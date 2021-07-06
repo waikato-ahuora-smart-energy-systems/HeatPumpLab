@@ -9,12 +9,13 @@ import multiprocessing
 def obj_TRHP(var, indep_var):
 
     #Independent variables 
-    dT_GC_min_tar = indep_var[0]
-    T_evap = indep_var[1]
+    Refrigerant = indep_var[0]
+    dT_GC_min_tar = indep_var[1]
     T_air_tar = indep_var[2]
     T_air_inlet = indep_var[3]
     T_air_exh = indep_var[4]
-    Refrigerant = indep_var[5]
+    RH_air_exh = indep_var[5]
+    
     T_gc_out_min = T_air_inlet + dT_GC_min_tar 
     T_ihx_in_max = T_air_exh - dT_GC_min_tar
     
@@ -27,20 +28,17 @@ def obj_TRHP(var, indep_var):
 
     #Fixed variables
     eff_phx = 0.90  
-    Eff_motor = 0.95
+    eff_motor = 0.95
 
-    #print([var])
-
-    heat_pump = HeatPump(Refrigerant=Refrigerant, T_air_inlet=T_air_inlet, T_air_exh=T_air_exh, T_air_tar=T_air_tar, 
-                         dT_GC_min_tar=dT_GC_min_tar, T_evap=T_evap, T_gc_out_min=T_gc_out_min, T_ihx_in_max=T_ihx_in_max, 
-                         dT_phx1_max=dT_phx1_max, dT_phx2_max=dT_phx2_max, dT_phx3_max=dT_phx3_max, eff_phx=eff_phx, 
-                         PR_offset1=PR_offset1, PR_offset2=PR_offset2, Eff_motor=Eff_motor, n_comp=3)
+    heat_pump = HeatPump(Refrigerant=Refrigerant, T_air_inlet=T_air_inlet, T_air_exh=T_air_exh, RH_air_exh=RH_air_exh, T_air_tar=T_air_tar, dT_GC_min_tar=dT_GC_min_tar, 
+                         T_gc_out_min=T_gc_out_min, T_ihx_in_max=T_ihx_in_max, eff_phx=eff_phx, dT_phx1_max=dT_phx1_max, dT_phx2_max=dT_phx2_max, dT_phx3_max=dT_phx3_max, 
+                         PR_offset1=PR_offset1, PR_offset2=PR_offset2, eff_motor=eff_motor, n_comp=3)
 
     obj_COP = heat_pump.solve()
 
-    #print(obj_COP)
+    print(var, obj_COP)
     #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1',PR_offset)
-    #print('T_air_tar=',T_air_tar, 'dT_GC_min_tar=',dT_GC_min_tar, 'T_evap=',T_evap, 'T_air_inlet = ',T_air_inlet, 'T_air_exh =',T_air_exh, 'T_gc_out_min = ',T_gc_out_min)
+    #print('T_air_tar=',T_air_tar, 'dT_GC_min_tar=',dT_GC_min_tar, 'T_air_inlet = ',T_air_inlet, 'T_air_exh =',T_air_exh, 'T_gc_out_min = ',T_gc_out_min)
     return obj_COP * -1000
 
     

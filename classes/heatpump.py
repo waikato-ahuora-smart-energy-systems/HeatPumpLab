@@ -18,8 +18,8 @@ import numpy as np
 
 class HeatPump:
 
-    def __init__(self, Refrigerant='Carbon Dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, T_evap=15.0, n_comp = 3, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
-                 PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, T_gc_out_min=0.0, T_ihx_in_max=46.0, Eff_motor=0.95, eff_phx = 0.9):
+    def __init__(self, Refrigerant='Carbon Dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 3, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
+                 PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx = 0.9):
 
         #Continuous variables for the heat pump operation
         self.Refrigerant = Refrigerant
@@ -28,6 +28,9 @@ class HeatPump:
         self.PR_offset1 = PR_offset1 
         self.PR_offset2 = PR_offset2
         self.n_comp = n_comp
+
+        self.eff_phx = eff_phx
+        self.eff_motor = eff_motor
 
         self.dT_phx1_max = dT_phx1_max if dT_phx1_max > 0.0 else 0.0
         self.dT_phx2_max = dT_phx2_max if self.n_comp > 1 and dT_phx2_max > 0.0 else 0.0
@@ -39,6 +42,7 @@ class HeatPump:
         self.converged = False
         self.COP = 1        
         self.AIR = 'Air'
+        self.T_evap_init = 15.0
 
         #Binary variables for the heat pump structure
         self.comp2_on = 1  if self.n_comp > 1 else 0
@@ -51,9 +55,9 @@ class HeatPump:
         self.n_comp = 1 + self.comp2_on + self.comp3_on 
     
         #Initialisation of unit operations
-        self.comp1 = Compressor(Eff_motor)
-        self.comp2 = Compressor(Eff_motor) 
-        self.comp3 = Compressor(Eff_motor) 
+        self.comp1 = Compressor(eff_motor)
+        self.comp2 = Compressor(eff_motor) 
+        self.comp3 = Compressor(eff_motor) 
         self.gas_cooler1 = GasCooler(HotFluid=self.Refrigerant, ColdFluid=self.AIR, dT_GC_min_tar=dT_GC_min_tar)
         self.gas_cooler2 = GasCooler(HotFluid=self.Refrigerant, ColdFluid=self.AIR, dT_GC_min_tar=dT_GC_min_tar)
         self.gas_cooler3 = GasCooler(HotFluid=self.Refrigerant, ColdFluid=self.AIR, dT_GC_min_tar=dT_GC_min_tar)
@@ -67,7 +71,7 @@ class HeatPump:
         self.evap_sup = Evaporator()
         
         #Initialise values in the evaporator streams
-        self.evaporator.ColdOut = Stream( 'Evap_out', Refrigerant, Temperature=T_evap, Quality=1 )
+        self.evaporator.ColdOut = Stream( 'Evap_out', Refrigerant, Temperature=self.T_evap_init, Quality=1 )
         P_low_init = self.evaporator.ColdOut.Pressure
         self.evap_sup.ColdIn = self.evaporator.ColdOut
         self.evap_sup.ColdOut = Stream( 'IHX_in', Refrigerant, Pressure=P_low_init, Temperature=self.T_ihx_in )
@@ -245,19 +249,19 @@ class HeatPump:
         T_air_out = 0
         Q_air_out = 0
 
-        while (i < 2 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
-                or abs(self.gas_cooler4.ColdOut.Heat_Flow - Q_air_out) > CONVERGANCE * Q_air_out) and i < 1000: #Check for model convergance
+        while (i < 10 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
+                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 1000: #Check for model convergance
             
             #Saves critical pressure and temperature properties to check for solution convergance
             h_exp_in = self.exp_valve.FlowIn.Enthalpy
-            Q_air_out = self.gas_cooler4.ColdOut.Heat_Flow
+            m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
             i += 1
 
             #Solve the performance of each component and update each special relationship
             for obj in self.OP:
                 obj.solve()
         
-        if abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) < CONVERGANCE * h_exp_in and abs(self.gas_cooler4.ColdOut.Heat_Flow - Q_air_out) < CONVERGANCE * Q_air_out:            
+        if i < 1000:            
             self.converged = True
         
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
@@ -267,15 +271,21 @@ class HeatPump:
     def solve(self):
         i = 0
         
-        P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', (self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max)) * 0.5, self.comp1.FlowIn.Entropy, 0) * 1000
-        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp1.FlowIn.Entropy, 0) * 1000
-        
-        r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True)
-        
-        if r[1].converged and self.converged:
-            self.COP = (self.gas_cooler4.Duty + self.gas_cooler3.Duty + self.gas_cooler2.Duty + self.gas_cooler1.Duty) / (self.comp1.Power + self.comp2.Power + self.comp3.Power )  # - self.exp_valve.Power
-        else:
-            self.converged = False           
+        P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max), self.comp1.FlowIn.Entropy, 0) * 1000
+        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar * 2, self.comp1.FlowIn.Entropy, 0) * 1000
+
+        a = self.state_solve(P_low_bound)
+        b = self.state_solve(P_upp_bound)
+
+        if a < 0.0 and b > 0.0:
+            
+            r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True)
+            
+            if r[1].converged and self.converged:
+                self.COP = (self.gas_cooler4.Duty + self.gas_cooler3.Duty + self.gas_cooler2.Duty + self.gas_cooler1.Duty) / (self.comp1.Power + self.comp2.Power + self.comp3.Power )  # - self.exp_valve.Power           
+            
+        if self.COP == 1:
+            self.converged = False          
         
         return self.COP    
 
