@@ -249,7 +249,7 @@ class HeatPump:
         T_air_out = 0
         Q_air_out = 0
 
-        while (i < 10 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
+        while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
                 or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 1000: #Check for model convergance
             
             #Saves critical pressure and temperature properties to check for solution convergance
