@@ -1,0 +1,79 @@
+__author__ = 'Tim Walmsley and Keri Adamson'
+__credits__ = ['Alex Geary']
+
+#import os, numpy as np, scipy as sp, math, glob, pandas, timeit, matplotlib.pyplot as plt, xlwings, copy
+from classes import HeatPump
+from scipy.optimize import differential_evolution as opt_method #dual_annealing  differential_evolution shgo
+import multiprocessing
+
+def obj_TRHP(var, indep_var):
+
+    #Independent variables 
+    dT_GC_min_tar = indep_var[0]
+    T_evap = indep_var[1]
+    T_air_tar = indep_var[2]
+    T_air_inlet = indep_var[3]
+    T_air_exh = indep_var[4]
+    Refrigerant = indep_var[5]
+    T_gc_out_min = T_air_inlet + dT_GC_min_tar 
+    T_ihx_in_max = T_air_exh - dT_GC_min_tar
+    
+    #Optimisation variables
+    dT_phx1_max = var[0]
+    dT_phx2_max = var[1]
+    dT_phx3_max = var[2]
+    PR_offset1 = 0.0 #var[3]
+    PR_offset2 = 0.0 #var[4]
+
+    #Fixed variables
+    eff_phx = 0.90  
+    Eff_motor = 0.95
+
+    #print([var])
+
+    heat_pump = HeatPump(Refrigerant=Refrigerant, T_air_inlet=T_air_inlet, T_air_exh=T_air_exh, T_air_tar=T_air_tar, 
+                         dT_GC_min_tar=dT_GC_min_tar, T_evap=T_evap, T_gc_out_min=T_gc_out_min, T_ihx_in_max=T_ihx_in_max, 
+                         dT_phx1_max=dT_phx1_max, dT_phx2_max=dT_phx2_max, dT_phx3_max=dT_phx3_max, eff_phx=eff_phx, 
+                         PR_offset1=PR_offset1, PR_offset2=PR_offset2, Eff_motor=Eff_motor, n_comp=3)
+
+    obj_COP = heat_pump.solve()
+
+    #print(obj_COP)
+    #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1',PR_offset)
+    #print('T_air_tar=',T_air_tar, 'dT_GC_min_tar=',dT_GC_min_tar, 'T_evap=',T_evap, 'T_air_inlet = ',T_air_inlet, 'T_air_exh =',T_air_exh, 'T_gc_out_min = ',T_gc_out_min)
+    return obj_COP * -1000
+
+    
+def optimiser_function(indep_var):
+    #Define the bounds of the optimisation variables
+    bound_dT_phx1_max = [0.0, 50.0]
+    bound_dT_phx2_max = [0.0, 50.0]
+    bound_dT_phx3_max = [0.0, 50.0]
+    bound_PR_offset1 = [-0.9, 0.9]
+    bound_PR_offset2 = [-0.9, 0.9]
+    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max] #, bound_PR_offset1, bound_PR_offset2]
+
+    #Define the starting values of the optimisation variables
+    #x0_dT_phx1_max = 0.0
+    #x0_dT_phx2_max = 0.0
+    #x0_dT_phx3_max = 0.0
+    #x0_PR_offset1 = 0.0
+    #x0_PR_offset2 = 0.0
+    #x0 = [x0_dT_phx1_max, x0_dT_phx2_max, x0_dT_phx3_max] #, x0_PR_offset1, x0_PR_offset2]
+
+    # perform the dual annealing search
+    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var]) #, x0=x0, maxiter=100 
+    result.fun *= -1/1000
+    
+    #print(result.fun)
+
+    output = []
+    output.append(['Obj function', result.fun])
+    output.append(['dT Gas Cooler', indep_var[0]])
+    output.append(['dT phx max 1', result.x[0]])
+    output.append(['dT phx max 2', result.x[1]])
+    output.append(['dT phx max 3', result.x[2]])
+    output.append(['message', result.message])
+    output.append(['success', result.success])
+ 
+    return output
