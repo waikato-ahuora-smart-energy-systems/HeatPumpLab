@@ -3,6 +3,7 @@ __credits__ = ['Alex Geary']
 
 import math
 from globalFunctions import REFPROP
+from classes.stream import Stream
 
 class PlateHeatExc:
     
@@ -51,7 +52,7 @@ class PlateHeatExc:
         self.ColdOut.PropsIn_mPH()
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
 
-        #self.Calc_Area()
+        self.Calc_Area()
        
     
     #Determines the design of the plate heat exchanger including thermal and hydralic performance
@@ -68,6 +69,11 @@ class PlateHeatExc:
                 self.NTU = self.HX_Eff /  ( 1 - self.HX_Eff )
             
             self.UA = self.NTU * min( Ch, Cc )
+
+            self.ColdIn.PropsExtend()
+            self.ColdOut.PropsExtend()
+            self.HotIn.PropsExtend()
+            self.HotOut.PropsExtend()
             
             k_h = ( REFPROP('TCX', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2, 0) ) / 1000
             Pr_h = REFPROP('PRANDTL', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2 ), 0)
@@ -90,6 +96,7 @@ class PlateHeatExc:
                 G = self.HotIn.Mass_Flow /  ( Wp * (Nt - 1) * self.PHX_flowgap )
 
                 RE_h = ( G * self.PHX_D_hyd )  /  ( Vis_h )
+                RE_h1 = (G * self.PHX_D_hyd )  /  ( self.HotIn.Viscosity)
                 Nu_h = 0.02 * ( Pr_h ** 0.67 ) * RE_h ** 0.4
                 HTC_h = ( k_h * Nu_h ) / self.PHX_D_hyd
 

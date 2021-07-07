@@ -31,7 +31,7 @@ def Trans_HTHP(Refrigerant='Carbon dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0
 #Run function for cmd line run
 if __name__=='__main__':
     TIC = timeit.default_timer()
-    if 1:
+    if 0:
         T_air_inlet = 15.0
         T_air_exh = 70.0
         RH_air_exh = 0.15
