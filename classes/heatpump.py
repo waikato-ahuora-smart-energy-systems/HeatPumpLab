@@ -246,8 +246,7 @@ class HeatPump:
         self.comp3.FlowOut.Pressure = P_comp_out
         i = 0
         h_exp_in = 0
-        T_air_out = 0
-        Q_air_out = 0
+        m_air_out = 0
 
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
                 or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 1000: #Check for model convergance
@@ -269,9 +268,7 @@ class HeatPump:
 
     #Solve heat pump cycle
     def solve(self):
-        i = 0
-        
-        P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max), self.comp1.FlowIn.Entropy, 0) * 1000
+        P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) * 1.5, self.comp1.FlowIn.Entropy, 0) * 1000
         P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar * 2, self.comp1.FlowIn.Entropy, 0) * 1000
 
         a = self.state_solve(P_low_bound)

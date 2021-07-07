@@ -67,6 +67,7 @@ def optimiser_function(indep_var):
 
     output = []
     output.append(['Obj function', result.fun])
+    output.append(['Refrigerant', indep_var[0]])
     output.append(['dT Gas Cooler', indep_var[1]])
     output.append(['dT phx max 1', result.x[0]])
     output.append(['dT phx max 2', result.x[1]])
