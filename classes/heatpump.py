@@ -18,7 +18,7 @@ import numpy as np
 
 class HeatPump:
 
-    def __init__(self, Refrigerant='Carbon Dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 3, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
+    def __init__(self, Refrigerant='Carbon Dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 2, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
                  PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx = 0.9):
 
         #Continuous variables for the heat pump operation
@@ -270,16 +270,16 @@ class HeatPump:
     def solve(self):
         
         P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max), self.comp1.FlowIn.Entropy, 0) * 1000
-        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) + self.dT_GC_min_tar, self.comp1.FlowIn.Entropy, 0) * 1000
+        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp1.FlowIn.Entropy, 0) * 1000
         
         i = 0 
         while self.state_solve(P_low_bound) > 0.0 and i < 10:
-            P_low_bound *= 0.95
+            P_low_bound *= 0.90
             i += 1
 
         i = 0
         while self.state_solve(P_upp_bound) < 0.0 and i < 10:
-            P_upp_bound *= 1.05
+            P_upp_bound *= 1.1
             i += 1
          
         a = self.state_solve(P_low_bound)

@@ -1,0 +1,110 @@
+['Obj function', 2.3701039358044977]
+['Refrigerant', 'Carbon dioxide']
+['dT Gas Cooler', 20]
+['dT phx max 1', 1.975361798599114]
+['dT phx max 2', 50.0]
+['dT phx max 3', 5.677337847523199e-10]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.7053708853452774]
+['Refrigerant', 'R1233zd(E)']
+['dT Gas Cooler', 20]
+['dT phx max 1', 37.803096527998406]
+['dT phx max 2', 35.03659762045886]
+['dT phx max 3', 0.7558369537694567]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.6475310610032996]
+['Refrigerant', 'R1234yf']
+['dT Gas Cooler', 20]
+['dT phx max 1', 0.13469126320810296]
+['dT phx max 2', 50.0]
+['dT phx max 3', 1.991095893809653]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.6732707200507493]
+['Refrigerant', 'R1234ze(Z)']
+['dT Gas Cooler', 20]
+['dT phx max 1', 29.004409751069453]
+['dT phx max 2', 31.445558649616864]
+['dT phx max 3', 5.356751522190727]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.7004278990936887]
+['Refrigerant', 'R1243zf']
+['dT Gas Cooler', 20]
+['dT phx max 1', 17.04408380466983]
+['dT phx max 2', 31.782595375406103]
+['dT phx max 3', 2.7039035550048447]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.7739608338159014]
+['Refrigerant', 'R1336mzz(Z)']
+['dT Gas Cooler', 20]
+['dT phx max 1', 33.96394492643231]
+['dT phx max 2', 43.319695774581994]
+['dT phx max 3', 7.043196035748359]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.7197178996320956]
+['Refrigerant', 'R1224yd(Z)']
+['dT Gas Cooler', 20]
+['dT phx max 1', 10.635400382126775]
+['dT phx max 2', 40.21731288762183]
+['dT phx max 3', 4.044512016629055]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.7242359220749144]
+['Refrigerant', 'R1234ze(E)']
+['dT Gas Cooler', 20]
+['dT phx max 1', 19.900445945509237]
+['dT phx max 2', 33.07558229207616]
+['dT phx max 3', 3.1263848566849415]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.637368329590751]
+['Refrigerant', 'Ammonia']
+['dT Gas Cooler', 20]
+['dT phx max 1', 49.54845522209261]
+['dT phx max 2', 45.08034509808783]
+['dT phx max 3', 21.59371641706755]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.7463614126592657]
+['Refrigerant', 'Isobutane']
+['dT Gas Cooler', 20]
+['dT phx max 1', 48.12246505904934]
+['dT phx max 2', 40.16174154402062]
+['dT phx max 3', 3.8234918077852234]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+
+['Obj function', 2.7039859300661773]
+['Refrigerant', 'Butane']
+['dT Gas Cooler', 20]
+['dT phx max 1', 40.87325337967351]
+['dT phx max 2', 39.87760534800654]
+['dT phx max 3', 5.097581862746262]
+['message', 'Optimization terminated successfully.']
+['success', True]
+
+

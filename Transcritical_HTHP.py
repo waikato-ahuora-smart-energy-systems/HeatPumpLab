@@ -14,7 +14,7 @@ from functions import optimiser_function
 
 
 @xlwings.func
-def Trans_HTHP(Refrigerant='Carbon dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp=3, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
+def Trans_HTHP(Refrigerant='Carbon dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp=2, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
                PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx=0.9):
 
     TIC = timeit.default_timer()
@@ -31,7 +31,7 @@ def Trans_HTHP(Refrigerant='Carbon dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0
 #Run function for cmd line run
 if __name__=='__main__':
     TIC = timeit.default_timer()
-    if 0:
+    if 1:
         T_air_inlet = 15.0
         T_air_exh = 70.0
         RH_air_exh = 0.15
@@ -60,12 +60,14 @@ if __name__=='__main__':
 
     else:  
 
-        heat_pump = HeatPump( Refrigerant = 'Ammonia', T_air_tar=200.0,  dT_phx1_max=0, dT_phx2_max=0,  dT_phx3_max=0) 
+        heat_pump = HeatPump( Refrigerant = 'Carbon dioxide', T_air_tar=200.0,  dT_phx1_max=1.97536179859911, dT_phx2_max=50,  dT_phx3_max=5.67733784752319E-10) 
                  
         obj_COP = heat_pump.solve() 
         
         print(obj_COP)
         print(heat_pump.gas_cooler4.HotIn.Pressure)
+        print(heat_pump.comp2.FlowOut.Pressure)
+        print(heat_pump.comp1.FlowOut.Pressure)
         print(heat_pump.evaporator.ColdIn.Pressure)
         #print(heat_pump.exp_valve.Power)
         #print(heat_pump.comp1.Power + heat_pump.comp2.Power + heat_pump.comp3.Power)

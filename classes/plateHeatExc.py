@@ -74,7 +74,7 @@ class PlateHeatExc:
             self.ColdOut.PropsExtend()
             self.HotIn.PropsExtend()
             self.HotOut.PropsExtend()
-            
+            '''
             k_h = ( REFPROP('TCX', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2, 0) ) / 1000
             Pr_h = REFPROP('PRANDTL', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2 ), 0)
             Vis_h = ( REFPROP('VIS', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2, 0) ) * ( 10 ** - 6 )
@@ -82,7 +82,7 @@ class PlateHeatExc:
             k_c = ( REFPROP('TCX', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2, 0) ) / 1000
             Pr_c = REFPROP('PRANDTL', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2 ), 0)
             Vis_c = ( REFPROP('VIS', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2, 0) ) * ( 10 ** - 6 )
-            
+            '''
             Wp = 0.5 * self.PHX_Length
             
             self.U = 1.5 #Intitial estimate
@@ -95,14 +95,19 @@ class PlateHeatExc:
                 Nt_0 = Nt
                 G = self.HotIn.Mass_Flow /  ( Wp * (Nt - 1) * self.PHX_flowgap )
 
-                RE_h = ( G * self.PHX_D_hyd )  /  ( Vis_h )
-                #RE_h1 = (G * self.PHX_D_hyd )  /  ( self.HotIn.Viscosity)
-                Nu_h = 0.02 * ( Pr_h ** 0.67 ) * RE_h ** 0.4
-                HTC_h = ( k_h * Nu_h ) / self.PHX_D_hyd
+                #RE_h = ( G * self.PHX_D_hyd )  /  ( Vis_h )
+                RE_h = (G * self.PHX_D_hyd )  /  ( self.HotIn.Viscosity)
+                #Nu_h = 0.02 * ( Pr_h ** 0.67 ) * RE_h ** 0.4
+                Nu_h = 0.02 * ( self.HotIn.PRANDTL ** 0.67 ) * RE_h ** 0.4
+                #HTC_h = ( k_h * Nu_h ) / self.PHX_D_hyd
+                HTC_h = ( self.HotIn.Thermal_conductivity * Nu_h ) / self.PHX_D_hyd
 
-                RE_c = ( G * self.PHX_D_hyd )  /  ( Vis_c )
-                Nu_c = 0.02 * ( Pr_c ** 0.67 ) * RE_c ** 0.4
-                HTC_c = ( k_c * Nu_c ) / self.PHX_D_hyd
+                #RE_c = ( G * self.PHX_D_hyd )  /  ( Vis_c )
+                RE_c = ( G * self.PHX_D_hyd )  /  ( self.ColdIn.Viscosity)
+                #Nu_c = 0.02 * ( Pr_c ** 0.67 ) * RE_c ** 0.4
+                Nu_c = 0.02 * ( self.ColdIn.PRANDTL ** 0.67 ) * RE_c ** 0.4
+                #HTC_c = ( k_c * Nu_c ) / self.PHX_D_hyd
+                HTC_c = ( self.ColdIn.Thermal_conductivity * Nu_c ) / self.PHX_D_hyd
 
                 #Assuming no fouling for now (new HX)
                 self.U = 1 / ( ( 1 / HTC_h ) + ( 1 / HTC_c ) + ( self.PHX_thick / self.PHX_thermalcond ) )
@@ -116,14 +121,18 @@ class PlateHeatExc:
 
             #Calculates hotside pressure drop
             self.HotIn.PropsExtend()
-            Density_h = REFPROP('D', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature )  / 2 ), 0)
+            #Density_h = REFPROP('D', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature )  / 2 ), 0)
+            den_avg_h = (self.HotIn.Density + self.HotOut.Density) /2
             f_h = 1.22 /  ( RE_h ** 0.252 )
-            self.dP_h = ( ( 2 * f_h * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_h * self.PHX_D_hyd ) )  / 1000
+            #self.dP_h = ( ( 2 * f_h * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_h * self.PHX_D_hyd ) )  / 1000
+            self.dP_h = ( ( 2 * f_h * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_h* self.PHX_D_hyd ) )  / 1000
             
             #Calculates coldside pressure drop
-            Density_c = REFPROP('D', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( ( self.ColdIn.Temperature + self.ColdOut.Temperature )  / 2 ), 0)
+            #Density_c = REFPROP('D', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( ( self.ColdIn.Temperature + self.ColdOut.Temperature )  / 2 ), 0)
+            den_avg_c = (self.ColdIn.Density + self.ColdOut.Density) /2
             f_c = 1.22 /  ( RE_c ** 0.252 )
-            self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_c * self.PHX_D_hyd ) )  / 1000
+            #self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_c * self.PHX_D_hyd ) )  / 1000
+            self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.PHX_D_hyd ) )  / 1000
         
         #Adjust the stream pressures
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h

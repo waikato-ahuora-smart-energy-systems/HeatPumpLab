@@ -49,7 +49,7 @@ def optimiser_function(indep_var):
     bound_dT_phx3_max = [0.0, 50.0]
     bound_PR_offset1 = [-0.9, 0.9]
     bound_PR_offset2 = [-0.9, 0.9]
-    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max] #, bound_PR_offset1, bound_PR_offset2]
+    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
 
     #Define the starting values of the optimisation variables
     #x0_dT_phx1_max = 0.0
