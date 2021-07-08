@@ -268,9 +268,20 @@ class HeatPump:
 
     #Solve heat pump cycle
     def solve(self):
-        P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) * 1.5, self.comp1.FlowIn.Entropy, 0) * 1000
-        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar * 2, self.comp1.FlowIn.Entropy, 0) * 1000
+        
+        P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max), self.comp1.FlowIn.Entropy, 0) * 1000
+        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) + self.dT_GC_min_tar, self.comp1.FlowIn.Entropy, 0) * 1000
+        
+        i = 0 
+        while self.state_solve(P_low_bound) > 0.0 and i < 10:
+            P_low_bound *= 0.95
+            i += 1
 
+        i = 0
+        while self.state_solve(P_upp_bound) < 0.0 and i < 10:
+            P_upp_bound *= 1.05
+            i += 1
+         
         a = self.state_solve(P_low_bound)
         b = self.state_solve(P_upp_bound)
 
