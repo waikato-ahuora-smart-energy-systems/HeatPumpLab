@@ -51,6 +51,7 @@ class PlateHeatExc:
         self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.dh_PHX
         self.ColdOut.PropsIn_mPH()
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
+        print("")
 
         #self.Calc_Area()
        

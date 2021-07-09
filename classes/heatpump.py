@@ -18,7 +18,7 @@ import numpy as np
 
 class HeatPump:
 
-    def __init__(self, Refrigerant='Carbon Dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 2, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
+    def __init__(self, Refrigerant='Carbon Dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 2, dT_phx1_max=20.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
                  PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx = 0.9):
 
         #Continuous variables for the heat pump operation
@@ -84,7 +84,7 @@ class HeatPump:
             self.ihx.ColdOut = self.ihx.ColdIn
 
         self.phx1.ColdIn = self.ihx.ColdOut
-        if self.ihx_on == 1:
+        if self.phx1_on == 1: #self.ihx_on == 1:
             self.phx1.ColdOut = Stream( 'Comp1_in', Refrigerant, Pressure=P_low_init, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx2_max * eff_phx )
         else:
             self.phx1.ColdOut = self.phx1.ColdIn
