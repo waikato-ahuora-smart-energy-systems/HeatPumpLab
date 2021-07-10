@@ -1,5 +1,6 @@
 from .compressor import Compressor
 from .crossFlowElement import CrossFlow_Element
+from .customRelationship import CustomRelationship
 from .ejector import Ejector
 from .expansionValve import Expansion_Valve
 from .evaporator import Evaporator
@@ -9,4 +10,4 @@ from .plateHeatExc import PlateHeatExc
 from .separator import Separator
 from .stream import Stream
 from .set_relationship import Set_Relationship
-from .customRelationship import CustomRelationship
+from .turbine import Turbine

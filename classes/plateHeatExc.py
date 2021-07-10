@@ -51,7 +51,7 @@ class PlateHeatExc:
         self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.dh_PHX
         self.ColdOut.PropsIn_mPH()
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
-        print("")
+        #print("")
 
         #self.Calc_Area()
        
@@ -139,4 +139,21 @@ class PlateHeatExc:
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
         self.HotOut.PropsIn_mPH()
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
-        self.ColdOut.PropsIn_mPH()        
+        self.ColdOut.PropsIn_mPH() 
+
+
+    def graph_data(self):
+        H = []; T_hot = []; T_cold = []
+
+        for i in range(51):
+            dh_hot = (self.HotIn.Enthalpy - self.HotOut.Enthalpy) * i / 50
+            dP_hot = (self.HotIn.Pressure - self.HotOut.Pressure) * i / 50
+            T_hot.append(REFPROP('T', self.HotOut.Fluid, 'PH', (self.HotOut.Pressure + dP_hot) / 1000, self.HotOut.Enthalpy + dh_hot))
+                        
+            dh_cold = (self.ColdOut.Enthalpy - self.ColdIn.Enthalpy) * i / 50
+            dP_cold = (self.ColdIn.Pressure - self.ColdOut.Pressure) * i / 50
+            T_cold.append(REFPROP('T', self.ColdIn.Fluid, 'PH', (self.ColdIn.Pressure - dP_hot) / 1000, self.ColdIn.Enthalpy + dh_cold))
+
+            H.append(dh_hot * self.HotOut.Mass_Flow)
+
+        return H, T_hot, T_cold         

@@ -6,6 +6,7 @@ from globalFunctions import REFPROP
 from globalVariables import CONVERGANCE
 from classes.crossFlowElement import CrossFlow_Element
 from classes.stream import Stream
+import matplotlib.pyplot as plt
 
 
 class GasCooler():
@@ -97,6 +98,9 @@ class GasCooler():
 
     def solve(self):
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
+        #self.HotOut.PropsIn_mPT()
+        #self.HotIn.PropsIn_mPH()
+
         self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
         
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_air
@@ -181,4 +185,19 @@ class GasCooler():
 
         return self.linear_elements[len(self.linear_elements) - 1].HotIn.Temperature
 
-          
+
+    def graph_data(self):
+        H = []; T_hot = []; T_cold = []
+
+        for i in range(51):
+            dh_hot = (self.HotIn.Enthalpy - self.HotOut.Enthalpy) * i / 50
+            dP_hot = (self.HotIn.Pressure - self.HotOut.Pressure) * i / 50
+            T_hot.append(REFPROP('T', self.HotOut.Fluid, 'PH', (self.HotOut.Pressure + dP_hot) / 1000, self.HotOut.Enthalpy + dh_hot))
+                        
+            dh_cold = (self.ColdOut.Enthalpy - self.ColdIn.Enthalpy) * i / 50
+            dP_cold = (self.ColdIn.Pressure - self.ColdOut.Pressure) * i / 50
+            T_cold.append(REFPROP('T', self.ColdIn.Fluid, 'PH', (self.ColdIn.Pressure - dP_hot) / 1000, self.ColdIn.Enthalpy + dh_cold))
+
+            H.append(dh_hot * self.HotOut.Mass_Flow)
+
+        return H, T_hot, T_cold         

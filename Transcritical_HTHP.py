@@ -7,10 +7,10 @@ __date__ = '2021'
 High temperature transcritical-recuperative heat pump model
 By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
 """
-import os, numpy as np, scipy as sp, math, glob, pandas, timeit, matplotlib.pyplot as plt, xlwings, copy
-import multiprocessing, time
+import timeit, xlwings, multiprocessing
 from classes import HeatPump
-from functions import optimiser_function
+from functions import optimiser_function, graph_heat_exchangers
+from globalFunctions import REFPROP
 
 
 @xlwings.func
@@ -50,7 +50,7 @@ if __name__=='__main__':
         #results = optimiser_function(indep_var)
         
         print(results)
-        f = open("TRHP_refs.csv", "w")
+        f = open("TRHP_refs_v2.csv", "w")
         for result in results:
             for element in result:
                 print(element, file=f)
@@ -59,42 +59,21 @@ if __name__=='__main__':
         f.close()        
 
     else:  
-
-        heat_pump = HeatPump( Refrigerant = 'R1234ze(E)', T_air_tar=200.0,  dT_phx1_max=20, dT_phx2_max=35,  dT_phx3_max=0) 
-                 
+        heat_pump = HeatPump( Refrigerant = 'R1234ze(E)', T_air_tar=200.0,  dT_phx1_max=20, dT_phx2_max=20,  dT_phx3_max=10, n_comp = 3)     
         obj_COP = heat_pump.solve() 
         
         print(obj_COP)
         print(heat_pump.gas_cooler4.HotIn.Pressure)
-        #print(heat_pump.comp2.FlowOut.Pressure)
+        print(heat_pump.comp2.FlowOut.Pressure)
         print(heat_pump.comp1.FlowOut.Pressure)
         print(heat_pump.evaporator.ColdIn.Pressure)
-        #print(heat_pump.exp_valve.Power)
-        #print(heat_pump.comp1.Power + heat_pump.comp2.Power + heat_pump.comp3.Power)
-        '''
-        print("gas cooler 3 + 4")
-        print("Air out",heat_pump.gas_cooler3.ColdOut.Temperature)
-        print("Air in",heat_pump.gas_cooler3.ColdIn.Temperature)
-        print("ref pressure",heat_pump.gas_cooler3.HotIn.Pressure)
-        print("ref temp in",heat_pump.gas_cooler3.HotIn.Temperature)
-        print("ref temp out",heat_pump.gas_cooler3.HotOut.Temperature)
-        print('mass flow',heat_pump.gas_cooler3.HotOut.Mass_Flow)
-        print('mass flow air',heat_pump.gas_cooler3.ColdOut.Mass_Flow)
-        print("gas cooler 2")
-        print("ref temp out",heat_pump.gas_cooler2.HotOut.Temperature)
-        print("ref temp in",heat_pump.gas_cooler2.HotIn.Temperature)
-        print("air temp out",heat_pump.gas_cooler2.ColdOut.Temperature)
-        print("air temp in",heat_pump.gas_cooler2.ColdIn.Temperature)
-        print("gas cooler 1")
-        print("ref temp out",heat_pump.gas_cooler1.HotOut.Temperature)
-        print("ref temp in",heat_pump.gas_cooler1.HotIn.Temperature)
-        print("air temp out",heat_pump.gas_cooler1.ColdOut.Temperature)
-        print("air temp in",heat_pump.gas_cooler1.ColdIn.Temperature)
-        print('comp')
-        print("int pressure",heat_pump.comp3.FlowOut.Pressure)
-        print("int temp",heat_pump.comp1.FlowOut.Temperature)
+        print(heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
 
-        '''
+        if 1:
+            graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.gas_cooler2, heat_pump.gas_cooler3, heat_pump.gas_cooler4, heat_pump.phx1, heat_pump.phx2, heat_pump.phx3])
+        else:
+            graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.phx1, heat_pump.gas_cooler2, heat_pump.phx2, heat_pump.gas_cooler3, heat_pump.phx3, heat_pump.gas_cooler4])
+
 
     TOC = timeit.default_timer()
     print(TOC - TIC) 

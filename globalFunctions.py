@@ -5,7 +5,7 @@ from globalVariables import CONVERGANCE
 import math
 from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
 
-RP = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP/REFPROP.DLL') #/REFPROP.DLL
+RP = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP') #/REFPROP.DLL
 RP.SETPATHdll('C:/Program Files (x86)/REFPROP')
 UNITS = RP.GETENUMdll(0,'SI with C').iEnum
 
@@ -19,7 +19,6 @@ def HAPROPS(propsOut, propsIn, P, T_or_H, AH, arg = [1.0]):
     fract_h2o = AH / (1 + AH)
     fract_air = 1 - fract_h2o
     P_vap = P * fract_h2o
-    
     
     if (propsOut == 'h' or propsOut == 'H') and propsIn == '.+T':
         T = T_or_H
@@ -36,7 +35,3 @@ def HAPROPS(propsOut, propsIn, P, T_or_H, AH, arg = [1.0]):
         h_vap = RP.REFPROPdll('Water', 'PQ', propOut, UNITS, 0, 0, P_vap, 1.0, [1.0]).Output[0]
 
         return fract_h2o * h_vap + fract_air * h_air
-
-
-
-    #return RP.REFPROPdll(fluid, propsIn, propsOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output

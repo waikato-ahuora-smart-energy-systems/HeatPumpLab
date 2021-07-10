@@ -18,7 +18,7 @@ import numpy as np
 
 class HeatPump:
 
-    def __init__(self, Refrigerant='Carbon Dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 2, dT_phx1_max=20.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
+    def __init__(self, Refrigerant='Carbon Dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 3, dT_phx1_max=20.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
                  PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx = 0.9):
 
         #Continuous variables for the heat pump operation
@@ -161,7 +161,7 @@ class HeatPump:
             self.phx1.HotOut = self.phx1.HotIn 
 
         self.gas_cooler1.HotIn = self.phx1.HotOut
-        self.gas_cooler1.HotOut = Stream( 'GC1_out', Refrigerant, Pressure=self.comp2.FlowOut.Pressure, Temperature=max(self.T_gc_out, T_air_inlet + dT_GC_min_tar))
+        self.gas_cooler1.HotOut = Stream( 'GC1_out', Refrigerant, Pressure=self.comp2.FlowOut.Pressure, Temperature=self.T_gc_out )
 
 
         #Initialisation of internal exchanger and evaporator system
@@ -194,7 +194,8 @@ class HeatPump:
             self.set_phx2_dTmax = Set_Relationship( source_obj=self.phx2.ColdIn, target_obj=[self.phx2.HotIn], c=self.dT_phx2_max, prop='Temperature', prop2='Pressure' ) 
         
         if self.phx1_on == 1:
-            self.set_phx1_dTmax = CustomRelationship( source_obj=[self.phx1.ColdIn, self.gas_cooler1.HotOut], target_obj=self.phx1.HotIn, var1=self.dT_phx2_max, relation=0 )
+            self.set_phx1_dTmax = Set_Relationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_max, prop='Temperature', prop2='Pressure' ) 
+            #self.set_phx1_dTmax = CustomRelationship( source_obj=[self.phx1.ColdIn, self.gas_cooler1.HotOut], target_obj=self.phx1.HotIn, var1=self.dT_phx2_max, relation=0 )
         
         self.set_P_ints = CustomRelationship( source_obj=[self.comp1.FlowIn, self.comp3.FlowOut, n_comp], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], var1=[self.PR_offset1, self.PR_offset2], relation=1 )
         self.set_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
@@ -249,7 +250,7 @@ class HeatPump:
         m_air_out = 0
 
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
-                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 1000: #Check for model convergance
+                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
             
             #Saves critical pressure and temperature properties to check for solution convergance
             h_exp_in = self.exp_valve.FlowIn.Enthalpy
@@ -260,7 +261,7 @@ class HeatPump:
             for obj in self.OP:
                 obj.solve()
         
-        if i < 1000:            
+        if i < 100:            
             self.converged = True
         
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
@@ -268,17 +269,17 @@ class HeatPump:
 
     #Solve heat pump cycle
     def solve(self):
-        
+        #Find a lower bound pressure resulting in an air temperature less than the target
         P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max), self.comp1.FlowIn.Entropy, 0) * 1000
-        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp1.FlowIn.Entropy, 0) * 1000
-        
         i = 0 
-        while self.state_solve(P_low_bound) > 0.0 and i < 10:
+        while self.state_solve(P_low_bound) > 0.0 and i < 20:
             P_low_bound *= 0.90
             i += 1
-
+        
+        #Find a upper bound pressure resulting in an air temperature greater than the target
+        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp1.FlowIn.Entropy, 0) * 1000
         i = 0
-        while self.state_solve(P_upp_bound) < 0.0 and i < 10:
+        while self.state_solve(P_upp_bound) < 0.0 and i < 20:
             P_upp_bound *= 1.1
             i += 1
          
