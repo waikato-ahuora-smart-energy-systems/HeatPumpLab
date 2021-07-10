@@ -97,11 +97,9 @@ class GasCooler():
                    
 
     def solve(self):
-        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
+        #self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
         #self.HotOut.PropsIn_mPT()
-        #self.HotIn.PropsIn_mPH()
-
-        self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
+        #self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
         
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_air
         self.ColdOut.PropsIn_mPH()

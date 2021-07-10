@@ -4,6 +4,7 @@ __credits__ = ['Alex Geary']
 import math
 from globalVariables import CONVERGANCE
 from globalFunctions import REFPROP
+from scipy import optimize
 
 class CustomRelationship:
     def __init__(self, source_obj=0, target_obj=0, var1=0, var2=0, relation=0):
@@ -39,36 +40,46 @@ class CustomRelationship:
                 self.target_obj[i - 1].Pressure = self.target_obj[i - 1].Pressure * math.exp(n_exp * PR_offset[i - 1])
 
     def Air_Mass_Flow(self):
-        mcp_air_list = []
+        m_air_list = []
         #Hot side terminal temperature
-        dH = 0
+        dQ = 0
         for gc in self.source_obj:
+            gc.HotOut.Pressure = gc.HotIn.Pressure - gc.dP_refrigerant
+            gc.HotOut.PropsIn_mPT()
+            gc.Duty = gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow
+            
             gc_duty = gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow
-            dH += gc_duty
-            dT = gc.HotIn.Temperature - gc.dT_GC_min_tar - self.source_obj[0].ColdIn.Temperature
-            mcp_air_list.append(dH / dT)
+            dQ += gc_duty
+            T_air_i = gc.HotIn.Temperature - gc.dT_GC_min_tar
+            dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
+            
+            if dh_air > 0:
+                m_air_list.append(dQ / dh_air)
+                self.mcp_air = dQ / (T_air_i - self.source_obj[0].ColdIn.Temperature)
 
-            if dH > gc.HotIn.Mass_Flow * gc.HotIn.Heat_Capacity * dT and dT > 0:
-                x = gc_duty / gc.HotIn.Mass_Flow / 2
-                h = gc.HotIn.Enthalpy
-                dH_1 = 0
+                P_crit = REFPROP('PCRIT', gc.HotIn.Fluid, 'PT', gc.HotIn.Pressure / 1000, gc.HotIn.Enthalpy) * 1000
 
-                while x > CONVERGANCE * gc_duty and gc_duty > 0 and h >= gc.HotOut.Enthalpy:
-                    h -= x
-                    dT = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h) - gc.dT_GC_min_tar - self.source_obj[0].ColdIn.Temperature
-                    dH_1 = dH - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h)
-                    cp_i = REFPROP('CP', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h)
+                if self.mcp_air > gc.HotIn.Mass_Flow * gc.HotIn.Heat_Capacity and self.mcp_air < gc.HotOut.Mass_Flow * gc.HotOut.Heat_Capacity:
+                    #a = self.mcp_air - gc.HotOut.Mass_Flow * REFPROP('CP', gc.HotOut.Fluid, 'PH', gc.HotOut.Pressure / 1000, gc.HotOut.Enthalpy)
+                    #b = self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, gc.HotIn.
+                    h_ref = optimize.brentq(f=lambda h_ref: self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref), a=gc.HotIn.Enthalpy, b=gc.HotOut.Enthalpy)
+                    dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
+                    if dQ_i > CONVERGANCE:
+                        T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dT_GC_min_tar
+                        dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
+                        m_air_list.append(dQ_i / dh_air)                
 
-                    if dH_1 < gc.HotIn.Mass_Flow * cp_i * dT: 
-                        h += x
-                        x /= 2
-                
-                if dH_1 > 0.0:
-                    mcp_air_list.append(dH_1 / dT)
-        
-        mcp_air = max(mcp_air_list)
+                if gc.HotIn.Pressure < REFPROP('PCRIT', gc.HotIn.Fluid, 'PT', gc.HotIn.Pressure / 1000, gc.HotIn.Enthalpy) * 1000:
+                    h_ref = REFPROP('H', gc.HotIn.Fluid, 'PQMASS', gc.HotIn.Pressure / 1000, 1.0)
+                    
+                    if h_ref < gc.HotIn.Enthalpy and h_ref > gc.HotOut.Enthalpy:
+                        dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
+                        if dQ_i > CONVERGANCE:
+                            T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dT_GC_min_tar
+                            dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
+                            m_air_list.append(dQ_i / dh_air)  
 
-        self.target_obj[0].ColdIn.Mass_Flow = mcp_air / self.source_obj[0].ColdIn.Heat_Capacity
+        self.target_obj[0].ColdIn.Mass_Flow = max(m_air_list)
         self.target_obj[0].ColdIn.PropsIn_mPT()
         
         for gc in self.target_obj:

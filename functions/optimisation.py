@@ -15,14 +15,15 @@ def obj_TRHP(var, indep_var):
     T_air_inlet = indep_var[3]
     T_air_exh = indep_var[4]
     RH_air_exh = indep_var[5]
+    n_comp = indep_var[6]
     
     T_gc_out_min = T_air_inlet + dT_GC_min_tar 
     T_ihx_in_max = T_air_exh - dT_GC_min_tar
     
     #Optimisation variables
     dT_phx1_max = var[0]
-    dT_phx2_max = var[1]
-    dT_phx3_max = var[2]
+    dT_phx2_max = var[1] if n_comp > 1 else 0
+    dT_phx3_max = var[2] if n_comp > 2 else 0
     PR_offset1 = 0.0 #var[3]
     PR_offset2 = 0.0 #var[4]
 
@@ -32,35 +33,27 @@ def obj_TRHP(var, indep_var):
 
     heat_pump = HeatPump(Refrigerant=Refrigerant, T_air_inlet=T_air_inlet, T_air_exh=T_air_exh, RH_air_exh=RH_air_exh, T_air_tar=T_air_tar, dT_GC_min_tar=dT_GC_min_tar, 
                          T_gc_out_min=T_gc_out_min, T_ihx_in_max=T_ihx_in_max, eff_phx=eff_phx, dT_phx1_max=dT_phx1_max, dT_phx2_max=dT_phx2_max, dT_phx3_max=dT_phx3_max, 
-                         PR_offset1=PR_offset1, PR_offset2=PR_offset2, eff_motor=eff_motor, n_comp=3)
+                         PR_offset1=PR_offset1, PR_offset2=PR_offset2, eff_motor=eff_motor, n_comp=n_comp)
 
     obj_COP = heat_pump.solve()
 
-    print(var, obj_COP)
-    #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1',PR_offset)
+    print(var, indep_var, obj_COP)
+    #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1', PR_offset)
     #print('T_air_tar=',T_air_tar, 'dT_GC_min_tar=',dT_GC_min_tar, 'T_air_inlet = ',T_air_inlet, 'T_air_exh =',T_air_exh, 'T_gc_out_min = ',T_gc_out_min)
     return obj_COP * -1000
 
     
 def optimiser_function(indep_var):
     #Define the bounds of the optimisation variables
-    bound_dT_phx1_max = [0.0, 50.0]
-    bound_dT_phx2_max = [0.0, 50.0]
-    bound_dT_phx3_max = [0.0, 50.0]
+    bound_dT_phx1_max = [0.0, 40.0]
+    bound_dT_phx2_max = [0.0, 40.0]
+    bound_dT_phx3_max = [0.0, 40.0]
     bound_PR_offset1 = [-0.9, 0.9]
     bound_PR_offset2 = [-0.9, 0.9]
     bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
 
-    #Define the starting values of the optimisation variables
-    #x0_dT_phx1_max = 0.0
-    #x0_dT_phx2_max = 0.0
-    #x0_dT_phx3_max = 0.0
-    #x0_PR_offset1 = 0.0
-    #x0_PR_offset2 = 0.0
-    #x0 = [x0_dT_phx1_max, x0_dT_phx2_max, x0_dT_phx3_max] #, x0_PR_offset1, x0_PR_offset2]
-
     # perform the dual annealing search
-    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var]) #, x0=x0, maxiter=100 
+    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var]) #, maxiter=100 
     result.fun *= -1/1000
     
     #print(result.fun)
