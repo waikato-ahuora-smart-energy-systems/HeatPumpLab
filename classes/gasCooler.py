@@ -97,7 +97,7 @@ class GasCooler():
                    
 
     def solve(self):
-        #self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
+        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
         #self.HotOut.PropsIn_mPT()
         #self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
         
@@ -128,7 +128,7 @@ class GasCooler():
 
                 #gradient + dA anlaysis
                 dT = (self.HotIn.Temperature - T_ref_in_0)
-                a = (self.Area * 1.001 - self.Area) / (T_ref_in_1 - T_ref_in_0)
+                a = (self.Area * 1.001 - self.Area) / abs(T_ref_in_1 - T_ref_in_0)
                 dA = (a * dT)
 
                 if self.Area > -dA:
@@ -143,7 +143,7 @@ class GasCooler():
                 
             #Refrigerant side pressure drop
             self.dP_refrigerant = self.linear_elements[len(self.linear_elements) - 1].HotIn.Pressure - self.HotOut.Pressure 
-            self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
+            #self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
             #Air side pressure drop
             sum_P = 0
             sum_h = 0

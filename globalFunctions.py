@@ -5,7 +5,7 @@ from globalVariables import CONVERGANCE
 import math
 from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
 
-RP = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP') #/REFPROP.DLL
+RP = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP/REFPROP.DLL') #/REFPROP.DLL
 RP.SETPATHdll('C:/Program Files (x86)/REFPROP')
 UNITS = RP.GETENUMdll(0,'SI with C').iEnum
 

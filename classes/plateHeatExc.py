@@ -51,9 +51,9 @@ class PlateHeatExc:
         self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.dh_PHX
         self.ColdOut.PropsIn_mPH()
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
-        #print("")
 
-        #self.Calc_Area()
+
+        self.Calc_Area()
        
     
     #Determines the design of the plate heat exchanger including thermal and hydralic performance

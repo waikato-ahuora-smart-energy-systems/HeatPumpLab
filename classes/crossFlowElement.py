@@ -33,6 +33,7 @@ class CrossFlow_Element:
         self.ColdIn.PropsIn_mPH() #test
         self.ColdIn.PropsExtend()
         self.HotOut.PropsExtend()
+        self.HotOut.PropsIn_mPH
   
         '''HEAT TRANSFER''' 
         #Calculate h for the air-side        
