@@ -26,3 +26,6 @@ class Evaporator:
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
         self.ColdIn.Pressure = self.ColdOut.Pressure + self.dP_c
         self.ColdIn.PropsIn_mPH()
+
+        
+

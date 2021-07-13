@@ -14,7 +14,7 @@ from globalFunctions import REFPROP
 from scipy import interpolate
 from scipy import optimize
 import numpy as np
-
+from scipy import ht 
 
 class HeatPump:
 

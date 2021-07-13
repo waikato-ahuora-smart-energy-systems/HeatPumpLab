@@ -1,7 +1,11 @@
+from __future__ import division
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 import math
+
+from math import log10
+
 
 class CrossFlow_Element:
 
@@ -48,10 +52,12 @@ class CrossFlow_Element:
         #Calculate h for the refrigerant-side    
         self.G_h = self.HotOut.Mass_Flow / self.Tube_Cross_Area
         self.RE_h = (self.G_h * self.Tube_I_Diameter * 2) / self.HotOut.Viscosity # = 4rG/u
-        self.Nu_h = 0.021 * (self.RE_h ** 0.8) * self.HotOut.PRANDTL ** 0.33 #correlation for NU
+        ''' supercritical correlation?'''
+        self.Nu_h = self.Nu_Bishop(Re = self.RE_h, Pr = self.HotOut.PRANDTL, D=self.Tube_I_Diameter) #correlation for NU 
+        #self.Nu_h = 0.021 * (self.RE_h ** 0.8) * self.HotOut.PRANDTL ** 0.33 #correlation for NU 
         self.h_h = (self.HotOut.Thermal_conductivity * self.Nu_h) / (2 * self.Tube_I_Diameter) #W/m2C = Nuk/4r
         self.h_h_ave = self.h_h * (1 - self.Fin_area_per_total_area)
-
+        
         #Calculate tube heat transfer resistance
         self.R_tube = (self.Tube_O_Diameter * math.log(self.Tube_O_Diameter / self.Tube_I_Diameter)) / (2 * self.Tube_Conductivity * (1 - self.Fin_area_per_total_area))
 
@@ -108,3 +114,12 @@ class CrossFlow_Element:
         else:
             Pn = 1 - math.exp(0-NTU) - math.exp(-(1 + R) * NTU) * Pn
         return Pn
+
+
+    def Nu_Bishop(self,Re = 0, Pr = 0, rho_w=None, rho_b=None, D=0, x=None):
+        Nu = 0.0069*Re**0.9*Pr**0.66
+        if rho_w is not None and rho_b is not None:
+            Nu *= (rho_w/rho_b)**0.43
+        if D is not None and x is not None:
+            Nu *= (1 + 2.4*D/x)
+        return Nu

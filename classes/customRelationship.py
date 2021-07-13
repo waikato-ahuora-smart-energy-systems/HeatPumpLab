@@ -62,7 +62,7 @@ class CustomRelationship:
                 if self.mcp_air > gc.HotIn.Mass_Flow * gc.HotIn.Heat_Capacity and self.mcp_air < gc.HotOut.Mass_Flow * gc.HotOut.Heat_Capacity:
                     #a = self.mcp_air - gc.HotOut.Mass_Flow * REFPROP('CP', gc.HotOut.Fluid, 'PH', gc.HotOut.Pressure / 1000, gc.HotOut.Enthalpy)
                     #b = self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, gc.HotIn.
-                    h_ref = optimize.brentq(f=lambda h_ref: self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref), a=gc.HotIn.Enthalpy, b=gc.HotOut.Enthalpy)
+                    h_ref = optimize.brentq(f=lambda h_ref: self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', (gc.HotIn.Pressure * (h_ref - gc.HotOut.Enthalpy) + gc.HotOut.Pressure * (gc.HotIn.Enthalpy - h_ref)) / (gc.HotIn.Enthalpy - gc.HotOut.Enthalpy) / 1000, h_ref), a=gc.HotIn.Enthalpy, b=gc.HotOut.Enthalpy)
                     dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
                     if dQ_i > CONVERGANCE:
                         T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dT_GC_min_tar

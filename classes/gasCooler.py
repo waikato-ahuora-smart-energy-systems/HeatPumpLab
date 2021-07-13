@@ -7,6 +7,7 @@ from globalVariables import CONVERGANCE
 from classes.crossFlowElement import CrossFlow_Element
 from classes.stream import Stream
 import matplotlib.pyplot as plt
+from scipy import optimize
 
 
 class GasCooler():
@@ -98,15 +99,15 @@ class GasCooler():
 
     def solve(self):
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
-        #self.HotOut.PropsIn_mPT()
-        #self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
+        self.HotOut.PropsIn_mPT()
+        self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
         
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_air
         self.ColdOut.PropsIn_mPH()
         self.ColdIn.Enthalpy = self.ColdOut.Enthalpy - self.Duty / self.ColdIn.Mass_Flow
         self.ColdIn.PropsIn_mPH()
         
-        if self.Duty > CONVERGANCE and 0:
+        if self.Duty > CONVERGANCE and 1:
             self.ColdIn.PropsExtend()
             self.ColdOut.PropsExtend()
             self.dT_max = ( self.HotIn.Temperature - self.ColdIn.Temperature )
@@ -115,53 +116,40 @@ class GasCooler():
             self.Max_Duty = (self.HotIn.Temperature - self.HotOut.Temperature ) * (( self.HotIn.Temperature - self.ColdIn.Temperature ))
 
             if self.Area == 0:
-                self.Area = self.Duty / ( self.U * self.LMTD_linear * 0.6) #First approximation for area 
+                Area_upp = self.Duty / ( self.U * self.LMTD_linear * 0.5) #First approximation for area 
+                Area_low = self.Duty / ( self.U * self.LMTD_linear * 1.5) #First approximation for area 
+            else:
+                Area_upp = self.Area * 1.1
+                Area_low = self.Area * 0.9                 
             
+            a = self.Calc_Area(Area_low)
+            b = self.Calc_Area(Area_upp)
 
-            i = 0
-            self.converged = False
-
-            T_ref_in_0 = self.Calc_Area(self.Area)
-
-            while self.converged == False:        
-                T_ref_in_1 = self.Calc_Area(self.Area * 1.001)
-
-                #gradient + dA anlaysis
-                dT = (self.HotIn.Temperature - T_ref_in_0)
-                a = (self.Area * 1.001 - self.Area) / abs(T_ref_in_1 - T_ref_in_0)
-                dA = (a * dT)
-
-                if self.Area > -dA:
-                    self.Area += dA
-                else:
-                    self.Area /= 2
-
-                T_ref_in_0 = self.Calc_Area(self.Area)
-                i += 1
-                if abs(self.HotIn.Temperature - T_ref_in_0) < CONVERGANCE * self.HotIn.Temperature or i == 100 :
-                    self.converged = True
+            if a < 0.0 and b > 0.0:
                 
-            #Refrigerant side pressure drop
-            self.dP_refrigerant = self.linear_elements[len(self.linear_elements) - 1].HotIn.Pressure - self.HotOut.Pressure 
-            #self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
-            #Air side pressure drop
-            sum_P = 0
-            sum_h = 0
-            for element in self.matrix_elements[self.N_passes - 1]:              
-                sum_P += element.ColdOut.Pressure
-                sum_h += element.ColdOut.Enthalpy
+                r = optimize.brentq(f=self.Calc_Area, a=Area_low, b=Area_upp, full_output=True)
+                
+                if r[1].converged:  
+                    self.converged = True          
 
-            self.ColdOut.Pressure = sum_P / self.N_elements_per_pass
-            self.ColdOut.Enthalpy = sum_h / self.N_elements_per_pass
-            self.dP_air = self.ColdIn.Pressure - self.ColdOut.Pressure
+                    #Refrigerant side pressure drop
+                    self.dP_refrigerant = self.linear_elements[len(self.linear_elements) - 1].HotIn.Pressure - self.HotOut.Pressure 
+                    self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
+                    #Air side pressure drop
+                    sum_P = 0
+                    sum_h = 0
+                    for element in self.matrix_elements[self.N_passes - 1]:              
+                        sum_P += element.ColdOut.Pressure
+                        sum_h += element.ColdOut.Enthalpy
 
-            #Accounting for pressure drop refrigerant
-            self.HotOut.PropsIn_mPT()
-            #Accounting for pressure drop air
-            self.ColdOut.PropsIn_mPH()
+                    self.ColdOut.Pressure = sum_P / self.N_elements_per_pass
+                    self.ColdOut.Enthalpy = sum_h / self.N_elements_per_pass
+                    self.dP_air = self.ColdIn.Pressure - self.ColdOut.Pressure
 
-            if i == 100:
-                self.converged = False
+                    #Accounting for pressure drop refrigerant
+                    self.HotOut.PropsIn_mPT()
+                    #Accounting for pressure drop air
+                    self.ColdOut.PropsIn_mPH()
 
 
     def Calc_Area(self, Area_0):
@@ -181,7 +169,7 @@ class GasCooler():
             element.solve(self.HT_Area_per_Element, self.Tube_Cross_Area)
             duty_total += element.Duty
 
-        return self.linear_elements[len(self.linear_elements) - 1].HotIn.Temperature
+        return self.linear_elements[len(self.linear_elements) - 1].HotIn.Temperature - self.HotIn.Temperature
 
 
     def graph_data(self):
