@@ -5,6 +5,9 @@ __credits__ = ['Alex Geary']
 import math
 
 from math import log10
+from ht import *
+import numpy as np
+
 
 
 class CrossFlow_Element:
@@ -34,7 +37,7 @@ class CrossFlow_Element:
     def solve(self, HT_Area_per_Element = 0, Tube_Cross_Area = 0):
         self.HT_Area_per_Element = HT_Area_per_Element
         self.Tube_Cross_Area = Tube_Cross_Area
-        self.ColdIn.PropsIn_mPH() #test
+        #self.ColdIn.PropsIn_mPH() #test
         self.ColdIn.PropsExtend()
         self.HotOut.PropsExtend()
         self.HotOut.PropsIn_mPH
@@ -96,7 +99,7 @@ class CrossFlow_Element:
         self.f_c = 0.39301916 * self.RE_c **(-0.24867009) #Correlation for f
         air_i = ((self.G_c ** 2) /(2 * self.ColdIn.Density))
         air_o = ((self.G_c ** 2) / (2 * self.ColdOut.Density))
-        self.dp_c = ((self.f_c * (self.G_c ** 2) * self.Hydralic_diameter) / (2 * self.ColdIn.Density * self.Hydralic_diameter)) + air_i - air_o 
+        self.dp_c = 0#((self.f_c * (self.G_c ** 2) * self.Hydralic_diameter) / (2 * self.ColdIn.Density * self.Hydralic_diameter)) + air_i - air_o 
 
         #Calculate pressures in/out of element
         self.HotIn.Pressure = self.HotOut.Pressure + self.dp_h
@@ -115,7 +118,7 @@ class CrossFlow_Element:
             Pn = 1 - math.exp(0-NTU) - math.exp(-(1 + R) * NTU) * Pn
         return Pn
 
-
+    
     def Nu_Bishop(self,Re = 0, Pr = 0, rho_w=None, rho_b=None, D=0, x=None):
         Nu = 0.0069*Re**0.9*Pr**0.66
         if rho_w is not None and rho_b is not None:
@@ -123,3 +126,4 @@ class CrossFlow_Element:
         if D is not None and x is not None:
             Nu *= (1 + 2.4*D/x)
         return Nu
+        

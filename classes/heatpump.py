@@ -246,14 +246,14 @@ class HeatPump:
         
         self.OP.append(self.gas_cooler1)
 
-
+        #self.AP = [self.gas_cooler1,self.gas_cooler2,self.gas_cooler3]
     def state_solve(self, P_comp_out):
         self.converged = False
         self.comp3.FlowOut.Pressure = P_comp_out
         i = 0
         h_exp_in = 0
         m_air_out = 0
-
+        #while self.converged == True:
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
                 or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
             
@@ -270,7 +270,8 @@ class HeatPump:
             self.converged = True
         
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
-            
+            #for obj in self.AP:
+                #obj.area_solve()
 
     #Solve heat pump cycle
     def solve(self):

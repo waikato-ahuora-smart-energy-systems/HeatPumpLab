@@ -107,7 +107,8 @@ class GasCooler():
         self.ColdIn.Enthalpy = self.ColdOut.Enthalpy - self.Duty / self.ColdIn.Mass_Flow
         self.ColdIn.PropsIn_mPH()
         
-        if self.Duty > CONVERGANCE and 0:
+    def area_solve(self):    
+        if self.Duty > CONVERGANCE and 1:
             self.ColdIn.PropsExtend()
             self.ColdOut.PropsExtend()
             self.dT_max = ( self.HotIn.Temperature - self.ColdIn.Temperature )
