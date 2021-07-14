@@ -2,6 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 from globalFunctions import REFPROP
+from classes.stream import Stream
 
 class Evaporator:
 
@@ -26,6 +27,14 @@ class Evaporator:
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
         self.ColdIn.Pressure = self.ColdOut.Pressure + self.dP_c
         self.ColdIn.PropsIn_mPH()
+
+
+        self.HotOut.Enthalpy = self.HotIn.Enthalpy - self.Duty / self.HotOut.Mass_Flow
+        self.HotOut.PropsIn_mPH()
+        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
+        self.HotOut.PropsIn_mPT()
+
+        
 
         
 

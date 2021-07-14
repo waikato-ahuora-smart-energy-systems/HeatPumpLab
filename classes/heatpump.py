@@ -14,7 +14,7 @@ from globalFunctions import REFPROP
 from scipy import interpolate
 from scipy import optimize
 import numpy as np
-from scipy import ht 
+
 
 class HeatPump:
 
@@ -174,6 +174,7 @@ class HeatPump:
         self.exp_valve.FlowIn = self.ihx.HotOut
         self.exp_valve.FlowOut = Stream( 'Evap_in', Refrigerant, Pressure=P_low_init, Enthalpy=self.exp_valve.FlowIn.Enthalpy )
         self.evaporator.ColdIn = self.exp_valve.FlowOut
+        
 
         #Initialisation of inlet and exhaust air streams
         self.gas_cooler1.ColdIn = Stream( 'AirIn1', self.AIR, Pressure=101, Temperature=T_air_inlet )
@@ -185,6 +186,10 @@ class HeatPump:
         self.gas_cooler4.ColdIn = self.gas_cooler3.ColdOut
         self.gas_cooler4.ColdOut = Stream( 'AirOut4', self.AIR, Pressure=101, Temperature=T_air_tar )
 
+        self.evaporator.HotIn = Stream( 'exhIn', self.AIR, Pressure=101, Temperature=T_air_exh)
+        self.evaporator.HotOut = Stream( 'exhout', self.AIR, Pressure=101, Temperature=T_air_exh)
+        self.evap_sup.HotIn = Stream( 'supIn', self.AIR, Pressure=101, Temperature=T_air_exh)
+        self.evap_sup.HotOut = Stream( 'suphout', self.AIR, Pressure=101, Temperature=T_air_exh)
 
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:

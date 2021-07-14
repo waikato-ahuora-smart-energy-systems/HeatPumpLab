@@ -4,6 +4,10 @@ __credits__ = ['Alex Geary']
 from globalVariables import CONVERGANCE
 import math
 from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
+import iapws
+from iapws import humidAir
+from ht import *
+
 
 RP = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP/REFPROP.DLL') #/REFPROP.DLL
 RP.SETPATHdll('C:/Program Files (x86)/REFPROP')
@@ -16,6 +20,10 @@ def REFPROPS(propsOut, fluid, propsIn, prop1, prop2, arg = [1.0]):
     return RP.REFPROPdll(fluid, propsIn, propsOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output
 
 def HAPROPS(propOut, propsIn, P, T_or_H, AH, arg = [1.0]):
+    
+    #humidAir.Air()
+    
+    
     fract_h2o = AH / (1 + AH)
     fract_air = 1 - fract_h2o
     P_vap = P * fract_h2o
