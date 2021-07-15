@@ -53,11 +53,11 @@ class PlateHeatExc:
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
 
 
-        self.Calc_Area()
+        #self.Calc_Area()
        
     
     #Determines the design of the plate heat exchanger including thermal and hydralic performance
-    def Calc_Area(self):
+    def area_solve(self):
         if self.Duty > 0:
 
             Ch = self.Duty / abs(( self.HotIn.Temperature - self.HotOut.Temperature ))

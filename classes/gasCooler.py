@@ -34,7 +34,7 @@ class GasCooler():
         #Model constants
         self.Beta = 587 # m^2/m^3
         self.N_passes = 6
-        self.N_elements_per_pass = 4
+        #self.N_elements_per_pass = 4
         self.Face_Velocity = 4 # m/
         self.gc = 9.81 #m/s
         self.Length_Longitudinal = 0.0219964 #m
@@ -58,7 +58,8 @@ class GasCooler():
         #self.Gap_spacing = 0.0005 #m
         
     
-    def init_heat_exchanger_elements(self):
+    def init_heat_exchanger_elements(self, N_elements_per_pass = 4):
+        self.N_elements_per_pass = N_elements_per_pass
         #Initialisation of heat exchanger elements
         self.matrix_elements = [[0 for j in range(self.N_elements_per_pass)] for i in range(self.N_passes)]
         self.linear_elements = []
@@ -135,7 +136,7 @@ class GasCooler():
 
                     #Refrigerant side pressure drop
                     self.dP_refrigerant = self.linear_elements[len(self.linear_elements) - 1].HotIn.Pressure - self.HotOut.Pressure 
-                    self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
+                    self.HotOut.Pressure = self.HotIn.Pressure - 0#self.dP_refrigerant
                     #Air side pressure drop
                     sum_P = 0
                     sum_h = 0
@@ -151,6 +152,7 @@ class GasCooler():
                     self.HotOut.PropsIn_mPT()
                     #Accounting for pressure drop air
                     self.ColdOut.PropsIn_mPH()
+        
 
 
     def Calc_Area(self, Area_0):
@@ -163,7 +165,8 @@ class GasCooler():
         
         self.Duct_Height = self.Face_Area ** 0.5
         self.Tube_Cross_Area = ((math.pi * (self.Tube_O_Diameter ** 2) / 4)/(self.Length_Longitudinal * self.Length_Transverse)) * (self.Duct_Height * (self.Depth / self.N_passes)) #calculated tube cross sec area using depth and Ll and Lt
-     
+
+        self.Area = Area_0
 
         duty_total = 0
         for element in self.linear_elements:

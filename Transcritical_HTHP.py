@@ -70,6 +70,8 @@ if __name__=='__main__':
         print(heat_pump.comp1.FlowOut.Pressure)
         print(heat_pump.evaporator.ColdIn.Pressure)
         print(heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
+        print("air temp out",heat_pump.gas_cooler4.ColdOut.Temperature)
+
 
         if 0:
             graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.gas_cooler2, heat_pump.gas_cooler3, heat_pump.gas_cooler4, heat_pump.phx1, heat_pump.phx2, heat_pump.phx3])
@@ -78,4 +80,4 @@ if __name__=='__main__':
 
 
     TOC = timeit.default_timer()
-    print(TOC - TIC) 
+    print("time",TOC - TIC) 

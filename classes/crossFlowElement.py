@@ -99,7 +99,7 @@ class CrossFlow_Element:
         self.f_c = 0.39301916 * self.RE_c **(-0.24867009) #Correlation for f
         air_i = ((self.G_c ** 2) /(2 * self.ColdIn.Density))
         air_o = ((self.G_c ** 2) / (2 * self.ColdOut.Density))
-        self.dp_c = 0#((self.f_c * (self.G_c ** 2) * self.Hydralic_diameter) / (2 * self.ColdIn.Density * self.Hydralic_diameter)) + air_i - air_o 
+        self.dp_c = ((self.f_c * (self.G_c ** 2) * self.Hydralic_diameter) / (2 * self.ColdIn.Density * self.Hydralic_diameter)) + air_i - air_o 
 
         #Calculate pressures in/out of element
         self.HotIn.Pressure = self.HotOut.Pressure + self.dp_h

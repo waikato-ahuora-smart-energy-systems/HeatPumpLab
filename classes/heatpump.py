@@ -206,10 +206,15 @@ class HeatPump:
         self.set_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
         
         #Setup heat exchanger elements
-        self.gas_cooler1.init_heat_exchanger_elements()
-        self.gas_cooler2.init_heat_exchanger_elements()
-        self.gas_cooler3.init_heat_exchanger_elements()
-        self.gas_cooler4.init_heat_exchanger_elements()
+        if self.phx3_on == 1: #therefore gas cooler 4,3,2,1 is on 
+            self.N_elements_per_pass = 2
+        if self.phx2_on == 1 and self.phx3_on == 0: #therefore gas cooler 3,2,1 is on
+            self.N_elements_per_pass = 3
+          
+        self.gas_cooler1.init_heat_exchanger_elements(self.N_elements_per_pass)
+        self.gas_cooler2.init_heat_exchanger_elements(self.N_elements_per_pass)
+        self.gas_cooler3.init_heat_exchanger_elements(self.N_elements_per_pass)
+        self.gas_cooler4.init_heat_exchanger_elements(self.N_elements_per_pass)
 
         #Solution pathway set-up
         self.OP = [self.exp_valve, self.evaporator, self.evap_sup, self.set_P_ints]
@@ -246,14 +251,30 @@ class HeatPump:
         
         self.OP.append(self.gas_cooler1)
 
-        #self.AP = [self.gas_cooler1,self.gas_cooler2,self.gas_cooler3]
+        self.AP = [self.gas_cooler1]
+        
+        if self.ihx_on == 1:
+            self.AP.append(self.ihx)
+        if self.phx1_on == 1:
+            self.AP.append(self.phx1)
+        if self.phx2_on == 1:
+            self.AP.append(self.phx2)        
+        if self.phx3_on == 1:
+            self.AP.append(self.phx3)        
+        if self.phx3_on == 1:
+            self.AP.append(self.gas_cooler4)
+        if self.phx2_on == 1:
+            self.AP.append(self.gas_cooler3)
+        if self.phx1_on == 1:
+            self.AP.append(self.gas_cooler2)
+
     def state_solve(self, P_comp_out):
         self.converged = False
         self.comp3.FlowOut.Pressure = P_comp_out
         i = 0
         h_exp_in = 0
         m_air_out = 0
-        #while self.converged == True:
+       
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
                 or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
             
@@ -268,11 +289,11 @@ class HeatPump:
         
         if i < 100:            
             self.converged = True
+            for ihx in self.AP:
+                ihx.area_solve()
         
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
-            #for obj in self.AP:
-                #obj.area_solve()
-
+         
     #Solve heat pump cycle
     def solve(self):
         #Find a lower bound pressure resulting in an air temperature less than the target
