@@ -119,7 +119,7 @@ class PlateHeatExc:
 
             self.Number_of_Plates = Nt
             self.Area = self.Area_per_plate * Nt
-
+            
             #Calculates hotside pressure drop
             self.HotIn.PropsExtend()
             #Density_h = REFPROP('D', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature )  / 2 ), 0)
@@ -133,14 +133,15 @@ class PlateHeatExc:
             den_avg_c = (self.ColdIn.Density + self.ColdOut.Density) /2
             f_c = 1.22 /  ( RE_c ** 0.252 )
             #self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_c * self.PHX_D_hyd ) )  / 1000
-            self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.PHX_D_hyd ) )  / 1000
-        
+            self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.PHX_D_hyd ) )  / 1000 
+        '''
         #Adjust the stream pressures
-        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
+        self.HotOut.Pressure = self.HotIn.Pressure# - self.dP_h
         self.HotOut.PropsIn_mPH()
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
-        self.ColdOut.PropsIn_mPH() 
-
+        self.ColdOut.PropsIn_mPH() '''
+        
+    
 
     def graph_data(self):
         H = []; T_hot = []; T_cold = []

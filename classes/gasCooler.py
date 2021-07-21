@@ -37,13 +37,13 @@ class GasCooler():
         #self.N_elements_per_pass = 4
         self.Face_Velocity = 4 # m/
         self.gc = 9.81 #m/s
-        self.Length_Longitudinal = 0.0219964 #m
+        self.Length_Longitudinal = 0.022 #m
         self.Length_Transverse = 0.0254 #m
 
         #Constants air side 
         self.sigma = 0.534
         self.Hydralic_diameter = 0.003632 #m
-        self.Fin_conductivity = 237 #W/m°C - Al fin
+        self.Fin_conductivity = 237 #W/m°C - Al fin 
         self.Fin_thickness = 0.0003 #m
         self.Fin_diameter = 0.0102 #m
         self.Fin_area_per_total_area = 0.913 #m^2/m^2
@@ -152,8 +152,7 @@ class GasCooler():
                     self.HotOut.PropsIn_mPT()
                     #Accounting for pressure drop air
                     self.ColdOut.PropsIn_mPH()
-        
-
+                    
 
     def Calc_Area(self, Area_0):
         self.Volume = Area_0 / self.Beta

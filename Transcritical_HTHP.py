@@ -73,7 +73,7 @@ if __name__=='__main__':
         print("air temp out",heat_pump.gas_cooler4.ColdOut.Temperature)
 
 
-        if 0:
+        if 1:
             graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.gas_cooler2, heat_pump.gas_cooler3, heat_pump.gas_cooler4, heat_pump.phx1, heat_pump.phx2, heat_pump.phx3])
         else:
             graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.phx1, heat_pump.gas_cooler2, heat_pump.phx2, heat_pump.gas_cooler3, heat_pump.phx3, heat_pump.gas_cooler4])

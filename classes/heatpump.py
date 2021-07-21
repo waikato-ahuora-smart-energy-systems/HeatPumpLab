@@ -254,13 +254,14 @@ class HeatPump:
         self.AP = [self.gas_cooler1]
         
         if self.ihx_on == 1:
-            self.AP.append(self.ihx)
+            self.AP.append(self.ihx)  
+        
         if self.phx1_on == 1:
             self.AP.append(self.phx1)
         if self.phx2_on == 1:
             self.AP.append(self.phx2)        
         if self.phx3_on == 1:
-            self.AP.append(self.phx3)        
+            self.AP.append(self.phx3)   
         if self.phx3_on == 1:
             self.AP.append(self.gas_cooler4)
         if self.phx2_on == 1:
@@ -274,25 +275,27 @@ class HeatPump:
         i = 0
         h_exp_in = 0
         m_air_out = 0
-       
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
                 or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
             
-            #Saves critical pressure and temperature properties to check for solution convergance
-            h_exp_in = self.exp_valve.FlowIn.Enthalpy
-            m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
-            i += 1
+            while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
+                    or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
+                
+                #Saves critical pressure and temperature properties to check for solution convergance
+                h_exp_in = self.exp_valve.FlowIn.Enthalpy
+                m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
+                i += 1
 
-            #Solve the performance of each component and update each special relationship
-            for obj in self.OP:
-                obj.solve()
-        
-        if i < 100:            
-            self.converged = True
-            for ihx in self.AP:
-                ihx.area_solve()
-        
-        return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
+                #Solve the performance of each component and update each special relationship
+                for obj in self.OP:
+                    obj.solve()
+            
+            if i < 100:            
+                self.converged = True
+                for ihx in self.AP:
+                    ihx.area_solve()
+            
+            return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
          
     #Solve heat pump cycle
     def solve(self):
