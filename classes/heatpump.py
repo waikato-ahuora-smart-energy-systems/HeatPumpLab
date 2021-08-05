@@ -218,19 +218,19 @@ class HeatPump:
 
         #Solution pathway set-up
         self.OP = [self.exp_valve, self.evaporator, self.evap_sup, self.set_P_ints]
+
         if self.ihx_on == 1:
             self.OP.append(self.ihx)
         if self.phx1_on == 1:
             self.OP.append(self.phx1)
 
         self.OP.append(self.comp1)
-
         if self.phx2_on == 1:
-            self.OP.append(self.phx2)        
+            self.OP.append(self.phx2)      
         if self.comp2_on == 1:
             self.OP.append(self.comp2)
         if self.phx3_on == 1:
-            self.OP.append(self.phx3)        
+            self.OP.append(self.phx3)       
         if self.comp3_on == 1:
             self.OP.append(self.comp3)
 
@@ -252,22 +252,21 @@ class HeatPump:
         self.OP.append(self.gas_cooler1)
 
         self.AP = [self.gas_cooler1]
-        
+        '''
         if self.ihx_on == 1:
             self.AP.append(self.ihx)  
-        
         if self.phx1_on == 1:
             self.AP.append(self.phx1)
         if self.phx2_on == 1:
             self.AP.append(self.phx2)        
         if self.phx3_on == 1:
-            self.AP.append(self.phx3)   
+            self.AP.append(self.phx3)  '''
         if self.phx3_on == 1:
             self.AP.append(self.gas_cooler4)
         if self.phx2_on == 1:
             self.AP.append(self.gas_cooler3)
         if self.phx1_on == 1:
-            self.AP.append(self.gas_cooler2)
+            self.AP.append(self.gas_cooler2) 
 
     def state_solve(self, P_comp_out):
         self.converged = False
@@ -278,24 +277,24 @@ class HeatPump:
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
                 or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
             
-            while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
-                    or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
-                
-                #Saves critical pressure and temperature properties to check for solution convergance
-                h_exp_in = self.exp_valve.FlowIn.Enthalpy
-                m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
-                i += 1
+        #while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
+            #       or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
+            
+            #Saves critical pressure and temperature properties to check for solution convergance
+            h_exp_in = self.exp_valve.FlowIn.Enthalpy
+            m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
+            i += 1
 
-                #Solve the performance of each component and update each special relationship
-                for obj in self.OP:
-                    obj.solve()
-            
-            if i < 100:            
-                self.converged = True
-                for ihx in self.AP:
-                    ihx.area_solve()
-            
-            return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
+            #Solve the performance of each component and update each special relationship
+            for obj in self.OP:
+                obj.solve()
+        
+        if i < 100:            
+            self.converged = True
+            for ihx in self.AP:
+                ihx.area_solve()
+        
+        return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
          
     #Solve heat pump cycle
     def solve(self):

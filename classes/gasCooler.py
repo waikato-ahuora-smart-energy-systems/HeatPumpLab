@@ -99,12 +99,12 @@ class GasCooler():
                    
 
     def solve(self):
-        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
+        self.HotOut.Pressure = self.HotIn.Pressure -self.dP_refrigerant
         self.HotOut.PropsIn_mPT()
         self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
         
-        self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_air
-        self.ColdOut.PropsIn_mPH()
+        #self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_air
+        #self.ColdOut.PropsIn_mPH()
         self.ColdIn.Enthalpy = self.ColdOut.Enthalpy - self.Duty / self.ColdIn.Mass_Flow
         self.ColdIn.PropsIn_mPH()
         
@@ -135,19 +135,25 @@ class GasCooler():
                     self.converged = True          
 
                     #Refrigerant side pressure drop
-                    self.dP_refrigerant = self.linear_elements[len(self.linear_elements) - 1].HotIn.Pressure - self.HotOut.Pressure 
-                    self.HotOut.Pressure = self.HotIn.Pressure - 0#self.dP_refrigerant
-                    #Air side pressure drop
+                    
+                    #self.dP_refrigerant = self.linear_elements[len(self.linear_elements) - 1].HotIn.Pressure - self.HotOut.Pressure 
+                    element_pressure = self.linear_elements[len(self.linear_elements) - 1].HotIn.Pressure
+                    self.dP_refrigerant = element_pressure  - self.HotOut.Pressure
+                    #self.HotOut.Pressure = self.HotIn.Pressure - 0#self.dP_refrigerant
+                    #Air side pressure drop 
+                    
+
                     sum_P = 0
-                    sum_h = 0
+                    sum_h = 0 
                     for element in self.matrix_elements[self.N_passes - 1]:              
                         sum_P += element.ColdOut.Pressure
-                        sum_h += element.ColdOut.Enthalpy
-
+                        sum_h += element.ColdOut.Enthalpy 
+                    
                     self.ColdOut.Pressure = sum_P / self.N_elements_per_pass
                     self.ColdOut.Enthalpy = sum_h / self.N_elements_per_pass
                     self.dP_air = self.ColdIn.Pressure - self.ColdOut.Pressure
-
+                   
+                    
                     #Accounting for pressure drop refrigerant
                     self.HotOut.PropsIn_mPT()
                     #Accounting for pressure drop air

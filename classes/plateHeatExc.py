@@ -35,6 +35,9 @@ class PlateHeatExc:
     def solve(self):
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
+        self.HotOut.PropsIn_mPH()
+        self.ColdOut.PropsIn_mPH() 
+        
 
         self.dT_max = abs( self.HotIn.Temperature - self.ColdIn.Temperature )
 
@@ -52,7 +55,7 @@ class PlateHeatExc:
         self.ColdOut.PropsIn_mPH()
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
 
-
+       
         #self.Calc_Area()
        
     
@@ -70,7 +73,7 @@ class PlateHeatExc:
                 self.NTU = self.HX_Eff /  ( 1 - self.HX_Eff )
             
             self.UA = self.NTU * min( Ch, Cc )
-
+            
             self.ColdIn.PropsExtend()
             self.ColdOut.PropsExtend()
             self.HotIn.PropsExtend()
@@ -134,12 +137,12 @@ class PlateHeatExc:
             f_c = 1.22 /  ( RE_c ** 0.252 )
             #self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_c * self.PHX_D_hyd ) )  / 1000
             self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.PHX_D_hyd ) )  / 1000 
-        '''
+        
         #Adjust the stream pressures
-        self.HotOut.Pressure = self.HotIn.Pressure# - self.dP_h
+        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
         self.HotOut.PropsIn_mPH()
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
-        self.ColdOut.PropsIn_mPH() '''
+        self.ColdOut.PropsIn_mPH() 
         
     
 
