@@ -103,7 +103,7 @@ class GasCooler():
         self.HotOut.PropsIn_mPT()
         self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
         
-        #self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_air
+        self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_air
         #self.ColdOut.PropsIn_mPH()
         self.ColdIn.Enthalpy = self.ColdOut.Enthalpy - self.Duty / self.ColdIn.Mass_Flow
         self.ColdIn.PropsIn_mPH()
@@ -133,7 +133,7 @@ class GasCooler():
                 
                 if r[1].converged:  
                     self.converged = True          
-
+                    
                     #Refrigerant side pressure drop
                     
                     #self.dP_refrigerant = self.linear_elements[len(self.linear_elements) - 1].HotIn.Pressure - self.HotOut.Pressure 
@@ -142,7 +142,7 @@ class GasCooler():
                     #self.HotOut.Pressure = self.HotIn.Pressure - 0#self.dP_refrigerant
                     #Air side pressure drop 
                     
-
+                    
                     sum_P = 0
                     sum_h = 0 
                     for element in self.matrix_elements[self.N_passes - 1]:              
@@ -152,12 +152,12 @@ class GasCooler():
                     self.ColdOut.Pressure = sum_P / self.N_elements_per_pass
                     self.ColdOut.Enthalpy = sum_h / self.N_elements_per_pass
                     self.dP_air = self.ColdIn.Pressure - self.ColdOut.Pressure
-                   
                     
+                    '''
                     #Accounting for pressure drop refrigerant
                     self.HotOut.PropsIn_mPT()
                     #Accounting for pressure drop air
-                    self.ColdOut.PropsIn_mPH()
+                    self.ColdOut.PropsIn_mPH()'''
                     
 
     def Calc_Area(self, Area_0):
@@ -191,7 +191,7 @@ class GasCooler():
                         
             dh_cold = (self.ColdOut.Enthalpy - self.ColdIn.Enthalpy) * i / 50
             dP_cold = (self.ColdIn.Pressure - self.ColdOut.Pressure) * i / 50
-            T_cold.append(REFPROP('T', self.ColdIn.Fluid, 'PH', (self.ColdIn.Pressure - dP_hot) / 1000, self.ColdIn.Enthalpy + dh_cold))
+            T_cold.append(REFPROP('T', self.ColdIn.Fluid, 'PH', (self.ColdIn.Pressure - dP_cold) / 1000, self.ColdIn.Enthalpy + dh_cold))
 
             H.append(dh_hot * self.HotOut.Mass_Flow)
 

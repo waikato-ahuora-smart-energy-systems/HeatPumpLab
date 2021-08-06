@@ -127,16 +127,20 @@ class PlateHeatExc:
             self.HotIn.PropsExtend()
             #Density_h = REFPROP('D', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature )  / 2 ), 0)
             den_avg_h = (self.HotIn.Density + self.HotOut.Density) /2
-            f_h = 1.22 /  ( RE_h ** 0.252 )
+            #f_h = 1.22 /  ( RE_h ** 0.252 )
+            f_h = 38 /  ( RE_h )
             #self.dP_h = ( ( 2 * f_h * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_h * self.PHX_D_hyd ) )  / 1000
             self.dP_h = ( ( 2 * f_h * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_h* self.PHX_D_hyd ) )  / 1000
             
             #Calculates coldside pressure drop
             #Density_c = REFPROP('D', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( ( self.ColdIn.Temperature + self.ColdOut.Temperature )  / 2 ), 0)
             den_avg_c = (self.ColdIn.Density + self.ColdOut.Density) /2
-            f_c = 1.22 /  ( RE_c ** 0.252 )
+            #f_c = 1.22 /  ( RE_c ** 0.252 )
+            f_c = 38 /  ( RE_c)
             #self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_c * self.PHX_D_hyd ) )  / 1000
             self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.PHX_D_hyd ) )  / 1000 
+        
+            
         
         #Adjust the stream pressures
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
@@ -156,7 +160,7 @@ class PlateHeatExc:
                         
             dh_cold = (self.ColdOut.Enthalpy - self.ColdIn.Enthalpy) * i / 50
             dP_cold = (self.ColdIn.Pressure - self.ColdOut.Pressure) * i / 50
-            T_cold.append(REFPROP('T', self.ColdIn.Fluid, 'PH', (self.ColdIn.Pressure - dP_hot) / 1000, self.ColdIn.Enthalpy + dh_cold))
+            T_cold.append(REFPROP('T', self.ColdIn.Fluid, 'PH', (self.ColdIn.Pressure - dP_cold) / 1000, self.ColdIn.Enthalpy + dh_cold))
 
             H.append(dh_hot * self.HotOut.Mass_Flow)
 

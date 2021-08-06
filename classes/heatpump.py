@@ -252,7 +252,7 @@ class HeatPump:
         self.OP.append(self.gas_cooler1)
 
         self.AP = [self.gas_cooler1]
-        '''
+        
         if self.ihx_on == 1:
             self.AP.append(self.ihx)  
         if self.phx1_on == 1:
@@ -260,7 +260,7 @@ class HeatPump:
         if self.phx2_on == 1:
             self.AP.append(self.phx2)        
         if self.phx3_on == 1:
-            self.AP.append(self.phx3)  '''
+            self.AP.append(self.phx3)  
         if self.phx3_on == 1:
             self.AP.append(self.gas_cooler4)
         if self.phx2_on == 1:
