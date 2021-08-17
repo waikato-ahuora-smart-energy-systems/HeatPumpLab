@@ -56,56 +56,61 @@ class CrossFlow_Element:
         self.G_h = self.HotOut.Mass_Flow / self.Tube_Cross_Area
         self.RE_h = (self.G_h * self.Tube_I_Diameter * 2) / self.HotOut.Viscosity # = 4rG/u
         ''' supercritical correlation?'''
-        self.Nu_h = self.Nu_Bishop(Re = self.RE_h, Pr = self.HotOut.PRANDTL, D=self.Tube_I_Diameter) #correlation for NU 
-        #self.Nu_h = 0.021 * (self.RE_h ** 0.8) * self.HotOut.PRANDTL ** 0.33 #correlation for NU 
-        self.h_h = (self.HotOut.Thermal_conductivity * self.Nu_h) / (2 * self.Tube_I_Diameter) #W/m2C = Nuk/4r
-        self.h_h_ave = self.h_h * (1 - self.Fin_area_per_total_area)
+        self.HotOut.PropsIn_mPH
+        self.ColdOut.PropsIn_mPH
+        if self.HotOut.PRANDTL < 0:
+            pass
+        else:
+            self.Nu_h = self.Nu_Bishop(Re = self.RE_h, Pr = self.HotOut.PRANDTL, D=self.Tube_I_Diameter) #correlation for NU 
+            #self.Nu_h = 0.021 * (self.RE_h ** 0.8) * self.HotOut.PRANDTL ** 0.33 #correlation for NU 
+            self.h_h = (self.HotOut.Thermal_conductivity * self.Nu_h) / (2 * self.Tube_I_Diameter) #W/m2C = Nuk/4r
+            self.h_h_ave = self.h_h * (1 - self.Fin_area_per_total_area)
+            
+            #Calculate tube heat transfer resistance
+            self.R_tube = (self.Tube_O_Diameter * math.log(self.Tube_O_Diameter / self.Tube_I_Diameter)) / (2 * self.Tube_Conductivity * (1 - self.Fin_area_per_total_area))
+
+            #Calculate U value
+            self.U = ((1 / self.h_c_ave + self.R_tube + 1 / self.h_h_ave) ** -1)/ 1000 #kW/m2C
+            
+            #Calculate effectiveness-NTU method for a crossflow heat exchanger element
+            self.mcp_h = self.HotOut.Heat_Capacity * self.HotOut.Mass_Flow
+            self.mcp_c = self.ColdIn.Heat_Capacity * self.ColdIn.Mass_Flow
+
+            self.NTU_h = (self.U * self.HT_Area_per_Element) / self.mcp_h
+            self.R_h = self.mcp_h / self.mcp_c
+            self.P_h = self.CrossflowUnmixedEff(self.NTU_h, self.R_h)
+            RIn_T_est = (self.P_h * self.ColdIn.Temperature - self.HotOut.Temperature) / (self.P_h - 1)
+            
+            #Calculate duty and unknown enthalpies of the element 
+            self.Duty = self.P_h * self.mcp_h * (RIn_T_est - self.ColdIn.Temperature)
+            self.HotIn.Enthalpy = self.HotOut.Enthalpy + self.Duty / self.HotOut.Mass_Flow
+            self.HotIn.Pressure = self.HotOut.Pressure
+            self.HotIn.PropsIn_mPH()
+            #self.HotIn.PropsIn_mPT()
+            self.HotIn.PropsExtend()
+            self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.Duty / self.ColdIn.Mass_Flow
+            self.ColdOut.Pressure = self.ColdIn.Pressure
+            self.ColdOut.PropsIn_mPH()
+            self.ColdOut.PropsExtend()
         
-        #Calculate tube heat transfer resistance
-        self.R_tube = (self.Tube_O_Diameter * math.log(self.Tube_O_Diameter / self.Tube_I_Diameter)) / (2 * self.Tube_Conductivity * (1 - self.Fin_area_per_total_area))
+            '''PRESSURE DROP per element'''
+            #Calculate pressure drop refrigerant side for each segment 
+            self.f_h = (0.790 * math.log( self.RE_h ) - 1.64) ** -2
+            ref_i = ((self.G_h ** 2) /(2 * self.HotIn.Density)) 
+            ref_o = ((self.G_h ** 2) / (2 * self.HotOut.Density + 1))
+            self.dp_h = ((self.f_h * (self.G_h ** 2) * self.Tube_I_Diameter) / (2 * self.HotIn.Density * self.Tube_I_Diameter)) + ref_i  - ref_o 
 
-        #Calculate U value
-        self.U = ((1 / self.h_c_ave + self.R_tube + 1 / self.h_h_ave) ** -1)/ 1000 #kW/m2C
-        
-        #Calculate effectiveness-NTU method for a crossflow heat exchanger element
-        self.mcp_h = self.HotOut.Heat_Capacity * self.HotOut.Mass_Flow
-        self.mcp_c = self.ColdIn.Heat_Capacity * self.ColdIn.Mass_Flow
+            #Calculate pressure drop air side for each segment 
+            self.f_c = 0.39301916 * self.RE_c **(-0.24867009) #Correlation for f
+            air_i = ((self.G_c ** 2) /(2 * self.ColdIn.Density))
+            air_o = ((self.G_c ** 2) / (2 * self.ColdOut.Density))
+            self.dp_c = ((self.f_c * (self.G_c ** 2) * self.Hydralic_diameter) / (2 * self.ColdIn.Density * self.Hydralic_diameter)) + air_i - air_o 
 
-        self.NTU_h = (self.U * self.HT_Area_per_Element) / self.mcp_h
-        self.R_h = self.mcp_h / self.mcp_c
-        self.P_h = self.CrossflowUnmixedEff(self.NTU_h, self.R_h)
-        RIn_T_est = (self.P_h * self.ColdIn.Temperature - self.HotOut.Temperature) / (self.P_h - 1)
-        
-        #Calculate duty and unknown enthalpies of the element 
-        self.Duty = self.P_h * self.mcp_h * (RIn_T_est - self.ColdIn.Temperature)
-        self.HotIn.Enthalpy = self.HotOut.Enthalpy + self.Duty / self.HotOut.Mass_Flow
-        self.HotIn.Pressure = self.HotOut.Pressure
-        self.HotIn.PropsIn_mPH()
-        #self.HotIn.PropsIn_mPT()
-        self.HotIn.PropsExtend()
-        self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.Duty / self.ColdIn.Mass_Flow
-        self.ColdOut.Pressure = self.ColdIn.Pressure
-        self.ColdOut.PropsIn_mPH()
-        self.ColdOut.PropsExtend()
-       
-        '''PRESSURE DROP per element'''
-        #Calculate pressure drop refrigerant side for each segment 
-        self.f_h = (0.790 * math.log( self.RE_h ) - 1.64) ** -2
-        ref_i = ((self.G_h ** 2) /(2 * self.HotIn.Density)) 
-        ref_o = ((self.G_h ** 2) / (2 * self.HotOut.Density + 1))
-        self.dp_h = ((self.f_h * (self.G_h ** 2) * self.Tube_I_Diameter) / (2 * self.HotIn.Density * self.Tube_I_Diameter)) + ref_i  - ref_o 
-
-        #Calculate pressure drop air side for each segment 
-        self.f_c = 0.39301916 * self.RE_c **(-0.24867009) #Correlation for f
-        air_i = ((self.G_c ** 2) /(2 * self.ColdIn.Density))
-        air_o = ((self.G_c ** 2) / (2 * self.ColdOut.Density))
-        self.dp_c = ((self.f_c * (self.G_c ** 2) * self.Hydralic_diameter) / (2 * self.ColdIn.Density * self.Hydralic_diameter)) + air_i - air_o 
-
-        #Calculate pressures in/out of element
-        self.HotIn.Pressure = self.HotOut.Pressure + self.dp_h
-        self.HotIn.PropsIn_mPH()
-        self.ColdOut.Pressure = self.ColdIn.Pressure - self.dp_c
-        self.ColdOut.PropsIn_mPH()
+            #Calculate pressures in/out of element
+            self.HotIn.Pressure = self.HotOut.Pressure + self.dp_h
+            self.HotIn.PropsIn_mPH()
+            self.ColdOut.Pressure = self.ColdIn.Pressure - self.dp_c
+            self.ColdOut.PropsIn_mPH()
         
 
     def CrossflowUnmixedEff(self, NTU, R, i = 1, j = 1, Pn = 0, Pn_0 = 0):
@@ -119,11 +124,14 @@ class CrossFlow_Element:
         return Pn
 
     
-    def Nu_Bishop(self,Re = 0, Pr = 0, rho_w=None, rho_b=None, D=0, x=None):
+    def Nu_Bishop(self,Re = 0, Pr = 0, rho_w=None, rho_b=None, D=None, x=None):
         Nu = 0.0069*Re**0.9*Pr**0.66
+        '''
         if rho_w is not None and rho_b is not None:
             Nu *= (rho_w/rho_b)**0.43
         if D is not None and x is not None:
-            Nu *= (1 + 2.4*D/x)
+            Nu *= (1 + 2.4*D/x)'''
+        if Pr < 0:
+            print(Pr, Re, self.HotIn.Fluid, self.HotIn.Pressure, self.HotIn.Temperature)
         return Nu
         

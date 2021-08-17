@@ -291,8 +291,8 @@ class HeatPump:
         
         if i < 100:            
             self.converged = True
-            for ihx in self.AP:
-                ihx.area_solve()
+            #for ihx in self.AP:
+                #ihx.area_solve()
         
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
          
