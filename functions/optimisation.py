@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 
 #import os, numpy as np, scipy as sp, math, glob, pandas, timeit, matplotlib.pyplot as plt, xlwings, copy
 from classes import HeatPump
-from scipy.optimize import dual_annealing as opt_method #dual_annealing  differential_evolution shgo
+from scipy.optimize import differential_evolution as opt_method #dual_annealing  differential_evolution shgo
 import multiprocessing
 
 def obj_TRHP(var, indep_var):
@@ -47,18 +47,19 @@ def optimiser_function(indep_var):
     #Define the bounds of the optimisation variables
     bound_dT_phx1_max = [0.1, 35.0]
     bound_dT_phx2_max = [0.1, 35.0]
-    bound_dT_phx3_max = [0.1, 35.0]
+    bound_dT_phx3_max = [0.1, 35.0] #change back to 0 and 40 ^^
     bound_PR_offset1 = [-0.9, 0.9]
     bound_PR_offset2 = [-0.9, 0.9]
     bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
-
+    
     # perform the dual annealing search
     result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var], maxiter=1) #, maxiter=100 
+    print(1)
     result.fun *= -1/1000
     print(1)
     print(result.fun)
 
-    output = []
+    output = [1]
     output.append(['Obj function', result.fun])
     output.append(['Refrigerant', indep_var[0]])
     output.append(['dT Gas Cooler', indep_var[1]])

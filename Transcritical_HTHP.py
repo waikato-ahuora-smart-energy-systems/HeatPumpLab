@@ -31,6 +31,9 @@ def Trans_HTHP(Refrigerant='Carbon dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0
     
 
 #Run function for cmd line run
+def init(l):
+            global lock
+            lock = l
 if __name__=='__main__':
     TIC = timeit.default_timer()
     if 1:
@@ -39,21 +42,24 @@ if __name__=='__main__':
         RH_air_exh = 0.15
         n_comp = 3
         T_air_tar = 200.0 #[i for i in range(180,205,5)]
-        dT_GC_min_tar = [j for j in range(24,26,1)]
+        dT_GC_min_tar = 25#[j for j in range(19,26,1)]
 
        
         
-        Refrigerant = 'R1233zd(E)' #[ 'R1233zd(E)', 'R1234yf']#, 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)'] #'Carbon dioxide', ,'Ammonia', 'Isobutane', 'Butane'
-        indep_var =  [[Refrigerant, float(dT_GC_min_tar[j]), T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(dT_GC_min_tar))]
+        Refrigerant = [ 'R1233zd(E)', 'R1234yf']#, 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)'] #'Carbon dioxide', ,'Ammonia', 'Isobutane', 'Butane'
+        indep_var =  [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))]
         #            [[Refrigerant, float(dT_GC_min_tar[j]), T_air_tar, T_air_inlet, T_air_exh, RH_air_exh] for j in range(len(dT_GC_min_tar))]
         #            [dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, Refrigerant] 
         #            [[float(dT_GC_min_tar[j]), T_air_tar, T_air_inlet, T_air_exh, Refrigerant] for j in range(len(dT_GC_min_tar))]         
 
-        with multiprocessing.Pool() as pool:
-            results = pool.map(optimiser_function, indep_var)
-            #pool.start()
-            #pool.join()
+        
+        #with multiprocessing as pool:
+        l = multiprocessing.Lock()
+        pool = multiprocessing.Pool(initializer=init, initargs=(l,))
+        results = pool.map(optimiser_function, indep_var)
+        pool.close()
+        pool.join()
         
         #results = optimiser_function(indep_var)
         
