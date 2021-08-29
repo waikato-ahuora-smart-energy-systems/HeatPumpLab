@@ -24,6 +24,9 @@ class CustomRelationship:
 
         elif self.relation == 2:
             self.Air_Mass_Flow()
+
+        else:
+            pass
     
     #Determines the n-1 intermediate pressures between n compressors
     def Determine_Pint(self, P_in, P_out, n_comp=1, PR_offset=[0.0]):

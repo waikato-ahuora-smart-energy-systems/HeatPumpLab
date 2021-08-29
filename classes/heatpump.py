@@ -277,9 +277,6 @@ class HeatPump:
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
                 or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
             
-        #while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
-            #       or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
-            
             #Saves critical pressure and temperature properties to check for solution convergance
             h_exp_in = self.exp_valve.FlowIn.Enthalpy
             m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
@@ -298,29 +295,34 @@ class HeatPump:
          
     #Solve heat pump cycle
     def solve(self):
-        #Find a lower bound pressure resulting in an air temperature less than the target
-        P_low_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max), self.comp1.FlowIn.Entropy, 0) * 1000
-        i = 0 
-        while self.state_solve(P_low_bound) > 0.0 and i < 20:
-            P_low_bound *= 0.90
-            i += 1
+        P_estimate = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
         
-        #Find a upper bound pressure resulting in an air temperature greater than the target
-        P_upp_bound = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp1.FlowIn.Entropy, 0) * 1000
+        P_low_bound = P_estimate
+        P_upp_bound = P_estimate
+        a = self.state_solve(P_estimate)
+        b = a
         i = 0
-        while self.state_solve(P_upp_bound) < 0.0 and i < 20:
-            P_upp_bound *= 1.1
-            i += 1
-         
-        a = self.state_solve(P_low_bound)
-        b = self.state_solve(P_upp_bound)
+        if b > 0.0:
+            #Find a lower bound pressure resulting in an air temperature less than the target
+            while b > 0.0 and i < 20:
+                P_upp_bound = P_low_bound
+                P_low_bound *= 0.90
+                b = self.state_solve(P_low_bound)
+                i += 1
+        else:
+            #Find a upper bound pressure resulting in an air temperature greater than the target
+            while a < 0.0 and i < 20:
+                P_low_bound = P_upp_bound
+                P_upp_bound *= 1.1
+                a = self.state_solve(P_upp_bound)
+                i += 1
 
         if a < 0.0 and b > 0.0:
             
             r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True)
             
             if r[1].converged and self.converged:
-                self.COP = (self.gas_cooler4.Duty + self.gas_cooler3.Duty + self.gas_cooler2.Duty + self.gas_cooler1.Duty) / (self.comp1.Power + self.comp2.Power + self.comp3.Power )  # - self.exp_valve.Power           
+                self.COP = (self.gas_cooler4.Duty + self.gas_cooler3.Duty + self.gas_cooler2.Duty + self.gas_cooler1.Duty) / (self.comp1.Power + self.comp2.Power + self.comp3.Power)  # - self.exp_valve.Power           
             
         if self.COP == 1:
             self.converged = False          
@@ -330,8 +332,6 @@ class HeatPump:
     
     #Writes the outputs of the model to a nested list (2-D)
     def Write_Outputs(self, dTime = 0):
-        pass
-    '''
         #Summarises the properties of the refrigerant streams
         output_col1 = ['m']
         output_col2 = ['P']
@@ -348,7 +348,7 @@ class HeatPump:
         output_col1.append('U')
         output_col2.append('Area')
         output_col3.append('Duty')
-        for unit_op in [self.ihx, self.phx1, self.phx2, self.gas_cooler3, self.gas_cooler2, self.gas_cooler1, self.evaporator, self.evap_sup]:
+        for unit_op in [self.ihx, self.phx1, self.phx2, self.phx3, self.gas_cooler4, self.gas_cooler3, self.gas_cooler2, self.gas_cooler1, self.evaporator, self.evap_sup]:
             output_col1.append(unit_op.U)
             output_col2.append(unit_op.Area)
             output_col3.append(unit_op.Duty)
@@ -357,7 +357,7 @@ class HeatPump:
         output_col1.append('')
         output_col2.append('Pressure Ratio')
         output_col3.append('Power')
-        for unit_op in [self.comp1, self.comp2]:
+        for unit_op in [self.comp1, self.comp2, self.comp3]:
             output_col1.append('')
             output_col2.append(unit_op.Pressure_Ratio)
             output_col3.append(unit_op.Power)
@@ -372,4 +372,3 @@ class HeatPump:
         transposed_output = [[row[i] for row in output] for i in range(len(output[0]))]
 
         return transposed_output
-    '''

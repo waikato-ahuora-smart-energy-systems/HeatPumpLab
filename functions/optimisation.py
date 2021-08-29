@@ -4,7 +4,6 @@ __credits__ = ['Alex Geary']
 #import os, numpy as np, scipy as sp, math, glob, pandas, timeit, matplotlib.pyplot as plt, xlwings, copy
 from classes import HeatPump
 from scipy.optimize import dual_annealing as opt_method #dual_annealing  differential_evolution shgo
-import multiprocessing
 
 def obj_TRHP(var, indep_var):
 
@@ -59,13 +58,13 @@ def optimiser_function(indep_var):
     print(result.fun)
 
     output = []
-    output.append(['Obj function', result.fun])
-    output.append(['Refrigerant', indep_var[0]])
-    output.append(['dT Gas Cooler', indep_var[1]])
-    output.append(['dT phx max 1', result.x[0]])
-    output.append(['dT phx max 2', result.x[1]])
-    output.append(['dT phx max 3', result.x[2]])
-    output.append(['message', result.message])
-    output.append(['success', result.success])
+    output.append(['Obj function:', result.fun])
+    output.append(['Refrigerant:', indep_var[0]])
+    output.append(['dT Gas Cooler:', indep_var[1]])
+    output.append(['dT phx max 1:', result.x[0]])
+    output.append(['dT phx max 2:', result.x[1]])
+    output.append(['dT phx max 3:', result.x[2]])
+    output.append(['Message:', result.message])
+    output.append(['Success:', result.success])
  
     return output

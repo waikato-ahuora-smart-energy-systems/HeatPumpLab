@@ -10,8 +10,8 @@ By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.w
 import timeit, xlwings, multiprocessing
 from classes import HeatPump
 from functions import optimiser_function, graph_heat_exchangers
-from globalFunctions import REFPROP
 from multiprocessing import pool 
+from globalVariables import AREA_CALC
 
 
 
@@ -33,7 +33,7 @@ def Trans_HTHP(Refrigerant='Carbon dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0
 #Run function for cmd line run
 if __name__=='__main__':
     TIC = timeit.default_timer()
-    if 1:
+    if 0:
         T_air_inlet = 15.0
         T_air_exh = 70.0
         RH_air_exh = 0.15
@@ -41,7 +41,6 @@ if __name__=='__main__':
         T_air_tar = 200.0 #[i for i in range(180,205,5)]
         dT_GC_min_tar = [j for j in range(24,26,1)]
 
-       
         
         Refrigerant = 'R1233zd(E)' #[ 'R1233zd(E)', 'R1234yf']#, 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)'] #'Carbon dioxide', ,'Ammonia', 'Isobutane', 'Butane'
         indep_var =  [[Refrigerant, float(dT_GC_min_tar[j]), T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(dT_GC_min_tar))]
@@ -67,17 +66,17 @@ if __name__=='__main__':
         f.close()        
 
     else:  
-        heat_pump = HeatPump( Refrigerant = 'R1336mzz(Z)', T_air_tar=200.0,  dT_phx1_max=20, dT_phx2_max=35,  dT_phx3_max=0, n_comp = 3)     
+        AREA_CALC = False
+        heat_pump = HeatPump(Refrigerant = 'R1336mzz(Z)', T_air_tar=200.0,  dT_phx1_max=20, dT_phx2_max=35,  dT_phx3_max=0, n_comp = 3)     
         obj_COP = heat_pump.solve() 
         
-        print(obj_COP)
-        print(heat_pump.gas_cooler4.HotIn.Pressure)
-        print(heat_pump.comp2.FlowOut.Pressure)
-        print(heat_pump.comp1.FlowOut.Pressure)
-        print(heat_pump.evaporator.ColdIn.Pressure)
-        print(heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
-        print("air temp out",heat_pump.gas_cooler4.ColdOut.Temperature)
-
+        print('COP:', obj_COP)
+        print('Comp 3 pressure out:', heat_pump.gas_cooler4.HotIn.Pressure)
+        print('Comp 2 pressure out:', heat_pump.comp2.FlowOut.Pressure)
+        print('Comp 1 pressure out:', heat_pump.comp1.FlowOut.Pressure)
+        print('Evap pressure:', heat_pump.evaporator.ColdIn.Pressure)
+        print('Overall pressure ratio:', heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
+        print("Air temp out:", heat_pump.gas_cooler4.ColdOut.Temperature)
 
         if 1:
             graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.gas_cooler2, heat_pump.gas_cooler3, heat_pump.gas_cooler4, heat_pump.phx1, heat_pump.phx2, heat_pump.phx3])

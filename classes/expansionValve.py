@@ -13,10 +13,4 @@ class Expansion_Valve:
     
     def solve(self):
         self.FlowOut.Enthalpy = self.FlowIn.Enthalpy - self.dH_loss
-        self.FlowOut.PropsIn_mPH()
-
-        #Turbine 
-        #self.FlowOut.Entropy = self.FlowIn.Entropy 
-        #self.FlowOut.PropsIn_mPS()
-        #self.Power = self.FlowIn.Heat_Flow - self.FlowOut.Heat_Flow
-        
+        self.FlowOut.PropsIn_mPH()        

@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 
 import math
 from globalFunctions import REFPROP
-from globalVariables import CONVERGANCE
+from globalVariables import CONVERGANCE, AREA_CALC
 from classes.crossFlowElement import CrossFlow_Element
 from classes.stream import Stream
 import matplotlib.pyplot as plt
@@ -107,9 +107,10 @@ class GasCooler():
         #self.ColdOut.PropsIn_mPH()
         self.ColdIn.Enthalpy = self.ColdOut.Enthalpy - self.Duty / self.ColdIn.Mass_Flow
         self.ColdIn.PropsIn_mPH()
-        
+
+
     def area_solve(self):    
-        if self.Duty > CONVERGANCE and 1:
+        if AREA_CALC and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
             self.ColdIn.PropsExtend()
             self.ColdOut.PropsExtend()
             self.dT_max = ( self.HotIn.Temperature - self.ColdIn.Temperature )
