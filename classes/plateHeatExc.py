@@ -56,7 +56,8 @@ class PlateHeatExc:
         '''put in the area function'''
         #if AREA_CALC and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:          
             #self.Calc_Area()
-
+        ''''''
+        '''assume a pressure drop and adjust length. use pressure drop to find heat transfer coefficient and area also using duty'''
         #Adjust the stream pressures
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
         self.HotOut.PropsIn_mPH()
