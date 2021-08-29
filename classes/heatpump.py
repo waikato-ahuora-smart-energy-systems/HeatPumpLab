@@ -9,7 +9,7 @@ from classes.evaporator import Evaporator
 from classes.stream import Stream
 from classes.set_relationship import Set_Relationship
 from classes.customRelationship import CustomRelationship
-from globalVariables import CONVERGANCE
+from globalVariables import AREA_CALC, CONVERGANCE
 from globalFunctions import REFPROP
 from scipy import interpolate
 from scipy import optimize
@@ -275,22 +275,27 @@ class HeatPump:
         h_exp_in = 0
         m_air_out = 0
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
-                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
-            
-            #Saves critical pressure and temperature properties to check for solution convergance
-            h_exp_in = self.exp_valve.FlowIn.Enthalpy
-            m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
-            i += 1
+                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100:
 
-            #Solve the performance of each component and update each special relationship
-            for obj in self.OP:
-                obj.solve()
-        
-        if i < 100:            
-            self.converged = True
-            #for ihx in self.AP:
-                #ihx.area_solve()
-        
+            while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
+                    or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
+                
+                #Saves critical pressure and temperature properties to check for solution convergance
+                h_exp_in = self.exp_valve.FlowIn.Enthalpy
+                m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
+                i += 1
+
+                #Solve the performance of each component and update each special relationship
+                for obj in self.OP:
+                    obj.solve()
+            
+            if i < 100:            
+                self.converged = True
+                
+                while AREA_CALC == True:
+                    for ihx in self.AP:
+                        ihx.area_solve()
+            
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
          
     #Solve heat pump cycle
