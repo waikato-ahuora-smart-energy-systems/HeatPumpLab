@@ -63,7 +63,7 @@ class PlateHeatExc:
         self.HotOut.PropsIn_mPH()
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
         self.ColdOut.PropsIn_mPH()
-
+    
     def area_solve(self):
        if AREA_CALC and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
             Ch = self.Duty / abs( self.HotIn.Temperature - self.HotOut.Temperature )
@@ -138,9 +138,6 @@ class PlateHeatExc:
     #Determines the design of the plate heat exchanger including thermal and hydralic performance
     '''
     def area_solve(self):
-
-       
-
         
         if AREA_CALC and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
             Ch = self.Duty / abs( self.HotIn.Temperature - self.HotOut.Temperature )
