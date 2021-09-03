@@ -291,7 +291,7 @@ class HeatPump:
             
             if i < 100:            
                 self.converged = True
-                
+
                 while AREA_CALC == True:
                     for ihx in self.AP:
                         ihx.area_solve()
