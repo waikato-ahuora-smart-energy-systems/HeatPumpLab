@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 
 import math
 from globalFunctions import REFPROP
-from globalVariables import CONVERGANCE, AREA_CALC
+from globalVariables import CONVERGANCE, area_calc
 from classes.crossFlowElement import CrossFlow_Element
 from classes.stream import Stream
 import matplotlib.pyplot as plt
@@ -56,6 +56,8 @@ class GasCooler():
         #self.Tube_thickness = 0.00165 #m
         #self.Tubes_per_pass = 4 #assumption
         #self.Gap_spacing = 0.0005 #m
+
+        self.area_calc_on = False
         
     
     def init_heat_exchanger_elements(self, N_elements_per_pass = 4):
@@ -109,8 +111,8 @@ class GasCooler():
         self.ColdIn.PropsIn_mPH()
 
 
-    def area_solve(self):    
-        if AREA_CALC and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
+    def area_solve(self):
+        if self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
             self.ColdIn.PropsExtend()
             self.ColdOut.PropsExtend()
             self.dT_max = ( self.HotIn.Temperature - self.ColdIn.Temperature )
@@ -130,7 +132,7 @@ class GasCooler():
 
             if a < 0.0 and b > 0.0:
                 
-                r = optimize.brentq(f=self.Calc_Area, a=Area_low, b=Area_upp, full_output=True)
+                r = optimize.brentq(f=self.Calc_Area, a=Area_low, b=Area_upp, full_output=True, rtol=CONVERGANCE, xtol=CONVERGANCE)
                 
                 if r[1].converged:  
                     self.converged = True          

@@ -11,7 +11,7 @@ import timeit, xlwings, multiprocessing
 from classes import HeatPump
 from functions import optimiser_function, graph_heat_exchangers
 from multiprocessing import pool 
-from globalVariables import AREA_CALC
+from globalVariables import area_calc
 
 
 
@@ -73,7 +73,6 @@ if __name__=='__main__':
         f.close()        
 
     else:  
-        AREA_CALC = False
         heat_pump = HeatPump(Refrigerant = 'R1336mzz(Z)', T_air_tar=200.0,  dT_phx1_max=20, dT_phx2_max=35,  dT_phx3_max=0, n_comp = 3)     
         obj_COP = heat_pump.solve() 
         
@@ -92,4 +91,4 @@ if __name__=='__main__':
 
 
     TOC = timeit.default_timer()
-    print("time",TOC - TIC) 
+    print("Total time:",TOC - TIC) 

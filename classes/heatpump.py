@@ -9,11 +9,10 @@ from classes.evaporator import Evaporator
 from classes.stream import Stream
 from classes.set_relationship import Set_Relationship
 from classes.customRelationship import CustomRelationship
-from globalVariables import AREA_CALC, CONVERGANCE
+from globalVariables import area_calc, CONVERGANCE
 from globalFunctions import REFPROP
-from scipy import interpolate
 from scipy import optimize
-import numpy as np
+from timeit import default_timer
 
 
 class HeatPump:
@@ -272,36 +271,39 @@ class HeatPump:
         self.converged = False
         self.comp3.FlowOut.Pressure = P_comp_out
         i = 0
-        h_exp_in = 0
-        m_air_out = 0
+        h_exp_in = 0.0
+        m_air_out = 0.0
+        dP_gc = 0.0
+        duty_comp = 0.0
+
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
-                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100:
-
-            while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
-                    or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out) and i < 100: #Check for model convergance
-                
-                #Saves critical pressure and temperature properties to check for solution convergance
-                h_exp_in = self.exp_valve.FlowIn.Enthalpy
-                m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
-                i += 1
-
-                #Solve the performance of each component and update each special relationship
-                for obj in self.OP:
-                    obj.solve()
+                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out
+                or abs(self.gas_cooler4.HotIn.Pressure - self.gas_cooler1.HotOut.Pressure - dP_gc) > CONVERGANCE * 10 * dP_gc
+                or abs(self.comp1.Power + self.comp2.Power + self.comp3.Power - duty_comp) > CONVERGANCE * 10 * duty_comp) and i < 100: #Check for model convergance
             
+            #Saves critical pressure and temperature properties to check for solution convergance
+            h_exp_in = self.exp_valve.FlowIn.Enthalpy
+            m_air_out = self.gas_cooler4.ColdOut.Mass_Flow
+            dP_gc = self.gas_cooler4.HotIn.Pressure - self.gas_cooler1.HotOut.Pressure
+            duty_comp = self.comp1.Power + self.comp2.Power + self.comp3.Power
+            i += 1
+
+            if area_calc == True:
+                for ihx in self.AP:
+                    ihx.area_solve()  
+
+            #Solve the performance of each component and update each special relationship
+            for obj in self.OP:
+                obj.solve()
+
             if i < 100:            
                 self.converged = True
-
-                while AREA_CALC == True:
-                    for ihx in self.AP:
-                        ihx.area_solve()
             
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
          
     #Solve heat pump cycle
     def solve(self):
         P_estimate = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
-        
         P_low_bound = P_estimate
         P_upp_bound = P_estimate
         a = self.state_solve(P_estimate)
@@ -322,10 +324,21 @@ class HeatPump:
                 a = self.state_solve(P_upp_bound)
                 i += 1
 
-        if a < 0.0 and b > 0.0:
-            
-            r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True)
-            
+        if a * b <= 0.0:
+            #Solve the heat pump thermodynamics
+            t0 = default_timer()
+            r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE*10, xtol=CONVERGANCE*10)
+            print(default_timer() - t0) 
+
+            if area_calc and r[1].converged and self.converged:
+                #Solve the heap pump thermodynamics with detailed heat exchanger design
+                P_low_bound = r[0] * 0.95
+                P_upp_bound = r[0] * 1.05
+
+                t0 = default_timer()
+                r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE*10, xtol=CONVERGANCE*10)
+                print(default_timer() - t0)  
+
             if r[1].converged and self.converged:
                 self.COP = (self.gas_cooler4.Duty + self.gas_cooler3.Duty + self.gas_cooler2.Duty + self.gas_cooler1.Duty) / (self.comp1.Power + self.comp2.Power + self.comp3.Power)  # - self.exp_valve.Power           
             

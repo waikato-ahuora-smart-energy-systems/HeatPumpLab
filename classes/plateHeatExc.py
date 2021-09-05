@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 
 import math
 from globalFunctions import REFPROP
-from globalVariables import AREA_CALC, CONVERGANCE
+from globalVariables import area_calc, CONVERGANCE
 
 class PlateHeatExc:
     
@@ -30,6 +30,8 @@ class PlateHeatExc:
         self.PHX_Length = 0.5
         self.PHX_Factor = 1.15
 
+        self.area_calc_on = False
+
 
     #Internal heat exchanger analysis to determine duty
     def solve(self):
@@ -53,19 +55,17 @@ class PlateHeatExc:
         self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.dh_PHX
         self.ColdOut.PropsIn_mPH()
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
-        '''put in the area function'''
-        #if AREA_CALC and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:          
-            #self.Calc_Area()
-        ''''''
+
         '''assume a pressure drop and adjust length. use pressure drop to find heat transfer coefficient and area also using duty'''
         #Adjust the stream pressures
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
         self.HotOut.PropsIn_mPH()
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
         self.ColdOut.PropsIn_mPH()
+
     
     def area_solve(self):
-       if AREA_CALC and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
+        if self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:          
             Ch = self.Duty / abs( self.HotIn.Temperature - self.HotOut.Temperature )
             Cc = self.Duty / abs( self.ColdOut.Temperature - self.ColdIn.Temperature )
             self.c = min( Ch, Cc ) / max( Ch, Cc )
@@ -81,16 +81,8 @@ class PlateHeatExc:
             self.ColdOut.PropsExtend()
             self.HotIn.PropsExtend()
             self.HotOut.PropsExtend()
-            '''
-            k_h = ( REFPROP('TCX', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2, 0) ) / 1000
-            Pr_h = REFPROP('PRANDTL', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2 ), 0)
-            Vis_h = ( REFPROP('VIS', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2, 0) ) * ( 10 ** - 6 )
-            
-            k_c = ( REFPROP('TCX', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2, 0) ) / 1000
-            Pr_c = REFPROP('PRANDTL', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2 ), 0)
-            Vis_c = ( REFPROP('VIS', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2, 0) ) * ( 10 ** - 6 )
-            '''
-            length = 0
+
+            length = 0.0
             while (abs(self.PHX_Length - length) > CONVERGANCE * length):
                 length = self.PHX_Length
                 Wp = 0.5 * self.PHX_Length
@@ -105,23 +97,16 @@ class PlateHeatExc:
                     Nt_0 = Nt
                     G = self.HotIn.Mass_Flow /  ( Wp * (Nt - 1) * self.PHX_flowgap )
 
-                    #RE_h = ( G * self.PHX_D_hyd )  /  ( Vis_h )
                     RE_h = (G * self.PHX_D_hyd )  /  ( self.HotIn.Viscosity)
-                    #Nu_h = 0.02 * ( Pr_h ** 0.67 ) * RE_h ** 0.4
                     Nu_h = 0.02 * ( self.HotIn.PRANDTL ** 0.67 ) * RE_h ** 0.4
-                    #HTC_h = ( k_h * Nu_h ) / self.PHX_D_hyd
                     HTC_h = ( self.HotIn.Thermal_conductivity * Nu_h ) / self.PHX_D_hyd
 
-                    #RE_c = ( G * self.PHX_D_hyd )  /  ( Vis_c )
                     RE_c = ( G * self.PHX_D_hyd )  /  ( self.ColdIn.Viscosity)
-                    #Nu_c = 0.02 * ( Pr_c ** 0.67 ) * RE_c ** 0.4
                     Nu_c = 0.02 * ( self.ColdIn.PRANDTL ** 0.67 ) * RE_c ** 0.4
-                    #HTC_c = ( k_c * Nu_c ) / self.PHX_D_hyd
                     HTC_c = ( self.ColdIn.Thermal_conductivity * Nu_c ) / self.PHX_D_hyd
 
                 #Calculates hotside pressure drop
                 self.HotIn.PropsExtend()
-                #Density_h = REFPROP('D', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature )  / 2 ), 0)
                 den_avg_h = (self.HotIn.Density + self.HotOut.Density) /2
                 #f_h = 1.22 /  ( RE_h ** 0.252 )
                 f_h = 38 /  ( RE_h )
@@ -130,8 +115,6 @@ class PlateHeatExc:
                 self.PHX_Length = (self.dP_h *1000 * den_avg_h* self.PHX_D_hyd)/(2 * f_h * ( G ** 2 ))
 
                 '''do the same for cold side?'''
-
-                
                 self.Area = self.dP_h / HTC_h #what about the k?
 
     
