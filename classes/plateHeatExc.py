@@ -108,8 +108,8 @@ class PlateHeatExc:
                 #Calculates hotside pressure drop
                 self.HotIn.PropsExtend()
                 den_avg_h = (self.HotIn.Density + self.HotOut.Density) /2
-                #f_h = 1.22 /  ( RE_h ** 0.252 )
-                f_h = 38 /  ( RE_h )
+                f_h = 1.22 /  ( RE_h ** 0.252 )
+
                 '''need to estimate pressure drop'''
                 self.dP_h = 30
                 self.PHX_Length = (self.dP_h *1000 * den_avg_h* self.PHX_D_hyd)/(2 * f_h * ( G ** 2 ))

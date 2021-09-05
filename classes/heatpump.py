@@ -288,7 +288,7 @@ class HeatPump:
             duty_comp = self.comp1.Power + self.comp2.Power + self.comp3.Power
             i += 1
 
-            if area_calc == True:
+            if self.area_on == True:
                 for ihx in self.AP:
                     ihx.area_solve()  
 
@@ -326,6 +326,7 @@ class HeatPump:
 
         if a * b <= 0.0:
             #Solve the heat pump thermodynamics
+            self.area_on = False
             t0 = default_timer()
             r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE*10, xtol=CONVERGANCE*10)
             print(default_timer() - t0) 
@@ -335,6 +336,7 @@ class HeatPump:
                 P_low_bound = r[0] * 0.95
                 P_upp_bound = r[0] * 1.05
 
+                self.area_on = True
                 t0 = default_timer()
                 r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE*10, xtol=CONVERGANCE*10)
                 print(default_timer() - t0)  
