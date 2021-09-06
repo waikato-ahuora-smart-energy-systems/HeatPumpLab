@@ -303,6 +303,7 @@ class HeatPump:
          
     #Solve heat pump cycle
     def solve(self):
+        self.area_on = False
         P_estimate = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
         P_low_bound = P_estimate
         P_upp_bound = P_estimate
@@ -326,7 +327,6 @@ class HeatPump:
 
         if a * b <= 0.0:
             #Solve the heat pump thermodynamics
-            self.area_on = False
             t0 = default_timer()
             r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE*10, xtol=CONVERGANCE*10)
             print(default_timer() - t0) 
@@ -334,12 +334,17 @@ class HeatPump:
             if area_calc and r[1].converged and self.converged:
                 #Solve the heap pump thermodynamics with detailed heat exchanger design
                 P_low_bound = r[0] * 0.95
+                P_org = r[0]
                 P_upp_bound = r[0] * 1.05
 
                 self.area_on = True
-                t0 = default_timer()
-                r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE*10, xtol=CONVERGANCE*10)
-                print(default_timer() - t0)  
+
+                dT = self.state_solve(P_org)
+                #t0 = default_timer()
+                #r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE*10, xtol=CONVERGANCE*10)
+                #print(default_timer() - t0)  
+
+                print(r[0] / P_org, dT)
 
             if r[1].converged and self.converged:
                 self.COP = (self.gas_cooler4.Duty + self.gas_cooler3.Duty + self.gas_cooler2.Duty + self.gas_cooler1.Duty) / (self.comp1.Power + self.comp2.Power + self.comp3.Power)  # - self.exp_valve.Power           
