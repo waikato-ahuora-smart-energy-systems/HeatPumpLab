@@ -59,4 +59,4 @@ class Stream:
     
     def PropsExtend(self): 
         props = REFPROPS('D;PRANDTL;VIS;TCX', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)
-        self.Density = props[0];  self.PRANDTL = props[1];  self.Viscosity = props[2] /1000000; self.Thermal_conductivity = props[3] / 1000;  self.Specific_volume = 1 / props[0]
+        self.Density = props[0];  self.PRANDTL = props[1];  self.Viscosity = props[2] /1000000000; self.Thermal_conductivity = props[3] / 1000000;  self.Specific_volume = 1 / props[0]
