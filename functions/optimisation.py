@@ -4,7 +4,7 @@ __credits__ = ['Alex Geary']
 #import os, numpy as np, scipy as sp, math, glob, pandas, timeit, matplotlib.pyplot as plt, xlwings, copy
 from classes import HeatPump
 from scipy.optimize import dual_annealing as opt_method #dual_annealing  differential_evolution shgo
-
+Streams = []
 def obj_TRHP(var, indep_var):
 
     #Independent variables 
@@ -36,6 +36,9 @@ def obj_TRHP(var, indep_var):
 
     obj_COP = heat_pump.solve()
 
+    global Streams 
+    Streams= heat_pump.Stream_outputs()
+
     print(var, indep_var, obj_COP)
     #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1', PR_offset)
     #print('T_air_tar=',T_air_tar, 'dT_GC_min_tar=',dT_GC_min_tar, 'T_air_inlet = ',T_air_inlet, 'T_air_exh =',T_air_exh, 'T_gc_out_min = ',T_gc_out_min)
@@ -65,6 +68,11 @@ def optimiser_function(indep_var):
     output.append(['dT phx max 1:', result.x[0]])
     output.append(['dT phx max 2:', result.x[1]])
     output.append(['dT phx max 3:', result.x[2]])
+    output.append(['P1:', Streams[0]])
+    output.append(['P2', Streams[1]])
+    output.append(['P3', Streams[2]])
+    output.append(['P4', Streams[3]])
+    output.append(['Target air', Streams[4]])
     output.append(['Message:', result.message])
     output.append(['Success:', result.success])
  
