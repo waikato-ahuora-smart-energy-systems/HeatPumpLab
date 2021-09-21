@@ -355,7 +355,7 @@ class HeatPump:
         return self.COP    
 
     def Stream_outputs(self):
-        return [ self.comp1.FlowIn, self.comp1.FlowOut, self.comp2.FlowOut, self.comp2.FlowOut, self.gas_cooler3.ColdOut]
+        return [ self.comp1.FlowIn.Pressure, self.comp1.FlowOut.Pressure, self.comp2.FlowOut.Pressure, self.comp3.FlowOut.Pressure, self.gas_cooler3.ColdOut.Temperature]
             
     #Writes the outputs of the model to a nested list (2-D)
     def Write_Outputs(self, dTime = 0):

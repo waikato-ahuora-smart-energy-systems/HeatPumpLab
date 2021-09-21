@@ -37,7 +37,7 @@ def init(l):
 
 if __name__=='__main__':
     TIC = timeit.default_timer()
-    if 0:
+    if 1:
         T_air_inlet = 15.0
         T_air_exh = 70.0
         RH_air_exh = 0.15
