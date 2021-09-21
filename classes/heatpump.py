@@ -209,6 +209,10 @@ class HeatPump:
             self.N_elements_per_pass = 2
         if self.phx2_on == 1 and self.phx3_on == 0: #therefore gas cooler 3,2,1 is on
             self.N_elements_per_pass = 3
+        if self.phx1_on == 1 and self.phx2_on == 0 and self.phx3_on == 0: #therefore gas cooler 2,1 is on
+            self.N_elements_per_pass = 4
+        else:
+            self.N_elements_per_pass = 4  
           
         self.gas_cooler1.init_heat_exchanger_elements(self.N_elements_per_pass)
         self.gas_cooler2.init_heat_exchanger_elements(self.N_elements_per_pass)

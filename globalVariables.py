@@ -3,4 +3,4 @@ __credits__ = ['Alex Geary']
 
 #Global mass and energy balance convergance criteria
 CONVERGANCE = 0.00001
-area_calc = True
+area_calc = False
