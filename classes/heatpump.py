@@ -354,7 +354,9 @@ class HeatPump:
         
         return self.COP    
 
-    
+    def Stream_outputs(self):
+        return [ self.comp1.FlowIn, self.comp1.FlowOut, self.comp2.FlowOut, self.comp2.FlowOut, self.gas_cooler3.ColdOut]
+            
     #Writes the outputs of the model to a nested list (2-D)
     def Write_Outputs(self, dTime = 0):
         #Summarises the properties of the refrigerant streams
