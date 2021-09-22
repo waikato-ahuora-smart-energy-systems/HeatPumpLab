@@ -47,12 +47,12 @@ def obj_TRHP(var, indep_var):
     
 def optimiser_function(indep_var):
     #Define the bounds of the optimisation variables
-    bound_dT_phx1_max = [0, 0.01]
-    bound_dT_phx2_max = [0, 0.01]
-    bound_dT_phx3_max = [0, 0.01] #change back to 0 and 40 ^^
+    bound_dT_phx1_max = [0, 40]
+    bound_dT_phx2_max = [0, 35]
+    bound_dT_phx3_max = [0, 35] #change back to 0 and 40 ^^
     bound_PR_offset1 = [-0.9, 0.9]
     bound_PR_offset2 = [-0.9, 0.9]
-    bounds = [bound_dT_phx1_max, bound_dT_phx2_max]#, bound_dT_phx3_max] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
+    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
     
     # perform the dual annealing search
     result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var], maxiter=1) #, maxiter=100 
@@ -65,11 +65,11 @@ def optimiser_function(indep_var):
     output.append(['dT Gas Cooler:', indep_var[1]])
     output.append(['dT phx max 1:', result.x[0]])
     output.append(['dT phx max 2:', result.x[1]])
-    #output.append(['dT phx max 3:', result.x[2]])
+    output.append(['dT phx max 3:', result.x[2]])
     output.append(['P1:', Streams[0]])
     output.append(['P2', Streams[1]])
     output.append(['P3', Streams[2]])
-    #output.append(['P4', Streams[3]])
+    output.append(['P4', Streams[3]])
     output.append(['Target air', Streams[4]])
     output.append(['Message:', result.message])
     output.append(['Success:', result.success])

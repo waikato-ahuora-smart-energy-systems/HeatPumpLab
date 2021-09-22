@@ -41,7 +41,7 @@ if __name__=='__main__':
         T_air_inlet = 15.0
         T_air_exh = 70.0
         RH_air_exh = 0.15
-        n_comp = 2
+        n_comp = 3
         T_air_tar = 200.0 #[i for i in range(180,205,5)]
         dT_GC_min_tar = 25#[j for j in range(19,26,1)]
 
