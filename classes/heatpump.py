@@ -84,7 +84,8 @@ class HeatPump:
 
         self.phx1.ColdIn = self.ihx.ColdOut
         if self.phx1_on == 1: #self.ihx_on == 1:
-            self.phx1.ColdOut = Stream( 'Comp1_in', Refrigerant, Pressure=P_low_init, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx2_max * eff_phx )
+            #self.phx1.ColdOut = Stream( 'Comp1_in', Refrigerant, Pressure=P_low_init, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx2_max * eff_phx )
+            self.phx1.ColdOut = Stream( 'Comp1_in', Refrigerant, Pressure=P_low_init, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx1_max * eff_phx )
         else:
             self.phx1.ColdOut = self.phx1.ColdIn
 
@@ -210,7 +211,7 @@ class HeatPump:
         if self.phx2_on == 1 and self.phx3_on == 0: #therefore gas cooler 3,2,1 is on
             self.N_elements_per_pass = 3
         if self.phx1_on == 1 and self.phx2_on == 0 and self.phx3_on == 0: #therefore gas cooler 2,1 is on
-            self.N_elements_per_pass = 4
+            self.N_elements_per_pass = 3
         else:
             self.N_elements_per_pass = 4  
           
@@ -359,7 +360,11 @@ class HeatPump:
         return self.COP    
 
     def Stream_outputs(self):
-        self.heat_capacity = self.gas_cooler4.HotIn.Mass_Flow * (self.gas_cooler4.HotOut.Enthalpy - self.gas_cooler4.HotIn.Enthalpy)
+        self.heat_capacityGC4 = self.gas_cooler4.HotIn.Mass_Flow * (self.gas_cooler4.HotIn.Enthalpy - self.gas_cooler4.HotOut.Enthalpy)
+        self.heat_capacityGC3 = self.gas_cooler3.HotIn.Mass_Flow * (self.gas_cooler3.HotIn.Enthalpy - self.gas_cooler3.HotOut.Enthalpy)
+        self.heat_capacityGC2 = self.gas_cooler2.HotIn.Mass_Flow * (self.gas_cooler2.HotIn.Enthalpy - self.gas_cooler2.HotOut.Enthalpy)
+        self.heat_capacityGC1 = self.gas_cooler1.HotIn.Mass_Flow * (self.gas_cooler1.HotIn.Enthalpy - self.gas_cooler1.HotOut.Enthalpy)
+        self.heat_capacity = self.heat_capacityGC4+self.heat_capacityGC3 + self.heat_capacityGC2 + self.heat_capacityGC1
         return [ self.comp1.FlowIn.Pressure, self.comp1.FlowOut.Pressure, self.comp2.FlowOut.Pressure, self.comp3.FlowOut.Pressure, self.gas_cooler4.ColdOut.Temperature, self.heat_capacity]
             
     #Writes the outputs of the model to a nested list (2-D)

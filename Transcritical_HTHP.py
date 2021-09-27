@@ -37,7 +37,7 @@ def init(l):
 
 if __name__=='__main__':
     TIC = timeit.default_timer()
-    if 1:
+    if 0:
         T_air_inlet = 15.0
         T_air_exh = 70.0
         RH_air_exh = 0.15
@@ -46,7 +46,7 @@ if __name__=='__main__':
         dT_GC_min_tar = 25#[j for j in range(19,26,1)]
 
         
-        Refrigerant = [ 'R1233zd(E)', 'R1234yf']#, 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)','Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane']
+        Refrigerant = [ 'R1233zd(E)', 'R1234yf', 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)','Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane']
         indep_var =  [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))]
         #            [[Refrigerant, float(dT_GC_min_tar[j]), T_air_tar, T_air_inlet, T_air_exh, RH_air_exh] for j in range(len(dT_GC_min_tar))]
