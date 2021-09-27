@@ -18,7 +18,7 @@ from timeit import default_timer
 class HeatPump:
 
     def __init__(self, Refrigerant='R1336mzz(Z)', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 3, dT_phx1_max=20.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
-                 PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx = 0.9):
+                 PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx = 0.9, T_evap_init = 15):
 
         #Continuous variables for the heat pump operation
         self.Refrigerant = Refrigerant
@@ -27,6 +27,7 @@ class HeatPump:
         self.PR_offset1 = PR_offset1 
         self.PR_offset2 = PR_offset2
         self.n_comp = n_comp
+        T_evap_init = T_evap_init
 
         self.eff_phx = eff_phx
         self.eff_motor = eff_motor
@@ -41,7 +42,7 @@ class HeatPump:
         self.converged = False
         self.COP = 1        
         self.AIR = 'Air'
-        self.T_evap_init = 15.0
+        #self.T_evap_init = 15.0
 
         #Binary variables for the heat pump structure
         self.comp2_on = 1  if self.n_comp > 1 else 0
