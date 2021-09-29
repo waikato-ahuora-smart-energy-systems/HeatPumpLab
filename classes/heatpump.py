@@ -18,7 +18,7 @@ from timeit import default_timer
 class HeatPump:
 
     def __init__(self, Refrigerant='R1336mzz(Z)', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 3, dT_phx1_max=20.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
-                 PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx = 0.9, T_evap_init = 15):
+                 PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=46.0, eff_motor=0.95, eff_phx = 0.9):
 
         #Continuous variables for the heat pump operation
         self.Refrigerant = Refrigerant
@@ -27,7 +27,7 @@ class HeatPump:
         self.PR_offset1 = PR_offset1 
         self.PR_offset2 = PR_offset2
         self.n_comp = n_comp
-        T_evap_init = T_evap_init
+        #self.T_evap_init = T_evap_init
 
         self.eff_phx = eff_phx
         self.eff_motor = eff_motor
@@ -42,7 +42,7 @@ class HeatPump:
         self.converged = False
         self.COP = 1        
         self.AIR = 'Air'
-        #self.T_evap_init = 15.0
+        self.T_evap_init = 15.0
 
         #Binary variables for the heat pump structure
         self.comp2_on = 1  if self.n_comp > 1 else 0
@@ -205,7 +205,7 @@ class HeatPump:
         
         self.set_P_ints = CustomRelationship( source_obj=[self.comp1.FlowIn, self.comp3.FlowOut, n_comp], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], var1=[self.PR_offset1, self.PR_offset2], relation=1 )
         self.set_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
-        
+        #self.set_air_massflow1 = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
         #Setup heat exchanger elements
         if self.phx3_on == 1: #therefore gas cooler 4,3,2,1 is on 
             self.N_elements_per_pass = 2

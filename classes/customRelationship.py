@@ -25,6 +25,9 @@ class CustomRelationship:
         elif self.relation == 2:
             self.Air_Mass_Flow()
 
+        elif self.relation == 3:
+            self.Airsource_Mass_Flow()
+
         else:
             pass
     
@@ -89,3 +92,26 @@ class CustomRelationship:
             gc.ColdOut.Mass_Flow = gc.ColdIn.Mass_Flow
             gc.ColdOut.Enthalpy = gc.ColdIn.Enthalpy + (gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow) / gc.ColdIn.Mass_Flow
             gc.ColdOut.PropsIn_mPH()
+
+
+    def Airsource_Mass_Flow(self):
+        m_air_list = []
+        #Hot side terminal temperature
+        dQ = 0
+        for ev in self.source_obj:
+            ev.ColdOut.Pressure = ev.ColdIn.Pressure
+            ev.HotOut.PropsIn_mPT()
+            ev.Duty = ev.ColdOut.Heat_Flow - ev.ColdIn.Heat_Flow
+            
+            ev_duty = ev.ColdOut.Heat_Flow - ev.ColdIn.Heat_Flow
+            dQ += ev_duty
+            T_air_i = ev.ColdOut.Temperature - 25
+            dh_air = self.source_obj[0].HotOut.Enthalpy - REFPROP('H', ev.HotOut.Fluid, 'PT', ev.HotOut.Pressure / 1000, T_air_i) 
+            
+            if dh_air > 0:
+                m_air_list.append(dQ / dh_air)
+                self.mcp_air = dQ / (T_air_i - self.source_obj[0].HotOut.Temperature)
+
+        self.target_obj[0].HotIn.Mass_Flow = max(m_air_list)
+        self.target_obj[0].HotOut.Mass_Flow = self.target_obj[0].HotIn.Mass_Flow
+        self.target_obj[0].HotIn.PropsIn_mPT()

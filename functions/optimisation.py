@@ -16,18 +16,18 @@ def obj_TRHP(var, indep_var):
     T_air_exh = indep_var[4]
     RH_air_exh = indep_var[5]
     n_comp = indep_var[6]
-    T_ihx_in_max = indep_var[7]
-    T_evap_init = indep_var[8]
+    #T_ihx_in_max = indep_var[7]
+    #T_evap_init = indep_var[7]
     
     T_gc_out_min = T_air_inlet + dT_GC_min_tar 
-    #T_ihx_in_max = T_air_exh - dT_GC_min_tar
+    T_ihx_in_max = T_air_exh - dT_GC_min_tar
     
     #Optimisation variables
     dT_phx1_max = var[0]
     dT_phx2_max = var[1] if n_comp > 1 else 0
     dT_phx3_max = var[2] if n_comp > 2 else 0
-    PR_offset1 = var[3]
-    PR_offset2 = var[4]
+    PR_offset1 =  0.0 #var[3]
+    PR_offset2 = 0.0 #var[4]
 
     #Fixed variables
     eff_phx = 0.90  
@@ -35,14 +35,14 @@ def obj_TRHP(var, indep_var):
     try:
         heat_pump = HeatPump(Refrigerant=Refrigerant, T_air_inlet=T_air_inlet, T_air_exh=T_air_exh, RH_air_exh=RH_air_exh, T_air_tar=T_air_tar, dT_GC_min_tar=dT_GC_min_tar, 
                             T_gc_out_min=T_gc_out_min, T_ihx_in_max=T_ihx_in_max, eff_phx=eff_phx, dT_phx1_max=dT_phx1_max, dT_phx2_max=dT_phx2_max, dT_phx3_max=dT_phx3_max, 
-                            PR_offset1=PR_offset1, PR_offset2=PR_offset2, eff_motor=eff_motor, n_comp=n_comp, T_evap_init = T_evap_init)
+                            PR_offset1=PR_offset1, PR_offset2=PR_offset2, eff_motor=eff_motor, n_comp=n_comp)
 
         obj_COP = heat_pump.solve()
 
         global Streams 
         Streams= heat_pump.Stream_outputs()
     except:
-        obj_COP = -0.001
+        obj_COP = 1
         pass
 
     print(var, indep_var, obj_COP)
@@ -56,9 +56,9 @@ def optimiser_function(indep_var):
     bound_dT_phx1_max = [0, 40.0]
     bound_dT_phx2_max = [0, 40.0]
     bound_dT_phx3_max = [0, 40.0] #change back to 0 and 40 ^^
-    bound_PR_offset1 = [-0.9, 0.9]
-    bound_PR_offset2 = [-0.9, 0.9]
-    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
+    bound_PR_offset1 = [-0.1, 0.1]
+    bound_PR_offset2 = [-0.1, 0.1]
+    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max] #, bound_PR_offset1, bound_PR_offset2] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
     
     # perform the dual annealing search
     
@@ -70,15 +70,13 @@ def optimiser_function(indep_var):
     output.append(['Obj function:', result.fun])
     output.append(['Refrigerant:', indep_var[0]])
     output.append(['dT Gas Cooler:', indep_var[1]])
-    output.append(['T_air_tar:', indep_var[2]])
-    output.append(['T_air_inlet:', indep_var[3]])
-    output.append(['T_ihx_in_max:', indep_var[7]])
-    output.append(['T_evap_init:', indep_var[8]])
+    #output.append(['T_air_tar:', indep_var[2]])
+    #output.append(['T_air_inlet:', indep_var[3]])
     output.append(['dT phx max 1:', result.x[0]])
     output.append(['dT phx max 2:', result.x[1]])
     output.append(['dT phx max 3:', result.x[2]])
-    output.append(['PR_offset1:', result.x[3]])
-    output.append(['PR_offset2:', result.x[4]])
+    #output.append(['PR_offset1:', result.x[3]])
+    #output.append(['PR_offset2:', result.x[4]])
     output.append(['P1:', Streams[0]])
     output.append(['P2', Streams[1]])
     output.append(['P3', Streams[2]])
