@@ -12,6 +12,7 @@ from classes import HeatPump
 from functions import optimiser_function, graph_heat_exchangers
 from multiprocessing import pool 
 from globalVariables import area_calc
+from functools import partial
 
 
 
@@ -38,16 +39,16 @@ def init(l):
 if __name__=='__main__':
     TIC = timeit.default_timer()
     if 1:
-        T_air_inlet = 10#[i for i in range(10,30,5)] #15.0
+        T_air_inlet = 15#[i for i in range(10,30,5)] #15.0
         T_air_exh = 70.0
         RH_air_exh = 0.15
         n_comp = 3
-        T_air_tar = 125#[k for k in range(125,225,25)]
+        T_air_tar = [k for k in range(125,225,25)]
         dT_GC_min_tar = 25#[j for j in range(19,26,1)]
        
         
-        Refrigerant = [ 'R1233zd(E)', 'R1234yf', 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)']#,'Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane']
-        indep_var =  [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))]
+        Refrigerant = [ 'R1233zd(E)', 'R1234yf', 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)','Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane']
+        indep_var =  [[Refrigerant[j],dT_GC_min_tar, T_air_tar[k], T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))for k in range(len(T_air_tar))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet[i], T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))for i in range(len(T_air_inlet))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar[k], T_air_inlet[i], T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))for k in range(len(T_air_tar))for i in range(len(T_air_inlet))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))]
@@ -55,12 +56,20 @@ if __name__=='__main__':
         #            [dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, Refrigerant] 
         #            [[float(dT_GC_min_tar[j]), T_air_tar, T_air_inlet, T_air_exh, Refrigerant] for j in range(len(dT_GC_min_tar))]         
 
-        
+        '''
         #with multiprocessing as pool:
         l = multiprocessing.Lock()
         pool = multiprocessing.Pool(initializer=init, initargs=(l,))
         results = pool.map(optimiser_function, indep_var)
        
+        pool.close()
+        pool.join()
+        '''
+        pool = multiprocessing.Pool()
+        m = multiprocessing.Manager()
+        l = m.Lock()
+        func = partial(optimiser_function, l)
+        results = pool.map(func, indep_var)
         pool.close()
         pool.join()
         
@@ -73,10 +82,11 @@ if __name__=='__main__':
                 print(element, file=f)
             print('\n', file=f)
          
-        f.close()        
+        f.close()   
+           
 
     else:  
-        heat_pump = HeatPump(Refrigerant = 'R1336mzz(Z)', T_air_tar=200.0,  dT_phx1_max=20, dT_phx2_max=35,  dT_phx3_max=0, n_comp = 3)     
+        heat_pump = HeatPump(Refrigerant = 'R1336mzz(Z)', T_air_inlet = 10,T_air_tar=150.0,  dT_phx1_max=20, dT_phx2_max=35,  dT_phx3_max=15, n_comp = 3)     
         obj_COP = heat_pump.solve() 
         
         print('COP:', obj_COP)

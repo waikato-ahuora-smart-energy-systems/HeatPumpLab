@@ -26,7 +26,7 @@ def obj_TRHP(var, indep_var):
     dT_phx1_max = var[0]
     dT_phx2_max = var[1] if n_comp > 1 else 0
     dT_phx3_max = var[2] if n_comp > 2 else 0
-    PR_offset1 =  0.0 #var[3]
+    PR_offset1 = 0.0#var[3]
     PR_offset2 = 0.0 #var[4]
 
     #Fixed variables
@@ -41,50 +41,55 @@ def obj_TRHP(var, indep_var):
 
         global Streams 
         Streams= heat_pump.Stream_outputs()
+    
+
+        print(var, indep_var, obj_COP)
+        #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1', PR_offset)
+        #print('T_air_tar=',T_air_tar, 'dT_GC_min_tar=',dT_GC_min_tar, 'T_air_inlet = ',T_air_inlet, 'T_air_exh =',T_air_exh, 'T_gc_out_min = ',T_gc_out_min)
     except:
         obj_COP = 1
         pass
-
-    print(var, indep_var, obj_COP)
-    #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1', PR_offset)
-    #print('T_air_tar=',T_air_tar, 'dT_GC_min_tar=',dT_GC_min_tar, 'T_air_inlet = ',T_air_inlet, 'T_air_exh =',T_air_exh, 'T_gc_out_min = ',T_gc_out_min)
     return obj_COP * -1000
 
     
-def optimiser_function(indep_var):
+def optimiser_function(lock,indep_var):
     #Define the bounds of the optimisation variables
     bound_dT_phx1_max = [0, 40.0]
     bound_dT_phx2_max = [0, 40.0]
     bound_dT_phx3_max = [0, 40.0] #change back to 0 and 40 ^^
-    bound_PR_offset1 = [-0.1, 0.1]
-    bound_PR_offset2 = [-0.1, 0.1]
-    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max] #, bound_PR_offset1, bound_PR_offset2] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
+    bound_PR_offset1 = [-0.9, 0.9]
+    bound_PR_offset2 = [-0.9, 0.9]
+    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_dT_phx3_max]#, bound_PR_offset1]#, bound_PR_offset2] #bound_dT_phx3_max, bound_PR_offset1, bound_PR_offset2]
     
     # perform the dual annealing search
-    
-    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var]) #, maxiter=100
+
+    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var], atol = 0.01, maxiter=100) #, maxiter=100
     result.fun *= -1/1000
     print(result.fun) 
+    #for base case
+    #var = 0
+    #result = obj_TRHP(var,indep_var)
+    #result *= -1/1000
+    #print(result) 
 
     output = []
-    output.append(['Obj function:', result.fun])
+    #output.append(['Obj function:', result.fun])
+    output.append(['Obj function:', result])
     output.append(['Refrigerant:', indep_var[0]])
-    output.append(['dT Gas Cooler:', indep_var[1]])
-    #output.append(['T_air_tar:', indep_var[2]])
-    #output.append(['T_air_inlet:', indep_var[3]])
-    output.append(['dT phx max 1:', result.x[0]])
-    output.append(['dT phx max 2:', result.x[1]])
-    output.append(['dT phx max 3:', result.x[2]])
-    #output.append(['PR_offset1:', result.x[3]])
-    #output.append(['PR_offset2:', result.x[4]])
+    #output.append(['dT Gas Cooler:', indep_var[1]])
+    output.append(['T_air_tar:', indep_var[2]])
+    #output.append(['T_air_inlet', indep_var[3]])
+    #output.append(['dT phx max 1:', result.x[0]])
+    #output.append(['dT phx max 2:', result.x[1]])
+    #output.append(['dT phx max 3:', result.x[2]])
     output.append(['P1:', Streams[0]])
     output.append(['P2', Streams[1]])
     output.append(['P3', Streams[2]])
     output.append(['P4', Streams[3]])
     output.append(['Target air', Streams[4]])
     output.append(['Heat Capacity', Streams[5]])
-    output.append(['Message:', result.message])
-    output.append(['Success:', result.success])
+    #output.append(['Message:', result.message])
+    #output.append(['Success:', result.success])
 
     return output
    

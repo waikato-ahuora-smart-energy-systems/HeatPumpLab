@@ -205,7 +205,7 @@ class HeatPump:
         
         self.set_P_ints = CustomRelationship( source_obj=[self.comp1.FlowIn, self.comp3.FlowOut, n_comp], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], var1=[self.PR_offset1, self.PR_offset2], relation=1 )
         self.set_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
-        #self.set_air_massflow1 = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
+        self.set_air_massflow1 = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
         #Setup heat exchanger elements
         if self.phx3_on == 1: #therefore gas cooler 4,3,2,1 is on 
             self.N_elements_per_pass = 2
@@ -365,7 +365,7 @@ class HeatPump:
         self.heat_capacityGC3 = self.gas_cooler3.HotIn.Mass_Flow * (self.gas_cooler3.HotIn.Enthalpy - self.gas_cooler3.HotOut.Enthalpy)
         self.heat_capacityGC2 = self.gas_cooler2.HotIn.Mass_Flow * (self.gas_cooler2.HotIn.Enthalpy - self.gas_cooler2.HotOut.Enthalpy)
         self.heat_capacityGC1 = self.gas_cooler1.HotIn.Mass_Flow * (self.gas_cooler1.HotIn.Enthalpy - self.gas_cooler1.HotOut.Enthalpy)
-        self.heat_capacity = self.heat_capacityGC4+self.heat_capacityGC3 + self.heat_capacityGC2 + self.heat_capacityGC1
+        self.heat_capacity = self.heat_capacityGC4 + self.heat_capacityGC3 + self.heat_capacityGC2 + self.heat_capacityGC1
         return [ self.comp1.FlowIn.Pressure, self.comp1.FlowOut.Pressure, self.comp2.FlowOut.Pressure, self.comp3.FlowOut.Pressure, self.gas_cooler4.ColdOut.Temperature, self.heat_capacity]
             
     #Writes the outputs of the model to a nested list (2-D)
