@@ -8,7 +8,7 @@ class Compressor:
         self.FlowIn = None
         self.FlowOut = None
         self.Motor_Eff = Motor_Eff
-        self.Pressure_Ratio = 0
+        self.Pressure_Ratio = 1.0
         self.dP = 0
         self.Isen_Eff = 0
         self.dh_shaft = 0

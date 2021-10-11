@@ -26,8 +26,8 @@ def obj_TRHP(var, indep_var):
     dT_phx1_max = var[0]
     dT_phx2_max = var[1] if n_comp > 1 else 0
     dT_phx3_max = var[2] if n_comp > 2 else 0
-    PR_offset1 = 0.0#var[3]
-    PR_offset2 = 0.0 #var[4]
+    PR_2 = 0.0 #var[3]
+    PR_3 = 0.0 #var[4]
 
     #Fixed variables
     eff_phx = 0.90  
@@ -35,13 +35,12 @@ def obj_TRHP(var, indep_var):
     try:
         heat_pump = HeatPump(Refrigerant=Refrigerant, T_air_inlet=T_air_inlet, T_air_exh=T_air_exh, T_air_tar=T_air_tar, dT_GC_min_tar=dT_GC_min_tar, 
                             T_gc_out_min=T_gc_out_min, T_ihx_in_max=T_ihx_in_max, eff_phx=eff_phx, dT_phx1_max=dT_phx1_max, dT_phx2_max=dT_phx2_max, dT_phx3_max=dT_phx3_max, 
-                            PR_offset1=PR_offset1, PR_offset2=PR_offset2, eff_motor=eff_motor, n_comp=n_comp) #RH_air_exh=RH_air_exh
+                            PR_2_init=PR_2, PR_3_init=PR_3, eff_motor=eff_motor, n_comp=n_comp) #RH_air_exh=RH_air_exh
 
         obj_COP = heat_pump.solve()
 
         global Streams 
-        Streams= heat_pump.Stream_outputs()
-    
+        Streams= heat_pump.Stream_outputs()    
 
         print(var, indep_var, obj_COP)
         #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1', PR_offset)
@@ -49,27 +48,26 @@ def obj_TRHP(var, indep_var):
     except:
         obj_COP = 1
         pass
-    return obj_COP * -1000
+    return obj_COP * -1
 
     
-def optimiser_function(lock,indep_var):
+def optimiser_function(lock, indep_var):
     #Define the bounds of the optimisation variables
     bound_dT_phx1_max = [0, 40.0]
     bound_dT_phx2_max = [0, 40.0]
     bound_dT_phx3_max = [0, 40.0] 
-    bound_PR_offset1 = [-0.9, 0.9]
-    bound_PR_offset2 = [-0.9, 0.9]
-    bounds = [bound_dT_phx1_max, bound_dT_phx2_max]#,  bound_dT_phx3_max]#, bound_PR_offset1]#, bound_PR_offset2] 
-    # perform the dual annealing search
- 
+    bound_PR_2 = [1.0, 50.0]
+    bound_PR_3 = [1.0, 50.0]
+    bounds = [bound_dT_phx1_max, bound_dT_phx2_max] #, bound_dT_phx3_max]#, bound_PR_2]#, bound_PR_3] 
 
-    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var], atol = 0.01, maxiter=100) #, maxiter=100
-    result.fun *= -1/1000
+    # perform the dual annealing search
+    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var], atol = 0.001, maxiter=100) #, maxiter=100
+    result.fun *= -1
     print(result.fun) 
 
     #for base case
     #var = 0
-    #result = obj_TRHP(var,indep_var)
+    #result = obj_TRHP(var, indep_var)
     #result *= -1/1000
     #print(result) 
 

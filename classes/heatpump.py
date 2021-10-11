@@ -18,14 +18,24 @@ from timeit import default_timer
 class HeatPump:
 
     def __init__(self, Refrigerant='R1336mzz(Z)', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 3, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
-                 PR_offset1=0.0, PR_offset2=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=15.1, eff_motor=0.95, eff_phx = 0.9):
+                 PR_2_init=0.0, PR_3_init=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=15.1, eff_motor=0.95, eff_phx = 0.9):
 
         #Continuous variables for the heat pump operation
         self.Refrigerant = Refrigerant
         self.T_air_tar = T_air_tar
         self.dT_GC_min_tar = dT_GC_min_tar
-        self.PR_offset1 = PR_offset1 
-        self.PR_offset2 = PR_offset2
+        
+        if PR_2_init < 1.0 and PR_3_init < 1.0:
+            self.comp_PR_type = "Constant" 
+        else:
+            self.comp_PR_type = "Variable"
+            if PR_2_init < 1.0:
+                PR_2_init = PR_3_init
+            if PR_3_init < 1.0:
+                PR_3_init = PR_2_init
+
+        self.PR_2_init = max(PR_2_init, 1.0)
+        self.PR_3_init = max(PR_3_init, 1.0)
         self.n_comp = n_comp
         #self.T_evap_init = T_evap_init
 
@@ -84,8 +94,7 @@ class HeatPump:
             self.ihx.ColdOut = self.ihx.ColdIn
 
         self.phx1.ColdIn = self.ihx.ColdOut
-        if self.phx1_on == 1: #self.ihx_on == 1:
-            #self.phx1.ColdOut = Stream( 'Comp1_in', Refrigerant, Pressure=P_low_init, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx2_max * eff_phx )
+        if self.phx1_on == 1: 
             self.phx1.ColdOut = Stream( 'Comp1_in', Refrigerant, Pressure=P_low_init, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx1_max * eff_phx )
         else:
             self.phx1.ColdOut = self.phx1.ColdIn
@@ -94,18 +103,28 @@ class HeatPump:
 
         P_comp_out_est = REFPROP('P', Refrigerant, 'TS', self.T_air_tar + self.dT_GC_min_tar - (dT_phx1_max + dT_phx2_max + dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
         
+        
         if self.n_comp == 1:
             P_comp1_out = P_comp_out_est
         elif self.n_comp == 2:
-            P_comp1_out = P_low_init ** (1 / 2) * P_comp_out_est ** (1 / 2)
+            if self.comp_PR_type == "Constant":
+                P_comp1_out = P_low_init ** (1 / 2) * P_comp_out_est ** (1 / 2)    
+            else:
+                PR_1 = P_comp_out_est / P_low_init * 1 / self.PR_2_init
+                P_comp1_out = P_low_init * PR_1
             P_comp2_out = P_comp_out_est
         elif self.n_comp == 3:
-            P_comp1_out = P_low_init ** (2 / 3) * P_comp_out_est ** (1 / 3)
-            P_comp2_out = P_low_init ** (1 / 3) * P_comp_out_est ** (2 / 3)
+            if self.comp_PR_type == "Constant":
+                P_comp1_out = P_low_init ** (2 / 3) * P_comp_out_est ** (1 / 3)
+                P_comp2_out = P_low_init ** (1 / 3) * P_comp_out_est ** (2 / 3)
+            else:
+                PR_1 = P_comp_out_est / P_low_init * 1 / (self.PR_2_init * self.PR_3_init)
+                P_comp1_out = P_low_init * PR_1
+                P_comp2_out = P_comp1_out * self.PR_2_init
             P_comp3_out = P_comp_out_est
 
         self.comp1.FlowOut = Stream( 'Comp1_out', Refrigerant, Pressure=P_comp1_out, Temperature=REFPROP('T', Refrigerant, 'PS', P_comp1_out / 1000, self.comp1.FlowIn.Entropy, 0))
-        
+
         self.phx2.ColdIn = self.comp1.FlowOut
         if self.phx2_on == 1:
             self.phx2.ColdOut = Stream( 'Comp2_in', Refrigerant, Pressure=self.phx2.ColdIn.Pressure, Temperature=self.phx2.ColdIn.Temperature + self.dT_phx2_max * eff_phx)
@@ -203,7 +222,8 @@ class HeatPump:
             self.set_phx1_dTmax = Set_Relationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_max, prop='Temperature', prop2='Pressure' ) 
             #self.set_phx1_dTmax = CustomRelationship( source_obj=[self.phx1.ColdIn, self.gas_cooler1.HotOut], target_obj=self.phx1.HotIn, var1=self.dT_phx2_max, relation=0 )
         #self.evaporator.ColdOut.Mass_Flow = Set_Relationship( source_obj=self.evaporator.ColdIn, target_obj=[self.evaporator.ColdOut], c=self.evaporator, prop='Mass Flow', prop2='Pressure' )
-        self.set_P_ints = CustomRelationship( source_obj=[self.comp1.FlowIn, self.comp3.FlowOut, n_comp], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], var1=[self.PR_offset1, self.PR_offset2], relation=1 )
+
+        self.set_P_ints = CustomRelationship( source_obj=[self.comp1.FlowIn, self.comp1.FlowOut, n_comp], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut, self.comp3.FlowOut], var1=[self.comp_PR_type, self.PR_2_init, self.PR_3_init], relation=1 )
         self.set_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
         self.set_air_massflow1 = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
         #Setup heat exchanger elements
@@ -275,7 +295,7 @@ class HeatPump:
 
     def state_solve(self, P_comp_out):
         self.converged = False
-        self.comp3.FlowOut.Pressure = P_comp_out
+        self.comp1.FlowOut.Pressure = P_comp_out
         i = 0
         h_exp_in = 0.0
         m_air_out = 0.0
@@ -310,10 +330,16 @@ class HeatPump:
     #Solve heat pump cycle
     def solve(self):
         self.area_on = False
-        P_estimate = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
-        P_low_bound = P_estimate
-        P_upp_bound = P_estimate
-        a = self.state_solve(P_estimate)
+        P_estimate_high = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + self.dT_GC_min_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
+        if self.comp_PR_type == "Constant":
+            P_comp1_est = ( P_estimate_high / self.comp1.FlowIn.Pressure ) ** ( 1 / self.n_comp) * self.comp1.FlowIn.Pressure
+        else:   
+            P_comp1_est = P_estimate_high / ( self.PR_2_init * self.PR_3_init ) 
+        
+        P_low_bound = P_comp1_est
+        P_upp_bound = P_comp1_est
+
+        a = self.state_solve(P_comp1_est)
         b = a
         i = 0
         if b > 0.0:

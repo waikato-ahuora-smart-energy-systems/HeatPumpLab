@@ -32,18 +32,17 @@ class CustomRelationship:
             pass
     
     #Determines the n-1 intermediate pressures between n compressors
-    def Determine_Pint(self, P_in, P_out, n_comp=1, PR_offset=[0.0]):
-        
-        for i in range(1, n_comp):
-            self.target_obj[i - 1].Pressure = P_in ** (1 - i / n_comp) * P_out ** (i / n_comp)
-
-            if (PR_offset[i - 1] > 0 and PR_offset[i - 1] <= 1.0) or (PR_offset[i - 1] < 0 and PR_offset[i - 1] >= -1.0): 
-                if i == 1:
-                    n_exp = math.log(self.target_obj[i - 1].Pressure) - math.log(P_in)
-                else:
-                    n_exp = math.log(self.target_obj[i - 1].Pressure) - math.log(self.target_obj[i - 2].Pressure)
-
-                self.target_obj[i - 1].Pressure = self.target_obj[i - 1].Pressure * math.exp(n_exp * PR_offset[i - 1])
+    def Determine_Pint(self, P_comp1_in, P_comp1_out, n_comp, PR_var):
+        if n_comp > 1:
+            if PR_var[0] == 'Constant':
+                PR_1 = P_comp1_out / P_comp1_in
+                self.target_obj[1].Pressure = self.target_obj[0].Pressure * PR_1
+                if n_comp == 3:
+                    self.target_obj[2].Pressure = self.target_obj[1].Pressure * PR_1
+            else:
+                self.target_obj[1].Pressure = self.target_obj[0].Pressure * PR_var[1]
+                if n_comp == 3:
+                    self.target_obj[2].Pressure = self.target_obj[1].Pressure * PR_var[2]
 
     def Air_Mass_Flow(self):
         m_air_list = []

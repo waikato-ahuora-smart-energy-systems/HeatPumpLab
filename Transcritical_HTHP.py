@@ -40,7 +40,7 @@ def init(l):
 
 if __name__=='__main__':
     TIC = timeit.default_timer()
-    if 1:
+    if 0:
         T_air_inlet =15.0#[i for i in range(10,30,5)] #15.0
         T_air_exh = 70.0
         #RH_air_exh = 0.15
@@ -50,8 +50,8 @@ if __name__=='__main__':
         #T_ihx_in_max = 15.01# [m for m in range(30,60,5)]
        
         
-        Refrigerant =[ 'R1233zd(E)', 'R1234yf', 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)','Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane']
-        indep_var =  [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, n_comp ] for j in range(len(Refrigerant))]
+        Refrigerant =['R1233zd(E)'] #, 'R1234yf', 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)','Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane'
+        indep_var =  [[Refrigerant[j], dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, n_comp ] for j in range(len(Refrigerant))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet[i], T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))for i in range(len(T_air_inlet))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar[k], T_air_inlet[i], T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))for k in range(len(T_air_tar))for i in range(len(T_air_inlet))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))]
@@ -97,7 +97,7 @@ if __name__=='__main__':
             
 
     else:  
-        heat_pump = HeatPump(Refrigerant = 'R1234ze(Z)', T_air_inlet = 15,T_air_tar=150,  dT_phx1_max=0.0, dT_phx2_max=0.0,  dT_phx3_max=0, n_comp = 2, dT_GC_min_tar=20.0,PR_offset1=0.0)     
+        heat_pump = HeatPump(Refrigerant='R1234ze(Z)', T_air_inlet=10, T_air_tar=180, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0, n_comp=3, dT_GC_min_tar=20.0, PR_2_init=4.0)     
         obj_COP = heat_pump.solve() 
         
         print('COP:', obj_COP)
@@ -107,6 +107,7 @@ if __name__=='__main__':
         print('Evap pressure:', heat_pump.evaporator.ColdIn.Pressure)
         print('Overall pressure ratio:', heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
         print("Air temp out:", heat_pump.gas_cooler4.ColdOut.Temperature)
+
 
 
         if 1:
