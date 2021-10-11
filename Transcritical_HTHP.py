@@ -40,7 +40,7 @@ def init(l):
 
 if __name__=='__main__':
     TIC = timeit.default_timer()
-    if 0:
+    if 1:
         T_air_inlet =15.0#[i for i in range(10,30,5)] #15.0
         T_air_exh = 70.0
         #RH_air_exh = 0.15
@@ -50,7 +50,7 @@ if __name__=='__main__':
         #T_ihx_in_max = 15.01# [m for m in range(30,60,5)]
        
         
-        Refrigerant =['R1233zd(E)'] #, 'R1234yf', 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)','Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane'
+        Refrigerant =['Carbon dioxide', 'R1234ze(E)'] #, 'R1234yf', 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)','R1233zd(E)', 'Ammonia', 'Isobutane', 'Butane'
         indep_var =  [[Refrigerant[j], dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, n_comp ] for j in range(len(Refrigerant))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet[i], T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))for i in range(len(T_air_inlet))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar[k], T_air_inlet[i], T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))for k in range(len(T_air_tar))for i in range(len(T_air_inlet))]
@@ -61,7 +61,7 @@ if __name__=='__main__':
 
         
         #with multiprocessing as pool:
-        ''''
+        '''
         l = multiprocessing.Lock()
         pool = multiprocessing.Pool(initializer=init, initargs=(l,))
         results = pool.map(optimiser_function, indep_var)
@@ -69,8 +69,6 @@ if __name__=='__main__':
         pool.close()
         pool.join()
         '''        
-
-        
         
         with get_context("spawn").Pool() as pool:
             pool = multiprocessing.Pool()
@@ -80,11 +78,8 @@ if __name__=='__main__':
             results = pool.map(func, indep_var)
             pool.close()
             pool.join()
-            
-            
-            
-        
-        #results = optimiser_function(indep_var)
+                       
+        #results = optimiser_function(0.0, indep_var)
         
         print(results)
         f = open("TRHP_refs_v2.csv", "w")
@@ -97,7 +92,7 @@ if __name__=='__main__':
             
 
     else:  
-        heat_pump = HeatPump(Refrigerant='R1234ze(Z)', T_air_inlet=10, T_air_tar=180, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0, n_comp=3, dT_GC_min_tar=20.0, PR_2_init=4.0)     
+        heat_pump = HeatPump(Refrigerant='Carbon dioxide', T_air_inlet=15, T_air_tar=200, dT_phx1_max=10.0, dT_phx2_max=10.0, dT_phx3_max=10.0, n_comp=3, dT_GC_min_tar=20.0, PR_2_init=0.0)     
         obj_COP = heat_pump.solve() 
         
         print('COP:', obj_COP)
@@ -108,13 +103,10 @@ if __name__=='__main__':
         print('Overall pressure ratio:', heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
         print("Air temp out:", heat_pump.gas_cooler4.ColdOut.Temperature)
 
-
-
         if 1:
             graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.gas_cooler2, heat_pump.gas_cooler3, heat_pump.gas_cooler4, heat_pump.phx1, heat_pump.phx2, heat_pump.phx3])
         else:
             graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.phx1, heat_pump.gas_cooler2, heat_pump.phx2, heat_pump.gas_cooler3, heat_pump.phx3, heat_pump.gas_cooler4])
-
 
     TOC = timeit.default_timer()
     print("Total time:",TOC - TIC) 

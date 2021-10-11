@@ -357,6 +357,14 @@ class HeatPump:
                 a = self.state_solve(P_upp_bound)
                 i += 1
 
+        if P_low_bound < self.comp1.FlowIn.Pressure:
+            #Check the low pressure bound remains above the evaporator pressure
+            P_low_bound = self.comp1.FlowIn.Pressure
+            b = self.state_solve(P_low_bound)
+            if P_upp_bound < P_low_bound:
+                #Check the upper pressure bound stays above the low pressure bound
+                a = b
+
         if a * b <= 0.0:
             #Solve the heat pump thermodynamics
             t0 = default_timer()

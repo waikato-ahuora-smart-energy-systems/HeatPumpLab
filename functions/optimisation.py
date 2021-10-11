@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 
 #import os, numpy as np, scipy as sp, math, glob, pandas, timeit, matplotlib.pyplot as plt, xlwings, copy
 from classes import HeatPump
-from scipy.optimize import differential_evolution as opt_method #dual_annealing  differential_evolution shgo
+from scipy.optimize import dual_annealing as opt_method #dual_annealing  differential_evolution shgo
 
 Streams = []
 def obj_TRHP(var, indep_var):
@@ -25,8 +25,8 @@ def obj_TRHP(var, indep_var):
     #Optimisation variables
     dT_phx1_max = var[0]
     dT_phx2_max = var[1] if n_comp > 1 else 0
-    dT_phx3_max = var[2] if n_comp > 2 else 0
-    PR_2 = 0.0 #var[3]
+    dT_phx3_max = 0.0 #var[2] if n_comp > 2 else 0
+    PR_2 = var[2] #var[3]
     PR_3 = 0.0 #var[4]
 
     #Fixed variables
@@ -58,10 +58,12 @@ def optimiser_function(lock, indep_var):
     bound_dT_phx3_max = [0, 40.0] 
     bound_PR_2 = [1.0, 50.0]
     bound_PR_3 = [1.0, 50.0]
-    bounds = [bound_dT_phx1_max, bound_dT_phx2_max] #, bound_dT_phx3_max]#, bound_PR_2]#, bound_PR_3] 
+    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_PR_2] #, bound_dT_phx3_max]#, bound_PR_2]#, bound_PR_3] 
+
+    x0 = [0.0, 0.0, 1.0]
 
     # perform the dual annealing search
-    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var], atol = 0.001, maxiter=100) #, maxiter=100
+    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var], atol = 0.001, maxiter=100, x0=x0) #, maxiter=100
     result.fun *= -1
     print(result.fun) 
 
