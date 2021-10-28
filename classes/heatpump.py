@@ -1,6 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
+from classes import gasCooler
 from classes.compressor import Compressor
 from classes.plateHeatExc import PlateHeatExc
 from classes.gasCooler import GasCooler
@@ -18,7 +19,7 @@ from timeit import default_timer
 class HeatPump:
 
     def __init__(self, Refrigerant='R1336mzz(Z)', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 3, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
-                 PR_2_init=0.0, PR_3_init=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=15.1, eff_motor=0.95, eff_phx = 0.9):
+                 PR_2_init=0.0, PR_3_init=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=50.0, eff_motor=0.95, eff_phx = 0.9):
 
         #Continuous variables for the heat pump operation
         self.Refrigerant = Refrigerant
@@ -122,7 +123,7 @@ class HeatPump:
                 P_comp1_out = P_low_init * PR_1
                 P_comp2_out = P_comp1_out * self.PR_2_init
             P_comp3_out = P_comp_out_est
-
+        
         self.comp1.FlowOut = Stream( 'Comp1_out', Refrigerant, Pressure=P_comp1_out, Temperature=REFPROP('T', Refrigerant, 'PS', P_comp1_out / 1000, self.comp1.FlowIn.Entropy, 0))
 
         self.phx2.ColdIn = self.comp1.FlowOut
@@ -303,7 +304,7 @@ class HeatPump:
         duty_comp = 0.0
 
         while (i < 5 or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > CONVERGANCE * h_exp_in 
-                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out
+                or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > CONVERGANCE * m_air_out 
                 or abs(self.gas_cooler4.HotIn.Pressure - self.gas_cooler1.HotOut.Pressure - dP_gc) > CONVERGANCE * 10 * dP_gc
                 or abs(self.comp1.Power + self.comp2.Power + self.comp3.Power - duty_comp) > CONVERGANCE * 10 * duty_comp) and i < 100: #Check for model convergance
             
@@ -346,14 +347,14 @@ class HeatPump:
             #Find a lower bound pressure resulting in an air temperature less than the target
             while b > 0.0 and i < 20:
                 P_upp_bound = P_low_bound
-                P_low_bound *= 0.90
+                P_low_bound *= 0.95
                 b = self.state_solve(P_low_bound)
                 i += 1
         else:
             #Find a upper bound pressure resulting in an air temperature greater than the target
             while a < 0.0 and i < 20:
                 P_low_bound = P_upp_bound
-                P_upp_bound *= 1.1
+                P_upp_bound *= 1.05
                 a = self.state_solve(P_upp_bound)
                 i += 1
 
@@ -392,7 +393,7 @@ class HeatPump:
         if self.COP == 1:
             self.converged = False          
         
-        return self.COP    
+        return self.COP     
 
     def Stream_outputs(self):
         self.heat_capacityGC4 = self.gas_cooler4.HotIn.Mass_Flow * (self.gas_cooler4.HotIn.Enthalpy - self.gas_cooler4.HotOut.Enthalpy)
@@ -400,7 +401,9 @@ class HeatPump:
         self.heat_capacityGC2 = self.gas_cooler2.HotIn.Mass_Flow * (self.gas_cooler2.HotIn.Enthalpy - self.gas_cooler2.HotOut.Enthalpy)
         self.heat_capacityGC1 = self.gas_cooler1.HotIn.Mass_Flow * (self.gas_cooler1.HotIn.Enthalpy - self.gas_cooler1.HotOut.Enthalpy)
         self.heat_capacity = self.heat_capacityGC4 + self.heat_capacityGC3 + self.heat_capacityGC2 + self.heat_capacityGC1
-        return [ self.comp1.FlowIn.Pressure, self.comp1.FlowOut.Pressure, self.comp2.FlowOut.Pressure, self.comp3.FlowOut.Pressure, self.gas_cooler4.ColdOut.Temperature, self.heat_capacity]
+        
+        
+        return [ self.comp1.FlowIn.Pressure, self.comp1.FlowOut.Pressure, self.comp2.FlowOut.Pressure, self.comp3.FlowOut.Pressure, self.gas_cooler4.ColdOut.Temperature, self.gas_cooler3.ColdOut.Temperature, self.heat_capacity]
             
     #Writes the outputs of the model to a nested list (2-D)
     def Write_Outputs(self, dTime = 0):

@@ -3,9 +3,14 @@ __credits__ = ['Alex Geary']
 
 #import os, numpy as np, scipy as sp, math, glob, pandas, timeit, matplotlib.pyplot as plt, xlwings, copy
 from classes import HeatPump
-from scipy.optimize import dual_annealing as opt_method #dual_annealing  differential_evolution shgo
+from scipy.optimize import differential_evolution as opt_method, slsqp #dual_annealing  differential_evolution shgo
+#from scipy.optimize import dual_annealing as opt_method
+from scipy.optimize import minimize
+from globalFunctions import REFPROP
+from multiprocessing import Lock
 
-Streams = []
+import threading 
+lock = threading.Lock()
 def obj_TRHP(var, indep_var):
 
     #Independent variables 
@@ -25,9 +30,9 @@ def obj_TRHP(var, indep_var):
     #Optimisation variables
     dT_phx1_max = var[0]
     dT_phx2_max = var[1] if n_comp > 1 else 0
-    dT_phx3_max = 0.0 #var[2] if n_comp > 2 else 0
-    PR_2 = var[2] #var[3]
-    PR_3 = 0.0 #var[4]
+    dT_phx3_max = 0.0#var[2] if n_comp > 2 else 0
+    PR_2 = var[2] 
+    PR_3 = 0.0#var[4] 
 
     #Fixed variables
     eff_phx = 0.90  
@@ -39,10 +44,10 @@ def obj_TRHP(var, indep_var):
 
         obj_COP = heat_pump.solve()
 
-        global Streams 
-        Streams= heat_pump.Stream_outputs()    
+        
+        
 
-        print(var, indep_var, obj_COP)
+        print(var, indep_var, (obj_COP))
         #print("dT_phx1_max",dT_phx1_max, "dT_phx2_max",dT_phx2_max, 'T_ihx_in_max',T_ihx_in_max, 'PR_offset1', PR_offset)
         #print('T_air_tar=',T_air_tar, 'dT_GC_min_tar=',dT_GC_min_tar, 'T_air_inlet = ',T_air_inlet, 'T_air_exh =',T_air_exh, 'T_gc_out_min = ',T_gc_out_min)
     except:
@@ -51,45 +56,126 @@ def obj_TRHP(var, indep_var):
     return obj_COP * -1
 
     
-def optimiser_function(lock, indep_var):
+def optimiser_function(indep_var):
+    lock.acquire()
+    Lower_bound=1.0
     #Define the bounds of the optimisation variables
-    bound_dT_phx1_max = [0, 40.0]
-    bound_dT_phx2_max = [0, 40.0]
-    bound_dT_phx3_max = [0, 40.0] 
-    bound_PR_2 = [1.0, 50.0]
-    bound_PR_3 = [1.0, 50.0]
-    bounds = [bound_dT_phx1_max, bound_dT_phx2_max, bound_PR_2] #, bound_dT_phx3_max]#, bound_PR_2]#, bound_PR_3] 
+    pcrit = REFPROP('Pcrit', indep_var[0], 'PH', 10000 / 1000, 200)*1000
+    p_RT = REFPROP('P', indep_var[0], 'QT', 1,15)*1000
+    upperbound_PR2=(pcrit / p_RT)
+    
+    #constraint to PR bounds
+    '''
+    if (pcrit / p_RT) > 25.0:
+        upperbound_PR2 = 25.0 
+    else:
+        upperbound_PR2=(pcrit / p_RT)
+    ''' 
+    upperbound_PR3 = upperbound_PR2 /2
+    
+    
+    if upperbound_PR3 < 1.0:
+        Lower_bound = 0.1
+    else:
+        Lower_bound = 1.0
 
-    x0 = [0.0, 0.0, 1.0]
-
+    #Constraint to IHX bounds
+    
+    if indep_var[0] == 'R1233zd(E)':
+        PHX1_x0 = 1.9
+        #PHX1_UB = 5.0
+        PHX2_x0 = 23.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'R1234yf':
+        PHX1_x0 = 18.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 25.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'R1234ze(Z)':
+        PHX1_x0 = 2.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 37.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'R1243zf':
+        PHX1_x0 = 11.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 26.0
+        #PHX2_UB =25.0
+    
+    if indep_var[0] == 'R1336mzz(Z)':
+        PHX1_x0 = 20.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 38.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'R1224yd(Z)':
+        PHX1_x0 = 9.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 40.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'R1234ze(E)':
+        PHX1_x0 = 6.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 26.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'Carbon dioxide':
+        PHX1_x0 = 1.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 3.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'Ammonia':
+        PHX1_x0 = 4.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 3.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'Isobutane':
+        PHX1_x0 = 15.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 38.0
+        #PHX2_UB =25.0
+    if indep_var[0] == 'Butane':
+        PHX1_x0 = 12.0
+        #PHX1_UB = 5.0
+        PHX2_x0 = 39.0
+        #PHX2_UB =25.0
+        
+    bound_dT_phx1_max = [0.0, 40]
+    bound_dT_phx2_max = [0.0, 40]
+    bound_dT_phx3_max = [0.0, 40.0] 
+    bound_PR_2 = [Lower_bound, upperbound_PR2]
+    bound_PR_3 = [Lower_bound, upperbound_PR3]
+    bnds = [bound_dT_phx1_max, bound_dT_phx2_max,  bound_PR_2]#, bound_PR_3] #bound_dT_phx1_max, bound_dT_phx2_max,  bound_dT_phx3_max
+    
+    
+    start =  [PHX1_x0,PHX2_x0, 1.0]
+    
     # perform the dual annealing search
-    result = opt_method(func=obj_TRHP, bounds=bounds, args=[indep_var], atol = 0.001, maxiter=100, x0=x0) #, maxiter=100
+   #result = opt_method(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=1000) #, maxiter=100
+    
+    result = minimize(fun=obj_TRHP, x0=start, args=indep_var, method= 'SLSQP', bounds= bnds)
     result.fun *= -1
     print(result.fun) 
+    lock.release()
 
     #for base case
     #var = 0
-    #result = obj_TRHP(var, indep_var)
-    #result *= -1/1000
+    #r#esult = obj_TRHP(var, indep_var)
+    #result *= -1
     #print(result) 
 
     output = []
     output.append(['Obj function:', result.fun])
+    output.append(['iterations:', result.nfev])
     #output.append(['Obj function:', result])
     output.append(['Refrigerant:', indep_var[0]])
-    #output.append(['dT Gas Cooler:', indep_var[1]])
-    #output.append(['T_air_tar:', indep_var[2]])
-    #output.append(['T_air_inlet', indep_var[3]])
+    output.append(['dT Gas Cooler:', indep_var[1]])
+    output.append(['T_air_tar:', indep_var[2]])
+    output.append(['T_air_inlet', indep_var[3]])
     #output.append(['T_ihx_in_max', indep_var[6]])
     output.append(['dT phx max 1:', result.x[0]])
     output.append(['dT phx max 2:', result.x[1]])
     #output.append(['dT phx max 3:', result.x[2]])
-    output.append(['P1:', Streams[0]])
-    output.append(['P2', Streams[1]])
-    output.append(['P3', Streams[2]])
-    #output.append(['P4', Streams[3]])
-    output.append(['Target air', Streams[4]])
-    output.append(['Heat Capacity', Streams[5]])
+    output.append(['PR 2:', result.x[2]])
+    #output.append(['PR 3:', result.x[4]])
     output.append(['Message:', result.message])
     output.append(['Success:', result.success])
 
