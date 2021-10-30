@@ -42,17 +42,17 @@ def init(l):
 
 if __name__=='__main__':
     TIC = timeit.default_timer()
-    if 1:
+    if 0:
         T_air_inlet =15#[i for i in range(10,30,5)] #15.0
-        T_air_exh = 70.0
+        T_air_exh = 60.0
         #RH_air_exh = 0.15
-        n_comp = 2#[q for q in range(1,4,1)]
+        n_comp = 1#[q for q in range(1,4,1)]
         T_air_tar = 200#[k for k in range(180,220,10)]
         dT_GC_min_tar =20#[m for m in range(20,26,1)]
         #T_ihx_in_max = 15.01# [m for m in range(30,60,5)]
        
         
-        Refrigerant ='R1243zf'#['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf']#,'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide']#, 'Ammonia', 'Isobutane', 'Butane']#'R1233zd(E)', 'R1234yf'#, 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane'
+        Refrigerant ='R1336mzz(Z)'#['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf']#,'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide']#, 'Ammonia', 'Isobutane', 'Butane']#'R1233zd(E)', 'R1234yf'#, 'R1234ze(Z)', 'R1243zf', 'R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane'
         #
         #indep_var =  [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet, T_air_exh, n_comp]for j in range(len(Refrigerant))]
         #            [[Refrigerant[j],dT_GC_min_tar, T_air_tar, T_air_inlet[i], T_air_exh, RH_air_exh, n_comp] for j in range(len(Refrigerant))for i in range(len(T_air_inlet))]
@@ -100,9 +100,28 @@ if __name__=='__main__':
             
 
     else:  
-        heat_pump = HeatPump(Refrigerant= 'R1234ze(Z)', T_air_inlet=15, T_air_tar=200, dT_phx1_max=2.000169729464747, dT_phx2_max= 36.997198376173905, dT_phx3_max=0.0, n_comp=2, dT_GC_min_tar=20.0, PR_2_init= 3.04591951950533)     
-        obj_COP = heat_pump.solve() 
-        
+        heat_pump =  HeatPump(Refrigerant='R1336mzz(Z)', T_air_inlet=15, T_air_tar=200,T_air_exh=60, dT_phx1_max=4.3, dT_phx2_max=0.0, dT_phx3_max=0.0, n_comp=1, dT_GC_min_tar=20.0)        
+        obj_COP = heat_pump.solve()
+       
+        print(heat_pump.Refrigerant)
+        print(obj_COP)
+        print(heat_pump.evaporator.ColdIn.Pressure)
+        print(heat_pump.comp1.FlowOut.Pressure)
+        print(heat_pump.comp2.FlowOut.Pressure)
+        print(heat_pump.gas_cooler4.HotIn.Pressure)
+        print(heat_pump.gas_cooler4.ColdOut.Temperature)
+        print(heat_pump.gas_cooler1.ColdIn.Temperature)
+        print(heat_pump.dT_GC_min_tar)
+        print(heat_pump.evaporator.HotIn.Temperature)
+        print(heat_pump.T_evap_init)      
+        print( heat_pump.dT_phx1_max)
+        print(heat_pump.dT_phx2_max)
+        print(heat_pump.dT_phx3_max)
+        print(heat_pump.PR_2_init)
+        print(heat_pump.PR_3_init)
+        print( heat_pump.T_air_tar)
+        print(heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
+        '''
         print('COP:', obj_COP)
         print('refrigerant', heat_pump.Refrigerant)
         print('Comp 3 pressure out:', heat_pump.gas_cooler4.HotIn.Pressure)
@@ -119,7 +138,7 @@ if __name__=='__main__':
         print('Dtmin', heat_pump.dT_GC_min_tar)
         print('Overall pressure ratio:', heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
         print("Air temp out:", heat_pump.gas_cooler4.ColdOut.Temperature)
-
+            '''
         if 1:
             graph_heat_exchangers([heat_pump.gas_cooler1, heat_pump.gas_cooler2, heat_pump.gas_cooler3, heat_pump.gas_cooler4, heat_pump.phx1, heat_pump.phx2, heat_pump.phx3])
         else:

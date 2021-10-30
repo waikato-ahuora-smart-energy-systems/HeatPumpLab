@@ -29,9 +29,9 @@ def obj_TRHP(var, indep_var):
     
     #Optimisation variables
     dT_phx1_max = var[0]
-    dT_phx2_max = var[1] if n_comp > 1 else 0
+    dT_phx2_max = 0.0#var[1] if n_comp > 1 else 0
     dT_phx3_max = 0.0#var[2] if n_comp > 2 else 0
-    PR_2 = var[2] 
+    PR_2 = 0.0#var[3] 
     PR_3 = 0.0#var[4] 
 
     #Fixed variables
@@ -82,71 +82,81 @@ def optimiser_function(indep_var):
     #Constraint to IHX bounds
     
     if indep_var[0] == 'R1233zd(E)':
-        PHX1_x0 = 1.9
+        PHX1_x0 = 39.9
         #PHX1_UB = 5.0
-        PHX2_x0 = 23.0
+        #PHX2_x0 = 6.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 17.0
     if indep_var[0] == 'R1234yf':
-        PHX1_x0 = 18.0
+        PHX1_x0 = 40.0
         #PHX1_UB = 5.0
-        PHX2_x0 = 25.0
+        #PHX2_x0 = 26.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 15.0
     if indep_var[0] == 'R1234ze(Z)':
-        PHX1_x0 = 2.0
+        PHX1_x0 = 40.0
         #PHX1_UB = 5.0
-        PHX2_x0 = 37.0
+        #PHX2_x0 = 26.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 3.0
     if indep_var[0] == 'R1243zf':
-        PHX1_x0 = 11.0
+        PHX1_x0 = 34.3
         #PHX1_UB = 5.0
-        PHX2_x0 = 26.0
+        #PHX2_x0 = 22.0
         #PHX2_UB =25.0
-    
+        #PHX3_x0 = 2.0
     if indep_var[0] == 'R1336mzz(Z)':
-        PHX1_x0 = 20.0
+        PHX1_x0 = 4.3
         #PHX1_UB = 5.0
-        PHX2_x0 = 38.0
+        #PHX2_x0 = 6.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 39.0
     if indep_var[0] == 'R1224yd(Z)':
-        PHX1_x0 = 9.0
+        PHX1_x0 = 40.0
         #PHX1_UB = 5.0
-        PHX2_x0 = 40.0
+        #PHX2_x0 = 14.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 19.0
     if indep_var[0] == 'R1234ze(E)':
-        PHX1_x0 = 6.0
+        PHX1_x0 = 30.0
         #PHX1_UB = 5.0
-        PHX2_x0 = 26.0
+        #PHX2_x0 = 26.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 3.0
     if indep_var[0] == 'Carbon dioxide':
-        PHX1_x0 = 1.0
+        PHX1_x0 = 4.1
         #PHX1_UB = 5.0
-        PHX2_x0 = 3.0
+        #PHX2_x0 = 0.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 1.0
     if indep_var[0] == 'Ammonia':
-        PHX1_x0 = 4.0
+        PHX1_x0 = 4.99
         #PHX1_UB = 5.0
-        PHX2_x0 = 3.0
+        #PHX2_x0 = 4.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 1.0
     if indep_var[0] == 'Isobutane':
-        PHX1_x0 = 15.0
+        PHX1_x0 = 40.0
         #PHX1_UB = 5.0
-        PHX2_x0 = 38.0
+        #PHX2_x0 = 38.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 0.0
     if indep_var[0] == 'Butane':
-        PHX1_x0 = 12.0
+        PHX1_x0 = 40.0
         #PHX1_UB = 5.0
-        PHX2_x0 = 39.0
+        #PHX2_x0 = 11.0
         #PHX2_UB =25.0
+        #PHX3_x0 = 23.0
         
-    bound_dT_phx1_max = [0.0, 40]
-    bound_dT_phx2_max = [0.0, 40]
+    bound_dT_phx1_max = [0.0, 40.0]
+    bound_dT_phx2_max = [0.0, 40.0]
     bound_dT_phx3_max = [0.0, 40.0] 
     bound_PR_2 = [Lower_bound, upperbound_PR2]
     bound_PR_3 = [Lower_bound, upperbound_PR3]
-    bnds = [bound_dT_phx1_max, bound_dT_phx2_max,  bound_PR_2]#, bound_PR_3] #bound_dT_phx1_max, bound_dT_phx2_max,  bound_dT_phx3_max
+    bnds = [bound_dT_phx1_max]#, bound_dT_phx2_max,  bound_dT_phx3_max,  bound_PR_2, bound_PR_3] #bound_dT_phx1_max, bound_dT_phx2_max,  bound_dT_phx3_max
     
     
-    start =  [PHX1_x0,PHX2_x0, 1.0]
+    start =  [PHX1_x0]#, PHX2_x0, PHX3_x0,1.0, 1.0]
     
     # perform the dual annealing search
    #result = opt_method(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=1000) #, maxiter=100
@@ -172,9 +182,9 @@ def optimiser_function(indep_var):
     output.append(['T_air_inlet', indep_var[3]])
     #output.append(['T_ihx_in_max', indep_var[6]])
     output.append(['dT phx max 1:', result.x[0]])
-    output.append(['dT phx max 2:', result.x[1]])
+    #output.append(['dT phx max 2:', result.x[1]])
     #output.append(['dT phx max 3:', result.x[2]])
-    output.append(['PR 2:', result.x[2]])
+    #output.append(['PR 2:', result.x[3]])
     #output.append(['PR 3:', result.x[4]])
     output.append(['Message:', result.message])
     output.append(['Success:', result.success])
