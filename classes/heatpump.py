@@ -1,7 +1,6 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from classes import gasCooler
 from classes.compressor import Compressor
 from classes.plateHeatExc import PlateHeatExc
 from classes.gasCooler import GasCooler
@@ -369,8 +368,7 @@ class HeatPump:
         if a * b <= 0.0:
             #Solve the heat pump thermodynamics
             t0 = default_timer()
-            r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE*10, xtol=CONVERGANCE*10)
-            print(default_timer() - t0) 
+            r = optimize.brentq(f=self.state_solve, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=CONVERGANCE, xtol=CONVERGANCE)
 
             if area_calc and r[1].converged and self.converged:
                 #Solve the heap pump thermodynamics with detailed heat exchanger design
@@ -387,9 +385,9 @@ class HeatPump:
 
                 print(r[0] / P_org, dT)
 
-            if r[1].converged and self.converged:
-                self.COP = (self.gas_cooler4.Duty + self.gas_cooler3.Duty + self.gas_cooler2.Duty + self.gas_cooler1.Duty) / (self.comp1.Power + self.comp2.Power + self.comp3.Power)  # - self.exp_valve.Power           
-            
+            if r[1].converged and self.converged and abs(self.gas_cooler4.ColdOut.Temperature - self.T_air_tar) < 0.05:
+                self.COP = (self.gas_cooler4.Duty + self.gas_cooler3.Duty + self.gas_cooler2.Duty + self.gas_cooler1.Duty) / (self.comp1.Power + self.comp2.Power + self.comp3.Power)  # - self.exp_valve.Power
+                        
         if self.COP == 1:
             self.converged = False          
         
@@ -401,7 +399,6 @@ class HeatPump:
         self.heat_capacityGC2 = self.gas_cooler2.HotIn.Mass_Flow * (self.gas_cooler2.HotIn.Enthalpy - self.gas_cooler2.HotOut.Enthalpy)
         self.heat_capacityGC1 = self.gas_cooler1.HotIn.Mass_Flow * (self.gas_cooler1.HotIn.Enthalpy - self.gas_cooler1.HotOut.Enthalpy)
         self.heat_capacity = self.heat_capacityGC4 + self.heat_capacityGC3 + self.heat_capacityGC2 + self.heat_capacityGC1
-        
         
         return [ self.comp1.FlowIn.Pressure, self.comp1.FlowOut.Pressure, self.comp2.FlowOut.Pressure, self.comp3.FlowOut.Pressure, self.gas_cooler4.ColdOut.Temperature, self.gas_cooler3.ColdOut.Temperature, self.heat_capacity]
             
