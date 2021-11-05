@@ -30,13 +30,13 @@ def Trans_HTHP(Refrigerant='Carbon dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0
     
 def multi_optimal_main():
     Refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane']
-    dT_GC_min_tar = [i for i in range(15,26,5)]
+    dT_GC_min_tar = [i for i in range(15,30,5)]
     T_air_tar = [i for i in range(180,220,10)]
     T_air_inlet = [i for i in range(10,30,5)]
     T_air_exh = 65.0
     n_comp = [i + 1 for i in range(3)]
     
-    results = [optimiser_function([Refrigerant[0], dT_GC_min_tar[1], T_air_tar[i], T_air_inlet[1], T_air_exh, n_comp[1]]) for i in range(len(T_air_tar))]
+    results = [optimiser_function([Refrigerant[0], dT_GC_min_tar[1], T_air_tar[2], T_air_inlet[1], T_air_exh, n_comp[1]])]# for i in range(len(T_air_tar))]
 
     #indep_var =  [[Refrigerant[0], dT_GC_min_tar[1], T_air_tar[i], T_air_inlet[1], T_air_exh, n_comp[1]] for i in range(len(T_air_tar))]
     #with multiprocessing.Pool() as pool:

@@ -146,7 +146,7 @@ def optimiser_function(indep_var):
     
     # Perform the optimisation
     if 1:
-        result = optimize.differential_evolution(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=200, init='sobol', updating='deferred', workers=-1, polish=False) #allows for multiprocessing
+        result = optimize.differential_evolution(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=200, updating='deferred', workers=-1, polish=False) #allows for multiprocessing
         result = optimize.minimize(fun=obj_TRHP, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
     elif 0:
         result = optimize.dual_annealing(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=200) #does not produce the global minimum value
