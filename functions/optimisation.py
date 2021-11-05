@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 
 from classes import HeatPump
 from scipy import optimize
-from globalFunctions import REFPROP
+from globalFunctions import REFPROP, write_output
 
 def obj_TRHP(var, indep_var):
     try:
@@ -42,7 +42,7 @@ def obj_TRHP(var, indep_var):
 
         obj_COP = heat_pump.solve()
        
-        print(var, indep_var, (obj_COP))
+        #print(var, indep_var, (obj_COP))
 
     except: 
         obj_COP = 1 #if the model fails, always return a COP of 1
@@ -147,6 +147,7 @@ def optimiser_function(indep_var):
     # Perform the optimisation
     if 1:
         result = optimize.differential_evolution(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=200, updating='deferred', workers=-1, polish=False) #allows for multiprocessing
+        DE_nfev = result.nfev
         result = optimize.minimize(fun=obj_TRHP, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
     elif 0:
         result = optimize.dual_annealing(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=200) #does not produce the global minimum value
@@ -158,13 +159,13 @@ def optimiser_function(indep_var):
     
     output = []
     output.append(['Obj function:', result.fun])
-    output.append(['iterations:', result.nfev])
+    output.append(['Iterations:', result.nfev + DE_nfev])
     output.append(['Refrigerant:', indep_var[0]])
     output.append(['dT Gas Cooler:', indep_var[1]])
     output.append(['T_air_tar:', indep_var[2]])
-    output.append(['T_air_inlet', indep_var[3]])
-    output.append(['T_air_exh', indep_var[4]])
-    output.append(['n_comp', indep_var[5]])
+    output.append(['T_air_inlet:', indep_var[3]])
+    output.append(['T_air_exh:', indep_var[4]])
+    output.append(['n_comp:', indep_var[5]])
     output.append(['dT phx max 1:', result.x[0]])
     if n_comp > 1:
         output.append(['dT phx max 2:', result.x[1]])
@@ -176,5 +177,8 @@ def optimiser_function(indep_var):
     output.append(['Success:', result.success])
 
     result = 0
+
+    print(output)
+    write_output("TRHP_refs_v4.csv", output)
 
     return output

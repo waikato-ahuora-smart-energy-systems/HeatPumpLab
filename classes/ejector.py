@@ -1,7 +1,6 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-#from globalVariables import CONVERGANCE
 from globalFunctions import REFPROP
 from globalVariables import CONVERGANCE
 

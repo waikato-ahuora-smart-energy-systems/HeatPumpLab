@@ -1,7 +1,6 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-import math
 from globalVariables import CONVERGANCE
 from globalFunctions import REFPROP
 from scipy import optimize

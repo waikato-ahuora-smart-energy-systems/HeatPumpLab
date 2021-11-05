@@ -3,10 +3,9 @@ __credits__ = ['Alex Geary']
 
 import math
 from globalFunctions import REFPROP
-from globalVariables import CONVERGANCE, area_calc
+from globalVariables import CONVERGANCE
 from classes.crossFlowElement import CrossFlow_Element
 from classes.stream import Stream
-import matplotlib.pyplot as plt
 from scipy import optimize
 
 

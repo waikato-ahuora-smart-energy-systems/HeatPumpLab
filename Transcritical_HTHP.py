@@ -10,7 +10,6 @@ By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.w
 import timeit, xlwings
 from classes import HeatPump
 from functions import optimiser_function, graph_heat_exchangers
-from globalFunctions import write_to_file
 #import multiprocessing
 
 
@@ -36,14 +35,11 @@ def multi_optimal_main():
     T_air_exh = 65.0
     n_comp = [i + 1 for i in range(3)]
     
-    results = [optimiser_function([Refrigerant[0], dT_GC_min_tar[1], T_air_tar[2], T_air_inlet[1], T_air_exh, n_comp[1]])]# for i in range(len(T_air_tar))]
+    [optimiser_function([Refrigerant[0], dT_GC_min_tar[1], T_air_tar[2], T_air_inlet[1], T_air_exh, n_comp[1]])]# for i in range(len(T_air_tar))]
 
     #indep_var =  [[Refrigerant[0], dT_GC_min_tar[1], T_air_tar[i], T_air_inlet[1], T_air_exh, n_comp[1]] for i in range(len(T_air_tar))]
     #with multiprocessing.Pool() as pool:
     #    results = pool.map(optimiser_function,(indep_var))
-
-    print(results)
-    write_to_file("TRHP_refs_v3.csv", results)
     
 
 def single_state_main():

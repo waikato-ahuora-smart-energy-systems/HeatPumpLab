@@ -1,0 +1,15 @@
+['Obj function:', 2.594116200622211]
+['Iterations:', 90]
+['Refrigerant:', 'R1233zd(E)']
+['dT Gas Cooler:', 20]
+['T_air_tar:', 200]
+['T_air_inlet:', 15]
+['T_air_exh:', 65.0]
+['n_comp:', 2]
+['dT phx max 1:', 6.749127288527646]
+['dT phx max 2:', 20.329702969619973]
+['PR 2:', 6.800888174485609]
+['Message:', 'Maximum number of iterations has been exceeded.']
+['Success:', False]
+
+

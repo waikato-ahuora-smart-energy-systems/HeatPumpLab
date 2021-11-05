@@ -4,11 +4,6 @@ __credits__ = ['Alex Geary']
 
 import math
 
-from math import log10
-from ht import *
-import numpy as np
-
-
 
 class CrossFlow_Element:
 

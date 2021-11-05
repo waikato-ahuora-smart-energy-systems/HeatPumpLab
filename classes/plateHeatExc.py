@@ -3,7 +3,6 @@ __credits__ = ['Alex Geary']
 
 import math
 from globalFunctions import REFPROP
-from globalVariables import area_calc, CONVERGANCE
 
 class PlateHeatExc:
     
