@@ -35,7 +35,7 @@ def multi_optimal_main():
     T_air_exh = 65.0
     n_comp = [i + 1 for i in range(3)]
     
-    [optimiser_function([Refrigerant[0], dT_GC_min_tar[1], T_air_tar[2], T_air_inlet[1], T_air_exh, n_comp[1]])]# for i in range(len(T_air_tar))]
+    [optimiser_function([Refrigerant[0], dT_GC_min_tar[1], T_air_tar[i], T_air_inlet[1], T_air_exh, n_comp[2]]) for i in range(len(T_air_tar))]
 
     #indep_var =  [[Refrigerant[0], dT_GC_min_tar[1], T_air_tar[i], T_air_inlet[1], T_air_exh, n_comp[1]] for i in range(len(T_air_tar))]
     #with multiprocessing.Pool() as pool:
