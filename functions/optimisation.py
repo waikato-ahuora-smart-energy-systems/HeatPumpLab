@@ -146,9 +146,9 @@ def optimiser_function(indep_var):
     
     # Perform the optimisation
     if 1:
-        result = optimize.differential_evolution(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=1, updating='deferred', workers=-1, polish=False) #allows for multiprocessing
-        #DE_nfev = result.nfev
-        #result = optimize.minimize(fun=obj_TRHP, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
+        result = optimize.differential_evolution(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=200, updating='deferred', workers=-1, polish=False) #allows for multiprocessing
+        DE_nfev = result.nfev
+        result = optimize.minimize(fun=obj_TRHP, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
     elif 0:
         result = optimize.dual_annealing(func=obj_TRHP, bounds=bnds, args=[indep_var], maxiter=200) #does not produce the global minimum value
     else:
@@ -159,7 +159,7 @@ def optimiser_function(indep_var):
     
     output = []
     output.append(['Obj function:', result.fun])
-    #output.append(['Iterations:', result.nfev + DE_nfev])
+    output.append(['Iterations:', result.nfev + DE_nfev])
     output.append(['Refrigerant:', indep_var[0]])
     output.append(['dT Gas Cooler:', indep_var[1]])
     output.append(['T_air_tar:', indep_var[2]])
