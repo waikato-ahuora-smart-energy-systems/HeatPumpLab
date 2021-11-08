@@ -179,6 +179,6 @@ def optimiser_function(indep_var):
     result = 0
 
     print(output)
-    write_output("TRHP_refs_v4.csv", output)
+    write_output('TRHP_refs_v4.csv', output)
 
     return output

@@ -39,7 +39,7 @@ def HAPROPS(propOut, propsIn, P, T_or_H, AH, arg = [1.0]):
         return fract_h2o * h_vap + fract_air * h_air
 
 def write_output(filename, to_write):
-    f = open(filename, "w")
+    f = open(filename, 'w')
     [print(elements, file=f) for elements in to_write]         
     print('\n', file=f)
     f.close()  
