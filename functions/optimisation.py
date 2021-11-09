@@ -158,27 +158,53 @@ def optimiser_function(indep_var):
     result.fun = 1000 / result.fun
     
     output = []
-    output.append(['Obj function:', result.fun])
-    output.append(['Iterations:', result.nfev + DE_nfev])
-    output.append(['Refrigerant:', indep_var[0]])
-    output.append(['dT Gas Cooler:', indep_var[1]])
-    output.append(['T_air_tar:', indep_var[2]])
-    output.append(['T_air_inlet:', indep_var[3]])
-    output.append(['T_air_exh:', indep_var[4]])
-    output.append(['n_comp:', indep_var[5]])
-    output.append(['dT phx max 1:', result.x[0]])
+
+    output.append(result.fun)
+    output.append(result.nfev + DE_nfev)
+    output.append(indep_var[0])
+    output.append(indep_var[1])
+    output.append(indep_var[2])
+    output.append(indep_var[3])
+    output.append(indep_var[4])
+    output.append(indep_var[5])
+    output.append(result.x[0])
     if n_comp > 1:
-        output.append(['dT phx max 2:', result.x[1]])
-        output.append(['PR 2:', result.x[2]])
+        output.append(result.x[1])
+        output.append(result.x[2])
+    else:
+        output.append('')
+        output.append('')
     if n_comp > 2:
-        output.append(['dT phx max 3:', result.x[3]])
-        output.append(['PR 3:', result.x[4]])
-    output.append(['Message:', result.message])
-    output.append(['Success:', result.success])
+        output.append(result.x[3])
+        output.append(result.x[4])
+    else:
+        output.append('')
+        output.append('')
+    output.append(result.message)
+    output.append(result.success)
+
+    output2 = []
+    output2.append(['Obj function:', result.fun])
+    output2.append(['Iterations:', result.nfev + DE_nfev])
+    output2.append(['Refrigerant:', indep_var[0]])
+    output2.append(['dT Gas Cooler:', indep_var[1]])
+    output2.append(['T_air_tar:', indep_var[2]])
+    output2.append(['T_air_inlet:', indep_var[3]])
+    output2.append(['T_air_exh:', indep_var[4]])
+    output2.append(['n_comp:', indep_var[5]])
+    output2.append(['dT phx max 1:', result.x[0]])
+    if n_comp > 1:
+        output2.append(['dT phx max 2:', result.x[1]])
+        output2.append(['PR 2:', result.x[2]])
+    if n_comp > 2:
+        output2.append(['dT phx max 3:', result.x[3]])
+        output2.append(['PR 3:', result.x[4]])
+    output2.append(['Message:', result.message])
+    output2.append(['Success:', result.success])
 
     result = 0
 
-    print(output)
-    write_output('TRHP_refs_v4.csv', output)
+    print(output2)
+    write_output('TRHP_refs_v5.csv', output, 'a')
 
     return output

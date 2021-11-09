@@ -2,6 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
+import csv
 
 try:
     RP = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP/REFPROP.DLL') #/REFPROP.DLL
@@ -38,8 +39,16 @@ def HAPROPS(propOut, propsIn, P, T_or_H, AH, arg = [1.0]):
 
         return fract_h2o * h_vap + fract_air * h_air
 
-def write_output(filename, to_write):
-    f = open(filename, 'a')
+def write_output(filename, to_write, how_to_write):
+    #f = open(filename, how_to_write)
+    with open(filename, how_to_write, newline= '') as f:
+        writer = csv.writer(f)
+        writer.writerow(to_write)
+    #f.close()
+
+    '''
+    f = open(filename, how_to_write)
     [print(elements, file=f) for elements in to_write]         
     print('\n', file=f)
     f.close()  
+    '''

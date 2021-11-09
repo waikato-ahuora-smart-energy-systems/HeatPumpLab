@@ -133,3 +133,20 @@
 ['Success:', False]
 
 
+['Obj function:', 2.6997170991885224]
+['Iterations:', 1347]
+['Refrigerant:', 'R1233zd(E)']
+['dT Gas Cooler:', 20]
+['T_air_tar:', 180]
+['T_air_inlet:', 15]
+['T_air_exh:', 65.0]
+['n_comp:', 3]
+['dT phx max 1:', 4.9805939696644845]
+['dT phx max 2:', 38.92973030956702]
+['PR 2:', 4.930151847263732]
+['dT phx max 3:', 54.15615336193576]
+['PR 3:', 1.015211906173891]
+['Message:', 'Optimization terminated successfully']
+['Success:', True]
+
+

@@ -10,6 +10,7 @@ By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.w
 import timeit, xlwings
 from classes import HeatPump
 from functions import optimiser_function, graph_heat_exchangers
+from globalFunctions import write_output
 #import multiprocessing
 
 
@@ -28,6 +29,10 @@ def Trans_HTHP(Refrigerant='Carbon dioxide', T_air_tar=200.0, dT_GC_min_tar=20.0
     return heat_pump.Write_Outputs(TOC - TIC) 
     
 def multi_optimal_main():
+
+    output = ['Obj function:','Iterations:','Refrigerant:','dT Gas Cooler:','T_air_tar:','T_air_inlet:','T_air_exh:','n_comp:','dT phx max 1:','dT phx max 2:','PR 2:','dT phx max 3:','PR 3:','Message:','Success:']
+    write_output('TRHP_refs_v5.csv', output, 'w')
+
     Refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane']
     dT_GC_min_tar = [i for i in range(15,30,5)]
     T_air_tar = [i for i in range(180,220,10)]
@@ -35,7 +40,7 @@ def multi_optimal_main():
     T_air_exh = 65.0
     n_comp = [i + 1 for i in range(3)]
     
-    [optimiser_function([Refrigerant[0], dT_GC_min_tar[1], T_air_tar[i], T_air_inlet[1], T_air_exh, n_comp[2]]) for i in range(len(T_air_tar))]
+    [optimiser_function([Refrigerant[j], dT_GC_min_tar[1], T_air_tar[2], T_air_inlet[1], T_air_exh, n_comp[1]]) for j in range(len(Refrigerant))]
 
     #indep_var =  [[Refrigerant[0], dT_GC_min_tar[1], T_air_tar[i], T_air_inlet[1], T_air_exh, n_comp[1]] for i in range(len(T_air_tar))]
     #with multiprocessing.Pool() as pool:
