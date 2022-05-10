@@ -1,7 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from globalFunctions import REFPROPS
+from functions.refprop import REFPROPS
 
 class Stream:
     def __init__(self, Name, Fluid = '', Mass_Flow = 1.0, Pressure = -1000, Temperature = -1000, Enthalpy = -1000, Quality = -1000, underdefined = 0):

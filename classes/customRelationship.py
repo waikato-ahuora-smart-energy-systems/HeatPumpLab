@@ -2,7 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 from globalVariables import CONVERGANCE
-from globalFunctions import REFPROP
+from functions.refprop import REFPROP
 from scipy import optimize
 
 class CustomRelationship:

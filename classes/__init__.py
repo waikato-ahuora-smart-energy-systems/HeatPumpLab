@@ -5,7 +5,7 @@ from .ejector import Ejector
 from .expansionValve import Expansion_Valve
 from .evaporator import Evaporator
 from .gasCooler import GasCooler
-from .heatpump import HeatPump
+from .HTTHP import HTTHP
 from .plateHeatExc import PlateHeatExc
 from .separator import Separator
 from .stream import Stream

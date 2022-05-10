@@ -1,8 +1,0 @@
-#Upgrade pip
-c:\users\puti-\appdata\local\programs\python\python39\python.exe -m pip install --upgrade pip
-
-#List all packages with newer versions available
-pip list --outdated
-
-#Update all pip packages
-pip freeze | %{$_.split('==')[0]} | %{pip install --upgrade $_}

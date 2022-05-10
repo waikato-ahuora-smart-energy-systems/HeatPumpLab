@@ -1,7 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from globalFunctions import REFPROP
+from functions.refprop import REFPROP
 
 class Compressor:
     def __init__(self, Motor_Eff):

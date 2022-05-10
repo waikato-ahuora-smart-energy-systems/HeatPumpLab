@@ -6,10 +6,10 @@
     "configurations": [
 
         {
-            "name": "Run-Debug HTHP",
+            "name": "Run-Debug HTTHP",
             "type": "python",
             "request": "launch",
-            "program": "Transcritical_HTHP.py",
+            "program": "main_HTTHP.py",
             "console": "integratedTerminal"
         }
     ]
