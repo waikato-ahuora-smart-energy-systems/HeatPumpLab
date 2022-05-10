@@ -1,7 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from scipy import optimize
+from scipy.optimize import minimize, differential_evolution
 from functions.refprop import REFPROP
 from functions.output import write_output
 from globalVariables import filename_output as fout
@@ -126,9 +126,9 @@ def optimiser_function(indep_var):
         x0.append(1.0)
     
     # Perform the optimisation
-    result = optimize.differential_evolution(func=obj, bounds=bnds, args=[indep_var], maxiter=200, updating='deferred', workers=-1, polish=False) #allows for multiprocessing
+    result = differential_evolution(func=obj, bounds=bnds, args=[indep_var], maxiter=200, updating='deferred', workers=-1, polish=False) #allows for multiprocessing
     DE_nfev = result.nfev
-    result = optimize.minimize(fun=obj, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
+    result = minimize(fun=obj, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
 
     #Covert the min obj result to the conventional COP = Q/W 
     result.fun = result.fun * -1
