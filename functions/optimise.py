@@ -8,24 +8,24 @@ from globalVariables import filename_output as fout
 from classes import TRHP
 
 def obj(var, indep_var):
-
     if indep_var[5] == 1:
         var.extend([0.0, 1.0, 0.0, 1.0])
     
     if indep_var[5] == 2:
         var.extend([0.0, 1.0])
 
-    m = TRHP(Refrigerant = indep_var[0],
-            dT_GC_min_tar = indep_var[1],
-            T_air_tar = indep_var[2],
-            T_air_inlet = indep_var[3],
-            T_air_exh = indep_var[4],
-            n_comp = indep_var[5], 
-            dT_phx1_max = var[0], 
-            dT_phx2_max = var[1], 
-            PR_2 = var[2], 
-            dT_phx3_max = var[3], 
-            PR_3 = var[4]
+    m = TRHP(
+                Refrigerant = indep_var[0],
+                dT_GC_min_tar = indep_var[1],
+                T_air_tar = indep_var[2],
+                T_air_inlet = indep_var[3],
+                T_air_exh = indep_var[4],
+                n_comp = indep_var[5], 
+                dT_phx1_max = var[0], 
+                dT_phx2_max = var[1], 
+                PR_2 = var[2], 
+                dT_phx3_max = var[3], 
+                PR_3 = var[4]
             )
     
     try:
@@ -39,7 +39,6 @@ def obj(var, indep_var):
 
     
 def optimiser_function(indep_var):
-
     #Define the bounds of the optimisation variables
     pcrit = REFPROP('Pcrit', indep_var[0], 'PH', 10, 200) * 1000
     p_RT = REFPROP('P', indep_var[0], 'QT', 1, 5) * 1000
@@ -47,6 +46,7 @@ def optimiser_function(indep_var):
     upperbound_PR2 = max(pcrit / p_RT / 2, 1.1)
     upperbound_PR3 = max(upperbound_PR2 / 2, 1.1)
 
+    '''
     #Constraint to IHX bounds
     if indep_var[0] == 'R1233zd(E)':
         PHX1_x0 = 39.9
@@ -114,6 +114,8 @@ def optimiser_function(indep_var):
         #PHX2_x0 = 11.0
         #PHX2_UB =25.0
         #PHX3_x0 = 23.0
+    '''
+    PHX1_x0 = 40.0
     
     n_comp = indep_var[5]
     x0 = [PHX1_x0]
@@ -133,9 +135,9 @@ def optimiser_function(indep_var):
     # Perform the optimisation
     result = differential_evolution(func=obj, bounds=bnds, args=[indep_var], maxiter=200, updating='deferred', workers=-1, polish=False) #allows for multiprocessing
     DE_nfev = result.nfev
-    result = minimize(fun=obj, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
+    #result = minimize(fun=obj, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
 
-    #Covert the min obj result to the conventional COP = Q/W 
+    #Covert the min obj result to a positive COP in W/W
     result.fun = result.fun / -1000
     result.nfev += DE_nfev
     write_output(filename=fout, result=result, n_comp=n_comp)

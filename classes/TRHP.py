@@ -30,6 +30,8 @@ class TRHP:
         self.dT_GC_min_tar = dT_GC_min_tar
         self.T_air_inlet = T_air_inlet
         self.T_air_exh = T_air_exh
+        self.T_gc_out_min = T_gc_out_min
+        self.T_ihx_in_max = T_ihx_in_max
         
         if PR_2_init < 1.0 and PR_3_init < 1.0:
             self.comp_PR_type = 'Constant' 
@@ -51,8 +53,8 @@ class TRHP:
         self.dT_phx2_max = dT_phx2_max if self.n_comp > 1 and dT_phx2_max > 0.0 else 0.0
         self.dT_phx3_max = dT_phx3_max if self.n_comp > 2 and dT_phx3_max > 0.0 else 0.0
 
-        self.T_gc_out = max(T_air_inlet + dT_GC_min_tar, T_gc_out_min)
-        self.T_ihx_in = min(T_air_exh - dT_GC_min_tar, T_ihx_in_max)
+        self.T_gc_out = max(self.T_air_inlet + self.dT_GC_min_tar, self.T_gc_out_min)
+        self.T_ihx_in = min(self.T_air_exh - self.dT_GC_min_tar, self.T_ihx_in_max)
         
         self.converged = False
         self.COP = 0        
@@ -63,7 +65,9 @@ class TRHP:
         self.create_components()
         self.stream_initialisation()
         self.set_dTmin_relationships()
-        self.set_gas_cooler_analysis()
+        self.detailed_model = False
+        if self.detailed_model: 
+            self.set_gas_cooler_analysis()
         self.define_solver_pathway()
 
 
@@ -182,7 +186,7 @@ class TRHP:
         if self.comp2_on == 1 and self.phx2_on == 1:
             self.gas_cooler3.HotOut = Stream( 'GC3_out', self.Refrigerant, Pressure= self.gas_cooler3.HotIn.Pressure, Temperature=self.comp1.FlowOut.Temperature + self.dT_phx2_max )
             self.phx2.HotIn = self.gas_cooler3.HotOut
-            self.phx2.HotOut = Stream( 'GC2_in', self.Refrigerant, Pressure=self.phx2.HotIn.Pressure, Temperature=self.phx2.ColdIn.Temperature + self.dT_phx2_max * eff_phx)
+            self.phx2.HotOut = Stream( 'GC2_in', self.Refrigerant, Pressure=self.phx2.HotIn.Pressure, Temperature=self.phx2.ColdIn.Temperature + self.dT_phx2_max * self.eff_phx)
         else:
             self.gas_cooler3.HotOut = self.gas_cooler3.HotIn
             self.phx2.HotIn = self.gas_cooler3.HotOut
@@ -192,7 +196,7 @@ class TRHP:
         if self.phx1_on == 1:
             self.gas_cooler2.HotOut = Stream( 'GC2_out', self.Refrigerant, Pressure= self.gas_cooler2.HotIn.Pressure, Temperature=self.comp1.FlowOut.Temperature + self.dT_phx1_max )
             self.phx1.HotIn = self.gas_cooler2.HotOut
-            self.phx1.HotOut = Stream( 'GC1_in', self.Refrigerant, Pressure=self.phx1.HotIn.Pressure, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx1_max * eff_phx)
+            self.phx1.HotOut = Stream( 'GC1_in', self.Refrigerant, Pressure=self.phx1.HotIn.Pressure, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx1_max * self.eff_phx)
         else:
             self.gas_cooler2.HotOut = self.gas_cooler2.HotIn
             self.phx1.HotIn = self.gas_cooler2.HotOut
@@ -257,12 +261,10 @@ class TRHP:
         else:
             self.N_elements_per_pass = 4  
 
-        self.detailed_model = False
-        if self.detailed_model: 
-            self.gas_cooler1.init_heat_exchanger_elements(self.N_elements_per_pass)
-            self.gas_cooler2.init_heat_exchanger_elements(self.N_elements_per_pass)
-            self.gas_cooler3.init_heat_exchanger_elements(self.N_elements_per_pass)
-            self.gas_cooler4.init_heat_exchanger_elements(self.N_elements_per_pass)
+        self.gas_cooler1.init_heat_exchanger_elements(self.N_elements_per_pass)
+        self.gas_cooler2.init_heat_exchanger_elements(self.N_elements_per_pass)
+        self.gas_cooler3.init_heat_exchanger_elements(self.N_elements_per_pass)
+        self.gas_cooler4.init_heat_exchanger_elements(self.N_elements_per_pass)
 
 
     def define_solver_pathway(self):
@@ -415,13 +417,3 @@ class TRHP:
                 self.converged = True
             
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
-
-
-    def Stream_outputs(self):
-        self.duty_GC4 = self.gas_cooler4.HotIn.Mass_Flow * (self.gas_cooler4.HotIn.Enthalpy - self.gas_cooler4.HotOut.Enthalpy)
-        self.duty_GC3 = self.gas_cooler3.HotIn.Mass_Flow * (self.gas_cooler3.HotIn.Enthalpy - self.gas_cooler3.HotOut.Enthalpy)
-        self.duty_GC2 = self.gas_cooler2.HotIn.Mass_Flow * (self.gas_cooler2.HotIn.Enthalpy - self.gas_cooler2.HotOut.Enthalpy)
-        self.duty_GC1 = self.gas_cooler1.HotIn.Mass_Flow * (self.gas_cooler1.HotIn.Enthalpy - self.gas_cooler1.HotOut.Enthalpy)
-        self.duty_GC_total = self.duty_GC4 + self.duty_GC3 + self.duty_GC2 + self.duty_GC1
-        
-        return [self.comp1.FlowIn.Pressure, self.comp1.FlowOut.Pressure, self.comp2.FlowOut.Pressure, self.comp3.FlowOut.Pressure, self.gas_cooler4.ColdOut.Temperature, self.gas_cooler3.ColdOut.Temperature, self.duty_GC_total]

@@ -14,10 +14,14 @@ class Compressor:
         self.dh_shaft = 0
         self.Shaft_Work = 0
         self.Power = 0
-        #Compressor model constants (Wang & Cleland, 2018)
-        self.COMP_COEFF_A = 0.65
-        self.COMP_COEFF_B = 0.015
-        self.COMP_COEFF_C = -0.0015
+        
+        compressor_model = [[0.65, 0.015, -0.0015],  #Compressor model constants (Wang & Cleland, 2018)
+                            [0.7, 0.0, 0.0]]        #Typical isentropic efficiency
+        m = 0
+
+        self.COMP_COEFF_A = compressor_model[m][0]
+        self.COMP_COEFF_B = compressor_model[m][1]
+        self.COMP_COEFF_C = compressor_model[m][2]
 
 
     def solve(self):
