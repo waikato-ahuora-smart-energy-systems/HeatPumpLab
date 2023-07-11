@@ -8,13 +8,12 @@ High temperature transcritical-recuperative heat pump model
 By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
 """
 from timeit import default_timer as timer
-#from classes.HTTHP import HTTHP
 from functions.optimiseHTTHP import optimiser_function, HTTHP
 
 if __name__=='__main__':
     TIC = timer()
 
-    Refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Ammonia', 'Isobutane', 'Butane']
+    Refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
     dT_GC_min_tar = [i for i in range(15,30,5)]
     T_air_tar = [i for i in range(180,220,10)]
     T_air_inlet = [i for i in range(10,30,5)]
