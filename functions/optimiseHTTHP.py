@@ -27,10 +27,15 @@ def obj(var, indep_var):
             dT_phx3_max = var[3], 
             PR_3 = var[4]
             )
-    m.solve
-    COP = m.COP
+    
+    try:
+        m.solve
+        COP = m.COP
+    except:
+        COP = 0
+
     del m 
-    return COP * -1
+    return COP * -1000
 
     
 def optimiser_function(indep_var):
@@ -131,10 +136,8 @@ def optimiser_function(indep_var):
     result = minimize(fun=obj, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
 
     #Covert the min obj result to the conventional COP = Q/W 
-    result.fun = result.fun * -1
-    
+    result.fun = result.fun / -1000
     result.nfev += DE_nfev
-
     write_output(filename=fout, result=result, n_comp=n_comp)
 
     return result

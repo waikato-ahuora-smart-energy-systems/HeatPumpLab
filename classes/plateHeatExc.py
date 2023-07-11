@@ -20,6 +20,12 @@ class PlateHeatExc:
         self.Duty = 0
         self.dP_h = 0
         self.dP_c = 0
+        self.area_calc_on = False
+        if self.area_calc_on:
+            self.plate_design_parameters()
+
+
+    def plate_design_parameters(self):
         #Plate heat exchanger model constants
         self.PHX_thick = 0.0005
         self.PHX_thermalcond = 0.0249
@@ -29,11 +35,9 @@ class PlateHeatExc:
         self.PHX_Length = 0.5
         self.PHX_Factor = 1.15
 
-        self.area_calc_on = False
 
-
-    #Internal heat exchanger analysis to determine duty
     def solve(self):
+        #Internal heat exchanger analysis to determine duty
         self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
         self.HotOut.PropsIn_mPH()
@@ -54,13 +58,6 @@ class PlateHeatExc:
         self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.dh_PHX
         self.ColdOut.PropsIn_mPH()
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
-
-        '''assume a pressure drop and adjust length. use pressure drop to find heat transfer coefficient and area also using duty'''
-        #Adjust the stream pressures
-        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
-        self.HotOut.PropsIn_mPH()
-        self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
-        self.ColdOut.PropsIn_mPH()
 
     
     def area_solve(self):
@@ -130,11 +127,9 @@ class PlateHeatExc:
             test = 0           
 
     
-    #Determines the design of the plate heat exchanger including thermal and hydralic performance
-    '''
     def area_solve(self):
-        
-        if AREA_CALC and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
+        #Determines the design of the plate heat exchanger including thermal and hydralic performance
+        if self.area_calc_on and self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
             Ch = self.Duty / abs( self.HotIn.Temperature - self.HotOut.Temperature )
             Cc = self.Duty / abs( self.ColdOut.Temperature - self.ColdIn.Temperature )
             self.c = min( Ch, Cc ) / max( Ch, Cc )
@@ -211,7 +206,7 @@ class PlateHeatExc:
             f_c = 38 /  ( RE_c)
             #self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_c * self.PHX_D_hyd ) )  / 1000
             self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.PHX_D_hyd ) )  / 1000         
-            '''
+
 
     def graph_data(self):
         H = []; T_hot = []; T_cold = []

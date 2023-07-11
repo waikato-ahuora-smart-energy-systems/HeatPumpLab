@@ -101,5 +101,5 @@ def write_screen(heat_pump):
         print('Target air:', heat_pump.T_air_tar)
         print('Dtmin:', heat_pump.dT_GC_min_tar)
         print('Overall pressure ratio:', heat_pump.gas_cooler4.HotIn.Pressure / heat_pump.evaporator.ColdIn.Pressure)
-        print("Dryer exh air temp:", heat_pump.evaporator.HotIn.Temperature)
-        print("Air temp out:", heat_pump.gas_cooler4.ColdOut.Temperature)
+        print('Dryer exh air temp:', heat_pump.evaporator.HotIn.Temperature)
+        print('Air temp out:', heat_pump.gas_cooler4.ColdOut.Temperature)

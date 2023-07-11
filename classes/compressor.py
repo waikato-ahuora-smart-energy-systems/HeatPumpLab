@@ -19,6 +19,7 @@ class Compressor:
         self.COMP_COEFF_B = 0.015
         self.COMP_COEFF_C = -0.0015
 
+
     def solve(self):
         self.Pressure_Ratio = self.FlowOut.Pressure / self.FlowIn.Pressure
         self.dP = self.FlowOut.Pressure - self.FlowIn.Pressure

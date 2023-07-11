@@ -24,30 +24,36 @@ class Stream:
             elif Pressure == -1000 and Enthalpy == -1000:
                 self.PropsIn_mTX()
 
+
     def PropsIn_mPH(self):
         props = REFPROPS('QMASS;T;S;CP', self.Fluid, 'PH', self.Pressure / 1000, self.Enthalpy)
         self.Quality = props[0];  self.Temperature = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3] 
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
-        
+
+
     def PropsIn_mPT(self):
         props = REFPROPS('QMASS;H;S;CP', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)
         self.Quality = props[0];  self.Enthalpy = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
+
 
     def PropsIn_mPX(self):
         props = REFPROPS('T;H;S;CP', self.Fluid, 'PQMASS', self.Pressure / 1000, self.Quality)
         self.Temperature = props[0];  self.Enthalpy = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
 
+
     def PropsIn_mPS(self):
         props = REFPROPS('T;H;QMASS;CP', self.Fluid, 'PS', self.Pressure / 1000, self.Entropy)
         self.Temperature = props[0];  self.Enthalpy = props[1];  self.Quality = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
 
+
     def PropsIn_mTX(self):
         props = REFPROPS('P;H;S;CP', self.Fluid, 'TQMASS', self.Temperature, self.Quality)
         self.Pressure = props[0] * 1000;  self.Enthalpy = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
+
 
     def Combine(self, fld1, fld2):
         #Assumes the fluids have the same composition
@@ -56,6 +62,7 @@ class Stream:
         self.Pressure = min(fld1.Pressure, fld2.Pressure)
         self.Enthalpy = (fld1.Heat_Flow + fld2.Heat_Flow) / self.Mass_Flow
         self.PropsIn_mPH()
+
     
     def PropsExtend(self): 
         props = REFPROPS('D;PRANDTL;VIS;TCX', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)

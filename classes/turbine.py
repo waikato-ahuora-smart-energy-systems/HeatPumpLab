@@ -1,8 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-class Turbine:
-    
+class Turbine: 
     def __init__(self, eff_isen = 1.0, eff_gen = 1.0):
         self.FlowIn = None
         self.FlowOut = None
@@ -11,7 +10,8 @@ class Turbine:
         self.eff_isen = eff_isen
         self.eff_gen = eff_gen
         self.Power = 0.0
-    
+
+
     def solve(self):
         self.FlowOut.Entropy = self.FlowIn.Entropy 
         self.FlowOut.PropsIn_mPS()

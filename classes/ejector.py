@@ -6,6 +6,7 @@ from globalVariables import CONVERGANCE
 
 class Ejector:
     def __init__(self, Eff_is_ejc):
+        self.CONVERGANCE = CONVERGANCE
         self.PriFlowIn = None
         self.SecFlowIn = None
         self.FlowOut = None
@@ -16,6 +17,7 @@ class Ejector:
         self.m_ratio = 1
         self.converged = False
 
+
     def solve(self):
         if self.Eff_is_ejc > 0 and self.Eff_is_ejc <= 1:
             self.Calc_Work()
@@ -23,6 +25,7 @@ class Ejector:
             self.FlowOut.Combine(self.PriFlowIn, self.SecFlowIn)   
         
         self.Ejector_System_Mass_Balance() 
+
 
     def Ejector_System_Mass_Balance(self, i = 0):
         while self.converged == False and i < 100:
@@ -33,7 +36,7 @@ class Ejector:
             h_out_1 = (self.SecFlowIn.Enthalpy * self.m_ratio + self.PriFlowIn.Enthalpy )  /  ( self.m_ratio + 1 )
             self.FlowOut.Enthalpy = ( h_out_1 + self.FlowOut.Enthalpy )  / 2
 
-            if ( abs(self.FlowOut.Enthalpy / h_out_1 - 1) > CONVERGANCE or abs(self.m_ratio / m_ratio_1 - 1) > CONVERGANCE ):
+            if ( abs(self.FlowOut.Enthalpy / h_out_1 - 1) > self.CONVERGANCE or abs(self.m_ratio / m_ratio_1 - 1) > self.CONVERGANCE ):
                 i += 1
             else:
                 self.converged = True
@@ -44,6 +47,7 @@ class Ejector:
         self.PriFlowIn.Mass_Flow = 1 / self.m_ratio
         self.FlowOut.Mass_Flow = 1 / self.m_ratio + 1
         self.FlowOut.PropsIn_mPH()
+
 
     def Calc_Work(self):
         if abs(self.FlowOut.Pressure - self.SecFlowIn.Pressure) / self.SecFlowIn.Pressure < 0.0001:
@@ -73,7 +77,7 @@ class Ejector:
                     /  ( ( self.PriFlowIn.Enthalpy - REFPROP('H', self.FlowOut.Fluid, 'PS', self.FlowOut.Pressure / 1000, self.PriFlowIn.Entropy, 0) )  * self.Eff_is_ejc )
             
             i += 1
-            if dh < CONVERGANCE:
+            if dh < self.CONVERGANCE:
                 break
         
         self.Pressure_Ratio = self.FlowOut.Pressure / self.SecFlowIn.Pressure

@@ -18,8 +18,8 @@ def graph_heat_exchangers(graph_obj):
             T_hot += T_hot_i
             T_cold += T_cold_i
 
-        plt.plot(H, T_hot, color='red', label = "Hot stream")
-        plt.plot(H, T_cold, color='blue', label = "Cold stream")
+        plt.plot(H, T_hot, color='red', label = 'Hot stream')
+        plt.plot(H, T_cold, color='blue', label = 'Cold stream')
 
         plt.xlabel('Heat Flow [kJ/kg(ref.)]')
         plt.ylabel('Temperature [°C]')

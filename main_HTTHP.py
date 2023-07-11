@@ -39,4 +39,4 @@ if __name__=='__main__':
         m.solve()
 
     TOC = timer()
-    print("Total time:",TOC - TIC) 
+    print('Total time:',TOC - TIC) 

@@ -7,6 +7,7 @@ from scipy import optimize
 
 class CustomRelationship:
     def __init__(self, source_obj=0, target_obj=0, var1=0, var2=0, relation=0):
+        self.CONVERGANCE = CONVERGANCE
         self.source_obj = source_obj
         self.target_obj = target_obj
         self.var1 = var1
@@ -30,8 +31,9 @@ class CustomRelationship:
         else:
             pass
     
-    #Determines the n-1 intermediate pressures between n compressors
+    
     def Determine_Pint(self, P_comp1_in, P_comp1_out, n_comp, PR_var):
+        #Determines the n-1 intermediate pressures between n compressors
         if n_comp > 1:
             if PR_var[0] == 'Constant':
                 PR_1 = P_comp1_out / P_comp1_in
@@ -42,6 +44,7 @@ class CustomRelationship:
                 self.target_obj[1].Pressure = self.target_obj[0].Pressure * PR_var[1]
                 if n_comp == 3:
                     self.target_obj[2].Pressure = self.target_obj[1].Pressure * PR_var[2]
+
 
     def Air_Mass_Flow(self):
         m_air_list = []
@@ -68,7 +71,7 @@ class CustomRelationship:
                     #b = self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, gc.HotIn.
                     h_ref = optimize.brentq(f=lambda h_ref: self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', (gc.HotIn.Pressure * (h_ref - gc.HotOut.Enthalpy) + gc.HotOut.Pressure * (gc.HotIn.Enthalpy - h_ref)) / (gc.HotIn.Enthalpy - gc.HotOut.Enthalpy) / 1000, h_ref), a=gc.HotIn.Enthalpy, b=gc.HotOut.Enthalpy)
                     dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
-                    if dQ_i > CONVERGANCE:
+                    if dQ_i > self.CONVERGANCE:
                         T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dT_GC_min_tar
                         dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
                         m_air_list.append(dQ_i / dh_air)                
@@ -78,7 +81,7 @@ class CustomRelationship:
                     
                     if h_ref < gc.HotIn.Enthalpy and h_ref > gc.HotOut.Enthalpy:
                         dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
-                        if dQ_i > CONVERGANCE:
+                        if dQ_i > self.CONVERGANCE:
                             T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dT_GC_min_tar
                             dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
                             m_air_list.append(dQ_i / dh_air)  

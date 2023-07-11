@@ -3,5 +3,4 @@ __credits__ = ['Alex Geary']
 
 #Global mass and energy balance convergance criteria
 CONVERGANCE = 0.00001
-area_calc = False
 filename_output = 'results.csv'

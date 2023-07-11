@@ -11,13 +11,22 @@ from scipy import optimize
 
 class GasCooler():
 
-    def __init__(self, HotFluid, ColdFluid, dT_GC_min_tar = 15):
+    def __init__(self, HotFluid, ColdFluid, dT_GC_min_tar = 15, detailed_model = False):
+        self.CONVERGANCE = CONVERGANCE
         self.HotIn = Stream( Name='HotIn', Fluid=HotFluid, underdefined=1 )
         self.HotOut = Stream( Name='HotOut', Fluid=HotFluid, underdefined=1 )
         self.ColdIn = Stream( Name='ColdIn', Fluid=ColdFluid, underdefined=1 )
         self.ColdOut = Stream( Name='ColdOut', Fluid=ColdFluid, underdefined=1 )
         self.dT_GC_min_tar = dT_GC_min_tar
+        self.detailed_model = detailed_model
+        if self.detailed_model:
+            self.detailed_initialisation()
+            self.area_calc_on = True
+        else:
+            self.area_calc_on = False
 
+
+    def detailed_initialisation(self):
         self.NTU = 0
         self.c = 0
         self.Duty = 0
@@ -55,8 +64,6 @@ class GasCooler():
         #self.Tube_thickness = 0.00165 #m
         #self.Tubes_per_pass = 4 #assumption
         #self.Gap_spacing = 0.0005 #m
-
-        self.area_calc_on = False
         
     
     def init_heat_exchanger_elements(self, N_elements_per_pass = 4):
@@ -100,7 +107,7 @@ class GasCooler():
                    
 
     def solve(self):
-        self.HotOut.Pressure = self.HotIn.Pressure -self.dP_refrigerant
+        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_refrigerant
         self.HotOut.PropsIn_mPT()
         self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
         
@@ -131,7 +138,7 @@ class GasCooler():
 
             if a < 0.0 and b > 0.0:
                 
-                r = optimize.brentq(f=self.Calc_Area, a=Area_low, b=Area_upp, full_output=True, rtol=CONVERGANCE, xtol=CONVERGANCE)
+                r = optimize.brentq(f=self.Calc_Area, a=Area_low, b=Area_upp, full_output=True, rtol=self.CONVERGANCE, xtol=self.CONVERGANCE)
                 
                 if r[1].converged:  
                     self.converged = True          
