@@ -1,9 +1,19 @@
-name: HTHP_env
+name: TRHP_env
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11.*
-  - ctREFPROP
+  - python=3.10.*
+  - numpy
   - scipy
+  - pandas
+  - ipykernel
   - matplotlib
+  - CoolProp
+  - xlrd
+  - ipycanvas
+  - pip
+  - pip:
+    - gekko
+    - ipyturtle3
+    - ctREFPROP

@@ -11,14 +11,17 @@ from scipy import optimize
 
 class GasCooler():
 
-    def __init__(self, HotFluid, ColdFluid, dT_GC_min_tar = 15, detailed_model = False):
+    def __init__(self, HotFluid, ColdFluid, dT_GC_min_tar = 15, detailed_model = False, dP_refrigerant = 0.0, dP_air = 0.0):
         self.CONVERGANCE = CONVERGANCE
         self.HotIn = Stream( Name='HotIn', Fluid=HotFluid, underdefined=1 )
         self.HotOut = Stream( Name='HotOut', Fluid=HotFluid, underdefined=1 )
         self.ColdIn = Stream( Name='ColdIn', Fluid=ColdFluid, underdefined=1 )
         self.ColdOut = Stream( Name='ColdOut', Fluid=ColdFluid, underdefined=1 )
         self.dT_GC_min_tar = dT_GC_min_tar
+        self.dP_refrigerant = dP_refrigerant
         self.detailed_model = detailed_model
+        self.dP_air = dP_air
+
         if self.detailed_model:
             self.detailed_initialisation()
             self.area_calc_on = True
@@ -31,14 +34,14 @@ class GasCooler():
         self.c = 0
         self.Duty = 0
         self.Area = 0
-        self.dP_refrigerant = 0
-        self.dP_air = 0
         self.converged = True
+
         #Initial guesses
         self.U = 0.1 # kW/[m^2 C]
         self.HX_Eff = 0.8
         self.FLength = 0.5 # m
         self.Depth = 1 # m
+
         #Model constants
         self.Beta = 587 # m^2/m^3
         self.N_passes = 6

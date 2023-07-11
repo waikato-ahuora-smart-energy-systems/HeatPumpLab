@@ -5,7 +5,7 @@ from scipy.optimize import minimize, differential_evolution
 from functions.refprop import REFPROP
 from functions.output import write_output
 from globalVariables import filename_output as fout
-from classes import HTTHP
+from classes import TRHP
 
 def obj(var, indep_var):
 
@@ -15,7 +15,7 @@ def obj(var, indep_var):
     if indep_var[5] == 2:
         var.extend([0.0, 1.0])
 
-    m = HTTHP(Refrigerant = indep_var[0],
+    m = TRHP(Refrigerant = indep_var[0],
             dT_GC_min_tar = indep_var[1],
             T_air_tar = indep_var[2],
             T_air_inlet = indep_var[3],

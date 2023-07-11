@@ -10,23 +10,23 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021-2023 (tim.walmsley
 - [Refprop](https://www.nist.gov/srd/refprop)
 ## Create conda environment
 
-Create a `HTHP_env` conda environment with the python packages specified in [environment.yml](environment.yml).
+Create a `TRHP_env` conda environment with the python packages specified in [environment.yml](environment.yml).
 ```bash
 conda env create -f environment.yml
 ```
-This step is only required once. If it becomes necessary to remove the `HTHP_env` environment (e.g. to start over), this can be done using:
+This step is only required once. If it becomes necessary to remove the `TRHP_env` environment (e.g. to start over), this can be done using:
 ```bash
-conda env remove -n HTHP_env
+conda env remove -n TRHP_env
 ```
 
-## Installation of this package into `HTHP_env` env
+## Installation of this package into `TRHP_env` env
 
 ```bash
-conda activate HTHP_env
+conda activate TRHP_env
 pip install .
 ```
 
-## Update of `HTHP_env` env
+## Update of `TRHP_env` env
 
 This step should only be needed when a new python package update is available or a new package is needed to be installed
 

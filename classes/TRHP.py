@@ -16,7 +16,7 @@ from functions.graph import graph_heat_exchangers
 from functions.output import write_screen
 
 
-class HTTHP:
+class TRHP:
     def __init__(self, Refrigerant='R1336mzz(Z)', T_air_tar=200.0, dT_GC_min_tar=20.0, n_comp = 3, dT_phx1_max=0.0, dT_phx2_max=0.0, dT_phx3_max=0.0, 
                  PR_2_init=0.0, PR_3_init=0.0, T_air_inlet=15.0, T_air_exh=70.0, RH_air_exh = 0.15, T_gc_out_min=0.0, T_ihx_in_max=50.0, eff_motor=0.95, 
                  eff_phx = 0.9, print_output=False, graph_output=False):
@@ -256,11 +256,13 @@ class HTTHP:
             self.N_elements_per_pass = 3
         else:
             self.N_elements_per_pass = 4  
-          
-        self.gas_cooler1.init_heat_exchanger_elements(self.N_elements_per_pass)
-        self.gas_cooler2.init_heat_exchanger_elements(self.N_elements_per_pass)
-        self.gas_cooler3.init_heat_exchanger_elements(self.N_elements_per_pass)
-        self.gas_cooler4.init_heat_exchanger_elements(self.N_elements_per_pass)
+
+        self.detailed_model = False
+        if self.detailed_model: 
+            self.gas_cooler1.init_heat_exchanger_elements(self.N_elements_per_pass)
+            self.gas_cooler2.init_heat_exchanger_elements(self.N_elements_per_pass)
+            self.gas_cooler3.init_heat_exchanger_elements(self.N_elements_per_pass)
+            self.gas_cooler4.init_heat_exchanger_elements(self.N_elements_per_pass)
 
 
     def define_solver_pathway(self):
@@ -289,7 +291,7 @@ class HTTHP:
         if self.phx1_on == 1:
             self.OP.append(self.set_phx1_dTmax)  
 
-        self.OP.append(self.set_air_massflow)
+        self.OP.append(self.set_gc_air_massflow)
         if self.phx3_on == 1:
             self.OP.append(self.gas_cooler4)
         if self.phx2_on == 1:
