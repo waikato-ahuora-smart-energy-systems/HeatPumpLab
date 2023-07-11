@@ -1,6 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
+'''
 from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
 import csv
 
@@ -46,9 +47,4 @@ def write_output(filename, to_write, how_to_write):
         writer.writerow(to_write)
     #f.close()
 
-    '''
-    f = open(filename, how_to_write)
-    [print(elements, file=f) for elements in to_write]         
-    print('\n', file=f)
-    f.close()  
-    '''
+'''
