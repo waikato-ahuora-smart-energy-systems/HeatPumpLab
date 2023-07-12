@@ -10,6 +10,8 @@ By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.w
 
 from timeit import default_timer as timer
 from functions.optimise import optimiser_function, TRHP
+from functions.write import terminal_print_result
+from functions.graph import graph_heat_exchangers
 
 if __name__=='__main__':
     TIC = timer()
@@ -21,25 +23,31 @@ if __name__=='__main__':
     T_air_exh = [65.0]
     n_comp = [n + 1 for n in range(3)]
 
-    if 0:
-        [optimiser_function(indep_var=[Refrigerant[0], dT_GC_min_tar[2], T_air_tar[12], T_air_inlet[1], T_air_exh[0], n_comp[1]]) ] # for j in range(len(Refrigerant))
+    if 1:
+        [optimiser_function(parameters=[Refrigerant[0], dT_GC_min_tar[2], T_air_tar[12], T_air_inlet[1], T_air_exh[0], n_comp[1]]) ] # for j in range(len(Refrigerant))
     else:
         m = TRHP(
-                    Refrigerant = Refrigerant[0],
-                    dT_GC_min_tar = dT_GC_min_tar[2],
-                    T_air_tar = T_air_tar[12],
-                    T_air_inlet = T_air_inlet[1],
-                    T_air_exh = T_air_exh[0],
-                    n_comp = n_comp[1],
-                    dT_phx1_max = 56.90464836084587,
-                    dT_phx2_max = 46.15299827209145,
-                    dT_phx3_max = 10.0, 
-                    PR_2_init = 6.250023469515739, 
-                    PR_3_init = 1.2,
-                    print_output=True,
-                    graph_output=True
-                )
+            Refrigerant = Refrigerant[0],
+            dT_GC_min_tar = dT_GC_min_tar[2],
+            T_air_tar = T_air_tar[12],
+            T_air_inlet = T_air_inlet[1],
+            T_air_exh = T_air_exh[0],
+            n_comp = n_comp[1],
+            dT_phx1_max = 56.90464836084587,
+            dT_phx2_max = 46.15299827209145,
+            dT_phx3_max = 10.0, 
+            comp2_power_frac = 0.2, 
+            comp3_power_frac = 0.3,
+            comp_PR_uniform = False
+        )
         m.solve()
+        terminal_print_result(m.output)
+        if 0:
+            graph_heat_exchangers([m.gas_cooler1, m.gas_cooler2, m.gas_cooler3, m.gas_cooler4, m.phx1, m.phx2, m.phx3])
+            graph_heat_exchangers([m.gas_cooler1, m.phx1, m.gas_cooler2, m.phx2, m.gas_cooler3, m.phx3, m.gas_cooler4])  
+
 
     TOC = timer()
     print('Total time:',TOC - TIC) 
+
+    

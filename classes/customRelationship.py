@@ -6,21 +6,19 @@ from functions.refprop import REFPROP
 from scipy import optimize
 
 class CustomRelationship:
-    def __init__(self, source_obj=0, target_obj=0, var1=0, var2=0, relation=0):
+    def __init__(self, source_obj=0, target_obj=0, relation=0):
         self.CONVERGANCE = CONVERGANCE
         self.source_obj = source_obj
         self.target_obj = target_obj
-        self.var1 = var1
-        self.var2 = var2
         self.relation = relation
         self.solve()
 
     def solve(self):
         if self.relation == 0:
-            self.target_obj.Temperature = max(min(self.source_obj[0].Temperature, self.source_obj[1].Temperature) + self.var1, self.source_obj[0].Temperature, self.source_obj[1].Temperature)
+            self.Determine_T()
 
         elif self.relation == 1:
-            self.Determine_Pint(self.source_obj[0].Pressure, self.source_obj[1].Pressure, self.source_obj[2], self.var1)
+            self.Determine_Pint()
 
         elif self.relation == 2:
             self.Air_Mass_Flow()
@@ -31,19 +29,24 @@ class CustomRelationship:
         else:
             pass
     
+    def Determine_T(self):
+        self.target_obj.Temperature = max(
+            min(self.source_obj[0].Temperature, self.source_obj[1].Temperature) + self.var, 
+            self.source_obj[0].Temperature, 
+            self.source_obj[1].Temperature
+            )
     
-    def Determine_Pint(self, P_comp1_in, P_comp1_out, n_comp, PR_var):
+    def Determine_Pint(self):
         #Determines the n-1 intermediate pressures between n compressors
-        if n_comp > 1:
-            if PR_var[0] == 'Constant':
-                PR_1 = P_comp1_out / P_comp1_in
-                self.target_obj[1].Pressure = self.target_obj[0].Pressure * PR_1
-                if n_comp == 3:
-                    self.target_obj[2].Pressure = self.target_obj[1].Pressure * PR_1
-            else:
-                self.target_obj[1].Pressure = self.target_obj[0].Pressure * PR_var[1]
-                if n_comp == 3:
-                    self.target_obj[2].Pressure = self.target_obj[1].Pressure * PR_var[2]
+        P_comp1_in = self.source_obj[0].Pressure 
+        P_comp1_out = self.source_obj[1].Pressure
+        comp1_power_frac = self.source_obj[2]
+        comp2_power_frac = self.source_obj[3]
+        comp3_power_frac = self.source_obj[4]
+
+        PR_comp1 = P_comp1_out / P_comp1_in
+        self.target_obj[1].Pressure = P_comp1_out * PR_comp1 * comp2_power_frac / comp1_power_frac if comp2_power_frac > 0.0 else P_comp1_out
+        self.target_obj[2].Pressure = self.target_obj[1].Pressure * PR_comp1 * comp3_power_frac / comp1_power_frac if comp3_power_frac > 0.0 else self.target_obj[1].Pressure
 
 
     def Air_Mass_Flow(self):
