@@ -21,7 +21,7 @@ if __name__=='__main__':
     T_air_exh = [65.0]
     n_comp = [i + 1 for i in range(3)]
 
-    if 1:
+    if 0:
         [optimiser_function(indep_var=[Refrigerant[0], dT_GC_min_tar[1], T_air_tar[2], T_air_inlet[1], T_air_exh[0], n_comp[1]]) ] # for j in range(len(Refrigerant))
     else:
         m = TRHP(
@@ -29,13 +29,13 @@ if __name__=='__main__':
                     dT_GC_min_tar = dT_GC_min_tar[1],
                     T_air_tar = T_air_tar[2],
                     T_air_inlet = T_air_inlet[1],
-                    T_air_exh = T_air_exh,
-                    n_comp = n_comp[2],
+                    T_air_exh = T_air_exh[0],
+                    n_comp = n_comp[0],
                     dT_phx1_max = 10.0,
                     dT_phx2_max = 10.0,
                     dT_phx3_max = 10.0, 
-                    PR_2_init = 0.0, 
-                    PR_3_init = 0.0,
+                    PR_2_init = 10.0, 
+                    PR_3_init = 10.0,
                     print_output=True
                 )
         m.solve()

@@ -32,19 +32,26 @@ class TRHP:
         self.T_air_exh = T_air_exh
         self.T_gc_out_min = T_gc_out_min
         self.T_ihx_in_max = T_ihx_in_max
+        self.n_comp = n_comp
         
-        if PR_2_init < 1.0 and PR_3_init < 1.0:
-            self.comp_PR_type = 'Constant' 
-        else:
-            self.comp_PR_type = 'Variable'
-            if PR_2_init < 1.0:
-                PR_2_init = PR_3_init
-            if PR_3_init < 1.0:
-                PR_3_init = PR_2_init
+        if self.n_comp == 1:
+            self.comp_PR_type = 'Constant'
+            PR_2_init = 1.0
+            PR_3_init = 1.0
+        elif self.n_comp == 2:
+            if PR_2_init > 1.0:
+                self.comp_PR_type = 'Variable'
+            else:
+                self.comp_PR_type = 'Constant'
+            PR_3_init = 1.0
+        elif self.n_comp == 3:
+            if PR_2_init > 1.0 and PR_3_init > 1.0:
+                self.comp_PR_type = 'Variable'
+            else:
+                self.comp_PR_type = 'Constant'
 
         self.PR_2_init = max(PR_2_init, 1.0)
         self.PR_3_init = max(PR_3_init, 1.0)
-        self.n_comp = n_comp
 
         self.eff_phx = eff_phx
         self.eff_motor = eff_motor
@@ -139,7 +146,7 @@ class TRHP:
                 P_comp1_out = P_low_init ** (2 / 3) * P_comp_out_est ** (1 / 3)
                 P_comp2_out = P_low_init ** (1 / 3) * P_comp_out_est ** (2 / 3)
             else:
-                PR_1 = P_comp_out_est / P_low_init * 1 / (self.PR_2_init * self.PR_3_init)
+                PR_1 = max(P_comp_out_est / P_low_init * 1 / (self.PR_2_init * self.PR_3_init), 1.0)
                 P_comp1_out = P_low_init * PR_1
                 P_comp2_out = P_comp1_out * self.PR_2_init
             P_comp3_out = P_comp_out_est
