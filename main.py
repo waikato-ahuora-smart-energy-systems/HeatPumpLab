@@ -16,13 +16,13 @@ if __name__=='__main__':
 
     Refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
     dT_GC_min_tar = [i for i in range(15,30,5)]
-    T_air_tar = [i for i in range(180,220,10)]
+    T_air_tar = [i for i in range(100,220,10)]
     T_air_inlet = [i for i in range(10,30,5)]
-    T_air_exh = 65.0
+    T_air_exh = [65.0]
     n_comp = [i + 1 for i in range(3)]
 
     if 1:
-        [optimiser_function(indep_var=[Refrigerant[0], dT_GC_min_tar[1], T_air_tar[2], T_air_inlet[1], T_air_exh, n_comp[1]]) ] # for j in range(len(Refrigerant))
+        [optimiser_function(indep_var=[Refrigerant[0], dT_GC_min_tar[1], T_air_tar[2], T_air_inlet[1], T_air_exh[0], n_comp[1]]) ] # for j in range(len(Refrigerant))
     else:
         m = TRHP(
                     Refrigerant = Refrigerant[3],
