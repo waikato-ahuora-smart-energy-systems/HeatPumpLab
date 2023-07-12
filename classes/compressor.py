@@ -17,7 +17,7 @@ class Compressor:
         
         compressor_model = [[0.65, 0.015, -0.0015],  #Compressor model constants (Wang & Cleland, 2018)
                             [0.7, 0.0, 0.0]]        #Typical isentropic efficiency
-        m = 0
+        m = 1
 
         self.COMP_COEFF_A = compressor_model[m][0]
         self.COMP_COEFF_B = compressor_model[m][1]

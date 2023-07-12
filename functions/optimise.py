@@ -19,9 +19,9 @@ def obj(var, indep_var):
                 n_comp = indep_var[5], 
                 dT_phx1_max = var[0], 
                 dT_phx2_max = var[1], 
-                PR_2 = var[2], 
+                PR_2_init = var[2], 
                 dT_phx3_max = var[3], 
-                PR_3 = var[4]
+                PR_3_init = var[4]
             )
     
     try:
@@ -43,15 +43,16 @@ def optimiser_function(indep_var):
     upperbound_PR3 = max(upperbound_PR2 / 2, 1.1)
 
     bnds = [(0.0, 60.0), (0.0, 60.0), (Lower_bound, upperbound_PR2), (0.0, 60.0), (Lower_bound, upperbound_PR3)]
+    x0 = [0.1, 0.1, Lower_bound*1.001, 0.1, Lower_bound*1.001]
     
     # Perform the optimisation
-    result = differential_evolution(func=obj, bounds=bnds, args=[indep_var], maxiter=200, updating='deferred', workers=-1, polish=False)
+    result = differential_evolution(func=obj, bounds=bnds, args=[indep_var], x0=x0, maxiter=200, updating='immediate', workers=1, polish=False)
     DE_nfev = result.nfev
     #result = minimize(fun=obj, x0=result.x, args=indep_var, method='SLSQP', bounds=bnds)
     
     #Covert the min obj result to a positive COP in W/W
     result.fun = result.fun / -1000
     result.nfev += DE_nfev
-    write_output(filename=fout, result=result, n_comp=indep_var[5])
+    write_output(filename=fout, result=result, indep_var=indep_var, n_comp=indep_var[5])
 
     return result
