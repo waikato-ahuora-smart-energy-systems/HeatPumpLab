@@ -18,22 +18,23 @@ from functions.graph import graph_heat_exchangers
 class TRHP:
     def __init__(
             self, 
-            Refrigerant='R1336mzz(Z)', 
-            T_air_tar=200.0, 
-            dT_GC_min_tar=20.0, 
+            Refrigerant = 'R1336mzz(Z)', 
+            T_air_tar = 200.0, 
+            dT_GC_min_tar = 20.0, 
             n_comp = 3, 
-            dT_phx1_max=0.0, 
-            dT_phx2_max=0.0, 
-            dT_phx3_max=0.0, 
+            dT_phx1_max = 0.0, 
+            dT_phx2_max = 0.0, 
+            dT_phx3_max = 0.0, 
             comp2_power_frac = 0.0, 
             comp3_power_frac = 0.0,
-            comp_PR_uniform = True, 
-            T_air_inlet=15.0, 
-            T_air_exh=70.0, 
+            comp_PR_uniform = False, 
+            T_air_inlet = 15.0, 
+            T_air_exh = 70.0, 
             RH_air_exh = 0.15, 
-            T_gc_out_min=0.0, 
-            T_ihx_in_max=50.0, 
-            eff_motor=0.95, 
+            T_gc_out_min = 0.0, 
+            T_ihx_in = 40.0,
+            Tsat_evap = 10.0, 
+            eff_motor = 0.96, 
             eff_phx = 0.9
         ):
 
@@ -45,10 +46,10 @@ class TRHP:
         self.T_air_inlet = T_air_inlet
         self.T_air_exh = T_air_exh
         self.T_gc_out_min = T_gc_out_min
-        self.T_ihx_in_max = T_ihx_in_max
+        self.Tsat_evap = Tsat_evap
 
         self.n_comp = n_comp
-        if comp_PR_uniform or comp2_power_frac + comp3_power_frac > 1.0:
+        if comp_PR_uniform or comp2_power_frac + comp3_power_frac >= 1.0:
             self.comp2_power_frac = 1 / self.n_comp if self.n_comp > 1 else 0.0
             self.comp3_power_frac = 1 / self.n_comp if self.n_comp > 2 else 0.0
         else:
@@ -74,12 +75,11 @@ class TRHP:
         self.dT_phx3_max = dT_phx3_max if self.n_comp > 2 and dT_phx3_max > 0.0 else 0.0
 
         self.T_gc_out = max(self.T_air_inlet + self.dT_GC_min_tar, self.T_gc_out_min)
-        self.T_ihx_in = min(self.T_air_exh - self.dT_GC_min_tar, self.T_ihx_in_max)
+        self.T_ihx_in = T_ihx_in
         
         self.converged = False
         self.COP = 0.0        
         self.AIR = 'Air'
-        self.T_evap_init = 15.0
 
         self.determine_HP_structure()
         self.create_components()
@@ -123,7 +123,7 @@ class TRHP:
 
     def stream_initialisation(self):
         #Initialise values in the evaporator streams
-        self.evaporator.ColdOut = Stream( 'Evap_out', self.Refrigerant, Temperature=self.T_evap_init, Quality=1 )
+        self.evaporator.ColdOut = Stream( 'Evap_out', self.Refrigerant, Temperature=self.Tsat_evap, Quality = 1 )
         P_low_init = self.evaporator.ColdOut.Pressure
         self.evap_sup.ColdIn = self.evaporator.ColdOut
         self.evap_sup.ColdOut = Stream( 'IHX_in', self.Refrigerant, Pressure=P_low_init, Temperature=self.T_ihx_in )
@@ -443,7 +443,7 @@ class TRHP:
             'n_comp:' : self.n_comp,
             #Additional results
             'Actual air T:' : self.gas_cooler4.ColdOut.Temperature,            
-            'Evap T:' : self.T_evap_init,
+            'Evap T:' : self.Tsat_evap,
             'Evap P:' : self.evaporator.ColdIn.Pressure,
             'Comp 1 P out:' : self.comp1.FlowOut.Pressure,
             'Comp 2 P out:' : self.comp2.FlowOut.Pressure,

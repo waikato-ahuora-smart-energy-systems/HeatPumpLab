@@ -17,14 +17,24 @@ if __name__=='__main__':
     TIC = timer()
 
     Refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
-    dT_GC_min_tar = [j for j in range(15,35,5)]
-    T_air_tar = [k for k in range(100,250,10)]
-    T_air_inlet = [l for l in range(10,30,5)]
+    dT_GC_min_tar = [j for j in range(20,40,5)]
+    T_air_tar = [k for k in range(100,300,10)]
+    T_air_inlet = [15.0]
     T_air_exh = [65.0]
     n_comp = [n + 1 for n in range(3)]
 
     if 1:
-        [optimiser_function(parameters=[Refrigerant[0], dT_GC_min_tar[2], T_air_tar[12], T_air_inlet[1], T_air_exh[0], n_comp[1]]) ] # for j in range(len(Refrigerant))
+        [optimiser_function(
+            parameters=[
+                Refrigerant[0], 
+                dT_GC_min_tar[2], 
+                T_air_tar[12], 
+                T_air_inlet[0],
+                T_air_exh[0], 
+                n_comp[1]
+                ]
+            )] # for j in range(len(Refrigerant))
+        
     else:
         m = TRHP(
             Refrigerant = Refrigerant[0],
