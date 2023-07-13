@@ -34,6 +34,7 @@ def obj(var, parameters):
 
     try:
         collected = gc.collect()
+        snapshot1 = tracemalloc.take_snapshot()
     except:
         pass
 
@@ -56,7 +57,7 @@ def optimiser_function(parameters):
         xi = [0, 0, 0, 1/parameters[5], 1/parameters[5]]
     
     # Perform the optimisation
-    result = differential_evolution(func=obj, bounds=bnds, x0=xi, args=[parameters], updating='deferred', workers=-1, polish=True, constraints=lc, popsize=4, atol=0.01) 
+    result = differential_evolution(func=obj, bounds=bnds, x0=xi, args=[parameters], updating='deferred', workers=-1, polish=False, constraints=lc, popsize=2, atol=0.001) 
     #result = dual_annealing(func=obj, bounds=bnds, x0=xi, args=[parameters])
     #result = direct(func=obj, bounds=bnds, args=[parameters])
     #result = shgo(func=obj, bounds=bnds, args=[parameters])
