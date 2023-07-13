@@ -23,7 +23,7 @@ if __name__=='__main__':
     T_air_exh = [65.0]
     n_comp = [n + 1 for n in range(3)]
 
-    if 0:
+    if 1:
         [optimiser_function(
             parameters=[
                 Refrigerant[0], 
