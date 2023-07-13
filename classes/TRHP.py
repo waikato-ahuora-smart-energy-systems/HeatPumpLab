@@ -1,6 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
+
 from classes.compressor import Compressor
 from classes.plateHeatExc import PlateHeatExc
 from classes.gasCooler import GasCooler
@@ -12,7 +13,6 @@ from classes.customRelationship import CustomRelationship
 from globalVariables import CONVERGANCE
 from functions.refprop import REFPROP
 from scipy.optimize import brentq
-from functions.graph import graph_heat_exchangers
 
 
 class TRHP:
@@ -92,7 +92,7 @@ class TRHP:
         
         self.determine_HP_structure()
         self.stream_initialisation()
-        self.set_dTmin_relationships()
+        self.set_relationships()
         self.detailed_model = False
         if self.detailed_model: 
             self.set_gas_cooler_analysis()
@@ -153,17 +153,23 @@ class TRHP:
 
         P_comp_out_est = REFPROP('P', self.Refrigerant, 'TS', self.T_air_tar + self.dT_GC_min_tar - (self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
         
-        PR_tot = P_comp_out_est / P_low_init
+        self.PR_tot = P_comp_out_est / P_low_init
+        PR1 = 1
+        PR2 = 1
+        PR3 = 1
         if self.n_comp == 1:
-            P_comp1_out = P_comp_out_est
+            PR1 = self.PR_tot
         elif self.n_comp == 2:
-            P_comp1_out = P_low_init * (PR_tot * self.comp1_power_frac / self.comp2_power_frac) ** (1 / 2)
-            P_comp2_out = P_comp_out_est
-        elif self.n_comp == 3:
-            P_comp1_out = P_low_init * (PR_tot * self.comp1_power_frac / self.comp2_power_frac * self.comp1_power_frac / self.comp3_power_frac) ** (1 / 3)
-            P_comp2_out = P_comp1_out * (P_comp1_out / P_low_init) * (self.comp2_power_frac / self.comp1_power_frac)
-            P_comp3_out = P_comp_out_est
-        
+            PR1 = (self.PR_tot)**(1/2) 
+            PR2 = PR1
+        else:
+            PR1 = (self.PR_tot)**(1/3) 
+            PR2 = PR1; PR3 = PR1
+                
+        P_comp1_out = P_low_init * PR1
+        P_comp2_out = P_comp1_out * PR2
+        P_comp3_out = P_comp2_out * PR3
+
         self.comp1.FlowOut = Stream( 'Comp1_out', self.Refrigerant, Pressure=P_comp1_out, Temperature=REFPROP('T', self.Refrigerant, 'PS', P_comp1_out / 1000, self.comp1.FlowIn.Entropy, 0))
 
         self.phx2.ColdIn = self.comp1.FlowOut
@@ -254,7 +260,7 @@ class TRHP:
         self.evap_sup.HotOut = Stream( 'suphout', self.AIR, Pressure=101, Temperature=self.T_air_exh)
 
 
-    def set_dTmin_relationships(self):
+    def set_relationships(self):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
             self.set_phx3_dTmax = Set_Relationship( source_obj=self.phx3.ColdIn, target_obj=[self.phx3.HotIn], c=self.dT_phx3_max, prop='Temperature', prop2='Pressure' ) 
@@ -265,7 +271,7 @@ class TRHP:
         if self.phx1_on == 1:
             self.set_phx1_dTmax = Set_Relationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_max, prop='Temperature', prop2='Pressure' ) 
 
-        self.set_P_ints = CustomRelationship( source_obj=[self.comp1.FlowIn, self.comp1.FlowOut, self.comp1_power_frac, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut, self.comp3.FlowOut], relation=1 )
+        self.set_P_ints = CustomRelationship( source_obj=[self.n_comp, self.comp1.FlowIn, self.comp3.FlowOut, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], relation=1 )
         self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
         self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
     
@@ -357,20 +363,12 @@ class TRHP:
 
 
     def set_pressure_bounds(self):
-        P_estimate_high = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
-        
-        PR_tot = P_estimate_high / self.comp1.FlowIn.Pressure
-        if self.n_comp == 1:
-            P_comp1_est = P_estimate_high
-        elif self.n_comp == 2:
-            P_comp1_est = self.comp1.FlowIn.Pressure * (PR_tot * self.comp1_power_frac / self.comp2_power_frac) ** (1 / 2)
-        elif self.n_comp == 3:
-            P_comp1_est = self.comp1.FlowIn.Pressure * (PR_tot * self.comp1_power_frac / self.comp2_power_frac * self.comp1_power_frac / self.comp3_power_frac) ** (1 / 3)
+        P_gc_est = REFPROP('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
 
-        self.P_low_bound = P_comp1_est
-        self.P_upp_bound = P_comp1_est
+        self.P_low_bound = P_gc_est
+        self.P_upp_bound = P_gc_est
 
-        dt_plus = self.state_solve(P_comp1_est)
+        dt_plus = self.state_solve(P_gc_est)
         dt_neg = dt_plus
         i = 0
         if dt_neg > 0.0:
@@ -402,14 +400,15 @@ class TRHP:
 
     def state_solve(self, P_comp_out):
         self.converged = False
-        self.comp1.FlowOut.Pressure = P_comp_out
+        self.comp3.FlowOut.Pressure = P_comp_out
         i = 0
         h_exp_in = 0.0
         m_air_out = 0.0
         dP_gc = 0.0
         duty_comp = 0.0
 
-        while ( (
+        while ( 
+                (
                     i < 5 
                     or abs(self.exp_valve.FlowIn.Enthalpy - h_exp_in) > self.CONVERGANCE * h_exp_in 
                     or abs(self.gas_cooler4.ColdOut.Mass_Flow - m_air_out) > self.CONVERGANCE * m_air_out 

@@ -23,7 +23,7 @@ if __name__=='__main__':
     T_air_exh = [65.0]
     n_comp = [n + 1 for n in range(3)]
 
-    if 1:
+    if 0:
         [optimiser_function(
             parameters=[
                 Refrigerant[0], 
@@ -42,19 +42,18 @@ if __name__=='__main__':
             T_air_tar = T_air_tar[12],
             T_air_inlet = T_air_inlet[0],
             T_air_exh = T_air_exh[0],
-            n_comp = n_comp[1],
-            dT_phx1_max = 56.90464836084587,
-            dT_phx2_max = 46.15299827209145,
-            dT_phx3_max = 10.0, 
-            comp2_power_frac = 0.2, 
-            comp3_power_frac = 0.3,
-            comp_PR_uniform = False
+            n_comp = n_comp[2],
+            dT_phx1_max = 60,
+            dT_phx2_max = 60,
+            dT_phx3_max = 20, 
+            comp2_power_frac = 0.05, 
+            comp3_power_frac = 0.8
         )
         m.solve()
         terminal_print_result(m.output)
-        if 0:
+        if 1:
             graph_heat_exchangers([m.gas_cooler1, m.gas_cooler2, m.gas_cooler3, m.gas_cooler4, m.phx1, m.phx2, m.phx3])
-            graph_heat_exchangers([m.gas_cooler1, m.phx1, m.gas_cooler2, m.phx2, m.gas_cooler3, m.phx3, m.gas_cooler4])  
+            #graph_heat_exchangers([m.gas_cooler1, m.phx1, m.gas_cooler2, m.phx2, m.gas_cooler3, m.phx3, m.gas_cooler4])  
 
 
     TOC = timer()

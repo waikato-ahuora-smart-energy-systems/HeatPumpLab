@@ -1,6 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
+import math
 from globalVariables import CONVERGANCE
 from functions.refprop import REFPROP
 from scipy import optimize
@@ -12,6 +13,7 @@ class CustomRelationship:
         self.target_obj = target_obj
         self.relation = relation
         self.solve()
+
 
     def solve(self):
         if self.relation == 0:
@@ -29,6 +31,7 @@ class CustomRelationship:
         else:
             pass
     
+
     def Determine_T(self):
         self.target_obj.Temperature = max(
             min(self.source_obj[0].Temperature, self.source_obj[1].Temperature) + self.var, 
@@ -36,17 +39,25 @@ class CustomRelationship:
             self.source_obj[1].Temperature
             )
     
+
     def Determine_Pint(self):
         #Determines the n-1 intermediate pressures between n compressors
-        P_comp1_in = self.source_obj[0].Pressure 
-        P_comp1_out = self.source_obj[1].Pressure
-        comp1_power_frac = self.source_obj[2]
-        comp2_power_frac = self.source_obj[3]
-        comp3_power_frac = self.source_obj[4]
+        n_comp, S0, S3, F2, F3 = self.source_obj
+        log_P3_star = math.log(S3.Pressure / S0.Pressure)
+        log_P1_star = (1 - F2 - F3) * log_P3_star
+        log_P2_star = (1 - F3) * log_P3_star
+        P1 = S0.Pressure * math.exp(log_P1_star)
+        P2 = S0.Pressure * math.exp(log_P2_star)
+        
+        self.target_obj[0].Pressure = P1
+        self.target_obj[1].Pressure = P2
+        
+        PR1 = self.target_obj[0].Pressure / S0.Pressure
+        PR2 = self.target_obj[1].Pressure / self.target_obj[0].Pressure
+        PR3 = S3.Pressure / self.target_obj[1].Pressure
 
-        PR_comp1 = P_comp1_out / P_comp1_in
-        self.target_obj[1].Pressure = P_comp1_out * PR_comp1 * comp2_power_frac / comp1_power_frac if comp2_power_frac > 0.0 else P_comp1_out
-        self.target_obj[2].Pressure = self.target_obj[1].Pressure * PR_comp1 * comp3_power_frac / comp1_power_frac if comp3_power_frac > 0.0 else self.target_obj[1].Pressure
+        i=0
+
 
 
     def Air_Mass_Flow(self):

@@ -4,7 +4,6 @@ __credits__ = ['Alex Geary']
 import matplotlib.pyplot as plt
 
 def graph_heat_exchangers(graph_obj):
-
         H = []; T_hot = []; T_cold = []
         for obj in graph_obj:
             H_i, T_hot_i, T_cold_i = obj.graph_data()

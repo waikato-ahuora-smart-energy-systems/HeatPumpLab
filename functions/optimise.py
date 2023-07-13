@@ -2,7 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 import numpy as np, gc
-from scipy.optimize import minimize, LinearConstraint, differential_evolution, dual_annealing, direct, basinhopping, shgo, brute
+from scipy.optimize import minimize, LinearConstraint, differential_evolution, dual_annealing, shgo
 from functions.write import append_result_to_csv, append_result_to_output, terminal_print_result
 from globalVariables import filename_output as fout
 
@@ -37,7 +37,7 @@ def obj(var, parameters):
     except:
         pass
 
-    print(COP) 
+    print(COP, var) 
     return -COP
 
     
@@ -48,7 +48,7 @@ def optimiser_function(parameters):
     xi = [0, 0, 0, 1/parameters[5], 1/parameters[5]]
     
     # Perform the optimisation
-    result = differential_evolution(func=obj, bounds=bnds, x0=xi, args=[parameters], updating='deferred', workers=-1, polish=True, constraints=lc) 
+    result = differential_evolution(func=obj, bounds=bnds, x0=xi, args=[parameters], updating='deferred', workers=8, polish=True, constraints=lc, atol = 0.001) 
     #result = dual_annealing(func=obj, bounds=bnds, x0=xi, args=[parameters])
     #result = direct(func=obj, bounds=bnds, args=[parameters])
     #result = shgo(func=obj, bounds=bnds, args=[parameters])
