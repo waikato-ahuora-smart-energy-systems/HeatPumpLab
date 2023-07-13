@@ -23,7 +23,7 @@ if __name__=='__main__':
     T_air_exh = [65.0]
     n_comp = [n + 1 for n in range(3)]
 
-    if 1:
+    if 0:
         [optimiser_function(
             parameters=[
                 Refrigerant[0], 
@@ -40,7 +40,7 @@ if __name__=='__main__':
             Refrigerant = Refrigerant[0],
             dT_GC_min_tar = dT_GC_min_tar[2],
             T_air_tar = T_air_tar[12],
-            T_air_inlet = T_air_inlet[1],
+            T_air_inlet = T_air_inlet[0],
             T_air_exh = T_air_exh[0],
             n_comp = n_comp[1],
             dT_phx1_max = 56.90464836084587,

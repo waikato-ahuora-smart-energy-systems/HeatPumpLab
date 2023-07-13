@@ -30,7 +30,6 @@ class TRHP:
             comp_PR_uniform = False, 
             T_air_inlet = 15.0, 
             T_air_exh = 70.0, 
-            RH_air_exh = 0.15, 
             T_gc_out_min = 0.0, 
             T_ihx_in = 40.0,
             Tsat_evap = 10.0, 
@@ -47,14 +46,32 @@ class TRHP:
         self.T_air_exh = T_air_exh
         self.T_gc_out_min = T_gc_out_min
         self.Tsat_evap = Tsat_evap
-
         self.n_comp = n_comp
-        if comp_PR_uniform or comp2_power_frac + comp3_power_frac >= 1.0:
+        self.comp2_power_frac = comp2_power_frac
+        self.comp3_power_frac = comp3_power_frac
+        self.comp_PR_uniform = comp_PR_uniform
+        self.eff_phx = eff_phx
+        self.eff_motor = eff_motor
+        self.dT_phx1_max = dT_phx1_max
+        self.dT_phx2_max = dT_phx2_max 
+        self.dT_phx3_max = dT_phx3_max 
+        self.T_ihx_in = T_ihx_in
+        self.AIR = 'Air'
+
+        self.create_components()
+        self.model_initialisation()
+
+
+    def model_initialisation(self):
+        self.converged = False
+        self.COP = 0.0        
+
+        if self.comp_PR_uniform or self.comp2_power_frac + self.comp3_power_frac >= 1.0:
             self.comp2_power_frac = 1 / self.n_comp if self.n_comp > 1 else 0.0
             self.comp3_power_frac = 1 / self.n_comp if self.n_comp > 2 else 0.0
         else:
-            self.comp2_power_frac = comp2_power_frac if self.n_comp > 1 else 0.0
-            self.comp3_power_frac = comp3_power_frac if self.n_comp > 2 else 0.0
+            self.comp2_power_frac = self.comp2_power_frac if self.n_comp > 1 else 0.0
+            self.comp3_power_frac = self.comp3_power_frac if self.n_comp > 2 else 0.0
         
         if self.comp2_power_frac == 0.0:
             self.comp3_power_frac = 0.0
@@ -67,22 +84,13 @@ class TRHP:
 
         self.comp1_power_frac = 1 - (self.comp2_power_frac + self.comp3_power_frac)
         
-        self.eff_phx = eff_phx
-        self.eff_motor = eff_motor
-
-        self.dT_phx1_max = dT_phx1_max if dT_phx1_max > 0.0 else 0.0
-        self.dT_phx2_max = dT_phx2_max if self.n_comp > 1 and dT_phx2_max > 0.0 else 0.0
-        self.dT_phx3_max = dT_phx3_max if self.n_comp > 2 and dT_phx3_max > 0.0 else 0.0
+        self.dT_phx1_max = self.dT_phx1_max if self.dT_phx1_max > 0.0 else 0.0
+        self.dT_phx2_max = self.dT_phx2_max if self.n_comp > 1 and self.dT_phx2_max > 0.0 else 0.0
+        self.dT_phx3_max = self.dT_phx3_max if self.n_comp > 2 and self.dT_phx3_max > 0.0 else 0.0
 
         self.T_gc_out = max(self.T_air_inlet + self.dT_GC_min_tar, self.T_gc_out_min)
-        self.T_ihx_in = T_ihx_in
         
-        self.converged = False
-        self.COP = 0.0        
-        self.AIR = 'Air'
-
         self.determine_HP_structure()
-        self.create_components()
         self.stream_initialisation()
         self.set_dTmin_relationships()
         self.detailed_model = False
@@ -90,18 +98,6 @@ class TRHP:
             self.set_gas_cooler_analysis()
         self.define_solver_pathway()
 
-
-    def determine_HP_structure(self):
-        #Binary variables for the heat pump structure
-        self.comp2_on = 1  if self.n_comp > 1 else 0
-        self.comp3_on = 1  if self.n_comp > 2 else 0
-        self.ihx_on = 1    if self.T_ihx_in < self.T_gc_out else 0
-        self.phx1_on = 1   if self.dT_phx1_max > 0.0 else 0
-        self.phx2_on = 1   if self.dT_phx2_max > 0.0 else 0
-        self.phx3_on = 1   if self.dT_phx3_max > 0.0 else 0
-
-        self.n_comp = 1 + self.comp2_on + self.comp3_on 
-    
 
     def create_components(self):
         #Initialisation of unit operations
@@ -119,7 +115,19 @@ class TRHP:
         self.exp_valve = Expansion_Valve()
         self.evaporator = Evaporator()
         self.evap_sup = Evaporator()
-        
+
+
+    def determine_HP_structure(self):
+        #Binary variables for the heat pump structure
+        self.comp2_on = 1  if self.n_comp > 1 else 0
+        self.comp3_on = 1  if self.n_comp > 2 else 0
+        self.ihx_on = 1    if self.T_ihx_in < self.T_gc_out else 0
+        self.phx1_on = 1   if self.dT_phx1_max > 0.0 else 0
+        self.phx2_on = 1   if self.dT_phx2_max > 0.0 else 0
+        self.phx3_on = 1   if self.dT_phx3_max > 0.0 else 0
+
+        self.n_comp = 1 + self.comp2_on + self.comp3_on 
+    
 
     def stream_initialisation(self):
         #Initialise values in the evaporator streams
