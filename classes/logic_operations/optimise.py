@@ -42,18 +42,10 @@ class Optimise:
         else:
             raise ValueError("Number of compressors must be 1, 2 or 3.")
 
-        try:
-            m.solve()
-            COP = m.COP
-        except:
-            COP = 0
-        
-        try:
-            del m
-            collected = gc.collect()
-        except:
-            pass
-
+        m.solve()
+        COP = m.COP
+        #del m
+        #collected = gc.collect()
         print(COP, var) 
         return -COP
 
@@ -77,8 +69,8 @@ class Optimise:
 
 
         # Perform the optimisation
-        result = differential_evolution(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters], constraints=lc, updating='deferred', workers=-1, polish=False, popsize=1, atol=0.001) 
-        #result = dual_annealing(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters])
+        #result = differential_evolution(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters], constraints=lc, updating='deferred', workers=-1, polish=True, popsize=10, atol=0.001) 
+        result = dual_annealing(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters])
         #result = shgo(func=self.get_obj_fun, bounds=bnds, args=[parameters])
 
         if result.fun < 0.0:  

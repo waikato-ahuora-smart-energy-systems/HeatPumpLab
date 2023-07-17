@@ -29,12 +29,12 @@ if __name__=='__main__':
         r = Optimise()
         [r.get_optimal(
             parameters={
-                'Refrigerant' : Refrigerant[0],
-                'dT_GC_min_tar' : dT_GC_min_tar[2],
+                'Refrigerant' : Refrigerant[4],
+                'dT_GC_min_tar' : dT_GC_min_tar[3],
                 'T_air_tar' : T_air_tar[12],
                 'T_air_inlet' : T_air_inlet[0],
                 'T_air_exh' : T_air_exh[0],
-                'n_comp' : n_comp[0]
+                'n_comp' : n_comp[2]
             })] # for j in range(len(Refrigerant))
         
     else:
@@ -51,6 +51,7 @@ if __name__=='__main__':
             comp2_power_frac = 0.05, 
             comp3_power_frac = 0.8
             )
+        
         m.solve()
 
         o = Write_Output(output=m.output)
