@@ -9,9 +9,10 @@ By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.w
 """
 
 from timeit import default_timer as timer
-from functions.optimise import optimiser_function, TRHP
-from functions.write import terminal_print_result
-from functions.graph import graph_heat_exchangers
+from classes.logic_operations.optimise import Optimise
+from classes.heat_pumps.TRHP import TRHP
+from classes.outputs.writeOutput import Write_Output
+from classes.outputs.graph import Graph
 
 
 if __name__=='__main__':
@@ -25,16 +26,16 @@ if __name__=='__main__':
     n_comp = [n + 1 for n in range(3)]
 
     if 1:
-        [optimiser_function(
-            parameters=[
-                Refrigerant[0], 
-                dT_GC_min_tar[2], 
-                T_air_tar[12], 
-                T_air_inlet[0],
-                T_air_exh[0], 
-                n_comp[2]
-                ]
-            )] # for j in range(len(Refrigerant))
+        r = Optimise()
+        [r.get_optimal(
+            parameters={
+                'Refrigerant' : Refrigerant[0],
+                'dT_GC_min_tar' : dT_GC_min_tar[2],
+                'T_air_tar' : T_air_tar[12],
+                'T_air_inlet' : T_air_inlet[0],
+                'T_air_exh' : T_air_exh[0],
+                'n_comp' : n_comp[0]
+            })] # for j in range(len(Refrigerant))
         
     else:
         m = TRHP(
@@ -43,19 +44,22 @@ if __name__=='__main__':
             T_air_tar = T_air_tar[12],
             T_air_inlet = T_air_inlet[0],
             T_air_exh = T_air_exh[0],
-            n_comp = n_comp[2],
+            n_comp = n_comp[0],
             dT_phx1_max = 60,
             dT_phx2_max = 60,
             dT_phx3_max = 20, 
             comp2_power_frac = 0.05, 
             comp3_power_frac = 0.8
-        )
+            )
         m.solve()
-        terminal_print_result(m.output)
-        if 1:
-            graph_heat_exchangers([m.gas_cooler1, m.gas_cooler2, m.gas_cooler3, m.gas_cooler4, m.phx1, m.phx2, m.phx3])
-            #graph_heat_exchangers([m.gas_cooler1, m.phx1, m.gas_cooler2, m.phx2, m.gas_cooler3, m.phx3, m.gas_cooler4])  
 
+        o = Write_Output(output=m.output)
+        o.terminal_print()
+
+        if 0:
+            g = Graph()
+            g.heat_exchangers([m.gas_cooler1, m.gas_cooler2, m.gas_cooler3, m.gas_cooler4, m.phx1, m.phx2, m.phx3])
+            g.heat_exchangers([m.gas_cooler1, m.phx1, m.gas_cooler2, m.phx2, m.gas_cooler3, m.phx3, m.gas_cooler4])  
 
     TOC = timer()
     print('Total time:',TOC - TIC) 
