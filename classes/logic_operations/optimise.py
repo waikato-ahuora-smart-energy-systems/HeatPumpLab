@@ -2,7 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 import numpy as np, gc
-from scipy.optimize import minimize, LinearConstraint, differential_evolution, dual_annealing, shgo
+from scipy.optimize import minimize, LinearConstraint, differential_evolution, dual_annealing
 from classes.outputs.writeOutput import Write_Output
 
 from classes.heat_pumps.TRHP import TRHP
@@ -14,39 +14,46 @@ class Optimise:
 
 
     def get_obj_fun(self, var, parameters):
-
-        if parameters['n_comp'] == 1:
-            m = TRHP(
-                **parameters,
-                dT_phx1_max = var[0]
-                )
-
-        elif parameters['n_comp'] == 2:
-            m = TRHP(
-                **parameters,
-                dT_phx1_max = var[0], 
-                dT_phx2_max = var[1], 
-                comp2_power_frac = var[2]
-                )
-
-        elif parameters['n_comp'] == 3:
-            m = TRHP(
-                **parameters,
-                dT_phx1_max = var[0], 
-                dT_phx2_max = var[1], 
-                dT_phx3_max = var[2], 
-                comp2_power_frac = var[3], 
-                comp3_power_frac = var[4]
-                )
+        COP = 0
         
-        else:
-            raise ValueError("Number of compressors must be 1, 2 or 3.")
+        if var[3]+ var[4] < 1:
+            if parameters['n_comp'] == 1:
+                m = TRHP(
+                    **parameters,
+                    dT_phx1_max = var[0]
+                    )
 
-        m.solve()
-        COP = m.COP
-        #del m
-        #collected = gc.collect()
-        print(COP, var) 
+            elif parameters['n_comp'] == 2:
+                m = TRHP(
+                    **parameters,
+                    dT_phx1_max = var[0], 
+                    dT_phx2_max = var[1], 
+                    comp2_power_frac = var[2]
+                    )
+
+            elif parameters['n_comp'] == 3:
+                m = TRHP(
+                    **parameters,
+                    dT_phx1_max = var[0], 
+                    dT_phx2_max = var[1], 
+                    dT_phx3_max = var[2], 
+                    comp2_power_frac = var[3], 
+                    comp3_power_frac = var[4]
+                    )
+            
+            else:
+                raise ValueError("Number of compressors must be 1, 2 or 3.")
+
+            try:
+                m.solve()
+                COP = m.COP
+                print(COP, m.converged, var) 
+                del m
+                collected = gc.collect()
+            except:
+                pass
+
+        
         return -COP
 
         
@@ -69,9 +76,8 @@ class Optimise:
 
 
         # Perform the optimisation
-        #result = differential_evolution(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters], constraints=lc, updating='deferred', workers=-1, polish=True, popsize=10, atol=0.001) 
-        result = dual_annealing(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters])
-        #result = shgo(func=self.get_obj_fun, bounds=bnds, args=[parameters])
+        result = differential_evolution(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters], constraints=lc, polish=False, updating='deferred', workers=-1, popsize=3, tol=0.001)
+        result = minimize(method='SLSQP', fun=self.get_obj_fun, bounds=bnds, x0=result.x, args=parameters, constraints=lc, tol=0.001)
 
         if result.fun < 0.0:  
             if parameters['n_comp'] == 1:

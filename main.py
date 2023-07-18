@@ -29,13 +29,13 @@ if __name__=='__main__':
         r = Optimise()
         [r.get_optimal(
             parameters={
-                'Refrigerant' : Refrigerant[4],
-                'dT_GC_min_tar' : dT_GC_min_tar[3],
-                'T_air_tar' : T_air_tar[12],
+                'Refrigerant' : Refrigerant[j],
+                'dT_GC_min_tar' : dT_GC_min_tar[1],
+                'T_air_tar' : T_air_tar[10],
                 'T_air_inlet' : T_air_inlet[0],
                 'T_air_exh' : T_air_exh[0],
                 'n_comp' : n_comp[2]
-            })] # for j in range(len(Refrigerant))
+                }) for j in range(len(Refrigerant))] # for j in range(len(Refrigerant))
         
     else:
         m = TRHP(
@@ -45,12 +45,12 @@ if __name__=='__main__':
             T_air_inlet = T_air_inlet[0],
             T_air_exh = T_air_exh[0],
             n_comp = n_comp[0],
-            dT_phx1_max = 60,
-            dT_phx2_max = 60,
-            dT_phx3_max = 20, 
-            comp2_power_frac = 0.05, 
-            comp3_power_frac = 0.8
-            )
+            dT_phx1_max = 4.17231090e+01,
+            dT_phx2_max = 3.89716524e+01,
+            dT_phx3_max = 7.09109499e+00, 
+            comp2_power_frac = 1.08420217e-19, 
+            comp3_power_frac = 9.45968903e-01
+            ) #4.17231090e+01 3.89716524e+01 7.09109499e+00 1.08420217e-19 9.45968903e-01
         
         m.solve()
 
