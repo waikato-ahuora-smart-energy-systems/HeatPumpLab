@@ -1,10 +1,8 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-import numpy as np, gc
+import gc
 from scipy.optimize import minimize, LinearConstraint, differential_evolution, dual_annealing
-from classes.outputs.writeOutput import Write_Output
-
 from classes.heat_pumps.TRHP import TRHP
 
 
@@ -100,11 +98,12 @@ def get_optimal(parameters):
         
         m.solve()
 
-        o = Write_Output(m.output)
-        o.terminal_print()
-        print('Obj diff: ', abs(m.COP / result.fun + 1))
-        print('Iterations: ', result.nfev)
-        o.append_output_dict(result=result)
-        o.append_csv()
+        m.output.update({
+            'Obj function:' : result.fun,
+            'Iterations:' : result.nfev,
+            'Message:' : result.message,
+            'Success:' : result.success
+        })
 
+        return m.output       
 

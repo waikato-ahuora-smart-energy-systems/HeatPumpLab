@@ -8,15 +8,11 @@ High temperature transcritical-recuperative heat pump model
 By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
 """
 
-#import threading
-import os
 import concurrent.futures
-import multiprocessing as Pool
-import time
 from timeit import default_timer as timer
 from classes.logic_operations.optimise import get_optimal
 from classes.heat_pumps.TRHP import TRHP
-from classes.outputs.writeOutput import Write_Output
+from classes.outputs.writeOutput import terminal_print, append_csv
 from classes.outputs.graph import Graph
 
 
@@ -30,31 +26,25 @@ if __name__=='__main__':
     T_air_exh = [65.0]
     n_comp = [n + 1 for n in range(3)]
 
-    if 1:
+    if 0:
         args = [{
                 'Refrigerant' : Refrigerant[j],
-                'dT_GC_min_tar' : dT_GC_min_tar[1],
+                'dT_GC_min_tar' : dT_GC_min_tar[k],
                 'T_air_tar' : T_air_tar[10],
                 'T_air_inlet' : T_air_inlet[0],
                 'T_air_exh' : T_air_exh[0],
-                'n_comp' : n_comp[2]
-            } for j in range(len(Refrigerant))] 
+                'n_comp' : n_comp[n]
+            } for j in range(len(Refrigerant)) for k in range(len(dT_GC_min_tar)) for n in range(len(n_comp))] 
         
-
+        i = 0 
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            executor.map(get_optimal, args)
-
-        '''
-        r = [m.get_optimal(
-            parameters={
-                'Refrigerant' : Refrigerant[j],
-                'dT_GC_min_tar' : dT_GC_min_tar[1],
-                'T_air_tar' : T_air_tar[10],
-                'T_air_inlet' : T_air_inlet[0],
-                'T_air_exh' : T_air_exh[0],
-                'n_comp' : n_comp[2]
-                }) for j in range(len(Refrigerant))] # for j in range(len(Refrigerant))
-        '''
+            for result in executor.map(get_optimal, args):
+                if type(result) is dict:
+                    append_csv(output=result)
+                    i += result
+        
+        print(i)
+        print(len(args))
 
 
     else:
@@ -70,12 +60,19 @@ if __name__=='__main__':
             dT_phx3_max = 7.09109499e+00, 
             comp2_power_frac = 1.08420217e-19, 
             comp3_power_frac = 9.45968903e-01
-            ) #4.17231090e+01 3.89716524e+01 7.09109499e+00 1.08420217e-19 9.45968903e-01
+            )
         
         m.solve()
 
-        o = Write_Output(output=m.output)
-        o.terminal_print()
+        m.output.update({
+            'Obj function:' : 0,
+            'Iterations:' : 0,
+            'Message:' : 0,
+            'Success:' : 0
+        })
+
+        if type(m.output) is dict:
+            terminal_print(output=m.output)
 
         if 0:
             g = Graph()
