@@ -76,7 +76,7 @@ class Optimise:
 
 
         # Perform the optimisation
-        result = differential_evolution(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters], constraints=lc, polish=False, updating='deferred', workers=-1, popsize=3, tol=0.001)
+        result = differential_evolution(func=self.get_obj_fun, bounds=bnds, x0=xi, args=[parameters], constraints=lc, polish=False, updating='immediate', workers=1, popsize=3, tol=0.001)
         result = minimize(method='SLSQP', fun=self.get_obj_fun, bounds=bnds, x0=result.x, args=parameters, constraints=lc, tol=0.001)
 
         if result.fun < 0.0:  
