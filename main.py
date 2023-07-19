@@ -8,8 +8,13 @@ High temperature transcritical-recuperative heat pump model
 By Tim Walmsley, Keri Adamson and Alex Geary, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
 """
 
+#import threading
+import os
+import concurrent.futures
+import multiprocessing as Pool
+import time
 from timeit import default_timer as timer
-from classes.logic_operations.optimise import Optimise
+from classes.logic_operations.optimise import get_optimal
 from classes.heat_pumps.TRHP import TRHP
 from classes.outputs.writeOutput import Write_Output
 from classes.outputs.graph import Graph
@@ -26,8 +31,21 @@ if __name__=='__main__':
     n_comp = [n + 1 for n in range(3)]
 
     if 1:
-        r = Optimise()
-        [r.get_optimal(
+        args = [{
+                'Refrigerant' : Refrigerant[j],
+                'dT_GC_min_tar' : dT_GC_min_tar[1],
+                'T_air_tar' : T_air_tar[10],
+                'T_air_inlet' : T_air_inlet[0],
+                'T_air_exh' : T_air_exh[0],
+                'n_comp' : n_comp[2]
+            } for j in range(len(Refrigerant))] 
+        
+
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            executor.map(get_optimal, args)
+
+        '''
+        r = [m.get_optimal(
             parameters={
                 'Refrigerant' : Refrigerant[j],
                 'dT_GC_min_tar' : dT_GC_min_tar[1],
@@ -36,7 +54,9 @@ if __name__=='__main__':
                 'T_air_exh' : T_air_exh[0],
                 'n_comp' : n_comp[2]
                 }) for j in range(len(Refrigerant))] # for j in range(len(Refrigerant))
-        
+        '''
+
+
     else:
         m = TRHP(
             Refrigerant = Refrigerant[0],
