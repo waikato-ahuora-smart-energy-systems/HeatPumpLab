@@ -5,7 +5,7 @@ from classes.unit_operations.common.commonHeatExc import BaseHeatExc
 
 class Evaporator(BaseHeatExc):
 
-    def __init__(self, Name='Evaporator', dP_h=0.0, dP_c=0.0, model='fixed evaporator', bypassed=False, tol=1e-8):
+    def __init__(self, Name='Evaporator', dP_h=0.0, dP_c=0.0, model='fixed cold duty', bypassed=False, tol=1e-8):
         self.Name = Name
         self.model = model
         self.bypassed = bypassed
@@ -19,7 +19,7 @@ class Evaporator(BaseHeatExc):
     
     def solve(self):       
         try:
-            self.get_base_performance(model='fixed cold duty')
+            self.get_base_performance(model=self.model)
         
         except:
             raise ValueError('Evaporator model failed: ' + self.Name)

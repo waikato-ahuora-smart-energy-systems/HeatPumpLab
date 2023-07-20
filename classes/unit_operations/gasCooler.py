@@ -199,4 +199,3 @@ class GasCooler(BaseHeatExc):
             duty_total += element.Duty
 
         return self.linear_elements[len(self.linear_elements) - 1].HotIn.Temperature - self.HotIn.Temperature
-    

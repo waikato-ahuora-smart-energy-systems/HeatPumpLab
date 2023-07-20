@@ -63,13 +63,13 @@ class CustomRelationship:
         #Hot side terminal temperature
         dQ = 0
         for gc in self.source_obj:
-            gc.HotOut.Pressure = gc.HotIn.Pressure - gc.dP_refrigerant
+            gc.HotOut.Pressure = gc.HotIn.Pressure - gc.dP_h
             gc.HotOut.PropsIn_mPT()
             gc.Duty = gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow
             
             gc_duty = gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow
             dQ += gc_duty
-            T_air_i = gc.HotIn.Temperature - gc.dT_GC_min_tar
+            T_air_i = gc.HotIn.Temperature - gc.dTmin
             dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
             
             if dh_air > 0:
@@ -94,7 +94,7 @@ class CustomRelationship:
                     if h_ref < gc.HotIn.Enthalpy and h_ref > gc.HotOut.Enthalpy:
                         dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
                         if dQ_i > self.tolerance:
-                            T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dT_GC_min_tar
+                            T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dTmin
                             dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
                             m_air_list.append(dQ_i / dh_air)  
 

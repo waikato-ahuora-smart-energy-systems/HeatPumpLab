@@ -4,7 +4,7 @@ __credits__ = ['Alex Geary']
 from classes.streams.properties import REFPROPS
 
 class MassStream:
-    def __init__(self, Name, Fluid='', Mass_Flow=1.0, Pressure=-1000, Temperature=-1000, Enthalpy=-1000, Quality=-1000, underdefined=0):
+    def __init__(self, Name='', Fluid='', Mass_Flow=1.0, Pressure=-1000, Temperature=-1000, Enthalpy=-1000, Quality=-1000, underdefined=0):
         self.Name = Name
         self.Fluid = Fluid
         self.Mass_Flow = Mass_Flow

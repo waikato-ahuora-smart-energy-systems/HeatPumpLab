@@ -26,7 +26,7 @@ if __name__=='__main__':
     T_air_exh = [65.0]
     n_comp = [n + 1 for n in range(3)]
 
-    if 1:
+    if 0:
         cases = [{
                 'Refrigerant' : Refrigerant[j],
                 'dT_GC_min_tar' : dT_GC_min_tar[k],
@@ -57,17 +57,18 @@ if __name__=='__main__':
 
     else:
         m = TRHP(
-            Refrigerant = Refrigerant[0],
-            dT_GC_min_tar = dT_GC_min_tar[2],
-            T_air_tar = T_air_tar[12],
-            T_air_inlet = T_air_inlet[0],
-            T_air_exh = T_air_exh[0],
-            n_comp = n_comp[0],
-            dT_phx1_max = 4.17231090e+01,
-            dT_phx2_max = 3.89716524e+01,
-            dT_phx3_max = 7.09109499e+00, 
-            comp2_power_frac = 1.08420217e-19, 
-            comp3_power_frac = 9.45968903e-01
+            Refrigerant=Refrigerant[0],
+            dT_GC_min_tar=dT_GC_min_tar[2],
+            T_air_tar=T_air_tar[12],
+            T_air_inlet=T_air_inlet[0],
+            T_air_exh=T_air_exh[0],
+            n_comp=n_comp[0],
+            dT_phx1_cold=0.0,
+            dT_phx2_cold=0.0,
+            dT_phx3_cold=0.0, 
+            comp2_power_frac=0.333, 
+            comp3_power_frac=0.333,
+            dTmin_phx=5.0
             )
         
         m.solve()
