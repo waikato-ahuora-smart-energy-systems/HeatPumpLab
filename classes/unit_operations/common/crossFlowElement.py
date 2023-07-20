@@ -3,15 +3,16 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 import math
+from classes.streams.massStream import MassStream
 
 
-class CrossFlow_Element:
+class CrossFlowElement:
 
     def __init__(self, Face_Velocity, sigma, Hydralic_diameter, Fin_conductivity, Fin_thickness, Fin_diameter, Fin_area_per_total_area, Tube_O_Diameter, Tube_I_Diameter, Tube_Spacing, Tube_Conductivity): 
-        self.HotIn = None
-        self.HotOut = None
-        self.ColdIn = None 
-        self.ColdOut = None
+        self.HotIn = MassStream()
+        self.HotOut = MassStream()
+        self.ColdIn = MassStream() 
+        self.ColdOut = MassStream()
         self.Face_Velocity = Face_Velocity
         
         #Constants air side 

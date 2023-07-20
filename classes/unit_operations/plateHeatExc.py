@@ -2,30 +2,30 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 import math
-from classes.streams.refprop import REFPROP
+from classes.streams.properties import REFPROP
+from classes.unit_operations.common.commonHeatExc import BaseHeatExc
 
-class PlateHeatExc:
+class PlateHeatExc(BaseHeatExc):
     
-    def __init__(self, HX_Eff):
-        self.HotIn = None
-        self.HotOut = None
-        self.ColdIn = None
-        self.ColdOut = None
+    def __init__(self, Name='Plate heat exchanger', HX_Eff=0.9, dTmin=5, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, tol=1e-8):
+        self.Name = Name
+        self.model = model
+        self.bypassed = bypassed
         self.HX_Eff = HX_Eff
-        self.NTU = 0
-        self.c = 0
-        self.U = 0
-        self.Number_of_Plates = 0
-        self.Area = 0
-        self.Duty = 0
-        self.dP_h = 0
-        self.dP_c = 0
-        self.area_calc_on = False
-        if self.area_calc_on:
-            self.plate_design_parameters()
+        self.dTmin = dTmin
+        self.dP_h = dP_h
+        self.dP_c = dP_c
+        self.tol = tol
+        self.variable_dP_model = False
+        self.init_stream_connections()
+        self.init_performance_metrics()
+      
+
+    def get_performance(self):
+        self.get_base_performance(model=self.model)
 
 
-    def plate_design_parameters(self):
+    def init_detailed_model(self):
         #Plate heat exchanger model constants
         self.PHX_thick = 0.0005
         self.PHX_thermalcond = 0.0249
@@ -36,30 +36,7 @@ class PlateHeatExc:
         self.PHX_Factor = 1.15
 
 
-    def solve(self):
-        #Internal heat exchanger analysis to determine duty
-        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
-        self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
-        self.HotOut.PropsIn_mPH()
-        self.ColdOut.PropsIn_mPH() 
-        
-        self.dT_max = abs( self.HotIn.Temperature - self.ColdIn.Temperature )
-
-        if self.dT_max > 5:
-            self.dh_h_max = self.HotIn.Enthalpy - REFPROP('H', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, self.HotIn.Temperature - self.dT_max * self.HX_Eff, 0)
-            self.dh_c_max = REFPROP('H', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, self.ColdIn.Temperature + self.dT_max * self.HX_Eff, 0) - self.ColdIn.Enthalpy
-        else:
-            self.dh_h_max = 0
-            self.dh_c_max = 0
-
-        self.dh_PHX = min(self.dh_h_max, self.dh_c_max)
-        self.HotOut.Enthalpy = self.HotIn.Enthalpy - self.dh_PHX
-        self.HotOut.PropsIn_mPH()
-        self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.dh_PHX
-        self.ColdOut.PropsIn_mPH()
-        self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
-
-    
+    '''
     def area_solve(self):
         if self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:          
             Ch = self.Duty / abs( self.HotIn.Temperature - self.HotOut.Temperature )
@@ -145,7 +122,7 @@ class PlateHeatExc:
             self.ColdOut.PropsExtend()
             self.HotIn.PropsExtend()
             self.HotOut.PropsExtend()
-            ''''''
+            
             k_h = ( REFPROP('TCX', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2, 0) ) / 1000
             Pr_h = REFPROP('PRANDTL', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2 ), 0)
             Vis_h = ( REFPROP('VIS', self.HotIn.Fluid, 'PT', self.HotIn.Pressure / 1000, ( self.HotIn.Temperature + self.HotOut.Temperature ) / 2, 0) ) * ( 10 ** - 6 )
@@ -153,7 +130,7 @@ class PlateHeatExc:
             k_c = ( REFPROP('TCX', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2, 0) ) / 1000
             Pr_c = REFPROP('PRANDTL', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2 ), 0)
             Vis_c = ( REFPROP('VIS', self.ColdIn.Fluid, 'PT', self.ColdIn.Pressure / 1000, ( self.ColdIn.Temperature + self.ColdOut.Temperature ) / 2, 0) ) * ( 10 ** - 6 )
-            ''''''
+            
             Wp = 0.5 * self.PHX_Length
             
             self.U = 1.5 #Intitial estimate
@@ -206,20 +183,5 @@ class PlateHeatExc:
             f_c = 38 /  ( RE_c)
             #self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( Density_c * self.PHX_D_hyd ) )  / 1000
             self.dP_c = ( ( 2 * f_c * self.PHX_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.PHX_D_hyd ) )  / 1000         
-
-
-    def graph_data(self):
-        H = []; T_hot = []; T_cold = []
-
-        for i in range(51):
-            dh_hot = (self.HotIn.Enthalpy - self.HotOut.Enthalpy) * i / 50
-            dP_hot = (self.HotIn.Pressure - self.HotOut.Pressure) * i / 50
-            T_hot.append(REFPROP('T', self.HotOut.Fluid, 'PH', (self.HotOut.Pressure + dP_hot) / 1000, self.HotOut.Enthalpy + dh_hot))
-                        
-            dh_cold = (self.ColdOut.Enthalpy - self.ColdIn.Enthalpy) * i / 50
-            dP_cold = (self.ColdIn.Pressure - self.ColdOut.Pressure) * i / 50
-            T_cold.append(REFPROP('T', self.ColdIn.Fluid, 'PH', (self.ColdIn.Pressure - dP_cold) / 1000, self.ColdIn.Enthalpy + dh_cold))
-
-            H.append(dh_hot * self.HotOut.Mass_Flow)
-
-        return H, T_hot, T_cold         
+        '''
+       

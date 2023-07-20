@@ -1,10 +1,10 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from classes.streams.refprop import REFPROPS
+from classes.streams.properties import REFPROPS
 
 class MassStream:
-    def __init__(self, Name, Fluid = '', Mass_Flow = 1.0, Pressure = -1000, Temperature = -1000, Enthalpy = -1000, Quality = -1000, underdefined = 0):
+    def __init__(self, Name, Fluid='', Mass_Flow=1.0, Pressure=-1000, Temperature=-1000, Enthalpy=-1000, Quality=-1000, underdefined=0):
         self.Name = Name
         self.Fluid = Fluid
         self.Mass_Flow = Mass_Flow
@@ -63,6 +63,16 @@ class MassStream:
         self.Enthalpy = (fld1.Heat_Flow + fld2.Heat_Flow) / self.Mass_Flow
         self.PropsIn_mPH()
 
+
+    def SetEqual(self, fld):
+        self.Mass_Flow = fld.Mass_Flow
+        self.Pressure = fld.Pressure
+        self.Temperature = fld.Temperature
+        self.Enthalpy = fld.Enthalpy
+        self.Entropy = fld.Entropy
+        self.Heat_Capacity = fld.Heat_Capacity        
+        self.Quality = fld.Quality
+        
     
     def PropsExtend(self): 
         props = REFPROPS('D;PRANDTL;VIS;TCX', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)

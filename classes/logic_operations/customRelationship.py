@@ -2,7 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 import math
-from classes.streams.refprop import REFPROP
+from classes.streams.properties import REFPROP
 from scipy import optimize
 
 class CustomRelationship:

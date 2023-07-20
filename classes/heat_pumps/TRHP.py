@@ -8,9 +8,9 @@ from classes.unit_operations.gasCooler import GasCooler
 from classes.unit_operations.expansionValve import Expansion_Valve
 from classes.unit_operations.evaporator import Evaporator
 from classes.streams.massStream import MassStream
-from classes.logic_operations.setRelationship import Set_Relationship
+from classes.logic_operations.setRelationship import SetRelationship
 from classes.logic_operations.customRelationship import CustomRelationship
-from classes.streams.refprop import REFPROP
+from classes.streams.properties import REFPROP
 from scipy.optimize import brentq
 
 
@@ -262,13 +262,13 @@ class TRHP:
     def set_relationships(self):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
-            self.set_phx3_dTmax = Set_Relationship( source_obj=self.phx3.ColdIn, target_obj=[self.phx3.HotIn], c=self.dT_phx3_max, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx3_dTmax = SetRelationship( source_obj=self.phx3.ColdIn, target_obj=[self.phx3.HotIn], c=self.dT_phx3_max, prop='Temperature', prop2='Pressure' ) 
         
         if self.phx2_on == 1:    
-            self.set_phx2_dTmax = Set_Relationship( source_obj=self.phx2.ColdIn, target_obj=[self.phx2.HotIn], c=self.dT_phx2_max, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx2_dTmax = SetRelationship( source_obj=self.phx2.ColdIn, target_obj=[self.phx2.HotIn], c=self.dT_phx2_max, prop='Temperature', prop2='Pressure' ) 
         
         if self.phx1_on == 1:
-            self.set_phx1_dTmax = Set_Relationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_max, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx1_dTmax = SetRelationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_max, prop='Temperature', prop2='Pressure' ) 
 
         self.set_P_ints = CustomRelationship( source_obj=[self.n_comp, self.comp1.FlowIn, self.comp3.FlowOut, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], relation=1 )
         self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )

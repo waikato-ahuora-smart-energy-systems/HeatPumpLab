@@ -1,17 +1,26 @@
-__author__ = 'Tim Walmsley and Keri Adamson'
-__credits__ = ['Alex Geary']
+__author__ = 'Tim Walmsley'
+__credits__ = ['Keri Adamson']
+
+from classes.streams.massStream import MassStream
 
 class Expansion_Valve:
     
-    def __init__(self):
-        self.FlowIn = None
-        self.FlowOut = None
-        #Isenthalpic valve
-        self.dH_loss = 0
-        self.Pressure_drop = 1
-        self.Power = 0
+    def __init__(self, Name='Expansion valve', heat_loss=0.0, tol=1e-8):
+        self.Name = Name
+        self.FlowIn = MassStream()
+        self.FlowOut = MassStream()
+        
+        self.heat_loss = heat_loss
+        self.Pressure_drop = 0.0
+        self.Power = 0.0
+        self.tol = tol
+    
     
     def solve(self):
-        self.FlowOut.Enthalpy = self.FlowIn.Enthalpy - self.dH_loss
-        self.FlowOut.PropsIn_mPH()
-        self.Pressure_drop = self.FlowIn.Pressure - self.FlowOut.Pressure         
+        if self.FlowIn.Mass_Flow > self.tol:
+            self.FlowOut.Enthalpy = self.FlowIn.Enthalpy - self.heat_loss
+            self.FlowOut.PropsIn_mPH()
+            self.Pressure_drop = self.FlowIn.Pressure - self.FlowOut.Pressure
+
+        else:
+            raise ValueError('No mass flow through the expansion valve: ' + self.Name)         

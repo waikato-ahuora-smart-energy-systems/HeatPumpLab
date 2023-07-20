@@ -1,14 +1,16 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from classes.streams.refprop import REFPROP
+from classes.streams.properties import REFPROP
+from classes.streams.massStream import MassStream
 
 class Ejector:
-    def __init__(self, Eff_is_ejc, tolerance=1e-6):
-        self.tolerance = tolerance
-        self.PriFlowIn = None
-        self.SecFlowIn = None
-        self.FlowOut = None
+    def __init__(self, Name='Ejector', Eff_is_ejc=1.0, tol=1e-8):
+        self.Name = Name
+        self.tol = tol
+        self.PriFlowIn = MassStream()
+        self.SecFlowIn = MassStream()
+        self.FlowOut = MassStream()
         self.Eff_is_ejc = Eff_is_ejc
         self.dH_comp = 0
         self.Power = 0
@@ -19,23 +21,23 @@ class Ejector:
 
     def solve(self):
         if self.Eff_is_ejc > 0 and self.Eff_is_ejc <= 1:
-            self.Calc_Work()
+            self.get_work()
         else:
             self.FlowOut.Combine(self.PriFlowIn, self.SecFlowIn)   
         
-        self.Ejector_System_Mass_Balance() 
+        self.ejector_mass_balance() 
 
 
-    def Ejector_System_Mass_Balance(self, i = 0):
+    def ejector_mass_balance(self, i = 0):
         while self.converged == False and i < 100:
-            """Solves the flow rates around the ejector and cycle"""
+            #Solves the flow rates around the ejector and cycle
             m_ratio_1 = self.m_ratio
             self.FlowOut.Quality = REFPROP('QMASS', self.FlowOut.Fluid, 'PH', self.FlowOut.Pressure / 1000, self.FlowOut.Enthalpy, 0)
             self.m_ratio = ( 1 / self.FlowOut.Quality )  - 1
             h_out_1 = (self.SecFlowIn.Enthalpy * self.m_ratio + self.PriFlowIn.Enthalpy )  /  ( self.m_ratio + 1 )
             self.FlowOut.Enthalpy = ( h_out_1 + self.FlowOut.Enthalpy )  / 2
 
-            if ( abs(self.FlowOut.Enthalpy / h_out_1 - 1) > self.tolerance or abs(self.m_ratio / m_ratio_1 - 1) > self.tolerance ):
+            if ( abs(self.FlowOut.Enthalpy / h_out_1 - 1) > self.tol or abs(self.m_ratio / m_ratio_1 - 1) > self.tol ):
                 i += 1
             else:
                 self.converged = True
@@ -48,7 +50,7 @@ class Ejector:
         self.FlowOut.PropsIn_mPH()
 
 
-    def Calc_Work(self):
+    def get_work(self):
         if abs(self.FlowOut.Pressure - self.SecFlowIn.Pressure) / self.SecFlowIn.Pressure < 0.0001:
             #Good estimate of the ejector outlet pressure
             #Use a large step for Newton's method
@@ -76,7 +78,7 @@ class Ejector:
                     /  ( ( self.PriFlowIn.Enthalpy - REFPROP('H', self.FlowOut.Fluid, 'PS', self.FlowOut.Pressure / 1000, self.PriFlowIn.Entropy, 0) )  * self.Eff_is_ejc )
             
             i += 1
-            if dh < self.tolerance:
+            if dh < self.tol:
                 break
         
         self.Pressure_Ratio = self.FlowOut.Pressure / self.SecFlowIn.Pressure
