@@ -20,7 +20,7 @@ if __name__=='__main__':
     TIC = timer()
 
     Refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
-    dT_GC_min_tar = [j / 2 for j in range(40,80,5)]
+    dT_GC_min_tar = [j for j in range(20,40,5)]
     T_air_tar = [k for k in range(100,305,5)]
     T_air_inlet = [15.0]
     T_air_exh = [65.0]
@@ -28,31 +28,33 @@ if __name__=='__main__':
 
     if 1:
         cases = [{
-                'Refrigerant' : Refrigerant[j],
-                'dT_GC_min_tar' : dT_GC_min_tar[k],
-                'T_air_tar' : T_air_tar[10],
+                'Refrigerant' : Refrigerant[i],
+                'dT_GC_min_tar' : dT_GC_min_tar[0],
+                'T_air_tar' : T_air_tar[k],
                 'T_air_inlet' : T_air_inlet[0],
                 'T_air_exh' : T_air_exh[0],
-                'n_comp' : n_comp[n]
-            } for j in range(len(Refrigerant)) for k in range(len(dT_GC_min_tar)) for n in range(len(n_comp))] # for n in range(len(n_comp))
+                'n_comp' : 1
+            } for i in range(len(Refrigerant)) for k in range(len(T_air_tar))] # for n in range(len(n_comp))
 
-        '''
+        
         for c in cases:
             result = get_optimal(c)
             if type(result) is dict:
                 append_csv(output=result)
-        '''
         
-        i = 0 
+        '''
+        results = [] 
         with concurrent.futures.ProcessPoolExecutor() as executor:
             for result in executor.map(get_optimal, cases):
-                try:
-                    if type(result) is dict:
-                        append_csv(output=result)
-                    i += 1
-                except:
-                    pass
-         
+                results.append(result)
+                
+        for result in results:
+            try:
+                if type(result) is dict:
+                    append_csv(output=result)
+            except:
+                pass
+        '''
         
 
     else:
