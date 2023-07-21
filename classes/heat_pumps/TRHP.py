@@ -16,26 +16,30 @@ class TRHP:
     def __init__(
             self, 
             Refrigerant='R1336mzz(Z)', 
+            Source='Water',
+            Sink='Air',
             T_air_tar=200.0, 
+            T_air_inlet=15.0, 
             dT_GC_min_tar=20.0, 
+            T_gc_out_min=0.0, 
+            T_air_exh=70.0, 
+            Tsat_evap=10.0, 
+            T_ihx_in=40.0,
+            dTmin_phx=5.0,
             n_comp=3, 
+            comp_PR_uniform=False, 
+            eff_motor=0.96, 
             dT_phx1_cold=0.0, 
             dT_phx2_cold=0.0, 
             dT_phx3_cold=0.0, 
             comp2_power_frac=0.0, 
             comp3_power_frac=0.0,
-            comp_PR_uniform=False, 
-            T_air_inlet=15.0, 
-            T_air_exh=70.0, 
-            T_gc_out_min=0.0, 
-            T_ihx_in=40.0,
-            Tsat_evap=10.0, 
-            eff_motor=0.96, 
-            dTmin_phx=5.0,
             tol=1e-6
         ):
 
         self.Refrigerant = Refrigerant
+        self.Source = Source
+        self.Sink = Sink
         self.T_air_tar = T_air_tar
         self.dT_GC_min_tar = dT_GC_min_tar
         self.T_air_inlet = T_air_inlet
@@ -52,7 +56,6 @@ class TRHP:
         self.dT_phx2_cold = dT_phx2_cold 
         self.dT_phx3_cold = dT_phx3_cold 
         self.T_ihx_in = T_ihx_in
-        self.AIR = 'Air'
         self.tol = tol
 
         self.converged = False
@@ -63,33 +66,19 @@ class TRHP:
 
 
     def init_model(self):
+        self.check_logic()
         self.init_components()
-        self.init_compressors()
-        self.init_structure()
         self.init_streams()
         self.set_relationships()
         self.define_solver_pathway()
 
-
-    def init_components(self):
-        #Initialisation of unit operations
-        self.comp1 = Compressor(Motor_Eff=self.eff_motor, model=0)
-        self.comp2 = Compressor(Motor_Eff=self.eff_motor, model=0) 
-        self.comp3 = Compressor(Motor_Eff=self.eff_motor, model=0) 
-        self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler3 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.ihx = PlateHeatExc(dTmin=self.dTmin, model='dTmin_terminal')
-        self.phx1 = PlateHeatExc(dTmin=self.dTmin, model='dTmin_terminal')
-        self.phx2 = PlateHeatExc(dTmin=self.dTmin, model='dTmin_terminal')        
-        self.phx3 = PlateHeatExc(dTmin=self.dTmin, model='dTmin_terminal')
-        self.exp_valve = Expansion_Valve()
-        self.evaporator = Evaporator(model='fixed cold duty')
-        self.evap_sup = PlateHeatExc(model='fixed cold temperature outlet')
-
-
-    def init_compressors(self):
+    def check_logic(self):
+        #Check the PHE combo
+        self.dT_phx1_cold = self.dT_phx1_cold if self.dT_phx1_cold > 0.0 else 0.0
+        self.dT_phx2_cold = self.dT_phx2_cold if self.n_comp > 1 and self.dT_phx2_cold > 0.0 else 0.0
+        self.dT_phx3_cold = self.dT_phx3_cold if self.n_comp > 2 and self.dT_phx3_cold > 0.0 else 0.0
+        
+        #Check the compressor combo
         if self.comp_PR_uniform or self.comp2_power_frac + self.comp3_power_frac >= 1.0:
             self.comp2_power_frac = 1 / self.n_comp if self.n_comp > 1 else 0.0
             self.comp3_power_frac = 1 / self.n_comp if self.n_comp > 2 else 0.0
@@ -108,20 +97,33 @@ class TRHP:
 
         self.comp1_power_frac = 1 - (self.comp2_power_frac + self.comp3_power_frac)
 
-
-    def init_structure(self):
         #Binary variables for the heat pump structure
         self.comp2_on = 1  if self.n_comp > 1 else 0
         self.comp3_on = 1  if self.n_comp > 2 else 0
         self.ihx_on = 1    if self.T_ihx_in < self.T_gc_out else 0
                 
-        self.dT_phx1_cold = self.dT_phx1_cold if self.dT_phx1_cold > 0.0 else 0.0
-        self.dT_phx2_cold = self.dT_phx2_cold if self.n_comp > 1 and self.dT_phx2_cold > 0.0 else 0.0
-        self.dT_phx3_cold = self.dT_phx3_cold if self.n_comp > 2 and self.dT_phx3_cold > 0.0 else 0.0
         self.phx1_on = 1   if self.dT_phx1_cold > 0.0 else 0
         self.phx2_on = 1   if self.dT_phx2_cold > 0.0 else 0
         self.phx3_on = 1   if self.dT_phx3_cold > 0.0 else 0
-    
+
+
+    def init_components(self):
+        #Initialisation of unit operations
+        self.comp1 = Compressor(Motor_Eff=self.eff_motor, model=0)
+        self.comp2 = Compressor(Motor_Eff=self.eff_motor, model=0) 
+        self.comp3 = Compressor(Motor_Eff=self.eff_motor, model=0) 
+        self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar)
+        self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar)
+        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar)
+        self.gas_cooler3 = GasCooler(dTmin=self.dT_GC_min_tar)
+        self.ihx = PlateHeatExc(dTmin=self.dTmin, model='dTmin_terminal')
+        self.phx1 = PlateHeatExc(dT_c=self.dT_phx1_cold, model='fixed cold delta temperature')
+        self.phx2 = PlateHeatExc(dT_c=self.dT_phx2_cold, model='fixed cold delta temperature')        
+        self.phx3 = PlateHeatExc(dT_c=self.dT_phx3_cold, model='fixed cold delta temperature')
+        self.exp_valve = Expansion_Valve()
+        self.evaporator = Evaporator(model='fixed cold duty')
+        self.evap_sup = PlateHeatExc(model='fixed cold temperature outlet')
+
 
     def init_streams(self):
         #Initialise values in the evaporator streams
@@ -133,13 +135,13 @@ class TRHP:
         #Initialise values in the compression streams
         self.ihx.ColdIn = self.evap_sup.ColdOut
         if self.ihx_on == 1:
-            self.ihx.ColdOut = MassStream( 'PHX1_in', self.Refrigerant, Pressure=P_low_init, Temperature=self.T_ihx_in + max(( self.T_gc_out - self.T_ihx_in ) * self.eff_phx, 0) )
+            self.ihx.ColdOut = MassStream( 'PHX1_in', self.Refrigerant, Pressure=P_low_init, Temperature=self.T_gc_out - self.dTmin )
         else:   
             self.ihx.ColdOut = self.ihx.ColdIn
 
         self.phx1.ColdIn = self.ihx.ColdOut
         if self.phx1_on == 1: 
-            self.phx1.ColdOut = MassStream( 'Comp1_in', self.Refrigerant, Pressure=P_low_init, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx1_cold * self.eff_phx )
+            self.phx1.ColdOut = MassStream( 'Comp1_in', self.Refrigerant, Pressure=P_low_init, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx1_cold )
         else:
             self.phx1.ColdOut = self.phx1.ColdIn
 
@@ -168,7 +170,7 @@ class TRHP:
 
         self.phx2.ColdIn = self.comp1.FlowOut
         if self.phx2_on == 1:
-            self.phx2.ColdOut = MassStream( 'Comp2_in', self.Refrigerant, Pressure=self.phx2.ColdIn.Pressure, Temperature=self.phx2.ColdIn.Temperature + self.dT_phx2_cold * self.eff_phx)
+            self.phx2.ColdOut = MassStream( 'Comp2_in', self.Refrigerant, Pressure=self.phx2.ColdIn.Pressure, Temperature=self.phx2.ColdIn.Temperature + self.dT_phx2_cold)
         else:
             self.phx2.ColdOut = self.comp1.FlowOut
         
@@ -180,7 +182,7 @@ class TRHP:
 
         self.phx3.ColdIn = self.comp2.FlowOut
         if self.phx3_on == 1:
-            self.phx3.ColdOut = MassStream( 'Comp3_in', self.Refrigerant, Pressure=self.phx3.ColdIn.Pressure, Temperature=self.phx3.ColdIn.Temperature + self.dT_phx3_cold * self.eff_phx)
+            self.phx3.ColdOut = MassStream( 'Comp3_in', self.Refrigerant, Pressure=self.phx3.ColdIn.Pressure, Temperature=self.phx3.ColdIn.Temperature + self.dT_phx3_cold)
         else:
             self.phx3.ColdOut = self.phx3.ColdIn
 
@@ -196,7 +198,7 @@ class TRHP:
         if self.comp3_on == 1 and self.phx3_on == 1:
             self.gas_cooler4.HotOut = MassStream( 'GC4_out', self.Refrigerant, Pressure= self.gas_cooler4.HotIn.Pressure, Temperature=self.comp2.FlowOut.Temperature + self.dT_phx3_cold )
             self.phx3.HotIn = self.gas_cooler4.HotOut
-            self.phx3.HotOut = MassStream( 'GC3_in', self.Refrigerant, Pressure=self.phx3.HotIn.Pressure, Temperature=self.phx3.ColdIn.Temperature + self.dT_phx3_cold * self.eff_phx)       
+            self.phx3.HotOut = MassStream( 'GC3_in', self.Refrigerant, Pressure=self.phx3.HotIn.Pressure, Temperature=self.phx3.ColdIn.Temperature + self.dT_phx3_cold)       
         else:
             self.gas_cooler4.HotOut = self.gas_cooler4.HotIn
             self.phx3.HotIn = self.gas_cooler4.HotOut
@@ -206,7 +208,7 @@ class TRHP:
         if self.comp2_on == 1 and self.phx2_on == 1:
             self.gas_cooler3.HotOut = MassStream( 'GC3_out', self.Refrigerant, Pressure= self.gas_cooler3.HotIn.Pressure, Temperature=self.comp1.FlowOut.Temperature + self.dT_phx2_cold )
             self.phx2.HotIn = self.gas_cooler3.HotOut
-            self.phx2.HotOut = MassStream( 'GC2_in', self.Refrigerant, Pressure=self.phx2.HotIn.Pressure, Temperature=self.phx2.ColdIn.Temperature + self.dT_phx2_cold * self.eff_phx)
+            self.phx2.HotOut = MassStream( 'GC2_in', self.Refrigerant, Pressure=self.phx2.HotIn.Pressure, Temperature=self.phx2.ColdIn.Temperature + self.dT_phx2_cold)
         else:
             self.gas_cooler3.HotOut = self.gas_cooler3.HotIn
             self.phx2.HotIn = self.gas_cooler3.HotOut
@@ -216,7 +218,7 @@ class TRHP:
         if self.phx1_on == 1:
             self.gas_cooler2.HotOut = MassStream( 'GC2_out', self.Refrigerant, Pressure= self.gas_cooler2.HotIn.Pressure, Temperature=self.comp1.FlowOut.Temperature + self.dT_phx1_cold )
             self.phx1.HotIn = self.gas_cooler2.HotOut
-            self.phx1.HotOut = MassStream( 'GC1_in', self.Refrigerant, Pressure=self.phx1.HotIn.Pressure, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx1_cold * self.eff_phx)
+            self.phx1.HotOut = MassStream( 'GC1_in', self.Refrigerant, Pressure=self.phx1.HotIn.Pressure, Temperature=self.phx1.ColdIn.Temperature + self.dT_phx1_cold )
         else:
             self.gas_cooler2.HotOut = self.gas_cooler2.HotIn
             self.phx1.HotIn = self.gas_cooler2.HotOut
@@ -239,33 +241,33 @@ class TRHP:
         
 
         #Initialisation of inlet and exhaust air streams
-        self.gas_cooler1.ColdIn = MassStream( 'AirIn1', self.AIR, Pressure=101, Temperature=self.T_air_inlet )
-        self.gas_cooler1.ColdOut = MassStream( 'AirOut1', self.AIR, Pressure=101, Temperature=self.T_air_tar )
+        self.gas_cooler1.ColdIn = MassStream( 'AirIn1', self.Sink, Pressure=101, Temperature=self.T_air_inlet )
+        self.gas_cooler1.ColdOut = MassStream( 'AirOut1', self.Sink, Pressure=101, Temperature=self.T_air_tar )
         self.gas_cooler2.ColdIn = self.gas_cooler1.ColdOut
-        self.gas_cooler2.ColdOut = MassStream( 'AirOut2', self.AIR, Pressure=101, Temperature=self.T_air_tar )
+        self.gas_cooler2.ColdOut = MassStream( 'AirOut2', self.Sink, Pressure=101, Temperature=self.T_air_tar )
         self.gas_cooler3.ColdIn = self.gas_cooler2.ColdOut
-        self.gas_cooler3.ColdOut = MassStream( 'AirOut3', self.AIR, Pressure=101, Temperature=self.T_air_tar )
+        self.gas_cooler3.ColdOut = MassStream( 'AirOut3', self.Sink, Pressure=101, Temperature=self.T_air_tar )
         self.gas_cooler4.ColdIn = self.gas_cooler3.ColdOut
-        self.gas_cooler4.ColdOut = MassStream( 'AirOut4', self.AIR, Pressure=101, Temperature=self.T_air_tar )
+        self.gas_cooler4.ColdOut = MassStream( 'AirOut4', self.Sink, Pressure=101, Temperature=self.T_air_tar )
 
-        self.evaporator.HotIn = MassStream( 'exhIn', self.AIR, Pressure=101, Temperature=self.T_air_exh)
-        self.evaporator.HotOut = MassStream( 'exhout', self.AIR, Pressure=101, Temperature=self.T_air_exh)
-        self.evap_sup.HotIn = MassStream( 'supIn', self.AIR, Pressure=101, Temperature=self.T_air_exh)
-        self.evap_sup.HotOut = MassStream( 'suphout', self.AIR, Pressure=101, Temperature=self.T_air_exh)
+        self.evaporator.HotIn = MassStream( 'exhIn', self.Source, Pressure=101, Temperature=45.0, Mass_Flow=10^6)
+        self.evaporator.HotOut = MassStream( 'exhout', self.Source, Pressure=101, Temperature=45.0, Mass_Flow=10^6)
+        self.evap_sup.HotIn = MassStream( 'supIn', self.Source, Pressure=101, Temperature=45.0, Mass_Flow=10^6)
+        self.evap_sup.HotOut = MassStream( 'suphout', self.Source, Pressure=101, Temperature=45.0, Mass_Flow=10^6)
 
 
     def set_relationships(self):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
-            self.set_phx3_dTmax = SetRelationship( source_obj=self.phx3.ColdIn, target_obj=[self.phx3.HotIn], c=self.dT_phx3_cold, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx3_dTmax = SetRelationship( source_obj=self.phx3.ColdIn, target_obj=[self.phx3.HotIn], c=self.dT_phx3_cold + self.dTmin, prop='Temperature', prop2='Pressure' ) 
         
         if self.phx2_on == 1:    
-            self.set_phx2_dTmax = SetRelationship( source_obj=self.phx2.ColdIn, target_obj=[self.phx2.HotIn], c=self.dT_phx2_cold, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx2_dTmax = SetRelationship( source_obj=self.phx2.ColdIn, target_obj=[self.phx2.HotIn], c=self.dT_phx2_cold + self.dTmin, prop='Temperature', prop2='Pressure' ) 
         
         if self.phx1_on == 1:
-            self.set_phx1_dTmax = SetRelationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_cold, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx1_dTmax = SetRelationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_cold + self.dTmin, prop='Temperature', prop2='Pressure' ) 
 
-        self.set_P_ints = CustomRelationship( source_obj=[self.n_comp, self.comp1.FlowIn, self.comp3.FlowOut, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], relation=1 )
+        self.set_P_ints = CustomRelationship( source_obj=[self.comp1.FlowIn, self.comp3.FlowOut, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], relation=1 )
         self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
         #self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
 
@@ -306,6 +308,7 @@ class TRHP:
         
         self.OP.append(self.gas_cooler1)
 
+        '''
         self.AP = [self.gas_cooler1]
         
         if self.ihx_on == 1:
@@ -322,6 +325,7 @@ class TRHP:
             self.AP.append(self.gas_cooler3)
         if self.phx1_on == 1:
             self.AP.append(self.gas_cooler2)
+        '''
 
 
     def solve(self):
@@ -336,7 +340,7 @@ class TRHP:
         if self.COP == 0:
             self.converged = False          
         
-        self.summarise_results()
+        self.get_summary()
 
 
     def set_pressure_bounds(self):
@@ -392,7 +396,7 @@ class TRHP:
                     or abs(self.gas_cooler4.HotIn.Pressure - self.gas_cooler1.HotOut.Pressure - dP_gc) > self.tol * 10 * dP_gc
                     or abs(self.comp1.Power + self.comp2.Power + self.comp3.Power - duty_comp) > self.tol * 10 * duty_comp
                 ) 
-                and i < 100
+                and i < 1000
               ): #Check for model convergance
             
             #Saves critical pressure and temperature properties to check for solution convergance
@@ -406,13 +410,13 @@ class TRHP:
             for obj in self.OP:
                 obj.solve()
 
-            if i < 100:            
+            if i < 1000:            
                 self.converged = True
             
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
 
 
-    def summarise_results(self):
+    def get_summary(self):
         self.output = {
             #Key results
             'COP:' : self.COP,
@@ -420,11 +424,11 @@ class TRHP:
             'Converged:' : self.converged,
             #Parameters
             'Refrigerant:' : self.Refrigerant,
-            'dT_min Gas Cooler:' : self.dT_GC_min_tar,
-            'T_air_tar:' : self.T_air_tar,
-            'T_air_inlet:' : self.gas_cooler1.ColdIn.Temperature,
-            'Dryer exh air T:' : self.evaporator.HotIn.Temperature,
             'n_comp:' : self.n_comp,
+            'Dryer exh air T:' : self.evaporator.HotIn.Temperature,
+            'dT_min Gas Cooler:' : self.dT_GC_min_tar,
+            'T_air_inlet:' : self.gas_cooler1.ColdIn.Temperature,
+            'T_air_tar:' : self.T_air_tar,
             #Additional results
             'Actual air T:' : self.gas_cooler4.ColdOut.Temperature,            
             'Evap T:' : self.Tsat_evap,

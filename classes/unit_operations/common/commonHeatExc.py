@@ -39,24 +39,33 @@ class BaseHeatExc:
                 self.get_performance()
 
 
-    def get_base_performance(self, model=''):
-        if model == 'dTmin_terminal':
+    def get_performance(self):
+        if self.model == 'dTmin_terminal':
             self.get_dTmin_terminal_model()
 
-        elif model == 'effectiveness':
+        elif self.model == 'effectiveness':
             self.get_effectiveness_model()
 
-        elif model == 'fixed cold duty':
+        elif self.model == 'fixed cold duty':
             self.get_fixed_cold_duty_model()
 
-        elif model == 'fixed hot duty':
+        elif self.model == 'fixed hot duty':
             self.get_fixed_hot_duty_model()
         
-        elif model == 'fixed cold temperature outlet':
+        elif self.model == 'fixed cold temperature outlet':
             self.get_fixed_cold_T_outlet_model()
         
-        elif model == 'fixed hot temperature outlet':
+        elif self.model == 'fixed hot temperature outlet':
             self.get_fixed_hot_T_outlet_model()
+
+        elif self.model == 'fixed cold delta temperature':
+            self.get_fixed_cold_delta_T_model()
+        
+        elif self.model == 'fixed hot delta temperature':
+            self.get_fixed_hot_delta_T_model()
+
+        elif self.model == 'specialised':
+            self.get_detailed_performance()
 
         else:
             raise ValueError('No heat exchanger model selected.')
@@ -75,7 +84,9 @@ class BaseHeatExc:
             self.ColdOut.Enthalpy = self.ColdIn.Enthalpy - self.Duty / self.ColdIn.Mass_Flow
             self.ColdOut.PropsIn_mPH()        
         except:
-            raise ValueError('Warning: Phase change occuring in heat exchanger ' + self.Name)        
+            raise ValueError('Warning: Phase change occuring in heat exchanger ' + self.Name)   
+
+        self.converged = True if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature else False    
 
 
     def get_effectiveness_model(self):
@@ -95,6 +106,7 @@ class BaseHeatExc:
         except:
             raise ValueError('Warning: Phase change occuring in heat exchanger ' + self.Name)        
 
+        self.converged = True if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature else False    
 
     def get_fixed_cold_duty_model(self):
         self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
@@ -108,6 +120,8 @@ class BaseHeatExc:
         if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature:
             print('Temperature cross occuring in the heat exchanger: ' + self.Name)
 
+        self.converged = True if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature else False
+
 
     def get_fixed_hot_duty_model(self):
         self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
@@ -115,11 +129,10 @@ class BaseHeatExc:
         self.HotIn.PropsIn_mPH()
 
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
-        self.ColdOut.Enthalpy = self.ColdIn.Enthalpy - self.Duty / self.ColdIn.Mass_Flow
+        self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.Duty / self.ColdIn.Mass_Flow
         self.ColdOut.PropsIn_mPH()
 
-        if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature:
-            print('Temperature cross occuring in the heat exchanger: ' + self.Name)
+        self.converged = True if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature else False
 
 
     def get_fixed_cold_T_outlet_model(self):
@@ -131,8 +144,7 @@ class BaseHeatExc:
         self.HotOut.Enthalpy = self.HotIn.Enthalpy - self.Duty / self.HotOut.Mass_Flow
         self.HotOut.PropsIn_mPH()
 
-        if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature:
-            print('Temperature cross occuring in the heat exchanger: ' + self.Name)
+        self.converged = True if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature else False
 
 
     def get_fixed_hot_T_outlet_model(self):
@@ -141,11 +153,36 @@ class BaseHeatExc:
         self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
         
         self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
-        self.ColdOut.Enthalpy = self.ColdIn.Enthalpy - self.Duty / self.ColdIn.Mass_Flow
+        self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.Duty / self.ColdIn.Mass_Flow
         self.ColdOut.PropsIn_mPH()
 
-        if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature:
-            print('Temperature cross occuring in the heat exchanger: ' + self.Name)
+        self.converged = True if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature else False
+
+
+    def get_fixed_cold_delta_T_model(self):
+        self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
+        self.ColdOut.Temperature = self.ColdIn.Temperature + self.dT_c
+        self.ColdOut.PropsIn_mPT()
+        self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
+        
+        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
+        self.HotOut.Enthalpy = self.HotIn.Enthalpy - self.Duty / self.HotOut.Mass_Flow
+        self.HotOut.PropsIn_mPH()
+
+        self.converged = True if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature else False 
+
+
+    def get_fixed_hot_delta_T_model(self):
+        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
+        self.HotOut.Temperature = self.HotIn.Temperature - self.dT_h
+        self.HotOut.PropsIn_mPT()
+        self.Duty = self.HotIn.Heat_Flow - self.HotOut.Heat_Flow
+        
+        self.ColdOut.Pressure = self.ColdIn.Pressure - self.dP_c
+        self.ColdOut.Enthalpy = self.ColdIn.Enthalpy + self.Duty / self.ColdIn.Mass_Flow
+        self.ColdOut.PropsIn_mPH()
+
+        self.converged = True if self.HotOut.Temperature < self.ColdIn.Temperature or self.HotIn.Temperature < self.ColdOut.Temperature else False 
 
 
     def get_graph_data(self, divisions=50):

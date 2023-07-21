@@ -5,10 +5,11 @@ from classes.unit_operations.common.commonHeatExc import BaseHeatExc
 
 class HeatExchanger(BaseHeatExc):
 
-    def __init__(self, Name='Heat exchanger', HX_Eff=0.9, dTmin=5, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, tol=1e-8):
+    def __init__(self, Name='Heat exchanger', HX_Eff=0.9, dTmin=5, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-8):
         self.Name = Name
         self.model = model
         self.bypassed = bypassed
+        self.converged = converged
         self.HX_Eff = HX_Eff
         self.dTmin = dTmin
         self.dP_h = dP_h
@@ -18,6 +19,3 @@ class HeatExchanger(BaseHeatExc):
         self.init_stream_connections()
         self.init_performance_metrics()
 
-    
-    def get_performance(self):       
-        self.get_base_performance(model=self.model)

@@ -7,22 +7,28 @@ from classes.unit_operations.common.commonHeatExc import BaseHeatExc
 
 class PlateHeatExc(BaseHeatExc):
     
-    def __init__(self, Name='Plate heat exchanger', HX_Eff=0.9, dTmin=5, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, tol=1e-8):
+    def __init__(self, Name='Plate heat exchanger', HX_Eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-8):
         self.Name = Name
         self.model = model
         self.bypassed = bypassed
+        self.converged = converged
         self.HX_Eff = HX_Eff
         self.dTmin = dTmin
+        self.dT_h = dT_h
+        self.dT_c = dT_c
         self.dP_h = dP_h
         self.dP_c = dP_c
         self.tol = tol
         self.variable_dP_model = False
         self.init_stream_connections()
         self.init_performance_metrics()
+
+        if self.model == 'custom':
+            self.init_detailed_model()
       
 
-    def get_performance(self):
-        self.get_base_performance(model=self.model)
+    def get_detailed_performance(self):
+        raise ValueError('No detailed plate heat exchanger model defined: ' + self.Name)
 
 
     def init_detailed_model(self):

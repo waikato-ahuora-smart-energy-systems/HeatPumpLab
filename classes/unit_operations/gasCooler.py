@@ -10,23 +10,22 @@ from scipy import optimize
 
 class GasCooler(BaseHeatExc):
 
-    def __init__(self, Name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, detailed_model=False, tol=1e-8):
+    def __init__(self, Name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, model='fixed hot temperature outlet', bypassed=False, converged=False, tol=1e-8):
         self.Name = Name
         self.dTmin = dTmin
         self.dP_h = dP_h
         self.dP_c = dP_c
-        self.detailed_model = detailed_model
+        self.model = model
+        self.bypassed = bypassed
+        self.converged = converged
         self.tol = tol
         
         self.init_stream_connections()
         self.init_performance_metrics()
 
-        if self.detailed_model:
+        if self.model == 'custom':
             self.init_parameters()
             self.init_nodes()
-            self.area_calc_on = True
-        else:
-            self.area_calc_on = False
 
 
     def init_parameters(self):
@@ -120,12 +119,8 @@ class GasCooler(BaseHeatExc):
             end_val = k + step
                    
 
-    def solve(self):
-        if self.detailed_model:
-            raise ValueError('No detailed gas cooler model defined: ' + self.Name)
-
-        else:
-            self.get_base_performance(model='fixed hot temperature outlet')
+    def get_detailed_performance(self):
+        raise ValueError('No detailed gas cooler model defined: ' + self.Name)
 
 
     def area_solve(self):
