@@ -5,7 +5,7 @@ from classes.unit_operations.common.commonHeatExc import BaseHeatExc
 
 class Evaporator(BaseHeatExc):
 
-    def __init__(self, Name='Evaporator', dP_h=0.0, dP_c=0.0, model='fixed cold duty', bypassed=False, converged=False, tol=1e-8):
+    def __init__(self, Name='Evaporator', dP_h=0.0, dP_c=0.0, model='fixed cold duty', bypassed=False, converged=False, tol=1e-6):
         self.Name = Name
         self.model = model
         self.bypassed = bypassed

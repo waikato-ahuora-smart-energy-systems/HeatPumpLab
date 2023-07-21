@@ -7,7 +7,7 @@ from classes.unit_operations.common.commonHeatExc import BaseHeatExc
 
 class PlateHeatExc(BaseHeatExc):
     
-    def __init__(self, Name='Plate heat exchanger', HX_Eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-8):
+    def __init__(self, Name='Plate heat exchanger', HX_Eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-6):
         self.Name = Name
         self.model = model
         self.bypassed = bypassed

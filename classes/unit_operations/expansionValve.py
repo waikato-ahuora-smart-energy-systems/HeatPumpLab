@@ -5,7 +5,7 @@ from classes.streams.massStream import MassStream
 
 class Expansion_Valve:
     
-    def __init__(self, Name='Expansion valve', heat_loss=0.0, tol=1e-8):
+    def __init__(self, Name='Expansion valve', heat_loss=0.0, tol=1e-6):
         self.Name = Name
         self.FlowIn = MassStream()
         self.FlowOut = MassStream()

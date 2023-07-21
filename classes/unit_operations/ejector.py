@@ -5,7 +5,7 @@ from classes.streams.properties import REFPROP
 from classes.streams.massStream import MassStream
 
 class Ejector:
-    def __init__(self, Name='Ejector', Eff_is_ejc=1.0, tol=1e-8):
+    def __init__(self, Name='Ejector', Eff_is_ejc=1.0, tol=1e-6):
         self.Name = Name
         self.tol = tol
         self.PriFlowIn = MassStream()

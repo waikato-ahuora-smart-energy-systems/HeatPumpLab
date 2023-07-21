@@ -10,7 +10,7 @@ from scipy import optimize
 
 class GasCooler(BaseHeatExc):
 
-    def __init__(self, Name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, model='fixed hot temperature outlet', bypassed=False, converged=False, tol=1e-8):
+    def __init__(self, Name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, model='fixed hot temperature outlet', bypassed=False, converged=False, tol=1e-6):
         self.Name = Name
         self.dTmin = dTmin
         self.dP_h = dP_h
