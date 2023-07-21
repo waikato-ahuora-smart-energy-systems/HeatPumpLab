@@ -12,25 +12,25 @@ def get_obj_fun(var, parameters):
     if parameters['n_comp'] == 1:
         m = TRHP(
             **parameters,
-            dT_phx1_max = var[0]
+            dT_phx1_cold=var[0]
             )
 
     elif parameters['n_comp'] == 2:
         m = TRHP(
             **parameters,
-            dT_phx1_max = var[0], 
-            dT_phx2_max = var[1], 
-            comp2_power_frac = var[2]
+            dT_phx1_cold=var[0], 
+            dT_phx2_cold=var[1], 
+            comp2_power_frac=var[2]
             )
 
     elif parameters['n_comp'] == 3:
         m = TRHP(
             **parameters,
-            dT_phx1_max = var[0], 
-            dT_phx2_max = var[1], 
-            dT_phx3_max = var[2], 
-            comp2_power_frac = var[3], 
-            comp3_power_frac = var[4]
+            dT_phx1_cold=var[0], 
+            dT_phx2_cold=var[1], 
+            dT_phx3_cold=var[2], 
+            comp2_power_frac=var[3], 
+            comp3_power_frac=var[4]
             )
     
     else:
