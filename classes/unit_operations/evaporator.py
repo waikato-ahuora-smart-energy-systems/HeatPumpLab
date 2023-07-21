@@ -1,42 +1,22 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from classes.streams.refprop import REFPROP
-from classes.streams.massStream import MassStream
+from classes.unit_operations.common.commonHeatExc import BaseHeatExc
 
-class Evaporator:
+class Evaporator(BaseHeatExc):
 
-    def __init__(self):
-        self.HotIn = None
-        self.HotOut = None
-        self.ColdIn = None
-        self.ColdOut = None
-        self.HX_Eff = 0.8
-        self.NTU = 0
-        self.c = 0
-        self.U = 1
-        self.Duty = 0
-        self.Area = 0
-        self.dP_h = 0
-        self.dP_c = 0
-        '''
-        self.Beta = 587 # m^2/m^3
-        self.FLength = 0.5 # m
-        self.Depth = 1 # m
-        '''
+    def __init__(self, Name='Evaporator', dP_h=0.0, dP_c=0.0, model='fixed cold duty', bypassed=False, converged=False, tol=1e-8):
+        self.Name = Name
+        self.model = model
+        self.bypassed = bypassed
+        self.converged = converged
+        self.dP_h = dP_h
+        self.dP_c = dP_c
+        self.tol = tol
+        self.variable_dP_model = False
+        self.init_stream_connections()
+        self.init_performance_metrics()        
         
-        
-    def solve(self):       
-        self.Duty = self.ColdOut.Heat_Flow - self.ColdIn.Heat_Flow
-        self.ColdIn.Pressure = self.ColdOut.Pressure + self.dP_c
-        self.ColdIn.PropsIn_mPH()
-
-        self.HotOut.Enthalpy = self.HotIn.Enthalpy - self.Duty / self.HotOut.Mass_Flow
-        self.HotOut.PropsIn_mPH()
-        self.HotOut.Pressure = self.HotIn.Pressure - self.dP_h
-        self.HotOut.PropsIn_mPT()
-
-        
-
-        
-
+    
+    def get_detailed_performance(self):
+        raise ValueError('No detailed evaporator model defined: ' + self.Name)

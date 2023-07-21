@@ -2,12 +2,12 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 import math
-from classes.streams.refprop import REFPROP
+from classes.streams.properties import REFPROP
 from scipy import optimize
 
 class CustomRelationship:
-    def __init__(self, source_obj=0, target_obj=0, relation=0, tolerance=1e-6):
-        self.tolerance = tolerance
+    def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-6):
+        self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
         self.relation = relation
@@ -41,21 +41,12 @@ class CustomRelationship:
 
     def Determine_Pint(self):
         #Determines the n-1 intermediate pressures between n compressors
-        n_comp, S0, S3, F2, F3 = self.source_obj
+        S0, S3, F2, F3 = self.source_obj
         log_P3_star = math.log(S3.Pressure / S0.Pressure)
         log_P1_star = (1 - F2 - F3) * log_P3_star
         log_P2_star = (1 - F3) * log_P3_star
-        P1 = S0.Pressure * math.exp(log_P1_star)
-        P2 = S0.Pressure * math.exp(log_P2_star)
-        
-        self.target_obj[0].Pressure = P1
-        self.target_obj[1].Pressure = P2
-        
-        PR1 = self.target_obj[0].Pressure / S0.Pressure
-        PR2 = self.target_obj[1].Pressure / self.target_obj[0].Pressure
-        PR3 = S3.Pressure / self.target_obj[1].Pressure
-
-        i=0
+        self.target_obj[0].Pressure = S0.Pressure * math.exp(log_P1_star)
+        self.target_obj[1].Pressure = S0.Pressure * math.exp(log_P2_star)
 
 
     def Air_Mass_Flow(self):
@@ -63,13 +54,13 @@ class CustomRelationship:
         #Hot side terminal temperature
         dQ = 0
         for gc in self.source_obj:
-            gc.HotOut.Pressure = gc.HotIn.Pressure - gc.dP_refrigerant
+            gc.HotOut.Pressure = gc.HotIn.Pressure - gc.dP_h
             gc.HotOut.PropsIn_mPT()
             gc.Duty = gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow
             
             gc_duty = gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow
             dQ += gc_duty
-            T_air_i = gc.HotIn.Temperature - gc.dT_GC_min_tar
+            T_air_i = gc.HotIn.Temperature - gc.dTmin
             dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
             
             if dh_air > 0:
@@ -83,8 +74,8 @@ class CustomRelationship:
                     #b = self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, gc.HotIn.
                     h_ref = optimize.brentq(f=lambda h_ref: self.mcp_air - gc.HotIn.Mass_Flow * REFPROP('CP', gc.HotIn.Fluid, 'PH', (gc.HotIn.Pressure * (h_ref - gc.HotOut.Enthalpy) + gc.HotOut.Pressure * (gc.HotIn.Enthalpy - h_ref)) / (gc.HotIn.Enthalpy - gc.HotOut.Enthalpy) / 1000, h_ref), a=gc.HotIn.Enthalpy, b=gc.HotOut.Enthalpy)
                     dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
-                    if dQ_i > self.tolerance:
-                        T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dT_GC_min_tar
+                    if dQ_i > self.tol:
+                        T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dTmin
                         dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
                         m_air_list.append(dQ_i / dh_air)                
 
@@ -93,8 +84,8 @@ class CustomRelationship:
                     
                     if h_ref < gc.HotIn.Enthalpy and h_ref > gc.HotOut.Enthalpy:
                         dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
-                        if dQ_i > self.tolerance:
-                            T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dT_GC_min_tar
+                        if dQ_i > self.tol:
+                            T_air_i = REFPROP('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dTmin
                             dh_air = REFPROP('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
                             m_air_list.append(dQ_i / dh_air)  
 

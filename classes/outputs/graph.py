@@ -8,10 +8,10 @@ class Graph:
     def __init__(self) -> None:
         pass
 
-    def heat_exchangers(self, graph_obj):
+    def heat_exchangers(self, graph_obj, title=''):
             H = []; T_hot = []; T_cold = []
             for obj in graph_obj:
-                H_i, T_hot_i, T_cold_i = obj.graph_data()
+                H_i, T_hot_i, T_cold_i = obj.get_graph_data()
                 if len(H) > 0:
                     j = len(H) - 1
                     H_i = [H_i[i] + H[j] for i in range(len(H_i))]
@@ -27,5 +27,6 @@ class Graph:
 
             plt.xlabel('Heat Flow [kJ/kg(ref.)]')
             plt.ylabel('Temperature [°C]')
-            #plt.title('Gas Cooler')
+            if title != '':
+                plt.title(title)
             plt.show()   
