@@ -57,10 +57,8 @@ class TRHP:
         self.dT_phx3_cold = dT_phx3_cold 
         self.T_ihx_in = T_ihx_in
         self.tol = tol
-
         self.converged = False
         self.COP = 0.0
-
         
         self.init_model()
 
@@ -71,6 +69,7 @@ class TRHP:
         self.init_streams()
         self.set_relationships()
         self.define_solver_pathway()
+
 
     def check_logic(self):
         #Check the PHE combo
@@ -396,7 +395,7 @@ class TRHP:
                     or abs(self.gas_cooler4.HotIn.Pressure - self.gas_cooler1.HotOut.Pressure - dP_gc) > self.tol * 10 * dP_gc
                     or abs(self.comp1.Power + self.comp2.Power + self.comp3.Power - duty_comp) > self.tol * 10 * duty_comp
                 ) 
-                and i < 1000
+                and i < 200
               ): #Check for model convergance
             
             #Saves critical pressure and temperature properties to check for solution convergance
@@ -410,7 +409,7 @@ class TRHP:
             for obj in self.OP:
                 obj.solve()
 
-            if i < 1000:            
+            if i < 200:            
                 self.converged = True
             
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar

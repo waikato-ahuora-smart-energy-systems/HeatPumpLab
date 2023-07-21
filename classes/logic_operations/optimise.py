@@ -40,8 +40,8 @@ def get_obj_fun(var, parameters):
         m.solve()
         COP = m.COP
         print(COP, m.converged, var) 
-        del m
-        collected = gc.collect()
+        del m #; collected = gc.collect()
+        
     except:
         pass
 
@@ -66,7 +66,7 @@ def get_optimal(parameters):
         raise ValueError("Number of compressors must be 1, 2 or 3.")
 
     # Perform the optimisation
-    result = differential_evolution(func=get_obj_fun, args=[parameters], bounds=bnds, x0=xi, constraints=lc, polish=False, workers=-1, popsize=3, tol=0.001)
+    result = differential_evolution(func=get_obj_fun, args=[parameters], bounds=bnds, x0=xi, constraints=lc, polish=False, workers=1, popsize=3, tol=0.001)
     result = minimize(method='SLSQP', fun=get_obj_fun, args=parameters, bounds=bnds, x0=result.x, constraints=lc, tol=0.001)
     
     if result.fun < 0.0:  

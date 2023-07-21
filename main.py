@@ -35,15 +35,14 @@ if __name__=='__main__':
                 'T_air_exh' : T_air_exh[0],
                 'n_comp' : 1
             } for i in range(len(Refrigerant)) for k in range(len(T_air_tar))] # for n in range(len(n_comp))
-
+        '''
         for c in cases:
             result = get_optimal(c)
             if type(result) is dict:
                 append_csv(output=result)
-        
         '''
         results = [] 
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
             for result in executor.map(get_optimal, cases):
                 results.append(result)
                 
@@ -53,8 +52,7 @@ if __name__=='__main__':
                     append_csv(output=result)
             except:
                 pass
-        '''
-
+        
     else:
         m = TRHP(
             Refrigerant=Refrigerant[0],
@@ -62,9 +60,9 @@ if __name__=='__main__':
             T_air_tar=T_air_tar[12],
             T_air_inlet=T_air_inlet[0],
             T_air_exh=T_air_exh[0],
-            n_comp=3,
-            dT_phx1_cold=20.0,
-            dT_phx2_cold=20.0,
+            n_comp=1,
+            dT_phx1_cold=50.0,
+            dT_phx2_cold=0.0,
             dT_phx3_cold=10.0, 
             comp2_power_frac=0.4, 
             comp3_power_frac=0.2,
