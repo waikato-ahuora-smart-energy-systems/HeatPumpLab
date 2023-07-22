@@ -43,10 +43,10 @@ if __name__=='__main__':
         results = [] 
         with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
             for result in executor.map(get_optimal, cases):
-                results.append(output=result, file_name='TRHP_results_v2')
+                results.append(result)
                 
         for result in results:
-            append_csv(output=result)
+            append_csv(output=result, file_name='TRHP_results_v2')
 
     else:
         m = TRHP(
