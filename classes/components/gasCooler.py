@@ -3,12 +3,12 @@ __credits__ = ['Alex Geary']
 
 import math
 from classes.streams.properties import REFPROP
-from classes.unit_operations.common.crossFlowElement import CrossFlowElement
-from classes.unit_operations.common.commonHeatExc import BaseHeatExc
+from classes.components.common.crossFlowElement import CrossFlowElement
+from classes.components.common.commonHeatExchanger import BaseHeatExchanger
 from classes.streams.massStream import MassStream
 from scipy import optimize
 
-class GasCooler(BaseHeatExc):
+class GasCooler(BaseHeatExchanger):
 
     def __init__(self, Name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, model='fixed hot temperature outlet', bypassed=False, converged=False, tol=1e-6):
         self.Name = Name

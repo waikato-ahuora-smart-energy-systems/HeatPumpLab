@@ -1,7 +1,6 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-import gc
 from classes.streams.properties import REFPROPS
 
 class MassStream:
@@ -31,36 +30,42 @@ class MassStream:
         props = REFPROPS('QMASS;T;S;CP', self.Fluid, 'PH', self.Pressure / 1000, self.Enthalpy)
         self.Quality = props[0];  self.Temperature = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3] 
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
-        del props #collected = gc.collect()
+        del props
 
 
     def PropsIn_mPT(self):
         props = REFPROPS('QMASS;H;S;CP', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)
         self.Quality = props[0];  self.Enthalpy = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
-        del props #collected = gc.collect()
+        del props
 
 
     def PropsIn_mPX(self):
         props = REFPROPS('T;H;S;CP', self.Fluid, 'PQMASS', self.Pressure / 1000, self.Quality)
         self.Temperature = props[0];  self.Enthalpy = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
-        del props #collected = gc.collect()
+        del props
 
 
     def PropsIn_mPS(self):
         props = REFPROPS('T;H;QMASS;CP', self.Fluid, 'PS', self.Pressure / 1000, self.Entropy)
         self.Temperature = props[0];  self.Enthalpy = props[1];  self.Quality = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
-        del props #collected = gc.collect()
+        del props
 
 
     def PropsIn_mTX(self):
         props = REFPROPS('P;H;S;CP', self.Fluid, 'TQMASS', self.Temperature, self.Quality)
         self.Pressure = props[0] * 1000;  self.Enthalpy = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
-        del props #collected = gc.collect()
-
+        del props
+        
+    
+    def PropsExtend(self): 
+        props = REFPROPS('D;PRANDTL;VIS;TCX', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)
+        self.Density = props[0];  self.PRANDTL = props[1];  self.Viscosity = props[2] /1000000000; self.Thermal_conductivity = props[3] / 1000000;  self.Specific_volume = 1 / props[0]
+        del props
+        
 
     def Combine(self, fld1, fld2):
         #Assumes the fluids have the same composition
@@ -79,9 +84,3 @@ class MassStream:
         self.Entropy = fld.Entropy
         self.Heat_Capacity = fld.Heat_Capacity        
         self.Quality = fld.Quality
-        
-    
-    def PropsExtend(self): 
-        props = REFPROPS('D;PRANDTL;VIS;TCX', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)
-        self.Density = props[0];  self.PRANDTL = props[1];  self.Viscosity = props[2] /1000000000; self.Thermal_conductivity = props[3] / 1000000;  self.Specific_volume = 1 / props[0]
-        del props #collected = gc.collect()

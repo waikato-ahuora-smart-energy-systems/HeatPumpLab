@@ -2,6 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 class SetRelationship:
+    
     def __init__(self, Name='', source_obj='', target_obj='', m = 1, c = 0, prop = 'Temperature', prop2 = 0):
         self.Name = Name
         self.source_obj = source_obj

@@ -23,7 +23,7 @@ if __name__=='__main__':
     dT_GC_min_tar = [j for j in range(20,40,5)]
     T_air_tar = [k for k in range(100,305,10)]
     T_air_inlet = [15.0]
-    T_air_exh = [65.0]
+    T_source_in = [45.0]
     n_comp = [n + 1 for n in range(3)]
 
     if 1:
@@ -32,39 +32,34 @@ if __name__=='__main__':
                 'dT_GC_min_tar' : dT_GC_min_tar[0],
                 'T_air_tar' : T_air_tar[k],
                 'T_air_inlet' : T_air_inlet[0],
-                'T_air_exh' : T_air_exh[0],
+                'T_source_in' : T_source_in[0],
                 'n_comp' : 1
             } for i in range(len(Refrigerant)) for k in range(len(T_air_tar))] # for n in range(len(n_comp))
         '''
         for c in cases:
             result = get_optimal(c)
-            if type(result) is dict:
-                append_csv(output=result)
+            append_csv(output=result)
         '''
         results = [] 
         with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
             for result in executor.map(get_optimal, cases):
-                results.append(result)
+                results.append(output=result, file_name='TRHP_results_v2')
                 
         for result in results:
-            try:
-                if type(result) is dict:
-                    append_csv(output=result)
-            except:
-                pass
-        
+            append_csv(output=result)
+
     else:
         m = TRHP(
             Refrigerant=Refrigerant[0],
             dT_GC_min_tar=dT_GC_min_tar[2],
             T_air_tar=T_air_tar[12],
             T_air_inlet=T_air_inlet[0],
-            T_air_exh=T_air_exh[0],
-            n_comp=1,
+            T_source_in=T_source_in[0],
+            n_comp=3,
             dT_phx1_cold=50.0,
             dT_phx2_cold=0.0,
             dT_phx3_cold=10.0, 
-            comp2_power_frac=0.4, 
+            comp2_power_frac=0.5, 
             comp3_power_frac=0.2,
             dTmin_phx=5.0
             )

@@ -3,7 +3,7 @@ __credits__ = ['Keri Adamson']
 
 from classes.streams.massStream import MassStream
 
-class Expansion_Valve:
+class ExpansionValve:
     
     def __init__(self, Name='Expansion valve', heat_loss=0.0, tol=1e-6):
         self.Name = Name
@@ -18,7 +18,7 @@ class Expansion_Valve:
     
     def solve(self):
         if self.FlowIn.Mass_Flow > self.tol:
-            self.FlowOut.Enthalpy = self.FlowIn.Enthalpy - self.heat_loss
+            self.FlowOut.Enthalpy = self.FlowIn.Enthalpy - self.heat_loss / self.FlowIn.Mass_Flow
             self.FlowOut.PropsIn_mPH()
             self.Pressure_drop = self.FlowIn.Pressure - self.FlowOut.Pressure
 

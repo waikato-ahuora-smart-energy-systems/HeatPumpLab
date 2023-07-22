@@ -1,9 +1,9 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from classes.unit_operations.common.commonHeatExc import BaseHeatExc
+from classes.components.common.commonHeatExchanger import BaseHeatExchanger
 
-class Evaporator(BaseHeatExc):
+class Evaporator(BaseHeatExchanger):
 
     def __init__(self, Name='Evaporator', dP_h=0.0, dP_c=0.0, model='fixed cold duty', bypassed=False, converged=False, tol=1e-6):
         self.Name = Name

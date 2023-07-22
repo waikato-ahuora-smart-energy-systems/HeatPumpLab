@@ -2,15 +2,15 @@ __author__ = 'Tim Walmsley and Lana Kong'
 __credits__ = ['']
 
 
-from classes.unit_operations.compressor import Compressor
-from classes.unit_operations.plateHeatExc import PlateHeatExc
-from classes.unit_operations.gasCooler import GasCooler
-from classes.unit_operations.expansionValve import Expansion_Valve
-from classes.unit_operations.evaporator import Evaporator
+from classes.components.compressor import Compressor
+from classes.components.plateHeatExc import PlateHeatExchanger
+from classes.components.gasCooler import GasCooler
+from classes.components.expansionValve import ExpansionValve
+from classes.components.evaporator import Evaporator
 from classes.streams.massStream import MassStream
-from classes.logic_operations.setRelationship import Set_Relationship
+from classes.logic_operations.setRelationship import SetRelationship
 from classes.logic_operations.customRelationship import CustomRelationship
-from classes.streams.refprop import REFPROP
+from classes.streams.properties import REFPROP
 from scipy.optimize import brentq
 
 
@@ -60,21 +60,20 @@ class HTTHP:
 
     def create_components(self):
         #Initialisation of unit operations
-        self.exp_valve_btm = Expansion_Valve()
+        self.exp_valve_btm = ExpansionValve()
         self.evaporator_btm = Evaporator()
         self.evap_sup_btm = Evaporator()
-        self.ihx_btm = PlateHeatExc(self.dT_min_ihx)
+        self.ihx_btm = PlateHeatExchanger(self.dT_min_ihx)
         self.comp_btm = Compressor(self.eff_motor)
         self.gas_cooler_cas = GasCooler(HotFluid=self.refrigerant_btm, ColdFluid=self.refrigerant_top, dT_GC_min_tar=self.dT_GC_min_tar)
         self.comp_top = Compressor(self.eff_motor) 
         self.gas_cooler_air = GasCooler(HotFluid=self.refrigerant_top, ColdFluid=self.AIR, dT_GC_min_tar=self.dT_GC_min_tar)
-        self.ihx_top = PlateHeatExc(self.dT_min_ihx) #Need to update class
-        self.ihx_tb = PlateHeatExc(self.dT_min_ihx)
-        self.exp_valve_top = Expansion_Valve()
+        self.ihx_top = PlateHeatExchanger(self.dT_min_ihx) #Need to update class
+        self.ihx_tb = PlateHeatExchanger(self.dT_min_ihx)
+        self.exp_valve_top = ExpansionValve()
         self.evaporator_top = Evaporator()
         self.evap_sup_top = Evaporator()
         
-
 
     def model_initialisation(self):
         self.converged = False
@@ -102,20 +101,19 @@ class HTTHP:
     def stream_initialisation(self):
         #Initialise values in the evaporator streams
         self.evaporator_btm.ColdOut = MassStream( 'Evap_btm_out', self.refrigerant_btm, Temperature=self.Tsat_evap, Quality = 1 )
-        P_low_init = self.evaporator_btm.ColdOut.Pressure
         self.evap_sup_btm.ColdIn = self.evaporator_btm.ColdOut
-        self.evap_sup_btm.ColdOut = MassStream( 'IHX_in', self.refrigerant_btm, Pressure=P_low_init, Temperature=self.T_ihx_btm_in )
+        self.evap_sup_btm.ColdOut = MassStream( 'IHX_in', self.refrigerant_btm, Pressure=self.evaporator_btm.ColdOut.Pressure, Temperature=self.T_ihx_btm_in )
 
         #Initialise values in the compression streams
         self.ihx_btm.ColdIn = self.evap_sup_btm.ColdOut
         if self.ihx_btm_on == 1:
-            self.ihx_btm.ColdOut = MassStream( 'PHX1_in', self.refrigerant_btm, Pressure=P_low_init, Temperature=self.T_ihx_btm_in + self.dT_ihx_btm)
+            self.ihx_btm.ColdOut = MassStream( 'PHX1_in', self.refrigerant_btm, Pressure=self.evaporator_btm.ColdOut.Pressure, Temperature=self.T_ihx_btm_in + self.dT_ihx_btm)
         else:   
             self.ihx_btm.ColdOut = self.ihx_btm.ColdIn
 
         self.ihx_tb.ColdIn = self.ihx_btm.ColdOut
         if self.ihx_tb_on == 1: 
-            self.ihx_tb.ColdOut = MassStream( 'Comp_btm_in', self.refrigerant_btm, Pressure=P_low_init, Temperature=self.ihx_tb.ColdIn.Temperature + self.dT_ihx_tb )
+            self.ihx_tb.ColdOut = MassStream( 'Comp_btm_in', self.refrigerant_btm, Pressure=self.evaporator_btm.ColdOut.Pressure, Temperature=self.ihx_tb.ColdIn.Temperature + self.dT_ihx_tb )
         else:
             self.ihx_tb.ColdOut = self.ihx_tb.ColdIn
 
@@ -134,13 +132,13 @@ class HTTHP:
             
         self.exp_valve_btm.FlowIn = self.ihx_btm.HotOut
 
-        self.exp_valve_btm.FlowOut = MassStream( 'Evap_btm_in', self.refrigerant_btm, Pressure=P_low_init, Enthalpy=self.exp_valve_btm.FlowIn.Enthalpy )
+        self.exp_valve_btm.FlowOut = MassStream( 'Evap_btm_in', self.refrigerant_btm, Pressure=self.evaporator_btm.ColdOut.Pressure, Enthalpy=self.exp_valve_btm.FlowIn.Enthalpy )
 
 
 
 
 
-        self.phx2.ColdIn = self.comp1.FlowOutMassStream( 'Evap_in', self.Refrigerant, Pressure=P_low_init, Enthalpy=self.exp_valve.FlowIn.Enthalpy )
+        self.phx2.ColdIn = self.comp1.FlowOutMassStream( 'Evap_in', self.Refrigerant, Pressure=self.evaporator_btm.ColdOut.Pressure, Enthalpy=self.exp_valve.FlowIn.Enthalpy )
 
         if self.phx2_on == 1:
             self.phx2.ColdOut = MassStream( 'Comp2_in', self.Refrigerant, Pressure=self.phx2.ColdIn.Pressure, Temperature=self.phx2.ColdIn.Temperature + self.dT_phx2_max * self.eff_phx)
@@ -215,7 +213,7 @@ class HTTHP:
             self.ihx.HotOut = self.ihx.HotIn
                 
         self.exp_valve.FlowIn = self.ihx.HotOut
-        self.exp_valve.FlowOut = MassStream( 'Evap_in', self.Refrigerant, Pressure=P_low_init, Enthalpy=self.exp_valve.FlowIn.Enthalpy )
+        self.exp_valve.FlowOut = MassStream( 'Evap_in', self.Refrigerant, Pressure=self.evaporator_btm.ColdOut.Pressure, Enthalpy=self.exp_valve.FlowIn.Enthalpy )
         self.evaporator.ColdIn = self.exp_valve.FlowOut
         
 
@@ -238,13 +236,13 @@ class HTTHP:
     def set_relationships(self):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
-            self.set_phx3_dTmax = Set_Relationship( source_obj=self.phx3.ColdIn, target_obj=[self.phx3.HotIn], c=self.dT_phx3_max, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx3_dTmax = SetRelationship( source_obj=self.phx3.ColdIn, target_obj=[self.phx3.HotIn], c=self.dT_phx3_max, prop='Temperature', prop2='Pressure' ) 
         
         if self.phx2_on == 1:    
-            self.set_phx2_dTmax = Set_Relationship( source_obj=self.phx2.ColdIn, target_obj=[self.phx2.HotIn], c=self.dT_phx2_max, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx2_dTmax = SetRelationship( source_obj=self.phx2.ColdIn, target_obj=[self.phx2.HotIn], c=self.dT_phx2_max, prop='Temperature', prop2='Pressure' ) 
         
         if self.phx1_on == 1:
-            self.set_phx1_dTmax = Set_Relationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_max, prop='Temperature', prop2='Pressure' ) 
+            self.set_phx1_dTmax = SetRelationship( source_obj=self.phx1.ColdIn, target_obj=[self.phx1.HotIn], c=self.dT_phx1_max, prop='Temperature', prop2='Pressure' ) 
 
         self.set_P_ints = CustomRelationship( source_obj=[self.n_comp, self.comp1.FlowIn, self.comp3.FlowOut, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], relation=1 )
         self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )

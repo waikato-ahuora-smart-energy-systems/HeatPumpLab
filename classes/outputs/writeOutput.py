@@ -5,12 +5,16 @@ import os
 import csv
 
 def terminal_print(output):
-    for key, value in output.items():
-        print(f'{key} {value}')
+    if type(output) is dict:
+        for key, value in output.items():
+            print(f'{key} {value}')
+
+    else:
+        print('Failed to print due to wrong output format.')
 
 
-def append_csv(output, file_name='TRHP_results_v2.csv'):
-    if output is dict():
+def append_csv(output='', file_name='untitled.csv'):
+    if type(output) is dict:
         file_exists = os.path.isfile(file_name)
         with open(file_name, 'a', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=output.keys())
@@ -19,6 +23,6 @@ def append_csv(output, file_name='TRHP_results_v2.csv'):
                 writer.writeheader()  # file doesn't exist yet, write a header
 
             writer.writerow(output)
-    
+            
     else:
-        raise ValueError('Output cannot write to file due to wrong format.')
+        print('Failed to appended CSV due to wrong output format.')

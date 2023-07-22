@@ -6,12 +6,12 @@ from classes.streams.properties import REFPROP
 from scipy import optimize
 
 class CustomRelationship:
+    
     def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-6):
         self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
         self.relation = relation
-        self.solve()
 
 
     def solve(self):
@@ -66,8 +66,6 @@ class CustomRelationship:
             if dh_air > 0:
                 m_air_list.append(dQ / dh_air)
                 self.mcp_air = dQ / (T_air_i - self.source_obj[0].ColdIn.Temperature)
-
-                P_crit = REFPROP('PCRIT', gc.HotIn.Fluid, 'PT', gc.HotIn.Pressure / 1000, gc.HotIn.Enthalpy) * 1000
 
                 if self.mcp_air > gc.HotIn.Mass_Flow * gc.HotIn.Heat_Capacity and self.mcp_air < gc.HotOut.Mass_Flow * gc.HotOut.Heat_Capacity:
                     #a = self.mcp_air - gc.HotOut.Mass_Flow * REFPROP('CP', gc.HotOut.Fluid, 'PH', gc.HotOut.Pressure / 1000, gc.HotOut.Enthalpy)
