@@ -111,5 +111,8 @@ def get_optimal(parameters):
             'Success:' : result.success
         })
 
-        return m.output       
+        res = m.output
+        del result
+        del m
+        return res       
 
