@@ -10,10 +10,10 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waik
 
 import concurrent.futures
 from timeit import default_timer as timer
-from classes.logic_operations.optimise import get_optimal
-from classes.heat_pumps.TRHP import TRHP
-from classes.outputs.writeOutput import terminal_print, append_csv
-from classes.outputs.graph import Graph
+#from logic_operations.optimise import get_optimal
+from heat_pumps import TRHP
+from outputs import print_result_to_terminal, print_result_to_csv
+from outputs import Graph
 
 
 if __name__=='__main__':
@@ -26,7 +26,7 @@ if __name__=='__main__':
     T_source_in = [45.0]
     n_comp = [n + 1 for n in range(3)]
 
-    if 1:
+    if 0:
         cases = [{
                 'Refrigerant' : Refrigerant[i],
                 'dT_GC_min_tar' : dT_GC_min_tar[0],
@@ -38,7 +38,7 @@ if __name__=='__main__':
         '''
         for c in cases:
             result = get_optimal(c)
-            append_csv(output=result)
+            print_result_to_csv(output=result)
         '''
         results = [] 
         with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
@@ -46,7 +46,7 @@ if __name__=='__main__':
                 results.append(result)
                 
         for result in results:
-            append_csv(output=result, file_name='TRHP_results_v2')
+            print_result_to_csv(output=result, file_name='TRHP_results_v2')
 
     else:
         m = TRHP(
@@ -74,7 +74,7 @@ if __name__=='__main__':
         })
 
         if type(m.output) is dict:
-            terminal_print(output=m.output)
+            print_result_to_terminal(output=m.output)
 
         if 0:
             g = Graph()
