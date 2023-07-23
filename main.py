@@ -19,7 +19,7 @@ from outputs import Graph
 if __name__=='__main__':
     TIC = timer()
 
-    Refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
+    refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
     dT_GC_min_tar = [j for j in range(20,40,5)]
     T_air_tar = [k for k in range(100,305,10)]
     T_air_inlet = [15.0]
@@ -28,13 +28,13 @@ if __name__=='__main__':
 
     if 0:
         cases = [{
-                'Refrigerant' : Refrigerant[i],
+                'refrigerant' : refrigerant[i],
                 'dT_GC_min_tar' : dT_GC_min_tar[0],
                 'T_air_tar' : T_air_tar[k],
                 'T_air_inlet' : T_air_inlet[0],
                 'T_source_in' : T_source_in[0],
                 'n_comp' : 1
-            } for i in range(len(Refrigerant)) for k in range(len(T_air_tar))] # for n in range(len(n_comp))
+            } for i in range(len(refrigerant)) for k in range(len(T_air_tar))] # for n in range(len(n_comp))
         '''
         for c in cases:
             result = get_optimal(c)
@@ -50,7 +50,7 @@ if __name__=='__main__':
 
     else:
         m = TRHP(
-            Refrigerant=Refrigerant[0],
+            refrigerant=refrigerant[0],
             dT_GC_min_tar=dT_GC_min_tar[2],
             T_air_tar=T_air_tar[12],
             T_air_inlet=T_air_inlet[0],

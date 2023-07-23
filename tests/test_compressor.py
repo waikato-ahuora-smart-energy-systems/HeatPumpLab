@@ -10,18 +10,18 @@ from streams import MassStream
 
 class TestCompressor(unittest.TestCase):
     def setUp(self):
-        flow_in = MassStream(Fluid='Air', Pressure=100, Temperature=20)
-        flow_out = MassStream(Fluid='Air', Pressure=100, Temperature=20)
-        self.c = Compressor(FlowIn=flow_in, FlowOut=flow_out)
-        self.c.Isentropic_Eff = 1.0
-        self.c.Motor_Eff = 1.0
+        flow_in = MassStream(fluid='Air', pressure=100, temperature=20)
+        flow_out = MassStream(fluid='Air', pressure=100, temperature=20)
+        self.c = Compressor(flow_in=flow_in, flow_out=flow_out)
+        self.c.isentropic_eff = 1.0
+        self.c.motor_eff = 1.0
 
     def tearDown(self):
         del self.c
     
     def test_should_solve_compressor(self):
         self.c.solve()
-        self.assertAlmostEqual(self.c.FlowOut.Enthalpy, self.c.FlowIn.Enthalpy)
+        self.assertAlmostEqual(self.c.flow_out.enthalpy, self.c.flow_in.enthalpy)
 
     def test_should_return_compressor_power(self):
         result = self.c.get_compressor_power()

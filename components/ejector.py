@@ -4,36 +4,36 @@ __credits__ = ['Alex Geary']
 from streams import get_property, MassStream
 
 class Ejector:
-    def __init__(self, Name='Ejector', Eff_is_ejc=1.0, tol=1e-6):
-        self.Name = Name
+    def __init__(self, name='Ejector', eff_is_ejc=1.0, tol=1e-6):
+        self.name = name
         self.tol = tol
-        self.PriFlowIn = MassStream()
-        self.SecFlowIn = MassStream()
-        self.FlowOut = MassStream()
-        self.Eff_is_ejc = Eff_is_ejc
+        self.primary_flow_in = MassStream()
+        self.sec_flow_in = MassStream()
+        self.flow_out = MassStream()
+        self.eff_is_ejc = eff_is_ejc
         self.dH_comp = 0
-        self.Power = 0
-        self.Pressure_Ratio = 1
+        self.power = 0
+        self.pressure_ratio = 1
         self.m_ratio = 1
         self.converged = False
 
     def solve(self):
-        if self.Eff_is_ejc > 0 and self.Eff_is_ejc <= 1:
+        if self.eff_is_ejc > 0 and self.eff_is_ejc <= 1:
             self.get_work()
         else:
-            self.FlowOut.Combine(self.PriFlowIn, self.SecFlowIn)   
+            self.flow_out.get_combined_stream(self.primary_flow_in, self.sec_flow_in)   
         self.ejector_mass_balance() 
 
     def ejector_mass_balance(self, i = 0):
         while self.converged == False and i < 100:
             #Solves the flow rates around the ejector and cycle
             m_ratio_1 = self.m_ratio
-            self.FlowOut.Quality = get_property('QMASS', self.FlowOut.Fluid, 'PH', self.FlowOut.Pressure / 1000, self.FlowOut.Enthalpy, 0)
-            self.m_ratio = ( 1 / self.FlowOut.Quality )  - 1
-            h_out_1 = (self.SecFlowIn.Enthalpy * self.m_ratio + self.PriFlowIn.Enthalpy )  /  ( self.m_ratio + 1 )
-            self.FlowOut.Enthalpy = ( h_out_1 + self.FlowOut.Enthalpy )  / 2
+            self.flow_out.quality = get_property('QMASS', self.flow_out.fluid, 'PH', self.flow_out.pressure / 1000, self.flow_out.enthalpy, 0)
+            self.m_ratio = ( 1 / self.flow_out.quality )  - 1
+            h_out_1 = (self.sec_flow_in.enthalpy * self.m_ratio + self.primary_flow_in.enthalpy )  /  ( self.m_ratio + 1 )
+            self.flow_out.enthalpy = ( h_out_1 + self.flow_out.enthalpy )  / 2
 
-            if ( abs(self.FlowOut.Enthalpy / h_out_1 - 1) > self.tol or abs(self.m_ratio / m_ratio_1 - 1) > self.tol ):
+            if ( abs(self.flow_out.enthalpy / h_out_1 - 1) > self.tol or abs(self.m_ratio / m_ratio_1 - 1) > self.tol ):
                 i += 1
             else:
                 self.converged = True
@@ -41,41 +41,41 @@ class Ejector:
         if i == 100:
             self.converged = False
 
-        self.PriFlowIn.Mass_Flow = 1 / self.m_ratio
-        self.FlowOut.Mass_Flow = 1 / self.m_ratio + 1
-        self.FlowOut.PropsIn_mPH()
+        self.primary_flow_in.mass_flow = 1 / self.m_ratio
+        self.flow_out.mass_flow = 1 / self.m_ratio + 1
+        self.flow_out.props_in_mPH()
 
     def get_work(self):
-        if abs(self.FlowOut.Pressure - self.SecFlowIn.Pressure) / self.SecFlowIn.Pressure < 0.0001:
+        if abs(self.flow_out.pressure - self.sec_flow_in.pressure) / self.sec_flow_in.pressure < 0.0001:
             #Good estimate of the ejector outlet pressure
             #Use a large step for Newton's method
-            y_min = ( get_property('H', self.SecFlowIn.Fluid, 'PS', self.SecFlowIn.Pressure / 1000, self.PriFlowIn.Entropy, 0) - self.PriFlowIn.Enthalpy )  * self.Eff_is_ejc
-            y_max = ( get_property('H', self.SecFlowIn.Fluid, 'PS', self.PriFlowIn.Pressure / 1000, self.SecFlowIn.Entropy, 0) - self.SecFlowIn.Enthalpy )  * self.m_ratio / self.Eff_is_ejc
-            self.FlowOut.Pressure = self.SecFlowIn.Pressure + abs(y_min /  ( y_max - y_min )) *  ( self.PriFlowIn.Pressure - self.SecFlowIn.Pressure )
+            y_min = ( get_property('H', self.sec_flow_in.fluid, 'PS', self.sec_flow_in.pressure / 1000, self.primary_flow_in.entropy, 0) - self.primary_flow_in.enthalpy )  * self.eff_is_ejc
+            y_max = ( get_property('H', self.sec_flow_in.fluid, 'PS', self.primary_flow_in.pressure / 1000, self.sec_flow_in.entropy, 0) - self.sec_flow_in.enthalpy )  * self.m_ratio / self.eff_is_ejc
+            self.flow_out.pressure = self.sec_flow_in.pressure + abs(y_min /  ( y_max - y_min )) *  ( self.primary_flow_in.pressure - self.sec_flow_in.pressure )
             #Set the step for use in Newton's method below
-            dx = self.FlowOut.Pressure - self.SecFlowIn.Pressure
+            dx = self.flow_out.pressure - self.sec_flow_in.pressure
         else:
             #Set the step for use in Newton's method below
             dx = 0.01
         
         i = 0
         while i < 100:
-            #For a given self.PriFlowIn inlet pressure and fixed self.SecFlowIn pressure,
-            #converge on point where the Power of expansion equals the Power of compression
+            #For a given self.primary_flow_in inlet pressure and fixed self.sec_flow_in pressure,
+            #converge on point where the power of expansion equals the power of compression
             #within the ejector unit using Newton's method
-            y_min = ( get_property('H', self.FlowOut.Fluid, 'PS', ( self.FlowOut.Pressure - dx )  / 1000, self.SecFlowIn.Entropy, 0) - self.SecFlowIn.Enthalpy )  * self.m_ratio / self.Eff_is_ejc \
-                    -  ( self.PriFlowIn.Enthalpy - get_property('H', self.FlowOut.Fluid, 'PS', ( self.FlowOut.Pressure - dx )  / 1000, self.PriFlowIn.Entropy, 0) )  * self.Eff_is_ejc
-            y_max = ( get_property('H', self.FlowOut.Fluid, 'PS', self.FlowOut.Pressure / 1000, self.SecFlowIn.Entropy, 0) - self.SecFlowIn.Enthalpy )  * self.m_ratio / self.Eff_is_ejc \
-                    -  ( self.PriFlowIn.Enthalpy - get_property('H', self.FlowOut.Fluid, 'PS', self.FlowOut.Pressure / 1000, self.PriFlowIn.Entropy, 0) )  * self.Eff_is_ejc
-            self.FlowOut.Pressure = self.FlowOut.Pressure -  ( y_max /  ( y_max - y_min ) )  * dx
-            dh = abs(( get_property('H', self.FlowOut.Fluid, 'PS', self.FlowOut.Pressure / 1000, self.SecFlowIn.Entropy, 0) - self.SecFlowIn.Enthalpy )  * self.m_ratio / self.Eff_is_ejc \
-                    -  ( self.PriFlowIn.Enthalpy - get_property('H', self.FlowOut.Fluid, 'PS', self.FlowOut.Pressure / 1000, self.PriFlowIn.Entropy, 0) )  * self.Eff_is_ejc) \
-                    /  ( ( self.PriFlowIn.Enthalpy - get_property('H', self.FlowOut.Fluid, 'PS', self.FlowOut.Pressure / 1000, self.PriFlowIn.Entropy, 0) )  * self.Eff_is_ejc )
+            y_min = ( get_property('H', self.flow_out.fluid, 'PS', ( self.flow_out.pressure - dx )  / 1000, self.sec_flow_in.entropy, 0) - self.sec_flow_in.enthalpy )  * self.m_ratio / self.eff_is_ejc \
+                    -  ( self.primary_flow_in.enthalpy - get_property('H', self.flow_out.fluid, 'PS', ( self.flow_out.pressure - dx )  / 1000, self.primary_flow_in.entropy, 0) )  * self.eff_is_ejc
+            y_max = ( get_property('H', self.flow_out.fluid, 'PS', self.flow_out.pressure / 1000, self.sec_flow_in.entropy, 0) - self.sec_flow_in.enthalpy )  * self.m_ratio / self.eff_is_ejc \
+                    -  ( self.primary_flow_in.enthalpy - get_property('H', self.flow_out.fluid, 'PS', self.flow_out.pressure / 1000, self.primary_flow_in.entropy, 0) )  * self.eff_is_ejc
+            self.flow_out.pressure = self.flow_out.pressure -  ( y_max /  ( y_max - y_min ) )  * dx
+            dh = abs(( get_property('H', self.flow_out.fluid, 'PS', self.flow_out.pressure / 1000, self.sec_flow_in.entropy, 0) - self.sec_flow_in.enthalpy )  * self.m_ratio / self.eff_is_ejc \
+                    -  ( self.primary_flow_in.enthalpy - get_property('H', self.flow_out.fluid, 'PS', self.flow_out.pressure / 1000, self.primary_flow_in.entropy, 0) )  * self.eff_is_ejc) \
+                    /  ( ( self.primary_flow_in.enthalpy - get_property('H', self.flow_out.fluid, 'PS', self.flow_out.pressure / 1000, self.primary_flow_in.entropy, 0) )  * self.eff_is_ejc )
             
             i += 1
             if dh < self.tol:
                 break
         
-        self.Pressure_Ratio = self.FlowOut.Pressure / self.SecFlowIn.Pressure
-        self.dH_comp = get_property('H', self.FlowOut.Fluid, 'PS', self.FlowOut.Pressure / 1000, self.SecFlowIn.Entropy, 0) - self.SecFlowIn.Enthalpy
-        self.Power = self.dH_comp * self.SecFlowIn.Mass_Flow / self.Eff_is_ejc
+        self.pressure_ratio = self.flow_out.pressure / self.sec_flow_in.pressure
+        self.dH_comp = get_property('H', self.flow_out.fluid, 'PS', self.flow_out.pressure / 1000, self.sec_flow_in.entropy, 0) - self.sec_flow_in.enthalpy
+        self.power = self.dH_comp * self.sec_flow_in.mass_flow / self.eff_is_ejc

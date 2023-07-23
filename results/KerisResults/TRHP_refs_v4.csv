@@ -1,6 +1,6 @@
 ['Obj function:', 2.594116200622211]
 ['Iterations:', 90]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 200]
 ['T_air_inlet:', 15]
@@ -14,7 +14,7 @@
 
 
 ['Obj function:', 2.6894499847145696]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 180]
 ['T_air_inlet:', 15]
@@ -28,7 +28,7 @@
 
 
 ['Obj function:', 2.6324669345311853]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 190]
 ['T_air_inlet:', 15]
@@ -42,7 +42,7 @@
 
 
 ['Obj function:', 2.555328016053418]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 200]
 ['T_air_inlet:', 15]
@@ -56,7 +56,7 @@
 
 
 ['Obj function:', 2.5256534948540468]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 210]
 ['T_air_inlet:', 15]
@@ -70,7 +70,7 @@
 
 
 ['Obj function:', 2.641359473856105]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 180]
 ['T_air_inlet:', 15]
@@ -86,7 +86,7 @@
 
 
 ['Obj function:', 2.5995826945758047]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 190]
 ['T_air_inlet:', 15]
@@ -102,7 +102,7 @@
 
 
 ['Obj function:', 2.5633884887859075]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 200]
 ['T_air_inlet:', 15]
@@ -118,7 +118,7 @@
 
 
 ['Obj function:', 2.478910058350919]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 210]
 ['T_air_inlet:', 15]
@@ -135,7 +135,7 @@
 
 ['Obj function:', 2.6997170991885224]
 ['Iterations:', 1347]
-['Refrigerant:', 'R1233zd(E)']
+['refrigerant:', 'R1233zd(E)']
 ['dT Gas Cooler:', 20]
 ['T_air_tar:', 180]
 ['T_air_inlet:', 15]

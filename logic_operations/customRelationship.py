@@ -29,86 +29,86 @@ class CustomRelationship:
             pass
     
     def Determine_T(self):
-        self.target_obj.Temperature = max(
-            min(self.source_obj[0].Temperature, self.source_obj[1].Temperature) + self.var, 
-            self.source_obj[0].Temperature, 
-            self.source_obj[1].Temperature
+        self.target_obj.temperature = max(
+            min(self.source_obj[0].temperature, self.source_obj[1].temperature) + self.var, 
+            self.source_obj[0].temperature, 
+            self.source_obj[1].temperature
             )
     
     def Determine_Pint(self):
         #Determines the n-1 intermediate pressures between n compressors
         S0, S3, F2, F3 = self.source_obj
-        log_P3_star = math.log(S3.Pressure / S0.Pressure)
+        log_P3_star = math.log(S3.pressure / S0.pressure)
         log_P1_star = (1 - F2 - F3) * log_P3_star
         log_P2_star = (1 - F3) * log_P3_star
-        self.target_obj[0].Pressure = S0.Pressure * math.exp(log_P1_star)
-        self.target_obj[1].Pressure = S0.Pressure * math.exp(log_P2_star)
+        self.target_obj[0].pressure = S0.pressure * math.exp(log_P1_star)
+        self.target_obj[1].pressure = S0.pressure * math.exp(log_P2_star)
 
     def Air_Mass_Flow(self):
         m_air_list = []
         #Hot side terminal temperature
         dQ = 0
         for gc in self.source_obj:
-            gc.HotOut.Pressure = gc.HotIn.Pressure - gc.dP_h
-            gc.HotOut.PropsIn_mPT()
-            gc.Duty = gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow
+            gc.source_out.pressure = gc.source_in.pressure - gc.dP_h
+            gc.source_out.props_in_mPT()
+            gc.duty = gc.source_in.heat_flow - gc.source_out.heat_flow
             
-            gc_duty = gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow
+            gc_duty = gc.source_in.heat_flow - gc.source_out.heat_flow
             dQ += gc_duty
-            T_air_i = gc.HotIn.Temperature - gc.dTmin
-            dh_air = get_property('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
+            T_air_i = gc.source_in.temperature - gc.dTmin
+            dh_air = get_property('H', gc.sink_in.fluid, 'PT', gc.sink_in.pressure / 1000, T_air_i) - self.source_obj[0].sink_in.enthalpy
             
             if dh_air > 0:
                 m_air_list.append(dQ / dh_air)
-                self.mcp_air = dQ / (T_air_i - self.source_obj[0].ColdIn.Temperature)
+                self.mcp_air = dQ / (T_air_i - self.source_obj[0].sink_in.temperature)
 
-                if self.mcp_air > gc.HotIn.Mass_Flow * gc.HotIn.Heat_Capacity and self.mcp_air < gc.HotOut.Mass_Flow * gc.HotOut.Heat_Capacity:
-                    #a = self.mcp_air - gc.HotOut.Mass_Flow * get_property('CP', gc.HotOut.Fluid, 'PH', gc.HotOut.Pressure / 1000, gc.HotOut.Enthalpy)
-                    #b = self.mcp_air - gc.HotIn.Mass_Flow * get_property('CP', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, gc.HotIn.
-                    h_ref = brentq(f=lambda h_ref: self.mcp_air - gc.HotIn.Mass_Flow * get_property('CP', gc.HotIn.Fluid, 'PH', (gc.HotIn.Pressure * (h_ref - gc.HotOut.Enthalpy) + gc.HotOut.Pressure * (gc.HotIn.Enthalpy - h_ref)) / (gc.HotIn.Enthalpy - gc.HotOut.Enthalpy) / 1000, h_ref), a=gc.HotIn.Enthalpy, b=gc.HotOut.Enthalpy)
-                    dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
+                if self.mcp_air > gc.source_in.mass_flow * gc.source_in.heat_capacity and self.mcp_air < gc.source_out.mass_flow * gc.source_out.heat_capacity:
+                    #a = self.mcp_air - gc.source_out.mass_flow * get_property('CP', gc.source_out.fluid, 'PH', gc.source_out.pressure / 1000, gc.source_out.enthalpy)
+                    #b = self.mcp_air - gc.source_in.mass_flow * get_property('CP', gc.source_in.fluid, 'PH', gc.source_in.pressure / 1000, gc.source_in.
+                    h_ref = brentq(f=lambda h_ref: self.mcp_air - gc.source_in.mass_flow * get_property('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref), a=gc.source_in.enthalpy, b=gc.source_out.enthalpy)
+                    dQ_i = dQ - gc.source_in.mass_flow * (gc.source_in.enthalpy - h_ref)
                     if dQ_i > self.tol:
-                        T_air_i = get_property('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dTmin
-                        dh_air = get_property('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
+                        T_air_i = get_property('T', gc.source_in.fluid, 'PH', gc.source_in.pressure / 1000, h_ref) - gc.dTmin
+                        dh_air = get_property('H', gc.sink_in.fluid, 'PT', gc.sink_in.pressure / 1000, T_air_i) - self.source_obj[0].sink_in.enthalpy
                         m_air_list.append(dQ_i / dh_air)                
 
-                if gc.HotIn.Pressure < get_property('PCRIT', gc.HotIn.Fluid, 'PT', gc.HotIn.Pressure / 1000, gc.HotIn.Enthalpy) * 1000:
-                    h_ref = get_property('H', gc.HotIn.Fluid, 'PQMASS', gc.HotIn.Pressure / 1000, 1.0)
+                if gc.source_in.pressure < get_property('PCRIT', gc.source_in.fluid, 'PT', gc.source_in.pressure / 1000, gc.source_in.enthalpy) * 1000:
+                    h_ref = get_property('H', gc.source_in.fluid, 'PQMASS', gc.source_in.pressure / 1000, 1.0)
                     
-                    if h_ref < gc.HotIn.Enthalpy and h_ref > gc.HotOut.Enthalpy:
-                        dQ_i = dQ - gc.HotIn.Mass_Flow * (gc.HotIn.Enthalpy - h_ref)
+                    if h_ref < gc.source_in.enthalpy and h_ref > gc.source_out.enthalpy:
+                        dQ_i = dQ - gc.source_in.mass_flow * (gc.source_in.enthalpy - h_ref)
                         if dQ_i > self.tol:
-                            T_air_i = get_property('T', gc.HotIn.Fluid, 'PH', gc.HotIn.Pressure / 1000, h_ref) - gc.dTmin
-                            dh_air = get_property('H', gc.ColdIn.Fluid, 'PT', gc.ColdIn.Pressure / 1000, T_air_i) - self.source_obj[0].ColdIn.Enthalpy
+                            T_air_i = get_property('T', gc.source_in.fluid, 'PH', gc.source_in.pressure / 1000, h_ref) - gc.dTmin
+                            dh_air = get_property('H', gc.sink_in.fluid, 'PT', gc.sink_in.pressure / 1000, T_air_i) - self.source_obj[0].sink_in.enthalpy
                             m_air_list.append(dQ_i / dh_air)  
 
-        self.target_obj[0].ColdIn.Mass_Flow = max(m_air_list)
-        self.target_obj[0].ColdIn.PropsIn_mPT()
+        self.target_obj[0].sink_in.mass_flow = max(m_air_list)
+        self.target_obj[0].sink_in.props_in_mPT()
         
         for gc in self.target_obj:
-            gc.ColdOut.Mass_Flow = gc.ColdIn.Mass_Flow
-            gc.ColdOut.Enthalpy = gc.ColdIn.Enthalpy + (gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow) / gc.ColdIn.Mass_Flow
-            gc.ColdOut.PropsIn_mPH()
+            gc.sink_out.mass_flow = gc.sink_in.mass_flow
+            gc.sink_out.enthalpy = gc.sink_in.enthalpy + (gc.source_in.heat_flow - gc.source_out.heat_flow) / gc.sink_in.mass_flow
+            gc.sink_out.props_in_mPH()
 
     def Airsource_Mass_Flow(self):
         m_air_list = []
         #Hot side terminal temperature
         dQ = 0
         for ev in self.source_obj:
-            ev.ColdOut.Pressure = ev.ColdIn.Pressure
-            ev.HotOut.PropsIn_mPT()
-            ev.Duty = ev.ColdOut.Heat_Flow - ev.ColdIn.Heat_Flow
+            ev.sink_out.pressure = ev.sink_in.pressure
+            ev.source_out.props_in_mPT()
+            ev.duty = ev.sink_out.heat_flow - ev.sink_in.heat_flow
             
-            ev_duty = ev.ColdOut.Heat_Flow - ev.ColdIn.Heat_Flow
+            ev_duty = ev.sink_out.heat_flow - ev.sink_in.heat_flow
             dQ += ev_duty
-            T_air_i = ev.ColdOut.Temperature - 25
-            dh_air = self.source_obj[0].HotOut.Enthalpy - get_property('H', ev.HotOut.Fluid, 'PT', ev.HotOut.Pressure / 1000, T_air_i) 
+            T_air_i = ev.sink_out.temperature - 25
+            dh_air = self.source_obj[0].source_out.enthalpy - get_property('H', ev.source_out.fluid, 'PT', ev.source_out.pressure / 1000, T_air_i) 
             
             if dh_air > 0:
                 m_air_list.append(dQ / dh_air)
-                self.mcp_air = dQ / (T_air_i - self.source_obj[0].HotOut.Temperature)
+                self.mcp_air = dQ / (T_air_i - self.source_obj[0].source_out.temperature)
 
-        self.target_obj[0].HotIn.Mass_Flow = max(m_air_list)
-        self.target_obj[0].HotOut.Mass_Flow = self.target_obj[0].HotIn.Mass_Flow
-        self.target_obj[0].HotIn.PropsIn_mPT()
+        self.target_obj[0].source_in.mass_flow = max(m_air_list)
+        self.target_obj[0].source_out.mass_flow = self.target_obj[0].source_in.mass_flow
+        self.target_obj[0].source_in.props_in_mPT()
         

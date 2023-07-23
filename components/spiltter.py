@@ -4,20 +4,20 @@ __credits__ = ['Alex Geary']
 from streams import MassStream
 
 class Splitter: 
-    def __init__(self, Name='Splitter', split_ratio_list = []):
-        self.Name = Name
-        self.FlowIn = MassStream()
-        self.FlowOut = [MassStream()]
+    def __init__(self, name='Splitter', split_ratio_list = []):
+        self.name = name
+        self.flow_in = MassStream()
+        self.flow_out = [MassStream()]
         self.split_ratio_list = split_ratio_list
 
     def add_flow_out(self, flow_j):
-        self.FlowOut.append(flow_j)
+        self.flow_out.append(flow_j)
 
     def solve(self):
         i = 1
-        for f in self.FlowOut:
-            f.SetEqual = self.FlowIn
-            f.Mass_Flow = self.split_ratio_list[i]
-            f.Heat_Flow = self.FlowIn.Enthalpy * f.Mass_Flow
+        for f in self.flow_out:
+            f.set_equal = self.flow_in
+            f.mass_flow = self.split_ratio_list[i]
+            f.heat_flow = self.flow_in.enthalpy * f.mass_flow
             i += 1
             

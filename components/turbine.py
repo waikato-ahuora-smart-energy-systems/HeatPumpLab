@@ -4,22 +4,22 @@ __credits__ = ['Alex Geary']
 from streams import MassStream
 
 class Turbine: 
-    def __init__(self, Name='Turbine', eff_isen = 1.0, eff_gen = 1.0):
-        self.Name = Name
-        self.FlowIn = MassStream()
-        self.FlowOut = MassStream()
+    def __init__(self, name='Turbine', eff_isen = 1.0, eff_gen = 1.0):
+        self.name = name
+        self.flow_in = MassStream()
+        self.flow_out = MassStream()
         self.eff_isen = eff_isen
         self.eff_gen = eff_gen
         self.dh = 0.0
-        self.Pressure_Ratio = 1.0
-        self.Power = 0.0
+        self.pressure_ratio = 1.0
+        self.power = 0.0
 
     def solve(self):
-        self.FlowOut.Entropy = self.FlowIn.Entropy 
-        self.FlowOut.PropsIn_mPS()
-        self.dh_isen = self.FlowIn.Enthalpy - self.FlowOut.Enthalpy
+        self.flow_out.entropy = self.flow_in.entropy 
+        self.flow_out.props_in_mPS()
+        self.dh_isen = self.flow_in.enthalpy - self.flow_out.enthalpy
         self.dh = self.dh_isen / self.eff_isen
-        self.FlowOut.Enthalpy = self.FlowIn.Enthalpy - self.dh 
-        self.FlowOut.PropsIn_mPH()
-        self.Power = self.dh * self.FlowOut.Mass_Flow * self.eff_gen
+        self.flow_out.enthalpy = self.flow_in.enthalpy - self.dh 
+        self.flow_out.props_in_mPH()
+        self.power = self.dh * self.flow_out.mass_flow * self.eff_gen
         

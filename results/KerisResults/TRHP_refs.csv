@@ -1,5 +1,5 @@
 ['Obj function', 2.3702683648719227]
-['Refrigerant', 'Carbon dioxide']
+['refrigerant', 'Carbon dioxide']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 0.2316283629883816]
 ['dT phx max 2', 50.0]
@@ -9,7 +9,7 @@
 
 
 ['Obj function', 2.7094303931681853]
-['Refrigerant', 'R1233zd(E)']
+['refrigerant', 'R1233zd(E)']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 44.06739315428429]
 ['dT phx max 2', 35.37726674023464]
@@ -19,7 +19,7 @@
 
 
 ['Obj function', 2.647480708490548]
-['Refrigerant', 'R1234yf']
+['refrigerant', 'R1234yf']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 45.979560366451246]
 ['dT phx max 2', 50.0]
@@ -29,7 +29,7 @@
 
 
 ['Obj function', 2.6808847115292793]
-['Refrigerant', 'R1234ze(Z)']
+['refrigerant', 'R1234ze(Z)']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 30.460747463814236]
 ['dT phx max 2', 31.20090025132114]
@@ -39,7 +39,7 @@
 
 
 ['Obj function', 2.700453173530514]
-['Refrigerant', 'R1243zf']
+['refrigerant', 'R1243zf']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 19.91039141328866]
 ['dT phx max 2', 31.7812093652915]
@@ -49,7 +49,7 @@
 
 
 ['Obj function', 2.776211839855025]
-['Refrigerant', 'R1336mzz(Z)']
+['refrigerant', 'R1336mzz(Z)']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 45.95944824075426]
 ['dT phx max 2', 43.37286176843183]
@@ -59,7 +59,7 @@
 
 
 ['Obj function', 2.7201354670909534]
-['Refrigerant', 'R1224yd(Z)']
+['refrigerant', 'R1224yd(Z)']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 40.895660708606776]
 ['dT phx max 2', 40.22027389820969]
@@ -69,7 +69,7 @@
 
 
 ['Obj function', 2.71243569516426]
-['Refrigerant', 'R1234ze(E)']
+['refrigerant', 'R1234ze(E)']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 31.090539814471704]
 ['dT phx max 2', 33.05135782290355]
@@ -79,7 +79,7 @@
 
 
 ['Obj function', 2.650859001699614]
-['Refrigerant', 'Ammonia']
+['refrigerant', 'Ammonia']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 49.32615790151809]
 ['dT phx max 2', 38.86042467931391]
@@ -89,7 +89,7 @@
 
 
 ['Obj function', 2.7453428192111797]
-['Refrigerant', 'Isobutane']
+['refrigerant', 'Isobutane']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 14.60103294038424]
 ['dT phx max 2', 40.15984985974381]
@@ -99,7 +99,7 @@
 
 
 ['Obj function', 2.7123705122537123]
-['Refrigerant', 'Butane']
+['refrigerant', 'Butane']
 ['dT Gas Cooler', 20]
 ['dT phx max 1', 46.491746625204286]
 ['dT phx max 2', 39.963582105501885]

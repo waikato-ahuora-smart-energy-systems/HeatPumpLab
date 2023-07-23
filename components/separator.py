@@ -4,24 +4,24 @@ __credits__ = ['Alex Geary']
 from streams import get_property, MassStream
 
 class Separator:
-    def __init__(self, Name='Separator', dP=0.0):
-        self.Name = Name
-        self.FlowIn = MassStream()
-        self.VapOut = MassStream()
-        self.LiquidOut = MassStream()
+    def __init__(self, name='Separator', dP=0.0):
+        self.name = name
+        self.flow_in = MassStream()
+        self.vap_out = MassStream()
+        self.liquid_out = MassStream()
         self.dP = dP
 
     def solve(self):
-        self.VapOut.Pressure = self.FlowIn.Pressure - self.dP
-        self.VapOut.Quality = 1.0
-        self.LiquidOut.Pressure = self.FlowIn.Pressure - self.dP
-        self.LiquidOut.Quality = 0.0
+        self.vap_out.pressure = self.flow_in.pressure - self.dP
+        self.vap_out.quality = 1.0
+        self.liquid_out.pressure = self.flow_in.pressure - self.dP
+        self.liquid_out.quality = 0.0
 
-        vap_frac = get_property('QMASS', self.FlowIn.Fluid, 'PH', self.VapOut.Pressure / 1000, self.FlowIn.Enthalpy, 0)
+        vap_frac = get_property('QMASS', self.flow_in.fluid, 'PH', self.vap_out.pressure / 1000, self.flow_in.enthalpy, 0)
         
-        self.VapOut.Mass_Flow = self.FlowIn.Mass_Flow * vap_frac
-        self.VapOut.PropsIn_mPX()
+        self.vap_out.mass_flow = self.flow_in.mass_flow * vap_frac
+        self.vap_out.props_in_mPX()
         
-        self.LiquidOut.Mass_Flow = self.FlowIn.Mass_Flow - self.VapOut.Mass_Flow
-        self.LiquidOut.PropsIn_mPX()
+        self.liquid_out.mass_flow = self.flow_in.mass_flow - self.vap_out.mass_flow
+        self.liquid_out.props_in_mPX()
         
