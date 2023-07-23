@@ -1,12 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
-__date__ = '2021'
-
-"""
-High temperature transcritical-recuperative heat pump model
-By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
-"""
+__date__ = '2021-2023'
 
 import concurrent.futures
 from timeit import default_timer as timer
@@ -19,7 +14,7 @@ from outputs import Graph
 if __name__=='__main__':
     TIC = timer()
 
-    refrigerant = ['R1233zd(E)', 'R1234yf','R1234ze(Z)', 'R1243zf','R1336mzz(Z)', 'R1224yd(Z)', 'R1234ze(E)', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
+    refrigerant = ['R1233zd(E)', 'R1234ze(E)', 'R1234ze(Z)', 'R1336mzz(Z)', 'R1224yd(Z)', 'R245fa', 'R365mfc', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
     dT_GC_min_tar = [j for j in range(20,40,5)]
     T_air_tar = [k for k in range(100,305,10)]
     T_air_inlet = [15.0]
@@ -34,20 +29,22 @@ if __name__=='__main__':
                 'T_air_inlet' : T_air_inlet[0],
                 'T_source_in' : T_source_in[0],
                 'n_comp' : 1
-            } for i in range(len(refrigerant)) for k in range(len(T_air_tar))] # for n in range(len(n_comp))
-        '''
+            } for k in range(len(T_air_tar)) for i in range(len(refrigerant)) ] # for n in range(len(n_comp))
+        
+        for c in cases:
+            print(c)
         for c in cases:
             result = get_TRHP_optimal(c)
-            print_result_to_csv(output=result)
+            print_result_to_csv(output=result, file_name='results/TRHP_results_v2.csv')
         '''
         results = [] 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=11) as executor:
             for result in executor.map(get_TRHP_optimal, cases):
                 results.append(result)
                 
         for result in results:
             print_result_to_csv(output=result, file_name='TRHP_results_v2')
-
+        '''
     else:
         m = TRHP(
             refrigerant=refrigerant[0],

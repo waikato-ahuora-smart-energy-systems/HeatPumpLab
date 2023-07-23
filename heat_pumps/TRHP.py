@@ -1,5 +1,12 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
+__email__ = 'tim.walmsley@waikato.ac.nz'
+__date__ = '2023'
+
+"""
+High temperature transcritical-recuperative heat pump model
+By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
+"""
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import get_property, MassStream
