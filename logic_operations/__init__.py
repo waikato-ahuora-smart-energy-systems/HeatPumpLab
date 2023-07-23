@@ -1,3 +1,2 @@
 from logic_operations.customRelationship import CustomRelationship
-#from logic_operations.optimise import get_optimal
 from logic_operations.setRelationship import SetRelationship

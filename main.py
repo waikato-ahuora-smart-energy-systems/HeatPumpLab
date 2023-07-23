@@ -10,7 +10,7 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waik
 
 import concurrent.futures
 from timeit import default_timer as timer
-#from logic_operations.optimise import get_optimal
+from optimise import get_TRHP_optimal
 from heat_pumps import TRHP
 from outputs import print_result_to_terminal, print_result_to_csv
 from outputs import Graph
@@ -26,7 +26,7 @@ if __name__=='__main__':
     T_source_in = [45.0]
     n_comp = [n + 1 for n in range(3)]
 
-    if 0:
+    if 1:
         cases = [{
                 'refrigerant' : refrigerant[i],
                 'dT_GC_min_tar' : dT_GC_min_tar[0],
@@ -37,12 +37,12 @@ if __name__=='__main__':
             } for i in range(len(refrigerant)) for k in range(len(T_air_tar))] # for n in range(len(n_comp))
         '''
         for c in cases:
-            result = get_optimal(c)
+            result = get_TRHP_optimal(c)
             print_result_to_csv(output=result)
         '''
         results = [] 
         with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
-            for result in executor.map(get_optimal, cases):
+            for result in executor.map(get_TRHP_optimal, cases):
                 results.append(result)
                 
         for result in results:
