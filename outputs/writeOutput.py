@@ -1,9 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 import os, csv
-
 
 def print_result_to_terminal(output):
     if type(output) is dict:
@@ -12,7 +10,6 @@ def print_result_to_terminal(output):
 
     else:
         print('Failed to print due to wrong output format.')
-
 
 def print_result_to_csv(output='', file_name='results/untitled.csv'):
     if type(output) is dict:

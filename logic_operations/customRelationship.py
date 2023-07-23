@@ -1,20 +1,16 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 import math
 from streams import get_property
 from scipy.optimize import brentq
 
-
 class CustomRelationship:
-    
     def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-6):
         self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
         self.relation = relation
-
 
     def solve(self):
         if self.relation == 0:
@@ -32,7 +28,6 @@ class CustomRelationship:
         else:
             pass
     
-
     def Determine_T(self):
         self.target_obj.Temperature = max(
             min(self.source_obj[0].Temperature, self.source_obj[1].Temperature) + self.var, 
@@ -40,7 +35,6 @@ class CustomRelationship:
             self.source_obj[1].Temperature
             )
     
-
     def Determine_Pint(self):
         #Determines the n-1 intermediate pressures between n compressors
         S0, S3, F2, F3 = self.source_obj
@@ -49,7 +43,6 @@ class CustomRelationship:
         log_P2_star = (1 - F3) * log_P3_star
         self.target_obj[0].Pressure = S0.Pressure * math.exp(log_P1_star)
         self.target_obj[1].Pressure = S0.Pressure * math.exp(log_P2_star)
-
 
     def Air_Mass_Flow(self):
         m_air_list = []
@@ -97,7 +90,6 @@ class CustomRelationship:
             gc.ColdOut.Enthalpy = gc.ColdIn.Enthalpy + (gc.HotIn.Heat_Flow - gc.HotOut.Heat_Flow) / gc.ColdIn.Mass_Flow
             gc.ColdOut.PropsIn_mPH()
 
-
     def Airsource_Mass_Flow(self):
         m_air_list = []
         #Hot side terminal temperature
@@ -119,3 +111,4 @@ class CustomRelationship:
         self.target_obj[0].HotIn.Mass_Flow = max(m_air_list)
         self.target_obj[0].HotOut.Mass_Flow = self.target_obj[0].HotIn.Mass_Flow
         self.target_obj[0].HotIn.PropsIn_mPT()
+        

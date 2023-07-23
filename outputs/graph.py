@@ -1,15 +1,11 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 import matplotlib.pyplot as plt
 
-
 class Graph:
-
     def __init__(self) -> None:
         pass
-
 
     def heat_exchangers(self, graph_obj, title=''):
             H = []; T_hot = []; T_cold = []
@@ -33,3 +29,4 @@ class Graph:
             if title != '':
                 plt.title(title)
             plt.show()   
+            

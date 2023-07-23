@@ -1,12 +1,9 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 from streams import MassStream
 
-
 class Turbine: 
-    
     def __init__(self, Name='Turbine', eff_isen = 1.0, eff_gen = 1.0):
         self.Name = Name
         self.FlowIn = MassStream()
@@ -16,7 +13,6 @@ class Turbine:
         self.dh = 0.0
         self.Pressure_Ratio = 1.0
         self.Power = 0.0
-
 
     def solve(self):
         self.FlowOut.Entropy = self.FlowIn.Entropy 

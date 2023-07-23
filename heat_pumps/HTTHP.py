@@ -1,13 +1,11 @@
 __author__ = 'Tim Walmsley and Lana Kong'
 __credits__ = ['']
 
-
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import MassStream
 from logic_operations import SetRelationship, CustomRelationship
 from streams import get_property
 from scipy.optimize import brentq
-
 
 class HTTHP:
     def __init__(
@@ -52,7 +50,6 @@ class HTTHP:
         self.create_components()
         self.model_initialisation()
 
-
     def create_components(self):
         #Initialisation of unit operations
         self.exp_valve_btm = ExpansionValve()
@@ -69,7 +66,6 @@ class HTTHP:
         self.evaporator_top = Evaporator()
         self.evap_sup_top = Evaporator()
         
-
     def model_initialisation(self):
         self.converged = False
         self.COP = 0.0        
@@ -85,13 +81,11 @@ class HTTHP:
         self.set_relationships()
         self.define_solver_pathway()
 
-
     def determine_HP_structure(self):
         #Binary variables for the heat pump structure
         self.ihx_top_on = 1    if self.dT_ihx_top < self.T_gc_out else 0
         self.ihx_btm_on = 1   if self.dT_ihx_btm > 0.0 else 0
         self.ihx_tb_on = 1   if self.dT_ihx_tb > 0.0 else 0
-
 
     def stream_initialisation(self):
         #Initialise values in the evaporator streams

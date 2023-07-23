@@ -1,9 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 class SetRelationship:
-    
     def __init__(self, Name='', source_obj='', target_obj='', m = 1, c = 0, prop = 'Temperature', prop2 = 0):
         self.Name = Name
         self.source_obj = source_obj
@@ -14,14 +12,12 @@ class SetRelationship:
         self.prop2 = prop2
         self.solve() #Change this to being explicit
 
-
     def solve(self):
         if self.prop == 'Temperature':
             self.set_temperature()
 
         elif self.prop == 'Mass Flow':
             self.set_mass_flow()
-
 
     def set_temperature(self):
         for obj in self.target_obj: 
@@ -32,7 +28,6 @@ class SetRelationship:
                 obj.PropsIn_mTX()
             else:
                 raise ValueError('Set relationship failed: ' + self.Name)   
-
 
     def set_mass_flow(self):
         for obj in self.target_obj: 

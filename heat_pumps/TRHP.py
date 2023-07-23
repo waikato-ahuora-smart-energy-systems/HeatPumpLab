@@ -60,14 +60,12 @@ class TRHP:
         
         self.init_model()
 
-
     def init_model(self):
         self.check_logic()
         self.init_components()
         self.init_streams()
         self.set_relationships()
         self.define_solver_pathway()
-
 
     def check_logic(self):
         #Check the PHE combo
@@ -103,12 +101,11 @@ class TRHP:
         self.phx2_on = 1   if self.dT_phx2_cold > 0.0 else 0
         self.phx3_on = 1   if self.dT_phx3_cold > 0.0 else 0
 
-
     def init_components(self):
         #Initialisation of unit operations
-        self.comp1 = Compressor(Motor_Eff=self.eff_motor, model=0)
-        self.comp2 = Compressor(Motor_Eff=self.eff_motor, model=0) 
-        self.comp3 = Compressor(Motor_Eff=self.eff_motor, model=0) 
+        self.comp1 = Compressor(Motor_Eff=self.eff_motor, model_index=0)
+        self.comp2 = Compressor(Motor_Eff=self.eff_motor, model_index=0) 
+        self.comp3 = Compressor(Motor_Eff=self.eff_motor, model_index=0) 
         self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar)
         self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar)
         self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar)
@@ -121,9 +118,7 @@ class TRHP:
         self.evaporator = Evaporator(model='fixed cold duty')
         self.evap_sup = PlateHeatExchanger(model='fixed cold temperature outlet')
 
-
     def init_streams(self):
-
         #Evaporator superheat section
         self.evap_sup.HotIn = MassStream( Name='Source In', Fluid=self.Source, Pressure=101, Temperature=self.T_source_in, Mass_Flow=10^6)
         self.evap_sup.HotOut = MassStream( Name='Source Out', Fluid=self.Source, Pressure=101, Temperature=self.T_source_in, Mass_Flow=10^6)
@@ -247,7 +242,6 @@ class TRHP:
         self.evaporator.HotIn = MassStream( Name='Exhaust air in', Fluid=self.Source, Pressure=101, Temperature=45.0, Mass_Flow=1000)
         self.evaporator.HotOut = MassStream( Name='Exhaust air out', Fluid=self.Source, Pressure=101, Temperature=45.0, Mass_Flow=1000)
 
-
     def set_relationships(self):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
@@ -265,7 +259,6 @@ class TRHP:
         self.set_P_ints = CustomRelationship( source_obj=[self.comp1.FlowIn, self.comp3.FlowOut, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.FlowOut, self.comp2.FlowOut], relation=1 )
         self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
         #self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
-
 
     def define_solver_pathway(self):
         #Solution pathway set-up
@@ -304,7 +297,6 @@ class TRHP:
         self.OP.append(self.evaporator)
         self.OP.append(self.set_gc_air_massflow)
 
-
     def solve(self):
         #Solve heat pump cycle                        
         if self.set_pressure_bounds() > 0.0:
@@ -318,7 +310,6 @@ class TRHP:
             self.converged = False          
         
         self.get_summary()
-
 
     def set_pressure_bounds(self):
         P_gc_est = get_property('P', self.comp1.FlowIn.Fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.comp1.FlowIn.Entropy, 0) * 1000
@@ -355,7 +346,6 @@ class TRHP:
 
         return -dt_plus * dt_neg    
    
-
     def state_solve(self, P_comp_out):
         self.converged = False
         self.comp3.FlowOut.Pressure = P_comp_out
@@ -383,7 +373,6 @@ class TRHP:
         self.converged = True if i < 20 else False
             
         return self.gas_cooler4.ColdOut.Temperature - self.T_air_tar
-
 
     def get_summary(self):
         self.output = {
@@ -415,4 +404,4 @@ class TRHP:
             'Gas cooler(s) inlet T:' : self.gas_cooler4.HotIn.Temperature,
             'Gas cooler(s) outlet T:' : self.gas_cooler1.HotOut.Temperature
         }
-    
+ 

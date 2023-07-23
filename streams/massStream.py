@@ -1,12 +1,9 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 from streams.properties import get_properties
 
-
 class MassStream:
-
     def __init__(self, Name='', Fluid='', Mass_Flow=1.0, Pressure=-1000, Temperature=-1000, Enthalpy=-1000, Quality=-1000, underdefined=0):
         self.Name = Name
         self.Fluid = Fluid
@@ -27,13 +24,11 @@ class MassStream:
             elif Pressure == -1000 and Enthalpy == -1000:
                 self.PropsIn_mTX()
 
-
     def PropsIn_mPH(self):
         props = get_properties('QMASS;T;S;CP', self.Fluid, 'PH', self.Pressure / 1000, self.Enthalpy)
         self.Quality = props[0];  self.Temperature = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3] 
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
         del props
-
 
     def PropsIn_mPT(self):
         props = get_properties('QMASS;H;S;CP', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)
@@ -41,13 +36,11 @@ class MassStream:
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
         del props
 
-
     def PropsIn_mPX(self):
         props = get_properties('T;H;S;CP', self.Fluid, 'PQMASS', self.Pressure / 1000, self.Quality)
         self.Temperature = props[0];  self.Enthalpy = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
         del props
-
 
     def PropsIn_mPS(self):
         props = get_properties('T;H;QMASS;CP', self.Fluid, 'PS', self.Pressure / 1000, self.Entropy)
@@ -55,20 +48,17 @@ class MassStream:
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
         del props
 
-
     def PropsIn_mTX(self):
         props = get_properties('P;H;S;CP', self.Fluid, 'TQMASS', self.Temperature, self.Quality)
         self.Pressure = props[0] * 1000;  self.Enthalpy = props[1];  self.Entropy = props[2];  self.Heat_Capacity = props[3]
         self.Heat_Flow = self.Enthalpy * self.Mass_Flow
         del props
         
-    
     def PropsExtend(self): 
         props = get_properties('D;PRANDTL;VIS;TCX', self.Fluid, 'PT', self.Pressure / 1000, self.Temperature)
         self.Density = props[0];  self.PRANDTL = props[1];  self.Viscosity = props[2] /1000000000; self.Thermal_conductivity = props[3] / 1000000;  self.Specific_volume = 1 / props[0]
         del props
         
-
     def Combine(self, fld1, fld2):
         #Assumes the fluids have the same composition
         self.Fluid = fld1.Fluid
@@ -76,7 +66,6 @@ class MassStream:
         self.Pressure = min(fld1.Pressure, fld2.Pressure)
         self.Enthalpy = (fld1.Heat_Flow + fld2.Heat_Flow) / self.Mass_Flow
         self.PropsIn_mPH()
-
 
     def SetEqual(self, fld):
         self.Mass_Flow = fld.Mass_Flow

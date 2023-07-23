@@ -1,12 +1,9 @@
 __author__ = 'Tim Walmsley'
 __credits__ = ['Keri Adamson']
 
-
 from streams import MassStream
 
-
 class ExpansionValve:
-    
     def __init__(self, Name='Expansion valve', heat_loss=0.0, tol=1e-6):
         self.Name = Name
         self.FlowIn = MassStream()
@@ -16,7 +13,6 @@ class ExpansionValve:
         self.Pressure_drop = 0.0
         self.Power = 0.0
         self.tol = tol
-    
     
     def solve(self):
         if self.FlowIn.Mass_Flow > self.tol:

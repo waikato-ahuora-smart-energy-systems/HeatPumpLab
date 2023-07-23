@@ -1,9 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 from streams import get_property, MassStream
-
 
 class Ejector:
     def __init__(self, Name='Ejector', Eff_is_ejc=1.0, tol=1e-6):
@@ -19,15 +17,12 @@ class Ejector:
         self.m_ratio = 1
         self.converged = False
 
-
     def solve(self):
         if self.Eff_is_ejc > 0 and self.Eff_is_ejc <= 1:
             self.get_work()
         else:
             self.FlowOut.Combine(self.PriFlowIn, self.SecFlowIn)   
-        
         self.ejector_mass_balance() 
-
 
     def ejector_mass_balance(self, i = 0):
         while self.converged == False and i < 100:
@@ -49,7 +44,6 @@ class Ejector:
         self.PriFlowIn.Mass_Flow = 1 / self.m_ratio
         self.FlowOut.Mass_Flow = 1 / self.m_ratio + 1
         self.FlowOut.PropsIn_mPH()
-
 
     def get_work(self):
         if abs(self.FlowOut.Pressure - self.SecFlowIn.Pressure) / self.SecFlowIn.Pressure < 0.0001:

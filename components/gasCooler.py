@@ -1,16 +1,13 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 import math
 from streams import get_property, MassStream
 from components.common.crossFlowElement import CrossFlowElement
 from components.common.commonHeatExchanger import BaseHeatExchanger
 from scipy.optimize import brentq
 
-
 class GasCooler(BaseHeatExchanger):
-
     def __init__(self, Name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, model='fixed hot temperature outlet', bypassed=False, converged=False, tol=1e-6):
         self.Name = Name
         self.dTmin = dTmin
@@ -27,7 +24,6 @@ class GasCooler(BaseHeatExchanger):
         if self.model == 'custom':
             self.init_parameters()
             self.init_nodes()
-
 
     def init_parameters(self):
         self.NTU = 0
@@ -65,8 +61,7 @@ class GasCooler(BaseHeatExchanger):
         self.Tube_Conductivity = 16 #W/m°C - SS tube
         #self.Tube_thickness = 0.00165 #m
         #self.Tubes_per_pass = 4 #assumption
-        #self.Gap_spacing = 0.0005 #m
-        
+        #self.Gap_spacing = 0.0005 #m 
     
     def init_nodes(self, N_elements_per_pass=1):
         self.N_elements_per_pass = N_elements_per_pass
@@ -119,10 +114,8 @@ class GasCooler(BaseHeatExchanger):
             start_val = end_val + step
             end_val = k + step
                    
-
     def get_detailed_performance(self):
         raise ValueError('No detailed gas cooler model defined: ' + self.Name)
-
 
     def area_solve(self):
         if self.Duty > 0 and self.HotIn.Temperature > self.ColdOut.Temperature and self.HotOut.Temperature > self.ColdIn.Temperature:
@@ -175,7 +168,6 @@ class GasCooler(BaseHeatExchanger):
                     #Accounting for pressure drop air
                     self.ColdOut.PropsIn_mPH()'''
                     
-
     def get_area(self, Area_0):
         self.Volume = Area_0 / self.Beta
         self.Face_Area = self.ColdIn.Mass_Flow / (self.ColdIn.Density * self.Face_Velocity)

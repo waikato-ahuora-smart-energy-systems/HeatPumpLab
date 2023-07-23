@@ -1,14 +1,11 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-
 import math
 from streams import get_property
 from components.common.commonHeatExchanger import BaseHeatExchanger
 
-
-class PlateHeatExchanger(BaseHeatExchanger):
-    
+class PlateHeatExchanger(BaseHeatExchanger):   
     def __init__(self, Name='Plate heat exchanger', HX_Eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-6):
         self.Name = Name
         self.model = model
@@ -28,10 +25,8 @@ class PlateHeatExchanger(BaseHeatExchanger):
         if self.model == 'custom':
             self.init_detailed_model()
       
-
     def get_detailed_performance(self):
         raise ValueError('No detailed plate heat exchanger model defined: ' + self.Name)
-
 
     def init_detailed_model(self):
         #Plate heat exchanger model constants
@@ -42,7 +37,6 @@ class PlateHeatExchanger(BaseHeatExchanger):
         self.PHX_LtoW = 4
         self.PHX_Length = 0.5
         self.PHX_Factor = 1.15
-
 
     '''
     def area_solve(self):

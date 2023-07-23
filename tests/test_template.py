@@ -1,8 +1,6 @@
 import unittest
 
-
 class TestMyFunction(unittest.TestCase):
-
     def setUp(self):
         """
         If there is any setup needed for your tests, it goes here.
@@ -10,14 +8,12 @@ class TestMyFunction(unittest.TestCase):
         """
         pass
 
-
     def tearDown(self):
         """
         Any cleanup after tests goes here.
         This method is called after each individual test method runs.
         """
         pass
-
 
     def test_case_1(self):
         """
@@ -35,7 +31,6 @@ class TestMyFunction(unittest.TestCase):
         # - assertIn(a, b)
         # - assertIsInstance(a, b)
         self.assertEqual(result, expected_output_1)
-
 
     def test_case_2(self):
         """
