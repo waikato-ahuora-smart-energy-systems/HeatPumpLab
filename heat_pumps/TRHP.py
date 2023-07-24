@@ -377,8 +377,8 @@ class TRHP:
 
         if self.COP == 0:
             self.converged = False          
-        
-        self.get_summary()
+        else:
+            self.get_summary()
 
     def get_summary(self):
         self.output = {

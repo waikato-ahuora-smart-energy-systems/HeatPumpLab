@@ -4,6 +4,7 @@ __credits__ = ['Alex Geary']
 from scipy.optimize import minimize, LinearConstraint, differential_evolution
 from heat_pumps import TRHP
 from outputs import print_result_to_terminal
+import threading
 
 def get_TRHP_obj_fun(var, parameters):
     COP = 0
@@ -42,7 +43,7 @@ def get_TRHP_obj_fun(var, parameters):
         if valid:
             m.solve()
             COP = m.COP
-            print(COP, m.converged, var) 
+            #print(COP, m.converged, var) 
             del m
         
     except:
@@ -51,7 +52,7 @@ def get_TRHP_obj_fun(var, parameters):
     return COP * -1000
 
 def get_TRHP_optimal(parameters):
-    print_result_to_terminal(parameters)
+    #print_result_to_terminal(parameters)
 
     #Define the bounds of the optimisation variables
     if parameters['n_comp'] == 1:
@@ -111,4 +112,7 @@ def get_TRHP_optimal(parameters):
         res = m.output
         del result
         del m
+
+        print(threading.enumerate())
+
         return res       

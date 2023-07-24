@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2021-2023'
 
-import concurrent.futures
+import concurrent.futures, threading
 from timeit import default_timer as timer
 from optimise import get_TRHP_optimal
 from heat_pumps import TRHP
@@ -30,7 +30,7 @@ if __name__=='__main__':
                 'T_source_in' : T_source_in[0],
                 'n_comp' : 1
             } for k in range(len(T_air_tar)) for i in range(len(refrigerant)) ] # for n in range(len(n_comp))
-        
+        '''
         for c in cases:
             print(c)
         for c in cases:
@@ -44,7 +44,7 @@ if __name__=='__main__':
                 
         for result in results:
             print_result_to_csv(output=result, file_name='TRHP_results_v2')
-        '''
+        
     else:
         m = TRHP(
             refrigerant=refrigerant[0],
