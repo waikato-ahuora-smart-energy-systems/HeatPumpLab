@@ -47,6 +47,7 @@ def get_TRHP_obj_fun(var, parameters):
             del m
         
     except:
+        print("Something has gone wrong in TRJP_Obj_Func")
         pass
 
     return COP * -1000
@@ -112,7 +113,7 @@ def get_TRHP_optimal(parameters):
         res = m.output
         del result
         del m
-
+        print("End of Optimisation call, listing active threads.")
         print(threading.enumerate())
 
         return res       
