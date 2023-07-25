@@ -30,21 +30,29 @@ if __name__=='__main__':
                 'T_source_in' : T_source_in[0],
                 'n_comp' : 1
             } for k in range(len(T_air_tar)) for i in range(len(refrigerant)) ] # for n in range(len(n_comp))
-        '''
-        for c in cases:
-            print(c)
-        for c in cases:
-            result = get_TRHP_optimal(c)
-            print_result_to_csv(output=result, file_name='results/TRHP_results_v2.csv')
-        '''
+        
+        # for c in cases:
+        #     print(c)
+        # for c in cases:
+        #     result = get_TRHP_optimal(c)
+        #     print_result_to_csv(output=result, file_name='results/TRHP_results_v2.csv')
+        
         results = [] 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=11) as executor:
-            for result in executor.map(get_TRHP_optimal, cases):
-                results.append(result)
+        procExecutor = concurrent.futures.ProcessPoolExecutor(max_workers=6)
+        futures = [procExecutor.submit(get_TRHP_optimal, case) for case in cases]
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            results.append(result)
+            print(result)
+
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
+        #     for result in executor.map(get_TRHP_optimal, cases):
+        #         print(result)
+        #         results.append(result)
                 
         for result in results:
             print_result_to_csv(output=result, file_name='TRHP_results_v2')
-        
+        procExecutor.shutdown()
     else:
         m = TRHP(
             refrigerant=refrigerant[0],
