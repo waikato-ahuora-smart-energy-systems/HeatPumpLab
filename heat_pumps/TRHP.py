@@ -104,9 +104,9 @@ class TRHP:
 
     def init_components(self):
         #Initialisation of unit operations
-        self.comp1 = Compressor(motor_eff=self.eff_motor, model_index=0)
-        self.comp2 = Compressor(motor_eff=self.eff_motor, model_index=0) 
-        self.comp3 = Compressor(motor_eff=self.eff_motor, model_index=0) 
+        self.comp1 = Compressor(motor_eff=self.eff_motor, model_index=1)
+        self.comp2 = Compressor(motor_eff=self.eff_motor, model_index=1) 
+        self.comp3 = Compressor(motor_eff=self.eff_motor, model_index=1) 
         self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar)
         self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar)
         self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar)

@@ -15,25 +15,26 @@ class HTTHP:
             dT_ihx_top = 0.0,       #Optimisation variable
             dT_ihx_btm = 0.0,       #Optimisation variable
             dT_ihx_tb = 0.0,        #Optimisation variable
-            T_gc_out = 0.0,         #Optimisation variable
+            T_gc_top_out = 0.0,         #Optimisation variable
             comp_PR_uniform = False, 
             T_air_inlet = 15.0, 
             T_air_exh = 70.0, 
-            T_ihx_btm_in = 40.0,
+            dT_ihx_btm_in = 20.0,   #CHECK
+            dT_ihx_top_in = 5.0,    #CHECK
             Tsat_evap = [10.0, 10.0], 
             eff_motor = 0.96, 
             dT_min_ihx = 0.9,
             tolerance=1e-6
         ):
 
-        self.refrigerant_btm = refrigerant[0]
-        self.refrigerant_top = refrigerant[1]
+        fluid=self.refrigerant_btm = refrigerant[0]
+        fluid=self.refrigerant_top = refrigerant[1]
 
         self.T_air_tar = T_air_tar
         self.dT_GC_min_tar = dT_GC_min_tar
         self.T_air_inlet = T_air_inlet
         self.T_air_exh = T_air_exh
-        self.T_gc_out = T_gc_out
+        self.T_gc_top_out = T_gc_top_out
         self.Tsat_evap = Tsat_evap
         self.comp_PR_uniform = comp_PR_uniform
         self.dT_min_ihx = dT_min_ihx
@@ -41,29 +42,30 @@ class HTTHP:
         self.dT_ihx_top = dT_ihx_top
         self.dT_ihx_btm = dT_ihx_btm 
         self.dT_ihx_tb = dT_ihx_tb
-        self.T_ihx_btm_in = T_ihx_btm_in
+        self.dT_ihx_btm_in = dT_ihx_btm_in
+        self.dT_ihx_top_in = dT_ihx_top_in
         self.AIR = 'Air'
         self.WATER = 'Water'
         self.tolerance = tolerance
 
-        self.create_components()
+        self.init_components()
         self.model_initialisation()
 
-    def create_components(self):
+    def init_components(self):
         #Initialisation of unit operations
         self.exp_valve_btm = ExpansionValve()
-        self.evaporator_btm = Evaporator()
-        self.evap_sup_btm = Evaporator()
+        self.evaporator_btm = Evaporator(model='fixed cold duty')
+        self.evap_sup_btm = Evaporator(model='fixed cold duty')
         self.ihx_btm = PlateHeatExchanger(self.dT_min_ihx)
-        self.comp_btm = Compressor(self.eff_motor)
-        self.gas_cooler_cas = GasCooler(HotFluid=self.refrigerant_btm, ColdFluid=self.refrigerant_top, dT_GC_min_tar=self.dT_GC_min_tar)
-        self.comp_top = Compressor(self.eff_motor) 
-        self.gas_cooler_air = GasCooler(HotFluid=self.refrigerant_top, ColdFluid=self.AIR, dT_GC_min_tar=self.dT_GC_min_tar)
-        self.ihx_top = PlateHeatExchanger(self.dT_min_ihx) #Need to update class
-        self.ihx_tb = PlateHeatExchanger(self.dT_min_ihx)
+        self.comp_btm = Compressor(motor_eff=self.eff_motor, model_index=1)
+        self.gas_cooler_cas = GasCooler(HotFluid=fluid=self.refrigerant_btm, ColdFluid=fluid=self.refrigerant_top, dT_GC_min_tar=self.dT_GC_min_tar)
+        self.comp_top = Compressor(motor_eff=self.eff_motor, model_index=1) 
+        self.gas_cooler_air = GasCooler(HotFluid=fluid=self.refrigerant_top, ColdFluid=self.AIR, dT_GC_min_tar=self.dT_GC_min_tar)
+        self.ihx_top = PlateHeatExchanger(self.dT_min_ihx, model='dTmin_terminal')
+        self.ihx_tb = PlateHeatExchanger(self.dT_min_ihx, model='dTmin_terminal')
         self.exp_valve_top = ExpansionValve()
-        self.evaporator_top = Evaporator()
-        self.evap_sup_top = Evaporator()
+        self.evaporator_top = Evaporator(model='fixed cold duty')
+        self.evap_sup_top = Evaporator(model='fixed cold duty')
         
     def model_initialisation(self):
         self.converged = False
@@ -73,153 +75,118 @@ class HTTHP:
         self.dT_ihx_btm = self.dT_ihx_btm if self.dT_ihx_btm > 0.0 else 0.0
         self.dT_ihx_tb = self.dT_ihx_tb if self.dT_ihx_tb > 0.0 else 0.0
 
-        self.T_gc_out = max(self.T_air_inlet + self.dT_GC_min_tar, self.T_gc_out)
+        self.T_gc_top_out = max(self.T_air_inlet + self.dT_GC_min_tar, self.T_gc_top_out)
         
         self.determine_HP_structure()
-        self.stream_initialisation()
+        self.init_streams()
         self.set_relationships()
         self.define_solver_pathway()
 
     def determine_HP_structure(self):
         #Binary variables for the heat pump structure
-        self.ihx_top_on = 1    if self.dT_ihx_top < self.T_gc_out else 0
+        self.ihx_top_on = 1    if self.dT_ihx_top < self.T_gc_top_out else 0
         self.ihx_btm_on = 1   if self.dT_ihx_btm > 0.0 else 0
         self.ihx_tb_on = 1   if self.dT_ihx_tb > 0.0 else 0
 
-    def stream_initialisation(self):
-        #Initialise values in the evaporator streams
-        self.evaporator_btm.sink_out = MassStream( 'Evap_btm_out', self.refrigerant_btm, temperature=self.Tsat_evap, quality = 1 )
+    def init_streams(self):
+        ###Bottom cycle###
+        
+        #Bottom evaporator
+        self.evaporator_btm.source_in = MassStream( name='source In', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6)
+        self.evaporator_btm.source_out = MassStream( name='source Out', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6)
+        self.evaporator_btm.sink_out = MassStream( 'Evap_btm_out', fluid=self.refrigerant_btm, temperature=self.Tsat_evap[0], quality = 1 )
+        
+        #Bottom evaporator superheater
+        self.evap_sup_btm.source_in = MassStream( name='source In', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6)
+        self.evap_sup_btm.source_out = MassStream( name='source Out', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6)
         self.evap_sup_btm.sink_in = self.evaporator_btm.sink_out
-        self.evap_sup_btm.sink_out = MassStream( 'IHX_in', self.refrigerant_btm, pressure=self.evaporator_btm.sink_out.pressure, temperature=self.T_ihx_btm_in )
+        self.evap_sup_btm.sink_out = MassStream( 'IHX_in', fluid=self.refrigerant_btm, pressure=self.evaporator_btm.sink_out.pressure, temperature=self.T_ihx_btm_in )
 
-        #Initialise values in the compression streams
+
+        #Bottom internal heat exchanger - sink side
         self.ihx_btm.sink_in = self.evap_sup_btm.sink_out
         if self.ihx_btm_on == 1:
-            self.ihx_btm.sink_out = MassStream( 'PHX1_in', self.refrigerant_btm, pressure=self.evaporator_btm.sink_out.pressure, temperature=self.T_ihx_btm_in + self.dT_ihx_btm)
+            self.ihx_btm.sink_out = MassStream( 'PHX1_in', fluid=self.refrigerant_btm, pressure=self.evaporator_btm.sink_out.pressure, temperature=self.T_ihx_btm_in + self.dT_ihx_btm)
         else:   
             self.ihx_btm.sink_out = self.ihx_btm.sink_in
 
+        #Top to bottom internal heat exchanger - sink side
         self.ihx_tb.sink_in = self.ihx_btm.sink_out
         if self.ihx_tb_on == 1: 
-            self.ihx_tb.sink_out = MassStream( 'Comp_btm_in', self.refrigerant_btm, pressure=self.evaporator_btm.sink_out.pressure, temperature=self.ihx_tb.sink_in.temperature + self.dT_ihx_tb )
+            self.ihx_tb.sink_out = MassStream( 'Comp_btm_in', fluid=self.refrigerant_btm, pressure=self.evaporator_btm.sink_out.pressure, temperature=self.ihx_tb.sink_in.temperature + self.dT_ihx_tb )
         else:
             self.ihx_tb.sink_out = self.ihx_tb.sink_in
 
+        #Bottom compressor
         self.comp_btm.flow_in = self.ihx_tb.sink_out
-
-        P_comp_out_est = get_property('P', self.refrigerant_btm, 'TS', self.T_air_tar + self.dT_GC_min_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3, self.comp_btm.flow_in.entropy, 0) * 1000        
-
-        self.comp_btm.flow_out = MassStream( 'Comp_btm_out', self.refrigerant_btm, pressure=P_comp_out_est, temperature=get_property('T', self.refrigerant_btm, 'PS', P_comp_btm_out / 1000, self.comp_btm.flow_in.entropy, 0))
+        P_comp_btm_out_est = get_property('P', self.refrigerant_btm, 'TS', self.T_air_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3, self.comp_btm.flow_in.entropy, 0) * 1000        
+        self.comp_btm.flow_out = MassStream( 'Comp_btm_out', fluid=self.refrigerant_btm, pressure=P_comp_btm_out_est, temperature=(self.T_air_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3))
+        
+        #Cascade gas cooler - source side
         self.gas_cooler_cas.source_in = self.comp_btm.flow_out
-        self.gas_cooler_cas.source_out = MassStream( 'Gas_cooler_out', self.refrigerant_btm, pressure=self.gas_cooler_cas.source_in.pressure, temperature=self.T_gc_out)
+        self.gas_cooler_cas.source_out = MassStream( 'Gas_cooler_out', fluid=self.refrigerant_btm, pressure=self.gas_cooler_cas.source_in.pressure, temperature=(self.evaporator_btm + 20))
 
+        #Bottom internal heat exchanger - source side
+        self.ihx_btm.source_in = self.gas_cooler_cas.source_out
         if self.ihx_btm_on == 1:
-            self.ihx_btm.source_out = MassStream( 'Comp2_in', self.refrigerant_btm, pressure=self.ihx_btm.sink_in.pressure, temperature=self.phx2.sink_in.temperature + self.dT_phx2_max * self.eff_phx)
+            self.ihx_btm.source_out = MassStream( 'Comp2_in', fluid=self.refrigerant_btm, pressure=self.ihx_btm.sink_in.pressure, temperature=(self.evaporator_btm + 20))
         else:
             self.ihx_btm.source_out = self.gas_cooler_cas.source_out
             
+        #Bottom expansion valve
         self.exp_valve_btm.flow_in = self.ihx_btm.source_out
+        self.exp_valve_btm.flow_out = MassStream( 'Evap_btm_in', fluid=self.refrigerant_btm, pressure=self.evaporator_btm.sink_out.pressure, enthalpy=self.exp_valve_btm.flow_in.enthalpy )
+        self.evaporator_btm.sink_in = self.exp_valve_btm.flow_out
 
-        self.exp_valve_btm.flow_out = MassStream( 'Evap_btm_in', self.refrigerant_btm, pressure=self.evaporator_btm.sink_out.pressure, enthalpy=self.exp_valve_btm.flow_in.enthalpy )
+        ###Top cycle###
 
+        #Top evaporator
+        self.evaporator_top.source_in = MassStream( name='source In', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6)
+        self.evaporator_top.source_out = MassStream( name='source Out', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6)
+        self.evaporator_top.sink_out = MassStream( 'Evap_top_out', fluid=self.refrigerant_top, temperature=self.Tsat_evap[1], quality = 1 )
+        self.evap_sup_top.sink_in = self.evaporator_top.sink_out
+        self.evap_sup_top.sink_out = MassStream( 'IHX_in', fluid=self.refrigerant_top, pressure=self.evaporator_top.sink_out.pressure, temperature=(self.Tsat_evap[1] + self.dT_ihx_top_in) )
 
-
-
-
-        self.phx2.sink_in = self.comp1.FlowOutMassStream( 'Evap_in', self.refrigerant, pressure=self.evaporator_btm.sink_out.pressure, enthalpy=self.exp_valve.flow_in.enthalpy )
-
-        if self.phx2_on == 1:
-            self.phx2.sink_out = MassStream( 'Comp2_in', self.refrigerant, pressure=self.phx2.sink_in.pressure, temperature=self.phx2.sink_in.temperature + self.dT_phx2_max * self.eff_phx)
-        else:
-            self.phx2.sink_out = self.comp1.flow_out
-        
-
-        
-
-
-        self.comp2.flow_in = self.phx2.sink_out
-        if self.comp2_on == 1:
-            self.comp2.flow_out = MassStream( 'Comp2_out', self.refrigerant, pressure=P_comp2_out, temperature=get_property('T', self.refrigerant, 'PS', P_comp2_out / 1000, self.comp1.flow_in.entropy, 0))       
-        else:
-            self.comp2.flow_out = self.comp2.flow_in
-
-        self.phx3.sink_in = self.comp2.flow_out
-        if self.phx3_on == 1:
-            self.phx3.sink_out = MassStream( 'Comp3_in', self.refrigerant, pressure=self.phx3.sink_in.pressure, temperature=self.phx3.sink_in.temperature + self.dT_phx3_max * self.eff_phx)
-        else:
-            self.phx3.sink_out = self.phx3.sink_in
-
-        self.comp3.flow_in = self.phx3.sink_out
-        if self.comp3_on == 1:
-            self.comp3.flow_out = MassStream( 'Comp3_out', self.refrigerant, pressure=P_comp3_out, temperature=get_property('T', self.refrigerant, 'PS', P_comp3_out / 1000, self.comp1.flow_in.entropy, 0))       
-        else:
-            self.comp3.flow_out = self.comp3.flow_in
-
-
-        #P_comp_top_out = P_comp_out_est
-
-        #Initialisation of gas cooler side of the cycle
-        self.gas_cooler4.source_in = self.comp3.flow_out
-        if self.comp3_on == 1 and self.phx3_on == 1:
-            self.gas_cooler4.source_out = MassStream( 'GC4_out', self.refrigerant, pressure= self.gas_cooler4.source_in.pressure, temperature=self.comp2.flow_out.temperature + self.dT_phx3_max )
-            self.phx3.source_in = self.gas_cooler4.source_out
-            self.phx3.source_out = MassStream( 'GC3_in', self.refrigerant, pressure=self.phx3.source_in.pressure, temperature=self.phx3.sink_in.temperature + self.dT_phx3_max * self.eff_phx)       
-        else:
-            self.gas_cooler4.source_out = self.gas_cooler4.source_in
-            self.phx3.source_in = self.gas_cooler4.source_out
-            self.phx3.source_out = self.phx3.source_in  
-
-        self.gas_cooler3.source_in = self.phx3.source_out
-        if self.comp2_on == 1 and self.phx2_on == 1:
-            self.gas_cooler3.source_out = MassStream( 'GC3_out', self.refrigerant, pressure= self.gas_cooler3.source_in.pressure, temperature=self.comp1.flow_out.temperature + self.dT_phx2_max )
-            self.phx2.source_in = self.gas_cooler3.source_out
-            self.phx2.source_out = MassStream( 'GC2_in', self.refrigerant, pressure=self.phx2.source_in.pressure, temperature=self.phx2.sink_in.temperature + self.dT_phx2_max * self.eff_phx)
-        else:
-            self.gas_cooler3.source_out = self.gas_cooler3.source_in
-            self.phx2.source_in = self.gas_cooler3.source_out
-            self.phx2.source_out = self.phx2.source_in
-
-        self.gas_cooler2.source_in = self.phx2.source_out
-        if self.phx1_on == 1:
-            self.gas_cooler2.source_out = MassStream( 'GC2_out', self.refrigerant, pressure= self.gas_cooler2.source_in.pressure, temperature=self.comp1.flow_out.temperature + self.dT_phx1_max )
-            self.phx1.source_in = self.gas_cooler2.source_out
-            self.phx1.source_out = MassStream( 'GC1_in', self.refrigerant, pressure=self.phx1.source_in.pressure, temperature=self.phx1.sink_in.temperature + self.dT_phx1_max * self.eff_phx)
-        else:
-            self.gas_cooler2.source_out = self.gas_cooler2.source_in
-            self.phx1.source_in = self.gas_cooler2.source_out
-            self.phx1.source_out = self.phx1.source_in 
-
-        self.gas_cooler1.source_in = self.phx1.source_out
-        self.gas_cooler1.source_out = MassStream( 'GC1_out', self.refrigerant, pressure=self.comp2.flow_out.pressure, temperature=self.T_gc_out )
-
-
-        #Initialisation of internal exchanger and evaporator system
-        self.ihx.source_in = self.gas_cooler1.source_out
-        if self.ihx_on == 1:
-            self.ihx.source_out = MassStream( 'Ej_pri_in', self.refrigerant, pressure=self.gas_cooler1.source_out.pressure, enthalpy=self.gas_cooler1.source_out.enthalpy -  ( self.phx1.sink_in.enthalpy - self.ihx.sink_in.enthalpy ) )
+        #Top internal heat exchanger - sink side
+        self.ihx_top.sink_in = self.evap_sup_top.sink_out
+        if self.ihx_top_on == 1:
+            self.ihx_top.sink_out = MassStream( 'PHX1_in', fluid=self.refrigerant_top, pressure=self.evaporator_top.sink_out.pressure, temperature=(self.evap_sup_top.sink_out.temperature + self.dT_ihx_top) )
         else:   
-            self.ihx.source_out = self.ihx.source_in
-                
-        self.exp_valve.flow_in = self.ihx.source_out
-        self.exp_valve.flow_out = MassStream( 'Evap_in', self.refrigerant, pressure=self.evaporator_btm.sink_out.pressure, enthalpy=self.exp_valve.flow_in.enthalpy )
-        self.evaporator.sink_in = self.exp_valve.flow_out
+            self.ihx_top.sink_out = self.ihx_top.sink_in
+
+        #Cascade gas cooler - sink side
+        self.gas_cooler_cas.sink_in = self.ihx_top.sink_out
+        self.gas_cooler_cas.sink_out = MassStream( 'Gas_cooler_out', fluid=self.refrigerant_top, pressure=self.gas_cooler_cas.source_in.pressure, temperature=(self.gas_cooler_cas.source_in.temperature - 20))
+
+        #Top compressor
+        self.comp_top.flow_in = self.gas_cooler_cas.sink_out
+        P_comp_top_out_est = get_property('P', self.refrigerant_top, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp_top.flow_in.entropy, 0) * 1000        
+        self.comp_top.flow_out = MassStream( 'Comp_top_out', fluid=self.refrigerant_top, pressure=P_comp_top_out_est, temperature=(self.T_air_tar + self.dT_GC_min_tar * 2))
         
+        #Top gas cooler for air heating
+        self.gas_cooler_air.source_in = self.comp_top.flow_out
+        self.gas_cooler_air.source_out = MassStream( 'Gas_cooler_out', fluid=self.refrigerant_top, pressure=self.gas_cooler_cas.source_in.pressure, temperature=self.T_gc_top_out )
+        self.gas_cooler_air.sink_in = MassStream( 'AirIn1', self.AIR, pressure=101, temperature=self.T_air_inlet )
+        self.gas_cooler_air.sink_out = MassStream( 'AirOut1', self.AIR, pressure=101, temperature=self.T_air_tar )
 
-        #Initialisation of inlet and exhaust air streams
-        self.gas_cooler1.sink_in = MassStream( 'AirIn1', self.AIR, pressure=101, temperature=self.T_air_inlet )
-        self.gas_cooler1.sink_out = MassStream( 'AirOut1', self.AIR, pressure=101, temperature=self.T_air_tar )
-        self.gas_cooler2.sink_in = self.gas_cooler1.sink_out
-        self.gas_cooler2.sink_out = MassStream( 'AirOut2', self.AIR, pressure=101, temperature=self.T_air_tar )
-        self.gas_cooler3.sink_in = self.gas_cooler2.sink_out
-        self.gas_cooler3.sink_out = MassStream( 'AirOut3', self.AIR, pressure=101, temperature=self.T_air_tar )
-        self.gas_cooler4.sink_in = self.gas_cooler3.sink_out
-        self.gas_cooler4.sink_out = MassStream( 'AirOut4', self.AIR, pressure=101, temperature=self.T_air_tar )
+        #Top internal heat exchanger - source side
+        self.ihx_top.source_in = self.gas_cooler_air.source_out
+        if self.ihx_top_on == 1:
+            self.ihx_top.source_out = MassStream( 'Comp2_in', fluid=self.refrigerant_top, pressure=self.ihx_top.sink_in.pressure, temperature=(self.evaporator_top + 20))
+        else:
+            self.ihx_top.source_out = self.ihx_top.source_in
 
-        self.evaporator.source_in = MassStream( 'exhIn', self.AIR, pressure=101, temperature=self.T_air_exh)
-        self.evaporator.source_out = MassStream( 'exhout', self.AIR, pressure=101, temperature=self.T_air_exh)
-        self.evap_sup.source_in = MassStream( 'supIn', self.AIR, pressure=101, temperature=self.T_air_exh)
-        self.evap_sup.source_out = MassStream( 'suphout', self.AIR, pressure=101, temperature=self.T_air_exh)
-
+        #Top to bottom internal heat exchanger - source side
+        self.ihx_tb.source_in = self.ihx_top.source_out
+        if self.ihx_tb_on == 1: 
+            self.ihx_tb.source_out = MassStream( 'Comp_top_in', fluid=self.refrigerant_top, pressure=self.evaporator_top.sink_out.pressure, temperature=(self.evaporator_top + 20) )
+        else:
+            self.ihx_tb.source_out = self.ihx_tb.source_in  
+        
+        #Top - expansion valve
+        self.exp_valve_top.flow_in = self.ihx_tb.source_out
+        self.exp_valve_top.flow_out = MassStream( 'Evap_top_in', fluid=self.refrigerant_top, pressure=self.evaporator_top.sink_out.pressure, enthalpy=self.exp_valve_top.flow_in.enthalpy )
+        self.evaporator_top.sink_in = self.exp_valve_top.flow_out
 
     def set_relationships(self):
         #Set special relationships between points in the cycle 
@@ -235,7 +202,6 @@ class HTTHP:
         self.set_P_ints = CustomRelationship( source_obj=[self.n_comp, self.comp1.flow_in, self.comp3.flow_out, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.flow_out, self.comp2.flow_out], relation=1 )
         self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
         #self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
-    
 
     def set_gas_cooler_analysis(self):
         #Setup heat exchanger elements
