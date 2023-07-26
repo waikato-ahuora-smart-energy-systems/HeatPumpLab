@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2021-2023'
 
-import concurrent.futures, threading
+import concurrent.futures
 from timeit import default_timer as timer
 from optimise import get_TRHP_optimal
 from heat_pumps import TRHP
@@ -16,7 +16,7 @@ if __name__=='__main__':
 
     refrigerant = ['R1233zd(E)', 'R1234ze(E)', 'R1234ze(Z)', 'R1336mzz(Z)', 'R1224yd(Z)', 'R245fa', 'R365mfc', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
     dT_GC_min_tar = [j for j in range(20,40,5)]
-    T_air_tar = [k for k in range(100,305,10)]
+    T_air_tar = [k for k in range(100,305,5)]
     T_air_inlet = [15.0]
     T_source_in = [45.0]
     n_comp = [n + 1 for n in range(3)]
@@ -29,30 +29,26 @@ if __name__=='__main__':
                 'T_air_inlet' : T_air_inlet[0],
                 'T_source_in' : T_source_in[0],
                 'n_comp' : 1
-            } for k in range(len(T_air_tar)) for i in range(len(refrigerant)) ] # for n in range(len(n_comp))
+            } for k in range(len(T_air_tar)) for i in range(len(refrigerant)) for n in range(len(n_comp))] # for n in range(len(n_comp))
         
-        # for c in cases:
-        #     print(c)
+        for c in cases:
+            print(c)
         # for c in cases:
         #     result = get_TRHP_optimal(c)
         #     print_result_to_csv(output=result, file_name='results/TRHP_results_v2.csv')
         
         results = [] 
-        procExecutor = concurrent.futures.ProcessPoolExecutor(max_workers=6)
+        procExecutor = concurrent.futures.ProcessPoolExecutor(max_workers=12)
         futures = [procExecutor.submit(get_TRHP_optimal, case) for case in cases]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             results.append(result)
             print(result)
-
-        # with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
-        #     for result in executor.map(get_TRHP_optimal, cases):
-        #         print(result)
-        #         results.append(result)
                 
         for result in results:
             print_result_to_csv(output=result, file_name='TRHP_results_v2')
         procExecutor.shutdown()
+        
     else:
         m = TRHP(
             refrigerant=refrigerant[0],
