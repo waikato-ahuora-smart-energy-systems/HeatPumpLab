@@ -1,1 +1,1 @@
-from optimise.optimiseTRHP import get_TRHP_optimal
+from .optimiseTRHP import get_TRHP_optimal
