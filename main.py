@@ -5,11 +5,10 @@ __date__ = '2021-2023'
 
 import concurrent.futures
 from timeit import default_timer as timer
-from optimise import get_TRHP_optimal
 from heat_pumps import TRHP
+from optimise import get_TRHP_optimal
 from outputs import print_result_to_terminal, print_result_to_csv
 from outputs import Graph
-
 
 if __name__=='__main__':
     TIC = timer()
@@ -29,13 +28,14 @@ if __name__=='__main__':
                 'T_air_inlet' : T_air_inlet[0],
                 'T_source_in' : T_source_in[0],
                 'n_comp' : 1
-            } for k in range(len(T_air_tar)) for i in range(len(refrigerant)) for n in range(len(n_comp))] # for n in range(len(n_comp))
+            } for k in range(len(T_air_tar)) for i in range(len(refrigerant))] #for n in range(len(n_comp)) 
         
         for c in cases:
             print(c)
         # for c in cases:
         #     result = get_TRHP_optimal(c)
         #     print_result_to_csv(output=result, file_name='results/TRHP_results_v2.csv')
+        print(len(cases))
         
         results = [] 
         procExecutor = concurrent.futures.ProcessPoolExecutor(max_workers=12)
@@ -46,9 +46,9 @@ if __name__=='__main__':
             print(result)
                 
         for result in results:
-            print_result_to_csv(output=result, file_name='TRHP_results_v2')
+            print_result_to_csv(output=result, file_name='TRHP_results_v3')
         procExecutor.shutdown()
-        
+
     else:
         m = TRHP(
             refrigerant=refrigerant[0],
