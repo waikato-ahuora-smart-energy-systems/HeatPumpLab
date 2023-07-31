@@ -59,16 +59,30 @@ class TRHP:
         self.converged = False
         self.COP = 0.0
         
-        self.init_model()
-
-    def init_model(self):
-        self.check_logic()
         self.init_components()
+        self.init_structure()
         self.init_streams()
-        self.set_relationships()
-        self.define_solver_pathway()
+        self.init_logic_blocks()
+        self.init_solver_pathway()
 
-    def check_logic(self):
+    def init_components(self):
+        #Initialisation of unit operations
+        self.comp1 = Compressor(motor_eff=self.eff_motor, model_index=1)
+        self.comp2 = Compressor(motor_eff=self.eff_motor, model_index=1) 
+        self.comp3 = Compressor(motor_eff=self.eff_motor, model_index=1) 
+        self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar)
+        self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar)
+        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar)
+        self.gas_cooler3 = GasCooler(dTmin=self.dT_GC_min_tar)
+        self.ihx = PlateHeatExchanger(dTmin=self.dTmin, model='dTmin_terminal')
+        self.phx1 = PlateHeatExchanger(dT_c=self.dT_phx1_cold, model='fixed cold delta temperature')
+        self.phx2 = PlateHeatExchanger(dT_c=self.dT_phx2_cold, model='fixed cold delta temperature')        
+        self.phx3 = PlateHeatExchanger(dT_c=self.dT_phx3_cold, model='fixed cold delta temperature')
+        self.exp_valve = ExpansionValve()
+        self.evaporator = Evaporator(model='fixed cold duty')
+        self.evap_sup = PlateHeatExchanger(model='fixed cold temperature outlet')
+
+    def init_structure(self):
         #Check the PHE combo
         self.dT_phx1_cold = self.dT_phx1_cold if self.dT_phx1_cold > 0.0 else 0.0
         self.dT_phx2_cold = self.dT_phx2_cold if self.n_comp > 1 and self.dT_phx2_cold > 0.0 else 0.0
@@ -101,23 +115,6 @@ class TRHP:
         self.phx1_on = 1   if self.dT_phx1_cold > 0.0 else 0
         self.phx2_on = 1   if self.dT_phx2_cold > 0.0 else 0
         self.phx3_on = 1   if self.dT_phx3_cold > 0.0 else 0
-
-    def init_components(self):
-        #Initialisation of unit operations
-        self.comp1 = Compressor(motor_eff=self.eff_motor, model_index=1)
-        self.comp2 = Compressor(motor_eff=self.eff_motor, model_index=1) 
-        self.comp3 = Compressor(motor_eff=self.eff_motor, model_index=1) 
-        self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler3 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.ihx = PlateHeatExchanger(dTmin=self.dTmin, model='dTmin_terminal')
-        self.phx1 = PlateHeatExchanger(dT_c=self.dT_phx1_cold, model='fixed cold delta temperature')
-        self.phx2 = PlateHeatExchanger(dT_c=self.dT_phx2_cold, model='fixed cold delta temperature')        
-        self.phx3 = PlateHeatExchanger(dT_c=self.dT_phx3_cold, model='fixed cold delta temperature')
-        self.exp_valve = ExpansionValve()
-        self.evaporator = Evaporator(model='fixed cold duty')
-        self.evap_sup = PlateHeatExchanger(model='fixed cold temperature outlet')
 
     def init_streams(self):
         #Evaporator superheat section
@@ -243,7 +240,7 @@ class TRHP:
         self.evaporator.source_in = MassStream( name='Exhaust air in', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000)
         self.evaporator.source_out = MassStream( name='Exhaust air out', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000)
 
-    def set_relationships(self):
+    def init_logic_blocks(self):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
             self.set_phx3_dT_cold = SetRelationship( source_obj=self.phx3.sink_in, target_obj=[self.phx3.sink_out], c=self.dT_phx3_cold, prop='temperature', prop2='pressure' ) 
@@ -261,7 +258,7 @@ class TRHP:
         self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
         #self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
 
-    def define_solver_pathway(self):
+    def init_solver_pathway(self):
         #Solution pathway set-up
         self.OP = [self.evap_sup, self.set_P_ints]
 

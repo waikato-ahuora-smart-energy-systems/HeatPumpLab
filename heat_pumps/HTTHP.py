@@ -79,8 +79,8 @@ class HTTHP:
         
         self.determine_HP_structure()
         self.init_streams()
-        self.set_relationships()
-        self.define_solver_pathway()
+        self.init_logic_blocks()
+        self.init_solver_pathway()
 
     def determine_HP_structure(self):
         #Binary variables for the heat pump structure
@@ -188,7 +188,7 @@ class HTTHP:
         self.exp_valve_top.flow_out = MassStream( 'Evap_top_in', fluid=self.refrigerant_top, pressure=self.evaporator_top.sink_out.pressure, enthalpy=self.exp_valve_top.flow_in.enthalpy )
         self.evaporator_top.sink_in = self.exp_valve_top.flow_out
 
-    def set_relationships(self):
+    def init_logic_blocks(self):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
             self.set_phx3_dTmax = SetRelationship( source_obj=self.phx3.sink_in, target_obj=[self.phx3.source_in], c=self.dT_phx3_max, prop='temperature', prop2='pressure' ) 
@@ -220,7 +220,7 @@ class HTTHP:
         self.gas_cooler4.init_heat_exchanger_elements(self.N_elements_per_pass)
 
 
-    def define_solver_pathway(self):
+    def init_solver_pathway(self):
         #Solution pathway set-up
         self.OP = [self.exp_valve, self.evaporator, self.evap_sup, self.set_P_ints]
 
