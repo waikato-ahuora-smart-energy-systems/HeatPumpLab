@@ -8,12 +8,13 @@ High temperature transcritical-recuperative heat pump model
 By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
 """
 
+from heat_pumps import Solver
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import get_property, MassStream
 from logic_operations import SetRelationship, CustomRelationship
 from scipy.optimize import brentq
 
-class TRHP:
+class TRHP(Solver):
     def __init__(
             self, 
             refrigerant='R1336mzz(Z)', 
@@ -260,76 +261,76 @@ class TRHP:
 
     def init_solver_pathway(self):
         #Solution pathway set-up
-        self.OP = [self.evap_sup, self.set_P_ints]
+        self.operations = [self.evap_sup, self.set_P_ints]
 
         if self.ihx_on == 1:
-            self.OP.append(self.ihx)
+            self.operations.append(self.ihx)
 
         if self.phx1_on == 1:
-            self.OP.append(self.set_phx1_dT_cold)
-            self.OP.append(self.set_phx1_hot_T_in)
-        self.OP.append(self.comp1)
+            self.operations.append(self.set_phx1_dT_cold)
+            self.operations.append(self.set_phx1_hot_T_in)
+        self.operations.append(self.comp1)
         if self.phx2_on == 1:
-            self.OP.append(self.set_phx2_dT_cold)
-            self.OP.append(self.set_phx2_hot_T_in)
+            self.operations.append(self.set_phx2_dT_cold)
+            self.operations.append(self.set_phx2_hot_T_in)
         if self.comp2_on == 1:
-            self.OP.append(self.comp2)
+            self.operations.append(self.comp2)
         if self.phx3_on == 1:
-            self.OP.append(self.set_phx3_dT_cold)
-            self.OP.append(self.set_phx3_hot_T_in)
+            self.operations.append(self.set_phx3_dT_cold)
+            self.operations.append(self.set_phx3_hot_T_in)
         if self.comp3_on == 1:
-            self.OP.append(self.comp3)
+            self.operations.append(self.comp3)
         
         if self.phx3_on == 1:
-            self.OP.append(self.gas_cooler4)
-            self.OP.append(self.phx3)
+            self.operations.append(self.gas_cooler4)
+            self.operations.append(self.phx3)
         if self.phx2_on == 1:
-            self.OP.append(self.gas_cooler3)
-            self.OP.append(self.phx2)
+            self.operations.append(self.gas_cooler3)
+            self.operations.append(self.phx2)
         if self.phx1_on == 1:
-            self.OP.append(self.gas_cooler2)        
-            self.OP.append(self.phx1)
-        self.OP.append(self.gas_cooler1)
+            self.operations.append(self.gas_cooler2)        
+            self.operations.append(self.phx1)
+        self.operations.append(self.gas_cooler1)
 
-        self.OP.append(self.exp_valve)
-        self.OP.append(self.evaporator)
-        self.OP.append(self.set_gc_air_massflow)
+        self.operations.append(self.exp_valve)
+        self.operations.append(self.evaporator)
+        self.operations.append(self.set_gc_air_massflow)
 
     def get_pressure_bounds(self):
-        P_gc_est = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.comp1.flow_in.entropy, 0) * 1000
+        P_est = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.comp1.flow_in.entropy, 0) * 1000
 
-        P_low_bound = P_gc_est
-        P_upp_bound = P_gc_est
+        P_lb = P_est
+        P_ub = P_est
 
-        dt_plus = self.get_solve_state(P_gc_est)
+        dt_plus = self.get_solve_state(P_est)
         dt_neg = dt_plus
         i = 0
         if dt_neg > 0.0:
             #Find a lower bound pressure resulting in an air temperature less than the target
             while dt_neg > 0.0 and i < 20:
-                P_upp_bound = P_low_bound
-                P_low_bound *= 0.9
-                dt_neg = self.get_solve_state(P_low_bound)
+                P_ub = P_lb
+                P_lb *= 0.9
+                dt_neg = self.get_solve_state(P_lb)
                 i += 1
             
         else:
             #Find a upper bound pressure resulting in an air temperature greater than the target
             while dt_plus < 0.0 and i < 20:
-                P_low_bound = P_upp_bound
-                P_upp_bound *= 1.1
-                dt_plus = self.get_solve_state(P_upp_bound)
+                P_lb = P_ub
+                P_ub *= 1.1
+                dt_plus = self.get_solve_state(P_ub)
                 i += 1
 
-        if P_low_bound < self.comp1.flow_in.pressure:
+        if P_lb < self.comp1.flow_in.pressure:
             #Check the low pressure bound remains above the evaporator pressure
-            P_low_bound = self.comp1.flow_in.pressure
-            dt_neg = self.get_solve_state(P_low_bound)
-            if P_upp_bound < P_low_bound:
+            P_lb = self.comp1.flow_in.pressure
+            dt_neg = self.get_solve_state(P_lb)
+            if P_ub < P_lb:
                 #Check the upper pressure bound stays above the low pressure bound
                 dt_neg = dt_plus
         
         feasible = int((-dt_plus * dt_neg) / abs(dt_plus * dt_neg))
-        return P_low_bound, P_upp_bound, feasible    
+        return P_lb, P_ub, feasible
    
     def get_solve_state(self, P_comp_out):
         self.converged = False
@@ -347,7 +348,7 @@ class TRHP:
             i += 1
 
             #Solve the performance of each component and update each special relationship
-            for obj in self.OP:
+            for obj in self.operations:
                 obj.solve()
 
             dh = self.tol * h - abs(self.exp_valve.flow_in.enthalpy - h)
@@ -361,11 +362,40 @@ class TRHP:
 
     def solve(self):
         #Solve heat pump cycle
-        P_low_bound, P_upp_bound, feasible = self.get_pressure_bounds()                     
+
+        P_lb, P_ub, feasible = self.get_pressure_bounds()                     
         if feasible == 1:
             #Solve the heat pump thermodynamics
             try:
-                r = brentq(f=self.get_solve_state, a=P_low_bound, b=P_upp_bound, full_output=True, rtol=self.tol, xtol=self.tol)
+                r = brentq(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
+
+                if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.05:
+                    self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
+            except:
+                print('Heat pump model failed to solve.') 
+
+        if self.COP == 0:
+            self.converged = False          
+        else:
+            self.get_summary()
+
+    def solve_v2(self):
+        
+        
+
+        args = {'x_obj'    : 0, 
+                'y_obj'    : 0,
+                'y_target' : 0 }
+        
+        
+        
+        #Solve heat pump cycle
+
+        P_lb, P_ub, feasible = self.get_pressure_bounds()                     
+        if feasible == 1:
+            #Solve the heat pump thermodynamics
+            try:
+                r = brentq(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
 
                 if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.05:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
