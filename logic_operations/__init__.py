@@ -1,2 +1,4 @@
+from logic_operations.controller import Controller
 from logic_operations.customRelationship import CustomRelationship
+from logic_operations.flowsheetSolver import FlowSheetSolver
 from logic_operations.setRelationship import SetRelationship

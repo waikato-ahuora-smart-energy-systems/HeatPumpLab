@@ -11,10 +11,10 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waik
 from heat_pumps import Solver
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import get_property, MassStream
-from logic_operations import SetRelationship, CustomRelationship
+from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver, Controller
 from scipy.optimize import brentq
 
-class TRHP(Solver):
+class TRHP(FlowSheetSolver, Controller):
     def __init__(
             self, 
             refrigerant='R1336mzz(Z)', 
@@ -241,6 +241,17 @@ class TRHP(Solver):
         self.evaporator.source_in = MassStream( name='Exhaust air in', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000)
         self.evaporator.source_out = MassStream( name='Exhaust air out', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000)
 
+        self.streams = [self.evaporator.sink_out, 
+                        self.comp1.flow_out, 
+                        self.comp2.flow_out, 
+                        self.comp3.flow_out, 
+                        self.gas_cooler1.sink_out, 
+                        self.gas_cooler2.sink_out, 
+                        self.gas_cooler3.sink_out, 
+                        self.gas_cooler4.sink_out, 
+                        self.ihx.source_out, 
+                        self.exp_valve.flow_out]
+
     def init_logic_blocks(self):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
@@ -381,31 +392,22 @@ class TRHP(Solver):
 
     def solve_v2(self):
         
-        
+        r = self.get_target_value(x_obj=[self.comp3.flow_out.pressure],
+                                  y_obj=[self.gas_cooler4.sink_out.temperature],
+                                  y_target=[self.T_air_tar])
 
-        args = {'x_obj'    : 0, 
-                'y_obj'    : 0,
-                'y_target' : 0 }
-        
-        
-        
-        #Solve heat pump cycle
+        try:
+            if r[1].converged and self.converged:
+                self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
 
-        P_lb, P_ub, feasible = self.get_pressure_bounds()                     
-        if feasible == 1:
-            #Solve the heat pump thermodynamics
-            try:
-                r = brentq(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
-
-                if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.05:
-                    self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
-            except:
-                print('Heat pump model failed to solve.') 
-
-        if self.COP == 0:
-            self.converged = False          
-        else:
             self.get_summary()
+
+        except:
+            print('Heat pump model failed to solve.') 
+            self.COP = 0
+            self.converged = False
+
+        return self.COP
 
     def get_summary(self):
         self.output = {
