@@ -15,35 +15,40 @@ if __name__=='__main__':
 
     refrigerant = ['R1233zd(E)', 'R1234ze(E)', 'R1234ze(Z)', 'R1336mzz(Z)', 'R1224yd(Z)', 'R245fa', 'R365mfc', 'Carbon dioxide', 'Isobutane', 'Butane', 'Propane']
     dT_GC_min_tar = [j for j in range(20,40,5)]
-    T_air_tar = [k for k in range(100,305,5)]
+    T_air_tar = [k for k in range(100,255,5)]
     T_air_inlet = [15.0]
     T_source_in = [45.0]
     n_comp = [n + 1 for n in range(3)]
 
     if 1:
-        cases = [{
-                'refrigerant' : refrigerant[i],
-                'dT_GC_min_tar' : dT_GC_min_tar[j],
-                'T_air_tar' : T_air_tar[k],
-                'T_air_inlet' : T_air_inlet[0],
-                'T_source_in' : T_source_in[0],
-                'n_comp' : 1
-            } for k in range(len(T_air_tar)) for i in range(len(refrigerant)) for j in range(len(dT_GC_min_tar))] #for n in range(len(n_comp)) 
-        
-        for c in cases:
-            print(c)
-        
-        results = [] 
-        pool = concurrent.futures.ProcessPoolExecutor()
-        futures = [pool.submit(get_TRHP_optimal, case) for case in cases]
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            results.append(result)
-            print(result)
+        for i in range(len(refrigerant)):
+            for n in range(len(n_comp)):
+                cases = [{
+                        'refrigerant' : refrigerant[i],
+                        'dT_GC_min_tar' : dT_GC_min_tar[j],
+                        'T_air_tar' : T_air_tar[k],
+                        'T_air_inlet' : T_air_inlet[0],
+                        'T_source_in' : T_source_in[0],
+                        'n_comp' : n_comp[n]
+                    } for k in range(len(T_air_tar)) for j in range(len(dT_GC_min_tar)) ] #for n in range(len(n_comp)) 
                 
-        for result in results:
-            print_result_to_csv(output=result, file_name='TRHP_results_v3')
-        pool.shutdown()
+                for c in cases:
+                    print(c)
+                
+                results = [] 
+                pool = concurrent.futures.ProcessPoolExecutor()
+                futures = [pool.submit(get_TRHP_optimal, case) for case in cases]
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        result = future.result()
+                        results.append(result)
+                        print(result)
+                    except:
+                        pass
+                        
+                for result in results:
+                    print_result_to_csv(output=result, file_name='TRHP_results_v3')
+                pool.shutdown()
 
     else:
         m = TRHP(
