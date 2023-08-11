@@ -43,7 +43,7 @@ def get_TRHP_obj_fun(var, parameters):
         if valid:
             m.solve()
             COP = m.COP
-            # print(COP, m.converged, var)
+            print(COP, m.converged, var)
             del m
         
     except:

@@ -23,23 +23,19 @@ if __name__=='__main__':
     if 1:
         cases = [{
                 'refrigerant' : refrigerant[i],
-                'dT_GC_min_tar' : dT_GC_min_tar[0],
+                'dT_GC_min_tar' : dT_GC_min_tar[j],
                 'T_air_tar' : T_air_tar[k],
                 'T_air_inlet' : T_air_inlet[0],
                 'T_source_in' : T_source_in[0],
                 'n_comp' : 1
-            } for k in range(len(T_air_tar)) for i in range(len(refrigerant))] #for n in range(len(n_comp)) 
+            } for k in range(len(T_air_tar)) for i in range(len(refrigerant)) for j in range(len(dT_GC_min_tar))] #for n in range(len(n_comp)) 
         
         for c in cases:
             print(c)
-        # for c in cases:
-        #     result = get_TRHP_optimal(c)
-        #     print_result_to_csv(output=result, file_name='results/TRHP_results_v2.csv')
-        print(len(cases))
         
         results = [] 
-        procExecutor = concurrent.futures.ProcessPoolExecutor(max_workers=12)
-        futures = [procExecutor.submit(get_TRHP_optimal, case) for case in cases]
+        pool = concurrent.futures.ProcessPoolExecutor()
+        futures = [pool.submit(get_TRHP_optimal, case) for case in cases]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             results.append(result)
@@ -47,18 +43,18 @@ if __name__=='__main__':
                 
         for result in results:
             print_result_to_csv(output=result, file_name='TRHP_results_v3')
-        procExecutor.shutdown()
+        pool.shutdown()
 
     else:
         m = TRHP(
             refrigerant=refrigerant[0],
-            dT_GC_min_tar=dT_GC_min_tar[2],
-            T_air_tar=T_air_tar[12],
+            dT_GC_min_tar=dT_GC_min_tar[0],
+            T_air_tar=T_air_tar[5],
             T_air_inlet=T_air_inlet[0],
             T_source_in=T_source_in[0],
-            n_comp=3,
-            dT_phx1_cold=50.0,
-            dT_phx2_cold=0.0,
+            n_comp=1,
+            dT_phx1_cold=10.0,
+            dT_phx2_cold=1.0,
             dT_phx3_cold=10.0, 
             comp2_power_frac=0.5, 
             comp3_power_frac=0.2,
@@ -67,20 +63,21 @@ if __name__=='__main__':
         
         m.solve()
 
-        m.output.update({
-            'Obj function:' : '',
-            'Iterations:' : 0,
-            'Message:' : '',
-            'Success:' : m.converged
-        })
+        if m.converged:
+            m.output.update({
+                'Obj function:' : '',
+                'Iterations:' : 0,
+                'Message:' : '',
+                'Success:' : m.converged
+            })
 
-        if type(m.output) is dict:
-            print_result_to_terminal(output=m.output)
+            if type(m.output) is dict:
+                print_result_to_terminal(output=m.output)
 
-        if 0:
-            g = Graph()
-            g.heat_exchangers([m.gas_cooler1, m.gas_cooler2, m.gas_cooler3, m.gas_cooler4, m.phx1, m.phx2, m.phx3])
-            g.heat_exchangers([m.gas_cooler1, m.phx1, m.gas_cooler2, m.phx2, m.gas_cooler3, m.phx3, m.gas_cooler4])  
+            if 0:
+                g = Graph()
+                g.heat_exchangers([m.gas_cooler1, m.gas_cooler2, m.gas_cooler3, m.gas_cooler4, m.phx1, m.phx2, m.phx3])
+                g.heat_exchangers([m.gas_cooler1, m.phx1, m.gas_cooler2, m.phx2, m.gas_cooler3, m.phx3, m.gas_cooler4])  
 
     TOC = timer()
     print('Total time:',TOC - TIC) 

@@ -4,7 +4,7 @@ __credits__ = ['Alex Geary']
 from components.common.commonHeatExchanger import BaseHeatExchanger
 
 class Evaporator(BaseHeatExchanger):
-    def __init__(self, name='Evaporator', dP_h=0.0, dP_c=0.0, model='fixed cold duty', bypassed=False, converged=False, tol=1e-6):
+    def __init__(self, name='Evaporator', dP_h=0.0, dP_c=0.0, model='saturated gas outlet evaporator', bypassed=False, converged=False, tol=1e-6):
         self.name = name
         self.model = model
         self.bypassed = bypassed

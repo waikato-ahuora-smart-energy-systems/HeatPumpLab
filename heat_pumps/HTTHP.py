@@ -58,9 +58,9 @@ class HTTHP:
         self.evap_sup_btm = Evaporator(model='fixed cold duty')
         self.ihx_btm = PlateHeatExchanger(self.dT_min_ihx)
         self.comp_btm = Compressor(motor_eff=self.eff_motor, model_index=1)
-        self.gas_cooler_cas = GasCooler(HotFluid=fluid=self.refrigerant_btm, ColdFluid=fluid=self.refrigerant_top, dT_GC_min_tar=self.dT_GC_min_tar)
+        self.gas_cooler_cas = GasCooler(HotFluid=self.refrigerant_btm, ColdFluid=self.refrigerant_top, dT_GC_min_tar=self.dT_GC_min_tar)
         self.comp_top = Compressor(motor_eff=self.eff_motor, model_index=1) 
-        self.gas_cooler_air = GasCooler(HotFluid=fluid=self.refrigerant_top, ColdFluid=self.AIR, dT_GC_min_tar=self.dT_GC_min_tar)
+        self.gas_cooler_air = GasCooler(HotFluid=self.refrigerant_top, ColdFluid=self.AIR, dT_GC_min_tar=self.dT_GC_min_tar)
         self.ihx_top = PlateHeatExchanger(self.dT_min_ihx, model='dTmin_terminal')
         self.ihx_tb = PlateHeatExchanger(self.dT_min_ihx, model='dTmin_terminal')
         self.exp_valve_top = ExpansionValve()
@@ -218,7 +218,6 @@ class HTTHP:
         self.gas_cooler2.init_heat_exchanger_elements(self.N_elements_per_pass)
         self.gas_cooler3.init_heat_exchanger_elements(self.N_elements_per_pass)
         self.gas_cooler4.init_heat_exchanger_elements(self.N_elements_per_pass)
-
 
     def init_solver_pathway(self):
         #Solution pathway set-up

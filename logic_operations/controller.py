@@ -14,12 +14,12 @@ class Controller():
         self.converged = self.get_state_solution()
         return y_obj[0] - y_target[0]
 
-    def get_x_bounds(self, x_obj):
+    def get_x_bounds(self, x_obj, y_obj, y_target):
         x_lb = x_obj[0]
         x_ub = x_obj[0]
 
-        y_plus = self.get_state_solution()
-        y_neg = y_plus
+        self.get_state_solution()
+        y_neg = y_obj[0]
         i = 0
         if y_neg > 0.0:
             while y_neg > 0.0 and i < 20:
@@ -41,13 +41,13 @@ class Controller():
         return x_lb, x_ub, feasible
 
     def get_target_value(self, x_init, x_obj, y_obj, y_target):
-        args = {'x_obj'    : [x_obj], 
-                'y_obj'    : [y_obj],
-                'y_target' : [y_target] }
+        args = {'x_obj'    : x_obj, 
+                'y_obj'    : y_obj,
+                'y_target' : y_target }
         
         r = [0]
         try:
-            x_lb, x_ub, feasible = self.get_x_bounds(x_init, args)                     
+            x_lb, x_ub, feasible = self.get_x_bounds(**args)                     
             if feasible == 1:
                 r = brentq(f=self.get_target_values_difference, 
                            args=args, 

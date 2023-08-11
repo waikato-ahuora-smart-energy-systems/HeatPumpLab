@@ -58,6 +58,9 @@ class BaseHeatExchanger:
         elif self.model == 'fixed hot delta temperature':
             self.get_fixed_hot_delta_T_model()
 
+        elif self.model == 'saturated gas outlet evaporator':
+            self.get_saturated_gas_sink_out_model()
+
         elif self.model == 'specialised':
             self.get_detailed_performance()
 
@@ -109,8 +112,8 @@ class BaseHeatExchanger:
         self.source_out.enthalpy = self.source_in.enthalpy - self.duty / self.source_out.mass_flow
         self.source_out.props_in_mPH()
 
-        if self.source_out.temperature < self.sink_in.temperature or self.source_in.temperature < self.sink_out.temperature:
-            print('temperature cross occuring in the heat exchanger: ' + self.name)
+        # if self.source_out.temperature < self.sink_in.temperature or self.source_in.temperature < self.sink_out.temperature:
+        #      print('temperature cross occuring in the heat exchanger: ' + self.name)
 
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
@@ -170,6 +173,21 @@ class BaseHeatExchanger:
         self.sink_out.props_in_mPH()
 
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False 
+
+    def get_saturated_gas_sink_out_model(self):
+        self.sink_in.props_in_mPH()
+        self.sink_out.pressure = self.sink_in.pressure - self.dP_c
+        self.sink_out.props_in_mPX()
+        self.duty = self.sink_out.heat_flow - self.sink_in.heat_flow
+
+        self.source_out.pressure = self.source_in.pressure - self.dP_h
+        self.source_out.enthalpy = self.source_in.enthalpy - self.duty / self.source_out.mass_flow
+        self.source_out.props_in_mPH()
+
+        # if self.source_out.temperature < self.sink_in.temperature or self.source_in.temperature < self.sink_out.temperature:
+        #      print('temperature cross occuring in the heat exchanger: ' + self.name)
+
+        self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
     def get_graph_data(self, divisions=50):
         H = []; T_hot = []; T_cold = []

@@ -8,7 +8,6 @@ High temperature transcritical-recuperative heat pump model
 By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
 """
 
-from heat_pumps import Solver
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import get_property, MassStream
 from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver, Controller
@@ -80,7 +79,7 @@ class TRHP(FlowSheetSolver, Controller):
         self.phx2 = PlateHeatExchanger(dT_c=self.dT_phx2_cold, model='fixed cold delta temperature')        
         self.phx3 = PlateHeatExchanger(dT_c=self.dT_phx3_cold, model='fixed cold delta temperature')
         self.exp_valve = ExpansionValve()
-        self.evaporator = Evaporator(model='fixed cold duty')
+        self.evaporator = Evaporator(model='saturated gas outlet evaporator')
         self.evap_sup = PlateHeatExchanger(model='fixed cold temperature outlet')
 
     def init_structure(self):
@@ -373,7 +372,6 @@ class TRHP(FlowSheetSolver, Controller):
 
     def solve(self):
         #Solve heat pump cycle
-
         P_lb, P_ub, feasible = self.get_pressure_bounds()                     
         if feasible == 1:
             #Solve the heat pump thermodynamics
@@ -386,13 +384,15 @@ class TRHP(FlowSheetSolver, Controller):
                 print('Heat pump model failed to solve.') 
 
         if self.COP == 0:
-            self.converged = False          
+            self.converged = False
+            print('Model failed to converge.')         
         else:
             self.get_summary()
 
     def solve_v2(self):
         
-        r = self.get_target_value(x_obj=[self.comp3.flow_out.pressure],
+        r = self.get_target_value(x_init=self.comp3.flow_out.pressure,
+                                  x_obj=[self.comp3.flow_out.pressure],
                                   y_obj=[self.gas_cooler4.sink_out.temperature],
                                   y_target=[self.T_air_tar])
 
