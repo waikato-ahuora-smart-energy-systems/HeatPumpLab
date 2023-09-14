@@ -50,7 +50,7 @@ if __name__=='__main__':
 
                     if completed == False:
                         results = [] 
-                        pool = concurrent.futures.ProcessPoolExecutor(max_workers=1)
+                        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
                         futures = [pool.submit(get_TRHP_optimal, case) for case in cases]
                         for future in concurrent.futures.as_completed(futures):
                             result = future.result()
