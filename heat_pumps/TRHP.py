@@ -372,22 +372,24 @@ class TRHP(FlowSheetSolver, Controller):
 
     def solve(self):
         #Solve heat pump cycle
-        P_lb, P_ub, feasible = self.get_pressure_bounds()                     
-        if feasible == 1:
-            #Solve the heat pump thermodynamics
-            try:
+        try:
+            P_lb, P_ub, feasible = self.get_pressure_bounds()     
+
+            if feasible == 1:
+                #Solve the heat pump thermodynamics
                 r = brentq(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
 
                 if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.05:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
-            except:
-                print('Heat pump model failed to solve.') 
 
-        if self.COP == 0:
-            self.converged = False
-            print('Model failed to converge.')         
-        else:
-            self.get_summary()
+            if self.COP == 0:
+                self.converged = False
+                # print('Model failed to converge.')         
+            else:
+                self.get_summary()
+
+        except:
+            print('Heat pump model failed to solve.') 
 
     def solve_v2(self):
         

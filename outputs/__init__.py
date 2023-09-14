@@ -1,3 +1,4 @@
 from outputs.graph import Graph
 from outputs.writeOutput import print_result_to_csv
 from outputs.writeOutput import print_result_to_terminal
+from outputs.writeOutput import read_csv_to_results

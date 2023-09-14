@@ -24,3 +24,12 @@ def print_result_to_csv(output='', file_name='results/untitled.csv'):
             
     except:
         print('Failed to appended result to CSV file.')
+
+def read_csv_to_results(file_name='results/untitled.csv'):
+    try:
+        with open(file_name, 'r') as csvfile:
+            reader = csv.DictReader(csvfile)
+            return list(reader)
+
+    except:
+        print('Failed to open CSV file.')

@@ -81,14 +81,14 @@ class CustomRelationship:
                             T_air_i = get_property('T', gc.source_in.fluid, 'PH', gc.source_in.pressure / 1000, h_ref) - gc.dTmin
                             dh_air = get_property('H', gc.sink_in.fluid, 'PT', gc.sink_in.pressure / 1000, T_air_i) - self.source_obj[0].sink_in.enthalpy
                             m_air_list.append(dQ_i / dh_air)  
-
-        self.target_obj[0].sink_in.mass_flow = max(m_air_list)
-        self.target_obj[0].sink_in.props_in_mPT()
-        
-        for gc in self.target_obj:
-            gc.sink_out.mass_flow = gc.sink_in.mass_flow
-            gc.sink_out.enthalpy = gc.sink_in.enthalpy + (gc.source_in.heat_flow - gc.source_out.heat_flow) / gc.sink_in.mass_flow
-            gc.sink_out.props_in_mPH()
+        if not m_air_list == []:
+            self.target_obj[0].sink_in.mass_flow = max(m_air_list)
+            self.target_obj[0].sink_in.props_in_mPT()
+            
+            for gc in self.target_obj:
+                gc.sink_out.mass_flow = gc.sink_in.mass_flow
+                gc.sink_out.enthalpy = gc.sink_in.enthalpy + (gc.source_in.heat_flow - gc.source_out.heat_flow) / gc.sink_in.mass_flow
+                gc.sink_out.props_in_mPH()
 
     def Airsource_Mass_Flow(self):
         m_air_list = []
