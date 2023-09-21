@@ -119,7 +119,7 @@ class HTTHP:
 
         #Bottom compressor
         self.comp_btm.flow_in = self.ihx_tb.sink_out
-        P_comp_btm_out_est = get_property('P', self.refrigerant_btm, 'TS', self.T_air_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3, self.comp_btm.flow_in.entropy, 0) * 1000        
+        P_comp_btm_out_est = get_property('P', self.refrigerant_btm, 'TS', self.T_air_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3, self.comp_btm.flow_in.entropy, self.RP) * 1000        
         self.comp_btm.flow_out = MassStream( 'Comp_btm_out', fluid=self.refrigerant_btm, pressure=P_comp_btm_out_est, temperature=(self.T_air_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3))
         
         #Cascade gas cooler - source side
@@ -160,7 +160,7 @@ class HTTHP:
 
         #Top compressor
         self.comp_top.flow_in = self.gas_cooler_cas.sink_out
-        P_comp_top_out_est = get_property('P', self.refrigerant_top, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp_top.flow_in.entropy, 0) * 1000        
+        P_comp_top_out_est = get_property('P', self.refrigerant_top, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp_top.flow_in.entropy, self.RP) * 1000        
         self.comp_top.flow_out = MassStream( 'Comp_top_out', fluid=self.refrigerant_top, pressure=P_comp_top_out_est, temperature=(self.T_air_tar + self.dT_GC_min_tar * 2))
         
         #Top gas cooler for air heating
@@ -199,8 +199,8 @@ class HTTHP:
         if self.phx1_on == 1:
             self.set_phx1_dTmax = SetRelationship( source_obj=self.phx1.sink_in, target_obj=[self.phx1.source_in], c=self.dT_phx1_max, prop='temperature', prop2='pressure' ) 
 
-        self.set_P_ints = CustomRelationship( source_obj=[self.n_comp, self.comp1.flow_in, self.comp3.flow_out, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.flow_out, self.comp2.flow_out], relation=1 )
-        self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
+        self.set_P_ints = CustomRelationship( source_obj=[self.n_comp, self.comp1.flow_in, self.comp3.flow_out, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.flow_out, self.comp2.flow_out], relation=1, RP=self.RP )
+        self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2, RP=self.RP )
         #self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
 
     def set_gas_cooler_analysis(self):
@@ -289,7 +289,7 @@ class HTTHP:
 
 
     def set_pressure_bounds(self):
-        P_gc_est = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.flow_in.entropy, 0) * 1000
+        P_gc_est = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.flow_in.entropy, self.RP) * 1000
 
         self.P_low_bound = P_gc_est
         self.P_upp_bound = P_gc_est

@@ -4,7 +4,7 @@ __credits__ = ['Alex Geary']
 from streams import get_property, MassStream
 
 class Compressor:
-    def __init__(self, name='Compressor', flow_in = MassStream(), flow_out = MassStream(), model_index=0, motor_eff=1.0):
+    def __init__(self, name='Compressor', flow_in = MassStream(), flow_out = MassStream(), model_index=0, motor_eff=1.0, RP=None):
         self.name = name
         self.flow_in = flow_in
         self.flow_out = flow_out
@@ -16,6 +16,7 @@ class Compressor:
         self.power = 0.0
         self.model_index = model_index
         self.model_coeffs = self.set_model_coeff()
+        self.RP = RP
 
     def set_model_coeff(self):    
         available_model_coeffs = [[       1.0,   0.0,     0.0],
@@ -30,7 +31,7 @@ class Compressor:
         return self.overall_eff / self.motor_eff
         
     def get_compressor_power(self):
-        h_isen = get_property('H', self.flow_in.fluid, 'PS', self.flow_out.pressure / 1000, self.flow_in.entropy, 0)
+        h_isen = get_property('H', self.flow_in.fluid, 'PS', self.flow_out.pressure / 1000, self.flow_in.entropy, self.RP)
         dh_shaft = (h_isen - self.flow_in.enthalpy)  / self.isentropic_eff
         self.shaft_work = dh_shaft * self.flow_in.mass_flow
         self.flow_out.enthalpy = self.flow_in.enthalpy + self.shaft_work / self.flow_in.mass_flow

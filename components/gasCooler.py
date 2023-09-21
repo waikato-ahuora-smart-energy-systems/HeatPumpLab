@@ -2,13 +2,13 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 import math
-from streams import get_property, MassStream
+from streams import MassStream
 from components.common.crossFlowElement import CrossFlowElement
 from components.common.commonHeatExchanger import BaseHeatExchanger
 from scipy.optimize import brentq
 
 class GasCooler(BaseHeatExchanger):
-    def __init__(self, name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, model='fixed hot temperature outlet', bypassed=False, converged=False, tol=1e-6):
+    def __init__(self, name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, model='fixed hot temperature outlet', bypassed=False, converged=False, tol=1e-6, RP=None):
         self.name = name
         self.dTmin = dTmin
         self.dP_h = dP_h
@@ -17,6 +17,7 @@ class GasCooler(BaseHeatExchanger):
         self.bypassed = bypassed
         self.converged = converged
         self.tol = tol
+        self.RP = RP
         
         self.init_stream_connections()
         self.init_performance_metrics()

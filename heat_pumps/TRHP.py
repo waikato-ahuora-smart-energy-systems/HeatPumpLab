@@ -9,11 +9,11 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waik
 """
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
-from streams import get_property, MassStream
+from streams import get_property, MassStream, Properties
 from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver, Controller
 from scipy.optimize import brentq
 
-class TRHP(FlowSheetSolver, Controller):
+class TRHP(FlowSheetSolver, Controller, Properties):
     def __init__(
             self, 
             refrigerant='R1336mzz(Z)', 
@@ -59,6 +59,7 @@ class TRHP(FlowSheetSolver, Controller):
         self.converged = False
         self.COP = 0.0
         
+        self.init_properties()
         self.init_components()
         self.init_structure()
         self.init_streams()
@@ -67,20 +68,20 @@ class TRHP(FlowSheetSolver, Controller):
 
     def init_components(self):
         #Initialisation of unit operations
-        self.comp1 = Compressor(motor_eff=self.eff_motor, model_index=1)
-        self.comp2 = Compressor(motor_eff=self.eff_motor, model_index=1) 
-        self.comp3 = Compressor(motor_eff=self.eff_motor, model_index=1) 
-        self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.gas_cooler3 = GasCooler(dTmin=self.dT_GC_min_tar)
-        self.ihx = PlateHeatExchanger(dTmin=self.dTmin, model='dTmin_terminal')
-        self.phx1 = PlateHeatExchanger(dT_c=self.dT_phx1_cold, model='fixed cold delta temperature')
-        self.phx2 = PlateHeatExchanger(dT_c=self.dT_phx2_cold, model='fixed cold delta temperature')        
-        self.phx3 = PlateHeatExchanger(dT_c=self.dT_phx3_cold, model='fixed cold delta temperature')
-        self.exp_valve = ExpansionValve()
-        self.evaporator = Evaporator(model='saturated gas outlet evaporator')
-        self.evap_sup = PlateHeatExchanger(model='fixed cold temperature outlet')
+        self.comp1 = Compressor(motor_eff=self.eff_motor, model_index=1, RP=self.RP)
+        self.comp2 = Compressor(motor_eff=self.eff_motor, model_index=1, RP=self.RP) 
+        self.comp3 = Compressor(motor_eff=self.eff_motor, model_index=1, RP=self.RP) 
+        self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.gas_cooler3 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.ihx = PlateHeatExchanger(dTmin=self.dTmin, model='dTmin_terminal', RP=self.RP)
+        self.phx1 = PlateHeatExchanger(dT_c=self.dT_phx1_cold, model='fixed cold delta temperature', RP=self.RP)
+        self.phx2 = PlateHeatExchanger(dT_c=self.dT_phx2_cold, model='fixed cold delta temperature', RP=self.RP)        
+        self.phx3 = PlateHeatExchanger(dT_c=self.dT_phx3_cold, model='fixed cold delta temperature', RP=self.RP)
+        self.exp_valve = ExpansionValve(RP=self.RP)
+        self.evaporator = Evaporator(model='saturated gas outlet evaporator', RP=self.RP)
+        self.evap_sup = PlateHeatExchanger(model='fixed cold temperature outlet', RP=self.RP)
 
     def init_structure(self):
         #Check the PHE combo
@@ -118,71 +119,71 @@ class TRHP(FlowSheetSolver, Controller):
 
     def init_streams(self):
         #Evaporator superheat section
-        self.evap_sup.source_in = MassStream( name='source In', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6)
-        self.evap_sup.source_out = MassStream( name='source Out', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6)
-        self.evap_sup.sink_in = MassStream( name='LP Ref: Evap to Super', fluid=self.refrigerant, temperature=self.Tsat_evap, quality=1.0 )
+        self.evap_sup.source_in = MassStream( name='source In', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6, RP=self.RP)
+        self.evap_sup.source_out = MassStream( name='source Out', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=10^6, RP=self.RP)
+        self.evap_sup.sink_in = MassStream( name='LP Ref: Evap to Super', fluid=self.refrigerant, temperature=self.Tsat_evap, quality=1.0, RP=self.RP)
         P_L = self.evap_sup.sink_in.pressure
-        self.evap_sup.sink_out = MassStream( name='LP Ref: Super to IHX', fluid=self.refrigerant, pressure=P_L, temperature=(self.T_source_in - self.dTmin) )
+        self.evap_sup.sink_out = MassStream( name='LP Ref: Super to IHX', fluid=self.refrigerant, pressure=P_L, temperature=(self.T_source_in - self.dTmin), RP=self.RP)
         
         #Internal heat exchanger
         self.ihx.sink_in = self.evap_sup.sink_out
         if self.ihx_on == 1:
-            self.ihx.sink_out = MassStream( name='LP Ref: IHX to PHX1', fluid=self.refrigerant, pressure=P_L, temperature=(self.T_gc_out - self.dTmin) )
+            self.ihx.sink_out = MassStream( name='LP Ref: IHX to PHX1', fluid=self.refrigerant, pressure=P_L, temperature=(self.T_gc_out - self.dTmin), RP=self.RP)
         else:   
             self.ihx.sink_out = self.ihx.sink_in
 
         #Plate heat exchanger 1 - cold-side
         self.phx1.sink_in = self.ihx.sink_out
         if self.phx1_on == 1: 
-            self.phx1.sink_out = MassStream( name='LP Ref: PHX1 to Comp1', fluid=self.refrigerant, pressure=P_L, temperature=(self.phx1.sink_in.temperature + self.dT_phx1_cold) )
+            self.phx1.sink_out = MassStream( name='LP Ref: PHX1 to Comp1', fluid=self.refrigerant, pressure=P_L, temperature=(self.phx1.sink_in.temperature + self.dT_phx1_cold), RP=self.RP)
         else:
             self.phx1.sink_out = self.phx1.sink_in
 
         #Final discharge pressure
-        P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.phx1.sink_out.entropy, 0) * 1000
+        P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.phx1.sink_out.entropy, RP=self.RP) * 1000
         PR = (P_H / P_L)**(1 / self.n_comp) 
 
         #Compressor 1
         self.comp1.flow_in = self.phx1.sink_out
-        self.comp1.flow_out = MassStream( name='Comp1_out', fluid=self.refrigerant, pressure=(P_L * PR), temperature=get_property('T', self.refrigerant, 'PS', (P_L * PR), self.phx1.sink_out.entropy, 0))
+        self.comp1.flow_out = MassStream( name='Comp1_out', fluid=self.refrigerant, pressure=(P_L * PR), temperature=get_property('T', self.refrigerant, 'PS', (P_L * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)
 
         #Plate heat exchanger 2 - cold-side
         self.phx2.sink_in = self.comp1.flow_out
         if self.phx2_on == 1:
-            self.phx2.sink_out = MassStream( name='Comp2_in', fluid=self.refrigerant, pressure=self.phx2.sink_in.pressure, temperature=self.phx2.sink_in.temperature + self.dT_phx2_cold)
+            self.phx2.sink_out = MassStream( name='Comp2_in', fluid=self.refrigerant, pressure=self.phx2.sink_in.pressure, temperature=self.phx2.sink_in.temperature + self.dT_phx2_cold, RP=self.RP)
         else:
             self.phx2.sink_out = self.comp1.flow_out
         
         #Compressor 2
         self.comp2.flow_in = self.phx2.sink_out
         if self.comp2_on == 1:
-            self.comp2.flow_out = MassStream( name='Comp2_out', fluid=self.refrigerant, pressure=(P_L * PR * PR), temperature=get_property('T', self.refrigerant, 'PS', (P_L * PR * PR), self.phx1.sink_out.entropy, 0))       
+            self.comp2.flow_out = MassStream( name='Comp2_out', fluid=self.refrigerant, pressure=(P_L * PR * PR), temperature=get_property('T', self.refrigerant, 'PS', (P_L * PR * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
         else:
             self.comp2.flow_out = self.comp2.flow_in
 
         #Plate heat exchanger 3 - cold-side
         self.phx3.sink_in = self.comp2.flow_out
         if self.phx3_on == 1:
-            self.phx3.sink_out = MassStream( name='Comp3_in', fluid=self.refrigerant, pressure=self.phx3.sink_in.pressure, temperature=self.phx3.sink_in.temperature + self.dT_phx3_cold )
+            self.phx3.sink_out = MassStream( name='Comp3_in', fluid=self.refrigerant, pressure=self.phx3.sink_in.pressure, temperature=self.phx3.sink_in.temperature + self.dT_phx3_cold, RP=self.RP)
         else:
             self.phx3.sink_out = self.phx3.sink_in
 
         #Compressor 3
         self.comp3.flow_in = self.phx3.sink_out
         if self.comp3_on == 1:
-            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=P_H, temperature=get_property('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, 0))       
+            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=P_H, temperature=get_property('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP))       
         else:
             self.comp3.flow_out = self.comp3.flow_in
 
         #Gas cooler 4 and Plate heat exchanger 3 - hot-sides
-        self.gas_cooler4.sink_out = MassStream( name='Air: GC4 to Dryer', fluid=self.Sink, pressure=101, temperature=self.T_air_tar )
-        self.gas_cooler4.sink_in = MassStream( name='Air: GC3 to GC4', fluid=self.Sink, pressure=101, temperature=self.T_air_tar )
+        self.gas_cooler4.sink_out = MassStream( name='Air: GC4 to Dryer', fluid=self.Sink, pressure=101, temperature=self.T_air_tar, RP=self.RP )
+        self.gas_cooler4.sink_in = MassStream( name='Air: GC3 to GC4', fluid=self.Sink, pressure=101, temperature=self.T_air_tar, RP=self.RP )
         
         self.gas_cooler4.source_in = self.comp3.flow_out
         if self.comp3_on == 1 and self.phx3_on == 1:
-            self.gas_cooler4.source_out = MassStream( name='Ref: GC4 to PHX3', fluid=self.refrigerant )
+            self.gas_cooler4.source_out = MassStream( name='Ref: GC4 to PHX3', fluid=self.refrigerant, RP=self.RP )
             self.phx3.source_in = self.gas_cooler4.source_out
-            self.phx3.source_out = MassStream( name='Ref: PHX3 to GC3', fluid=self.refrigerant )       
+            self.phx3.source_out = MassStream( name='Ref: PHX3 to GC3', fluid=self.refrigerant, RP=self.RP )       
         else:
             self.gas_cooler4.source_out = self.gas_cooler4.source_in
             self.phx3.source_in = self.gas_cooler4.source_out
@@ -190,13 +191,13 @@ class TRHP(FlowSheetSolver, Controller):
         
         #Gas cooler 3 and Plate heat exchanger 2 - hot-sides
         self.gas_cooler3.sink_out = self.gas_cooler4.sink_in
-        self.gas_cooler3.sink_in = MassStream( name='Air: GC2 to GC3', fluid=self.Sink, pressure=101, temperature=self.T_air_tar )
+        self.gas_cooler3.sink_in = MassStream( name='Air: GC2 to GC3', fluid=self.Sink, pressure=101, temperature=self.T_air_tar, RP=self.RP )
         
         self.gas_cooler3.source_in = self.phx3.source_out
         if self.comp2_on == 1 and self.phx2_on == 1:
-            self.gas_cooler3.source_out = MassStream( name='Ref: GC3 to PHX2', fluid=self.refrigerant )
+            self.gas_cooler3.source_out = MassStream( name='Ref: GC3 to PHX2', fluid=self.refrigerant, RP=self.RP )
             self.phx2.source_in = self.gas_cooler3.source_out
-            self.phx2.source_out = MassStream( name='Ref: PHX2 to GC2', fluid=self.refrigerant )
+            self.phx2.source_out = MassStream( name='Ref: PHX2 to GC2', fluid=self.refrigerant, RP=self.RP )
         else:
             self.gas_cooler3.source_out = self.gas_cooler3.source_in
             self.phx2.source_in = self.gas_cooler3.source_out
@@ -204,41 +205,41 @@ class TRHP(FlowSheetSolver, Controller):
 
         #Gas cooler 2 and Plate heat exchanger 1 - hot-sides
         self.gas_cooler2.sink_out = self.gas_cooler3.sink_in
-        self.gas_cooler2.sink_in = MassStream( name='Air: GC1 to GC2', fluid=self.Sink, pressure=101, temperature=self.T_air_tar )
+        self.gas_cooler2.sink_in = MassStream( name='Air: GC1 to GC2', fluid=self.Sink, pressure=101, temperature=self.T_air_tar, RP=self.RP )
 
         self.gas_cooler2.source_in = self.phx2.source_out
         if self.phx1_on == 1:
-            self.gas_cooler2.source_out = MassStream( name='Ref: GC2 to PHX1', fluid=self.refrigerant )
+            self.gas_cooler2.source_out = MassStream( name='Ref: GC2 to PHX1', fluid=self.refrigerant, RP=self.RP )
             self.phx1.source_in = self.gas_cooler2.source_out
-            self.phx1.source_out = MassStream( name='Ref: PHX1 to GC1', fluid=self.refrigerant )
+            self.phx1.source_out = MassStream( name='Ref: PHX1 to GC1', fluid=self.refrigerant, RP=self.RP )
         else:
             self.gas_cooler2.source_out = self.gas_cooler2.source_in
             self.phx1.source_in = self.gas_cooler2.source_out
             self.phx1.source_out = self.phx1.source_in
 
         #Gas cooler 1
-        self.gas_cooler1.sink_in = MassStream( name='Air: Inlet to GC1', fluid=self.Sink, pressure=101, temperature=self.T_air_inlet )
+        self.gas_cooler1.sink_in = MassStream( name='Air: Inlet to GC1', fluid=self.Sink, pressure=101, temperature=self.T_air_inlet, RP=self.RP )
         self.gas_cooler1.sink_out = self.gas_cooler2.sink_in
 
-        self.gas_cooler1.source_out = MassStream( name='Ref: GC1 to IHX', fluid=self.refrigerant, pressure=P_H, temperature=self.T_gc_out )
+        self.gas_cooler1.source_out = MassStream( name='Ref: GC1 to IHX', fluid=self.refrigerant, pressure=P_H, temperature=self.T_gc_out, RP=self.RP )
         self.gas_cooler1.source_in = self.phx1.source_out
 
         #Internal heat exchanger
         self.ihx.source_in = self.gas_cooler1.source_out
         if self.ihx_on == 1:
-            self.ihx.source_out = MassStream( name='Ref: IHX to Exp V', fluid=self.refrigerant, pressure=P_H, temperature=self.T_gc_out )
+            self.ihx.source_out = MassStream( name='Ref: IHX to Exp V', fluid=self.refrigerant, pressure=P_H, temperature=self.T_gc_out, RP=self.RP )
         else:   
             self.ihx.source_out = self.ihx.source_in
         
         #Expansion valve
         self.exp_valve.flow_in = self.ihx.source_out
-        self.exp_valve.flow_out = MassStream( name='Evap_in', fluid=self.refrigerant, pressure=P_L, enthalpy=self.exp_valve.flow_in.enthalpy )
+        self.exp_valve.flow_out = MassStream( name='Evap_in', fluid=self.refrigerant, pressure=P_L, enthalpy=self.exp_valve.flow_in.enthalpy, RP=self.RP )
 
         #Evaporator
         self.evaporator.sink_in = self.exp_valve.flow_out
         self.evaporator.sink_out = self.evap_sup.sink_in
-        self.evaporator.source_in = MassStream( name='Exhaust air in', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000)
-        self.evaporator.source_out = MassStream( name='Exhaust air out', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000)
+        self.evaporator.source_in = MassStream( name='Exhaust air in', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000, RP=self.RP)
+        self.evaporator.source_out = MassStream( name='Exhaust air out', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000, RP=self.RP)
 
         self.streams = [self.evaporator.sink_out, 
                         self.comp1.flow_out, 
@@ -265,8 +266,8 @@ class TRHP(FlowSheetSolver, Controller):
             self.set_phx1_dT_cold = SetRelationship( source_obj=self.phx1.sink_in, target_obj=[self.phx1.sink_out], c=self.dT_phx1_cold, prop='temperature', prop2='pressure' ) 
             self.set_phx1_hot_T_in = SetRelationship( source_obj=self.phx1.sink_out, target_obj=[self.phx1.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
 
-        self.set_P_ints = CustomRelationship( source_obj=[self.comp1.flow_in, self.comp3.flow_out, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.flow_out, self.comp2.flow_out], relation=1 )
-        self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2 )
+        self.set_P_ints = CustomRelationship( source_obj=[self.comp1.flow_in, self.comp3.flow_out, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.flow_out, self.comp2.flow_out], relation=1, RP=self.RP )
+        self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2, RP=self.RP )
         #self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
 
     def init_solver_pathway(self):
@@ -307,7 +308,7 @@ class TRHP(FlowSheetSolver, Controller):
         self.operations.append(self.set_gc_air_massflow)
 
     def get_pressure_bounds(self):
-        P_est = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.comp1.flow_in.entropy, 0) * 1000
+        P_est = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.comp1.flow_in.entropy, RP=self.RP) * 1000
 
         P_lb = P_est
         P_ub = P_est
