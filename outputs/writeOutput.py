@@ -11,17 +11,18 @@ def print_result_to_terminal(output):
     else:
         print('Failed to print due to wrong output format.')
 
-def print_result_to_csv(output='', file_name='results/untitled.csv'):
+def print_result_to_csv(output=[], file_name='results/untitled.csv'):
     try:
-        file_exists = os.path.isfile(file_name)
-        with open(file_name, 'a', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=output.keys())
+        if output != []:
+            file_exists = os.path.isfile(file_name)
+            with open(file_name, 'a', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=output.keys())
 
-            if not file_exists:
-                writer.writeheader()  # file doesn't exist yet, write a header
+                if not file_exists:
+                    writer.writeheader()  # file doesn't exist yet, write a header
 
-            writer.writerow(output)
-            
+                writer.writerow(output)
+                
     except:
         print('Failed to appended result to CSV file.')
 

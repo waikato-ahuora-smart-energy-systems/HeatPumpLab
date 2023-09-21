@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 
 from scipy.optimize import minimize, LinearConstraint, differential_evolution as global_minimize
 from heat_pumps import TRHP
-import multiprocessing, gc
+import gc
 from outputs import print_result_to_terminal
 
 def get_TRHP_obj_fun(var, parameters):
@@ -99,7 +99,7 @@ def get_TRHP_optimal(parameters):
                     )
             
             m.solve()
-
+            m.get_summary()
             m.output.update({
                 'Obj function:' : -result.fun / 1000,
                 'Iterations:' : result.nfev,
@@ -116,5 +116,4 @@ def get_TRHP_optimal(parameters):
             return res
 
     except:
-        gc.collect()
         return None 

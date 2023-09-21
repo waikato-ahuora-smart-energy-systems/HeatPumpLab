@@ -384,9 +384,6 @@ class TRHP(FlowSheetSolver, Controller):
 
             if self.COP == 0:
                 self.converged = False
-                # print('Model failed to converge.')         
-            else:
-                self.get_summary()
 
         except:
             print('Heat pump model failed to solve.') 
@@ -431,6 +428,9 @@ class TRHP(FlowSheetSolver, Controller):
             'Comp 1 P out:' : self.comp1.flow_out.pressure,
             'Comp 2 P out:' : self.comp2.flow_out.pressure,
             'Comp 3 P out:' : self.comp3.flow_out.pressure,
+            'Comp 1 power frac:' : self.comp1_power_frac, 
+            'Comp 2 power frac:' : self.comp2_power_frac, 
+            'Comp 3 power frac:' : self.comp3_power_frac,            
             'dT phx max 1:' : self.dT_phx1_cold,
             'dT phx max 2:' : self.dT_phx2_cold,
             'dT phx max 3:' : self.dT_phx3_cold,
