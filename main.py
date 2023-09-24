@@ -39,19 +39,24 @@ if __name__=='__main__':
                         for c in cases:
                             print(c)
                         
-                        completed = False
                         if prev_results != None:
-                            case = cases[0]
-                            for res in prev_results:
-                                if (case['refrigerant'] == res['refrigerant:'] and 
-                                    case['dT_GC_min_tar'] == float(res['dT_min Gas Cooler:']) and 
-                                    case['T_air_tar'] == float(res['T_air_tar:']) and 
-                                    case['T_air_inlet'] == float(res['T_air_inlet:']) and 
-                                    case['T_source_in'] == float(res['Dryer exh air T:']) and 
-                                    case['n_comp'] == int(res['n_comp:'])):
-                                    completed = True
+                            r = []
+                            i = 0
+                            for case in cases:
+                                for res in prev_results:
+                                    if (case['refrigerant'] == res['refrigerant:'] and 
+                                        case['dT_GC_min_tar'] == float(res['dT_min Gas Cooler:']) and 
+                                        case['T_air_tar'] == float(res['T_air_tar:']) and 
+                                        case['T_air_inlet'] == float(res['T_air_inlet:']) and 
+                                        case['T_source_in'] == float(res['Dryer exh air T:']) and 
+                                        case['n_comp'] == int(res['n_comp:'])):
+                                        r.append(i)
+                                i = i + 1
+                                    
+                            for i in reversed(r):
+                                cases.pop(i)
 
-                        if completed == False:
+                        if cases != None and cases != []:
                             results = [] 
 
                             with concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu, max_tasks_per_child=1) as executor:
