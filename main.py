@@ -12,58 +12,54 @@ from outputs import Graph
 
 if __name__=='__main__':
     TIC = timer()
-    refrigerant = ['Isobutane', 'Butane', 'Propane', 'Carbon dioxide', 'R1233zd(E)', 'R1234ze(E)', 'R1234ze(Z)', 'R1336mzz(Z)', 'R1224yd(Z)']
-    dT_GC_min_tar = [j for j in range(20,35,5)]
-    T_air_tar = [k for k in range(100,255,5)]
-    T_air_inlet = [15.0]
+    refrigerant = ['Isobutane', 'Butane', 'R1233zd(E)', 'R1234ze(E)', 'R1234ze(Z)', 'R1336mzz(Z)', 'Carbon dioxide', 'Propane']
+    dT_GC_min_tar = [float(j) for j in range(20,35,5)]
+    T_air_tar = [float(k) for k in range(100,255,10)]
+    T_air_inlet = [float(m) for m in range(15,60,10)]
     T_source_in = [45.0]
     n_comp = [n + 1 for n in range(3)]
 
     if 1:
-        file_name='TRHP_results_v5'
+        file_name='TRHP_results_v1'
         prev_results = read_csv_to_results(file_name=file_name)
         n_cpu = os.cpu_count() - 2
-
-        for n in range(len(n_comp)):
-            for i in range(len(refrigerant)):
+        for i in range(len(refrigerant)):
+            for m in range(len(T_air_inlet)):
                 for j in range(len(dT_GC_min_tar)):
-                    cases = [{
-                            'refrigerant' : refrigerant[i],
-                            'dT_GC_min_tar' : dT_GC_min_tar[j],
-                            'T_air_tar' : T_air_tar[k],
-                            'T_air_inlet' : T_air_inlet[0],
-                            'T_source_in' : T_source_in[0],
-                            'n_comp' : n_comp[n]
-                        } for k in range(len(T_air_tar)) ]
-                    
-                    for c in cases:
-                        print(c)
-                    
-                    completed = False
-                    if prev_results != None:
-                        case = cases[0]
-                        for res in prev_results:
-                            if (case['refrigerant'] == res['refrigerant:'] and 
-                                case['dT_GC_min_tar'] == int(res['dT_min Gas Cooler:']) and 
-                                case['T_air_tar'] == int(res['T_air_tar:']) and 
-                                case['T_air_inlet'] == float(res['T_air_inlet:']) and 
-                                case['T_source_in'] == float(res['Dryer exh air T:']) and 
-                                case['n_comp'] == int(res['n_comp:'])):
-                                completed = True
+                    for n in range(len(n_comp)):
+                        cases = [{
+                                'refrigerant' : refrigerant[i],
+                                'dT_GC_min_tar' : dT_GC_min_tar[j],
+                                'T_air_tar' : T_air_tar[k],
+                                'T_air_inlet' : T_air_inlet[0],
+                                'T_source_in' : T_source_in[0],
+                                'n_comp' : n_comp[n]
+                                } for k in range(len(T_air_tar)) ]
+                                                
+                        for c in cases:
+                            print(c)
+                        
+                        completed = False
+                        if prev_results != None:
+                            case = cases[0]
+                            for res in prev_results:
+                                if (case['refrigerant'] == res['refrigerant:'] and 
+                                    case['dT_GC_min_tar'] == float(res['dT_min Gas Cooler:']) and 
+                                    case['T_air_tar'] == float(res['T_air_tar:']) and 
+                                    case['T_air_inlet'] == float(res['T_air_inlet:']) and 
+                                    case['T_source_in'] == float(res['Dryer exh air T:']) and 
+                                    case['n_comp'] == int(res['n_comp:'])):
+                                    completed = True
 
-                    if completed == False:
-                        results = [] 
+                        if completed == False:
+                            results = [] 
 
-                        pool = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
-                        futures = [pool.submit(get_TRHP_optimal, case) for case in cases]
-                        for future in concurrent.futures.as_completed(futures):
-                            result = future.result()
-                            if result != None:
-                                results.append(result)
-                        pool.shutdown()
+                            with concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu, max_tasks_per_child=1) as executor:
+                                results = executor.map(get_TRHP_optimal, cases)
 
-                        for result in results:
-                            print_result_to_csv(output=result, file_name=file_name)
+                            for result in results:
+                                if result != 0:
+                                    print_result_to_csv(output=result, file_name=file_name)
 
     else:
         m = TRHP(

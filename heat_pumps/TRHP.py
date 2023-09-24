@@ -171,7 +171,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         #Compressor 3
         self.comp3.flow_in = self.phx3.sink_out
         if self.comp3_on == 1:
-            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=P_H, temperature=get_property('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP))       
+            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=P_H, temperature=get_property('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
         else:
             self.comp3.flow_out = self.comp3.flow_in
 
