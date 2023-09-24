@@ -22,20 +22,20 @@ if __name__=='__main__':
     if 1:
         file_name='TRHP_results_v1'
         prev_results = read_csv_to_results(file_name=file_name)
-        n_cpu = os.cpu_count() - 2
-        for i in range(len(refrigerant)):
-            for m in range(len(T_air_inlet)):
-                for j in range(len(dT_GC_min_tar)):
-                    for n in range(len(n_comp)):
+        n_cpu = os.cpu_count() - 4
+        for j in range(len(dT_GC_min_tar)):
+            for i in range(len(refrigerant)):
+                for m in range(len(T_air_inlet)):
+                    for n in reversed(range(len(n_comp))):
                         cases = [{
                                 'refrigerant' : refrigerant[i],
                                 'dT_GC_min_tar' : dT_GC_min_tar[j],
                                 'T_air_tar' : T_air_tar[k],
-                                'T_air_inlet' : T_air_inlet[0],
+                                'T_air_inlet' : T_air_inlet[m],
                                 'T_source_in' : T_source_in[0],
                                 'n_comp' : n_comp[n]
                                 } for k in range(len(T_air_tar)) ]
-                                                
+                                                                        
                         for c in cases:
                             print(c)
                         
