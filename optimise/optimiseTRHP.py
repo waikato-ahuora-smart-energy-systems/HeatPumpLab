@@ -70,7 +70,6 @@ def get_TRHP_optimal(parameters):
         result = global_minimize(func=get_TRHP_obj_fun, args=[parameters], bounds=bnds, x0=xi, constraints=lc, polish=False, updating='immediate', workers=1, popsize=2, tol=0.001)
         result = minimize(method='SLSQP', fun=get_TRHP_obj_fun, args=parameters, bounds=bnds, x0=result.x, constraints=lc, tol=0.001)
         
-
         if result.fun < 0.0:  
             if parameters['n_comp'] == 1:
                 m = TRHP(

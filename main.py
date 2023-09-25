@@ -22,7 +22,7 @@ if __name__=='__main__':
     if 1:
         file_name='TRHP_results_v1'
         prev_results = read_csv_to_results(file_name=file_name)
-        n_cpu = os.cpu_count() - 4
+        n_cpu = os.cpu_count() - 2
         for j in range(len(dT_GC_min_tar)):
             for i in range(len(refrigerant)):
                 for m in range(len(T_air_inlet)):
@@ -36,19 +36,16 @@ if __name__=='__main__':
                                 'n_comp' : n_comp[n]
                                 } for k in range(len(T_air_tar)) ]
                                                                         
-                        for c in cases:
-                            print(c)
-                        
                         if prev_results != None:
                             r = []
                             i = 0
                             for case in cases:
                                 for res in prev_results:
                                     if (case['refrigerant'] == res['refrigerant:'] and 
-                                        case['dT_GC_min_tar'] == float(res['dT_min Gas Cooler:']) and 
-                                        case['T_air_tar'] == float(res['T_air_tar:']) and 
-                                        case['T_air_inlet'] == float(res['T_air_inlet:']) and 
-                                        case['T_source_in'] == float(res['Dryer exh air T:']) and 
+                                        abs(case['dT_GC_min_tar'] - float(res['dT_min Gas Cooler:'])) < 0.01 and 
+                                        abs(case['T_air_tar'] - float(res['T_air_tar:'])) < 0.01 and 
+                                        abs(case['T_air_inlet'] - float(res['T_air_inlet:'])) < 0.01 and 
+                                        abs(case['T_source_in'] - float(res['Dryer exh air T:'])) < 0.01 and 
                                         case['n_comp'] == int(res['n_comp:'])):
                                         r.append(i)
                                 i = i + 1
@@ -56,11 +53,16 @@ if __name__=='__main__':
                             for i in reversed(r):
                                 cases.pop(i)
 
+                        for c in cases:
+                            print(c)
+                        
                         if cases != None and cases != []:
                             results = [] 
 
-                            with concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu, max_tasks_per_child=1) as executor:
-                                results = executor.map(get_TRHP_optimal, cases)
+                            executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
+                            results = [executor.submit(get_TRHP_optimal, case) for case in cases]
+                            # results = executor.map(get_TRHP_optimal, cases)
+                            executor.shutdown()
 
                             for result in results:
                                 if result != 0:
