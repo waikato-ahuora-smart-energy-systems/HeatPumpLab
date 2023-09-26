@@ -7,7 +7,7 @@ import concurrent.futures, os
 from timeit import default_timer as timer
 from heat_pumps import TRHP
 from optimise import get_TRHP_optimal
-from outputs import print_result_to_terminal, print_result_to_csv, read_csv_to_results
+from outputs import print_result_to_terminal, read_csv_to_results, transfer_results
 from outputs import Graph
 
 if __name__=='__main__':
@@ -20,9 +20,11 @@ if __name__=='__main__':
     n_comp = [n + 1 for n in range(3)]
 
     if 1:
-        file_name='TRHP_results_v1'
+        file_name='results/TRHP_results'
+        transfer_results(file_name=file_name)
+
         prev_results = read_csv_to_results(file_name=file_name)
-        n_cpu = os.cpu_count() - 2
+        n_cpu = os.cpu_count() - 4
         for j in range(len(dT_GC_min_tar)):
             for i in range(len(refrigerant)):
                 for m in range(len(T_air_inlet)):
@@ -35,7 +37,7 @@ if __name__=='__main__':
                                 'T_source_in' : T_source_in[0],
                                 'n_comp' : n_comp[n]
                                 } for k in range(len(T_air_tar)) ]
-                                                                        
+                        
                         if prev_results != None:
                             r = []
                             i = 0
@@ -61,12 +63,9 @@ if __name__=='__main__':
 
                             executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
                             results = [executor.submit(get_TRHP_optimal, case) for case in cases]
-                            # results = executor.map(get_TRHP_optimal, cases)
                             executor.shutdown()
 
-                            for result in results:
-                                if result != 0:
-                                    print_result_to_csv(output=result, file_name=file_name)
+                            transfer_results(file_name=file_name)
 
     else:
         m = TRHP(

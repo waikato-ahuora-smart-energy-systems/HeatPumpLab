@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 
 from scipy.optimize import minimize, LinearConstraint, differential_evolution as global_minimize
 from heat_pumps import TRHP
-from outputs import print_result_to_terminal
+from outputs import print_result_to_terminal, print_result_to_csv
 
 def get_TRHP_obj_fun(var, parameters):
     COP = 0.0
@@ -42,7 +42,9 @@ def get_TRHP_obj_fun(var, parameters):
         m.solve()
         COP = m.COP
         print(COP, var)
-    
+    else:
+        COP = 0
+        
     return COP * -1000
 
 def get_TRHP_optimal(parameters):
@@ -67,8 +69,9 @@ def get_TRHP_optimal(parameters):
             raise ValueError("Number of compressors must be 1, 2 or 3.")
         
         # Perform the optimisation
-        result = global_minimize(func=get_TRHP_obj_fun, args=[parameters], bounds=bnds, x0=xi, constraints=lc, polish=False, updating='immediate', workers=1, popsize=2, tol=0.001)
+        result = global_minimize(func=get_TRHP_obj_fun, args=[parameters], bounds=bnds, x0=xi, constraints=lc, polish=False, updating='immediate', workers=1, popsize=3, tol=0.001)
         result = minimize(method='SLSQP', fun=get_TRHP_obj_fun, args=parameters, bounds=bnds, x0=result.x, constraints=lc, tol=0.001)
+        # result = minimize(method='SLSQP', fun=get_TRHP_obj_fun, args=parameters, bounds=bnds, x0=xi, constraints=lc, tol=1)
         
         if result.fun < 0.0:  
             if parameters['n_comp'] == 1:
@@ -102,7 +105,14 @@ def get_TRHP_optimal(parameters):
                 'Success:' : result.success
             })
 
+            for ele in parameters:
+                if ele == 'refrigerant':
+                    suffix = '-' + str(parameters[ele])
+                else:
+                    suffix = suffix + '-' + "{:.0f}".format(parameters[ele])
+
             print_result_to_terminal(m.output)
+            print_result_to_csv(output=m.output, suffix=suffix)
 
             return m.output
 
