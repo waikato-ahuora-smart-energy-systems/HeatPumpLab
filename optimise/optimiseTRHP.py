@@ -39,9 +39,10 @@ def get_TRHP_obj_fun(var, parameters):
         raise ValueError("Number of compressors must be 1, 2 or 3.")
 
     if valid:
+        print(var, parameters)
         m.solve()
         COP = m.COP
-        print(COP, var)
+        print(COP)
     else:
         COP = 0
         
@@ -69,7 +70,7 @@ def get_TRHP_optimal(parameters):
             raise ValueError("Number of compressors must be 1, 2 or 3.")
         
         # Perform the optimisation
-        result = global_minimize(func=get_TRHP_obj_fun, args=[parameters], bounds=bnds, x0=xi, constraints=lc, polish=False, updating='immediate', workers=1, popsize=3, tol=0.001)
+        result = global_minimize(func=get_TRHP_obj_fun, args=[parameters], bounds=bnds, x0=xi, constraints=lc, polish=False, updating='immediate', workers=1, popsize=2, tol=0.001)
         result = minimize(method='SLSQP', fun=get_TRHP_obj_fun, args=parameters, bounds=bnds, x0=result.x, constraints=lc, tol=0.001)
         # result = minimize(method='SLSQP', fun=get_TRHP_obj_fun, args=parameters, bounds=bnds, x0=xi, constraints=lc, tol=1)
         

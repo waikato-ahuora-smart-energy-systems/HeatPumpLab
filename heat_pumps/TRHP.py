@@ -140,8 +140,12 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             self.phx1.sink_out = self.phx1.sink_in
 
         #Final discharge pressure
-        P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.phx1.sink_out.entropy, RP=self.RP) * 1000
-        PR = (P_H / P_L)**(1 / self.n_comp) 
+        if self.T_air_tar < get_property('TCRIT', self.comp1.flow_in.fluid, 'PQ', 100, 0, RP=self.RP):
+            P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP) * 1000    
+        else:
+            P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) * 0.7, self.phx1.sink_out.entropy, RP=self.RP) * 1000
+        
+        PR = max((P_H / P_L)**(1 / self.n_comp), 1.5)
 
         #Compressor 1
         self.comp1.flow_in = self.phx1.sink_out
@@ -171,7 +175,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         #Compressor 3
         self.comp3.flow_in = self.phx3.sink_out
         if self.comp3_on == 1:
-            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=P_H, temperature=get_property('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
+            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=(P_L * PR * PR * PR), temperature=get_property('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
         else:
             self.comp3.flow_out = self.comp3.flow_in
 
@@ -308,12 +312,10 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         self.operations.append(self.set_gc_air_massflow)
 
     def get_pressure_bounds(self):
-        P_est = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) / 2, self.comp1.flow_in.entropy, RP=self.RP) * 1000
+        P_lb = self.comp1.flow_out.pressure
+        P_ub = self.comp1.flow_out.pressure
 
-        P_lb = P_est
-        P_ub = P_est
-
-        dt_plus = self.get_solve_state(P_est)
+        dt_plus = self.get_solve_state(P_lb)
         dt_neg = dt_plus
         i = 0
         if dt_neg > 0.0:
@@ -374,14 +376,16 @@ class TRHP(FlowSheetSolver, Controller, Properties):
     def solve(self):
         #Solve heat pump cycle
         try:
-            P_lb, P_ub, feasible = self.get_pressure_bounds()     
+            if self.T_air_tar - ((self.T_gc_out - self.dTmin) + self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) > 40:
+            
+                P_lb, P_ub, feasible = self.get_pressure_bounds()     
 
-            if feasible == 1:
-                #Solve the heat pump thermodynamics
-                r = brentq(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
+                if feasible == 1:
+                    #Solve the heat pump thermodynamics
+                    r = brentq(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
 
-                if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.05:
-                    self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
+                    if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.05:
+                        self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
 
             if self.COP == 0:
                 self.converged = False
