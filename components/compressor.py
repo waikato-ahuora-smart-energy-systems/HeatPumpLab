@@ -9,20 +9,19 @@ class Compressor:
         self.flow_in = flow_in
         self.flow_out = flow_out
         self.motor_eff = motor_eff
-        self.isentropic_eff = 1.0
+        self.isentropic_eff = 0.0
         self.pressure_ratio = 1.0
-        self.overall_eff = 1.0
+        self.overall_eff = 0.0
         self.shaft_work = 0.0
         self.power = 0.0
-        self.model_index = model_index
-        self.model_coeffs = self.set_model_coeff()
+        self.model_coeffs = self.set_model_coeff(model_index)
         self.RP = RP
 
-    def set_model_coeff(self):    
+    def set_model_coeff(self, model_index):    
         available_model_coeffs = [[       1.0,   0.0,     0.0],
                                   [(0.7/0.96),   0.0,     0.0],         #Typical isentropic efficiency
                                   [      0.65, 0.015, -0.0015]]  #Compressor model constants (Wang & Cleland, 2018)       
-        return available_model_coeffs[self.model_index]
+        return available_model_coeffs[model_index]
 
     def get_isentropic_efficiency(self):
         self.pressure_ratio = self.flow_out.pressure / self.flow_in.pressure

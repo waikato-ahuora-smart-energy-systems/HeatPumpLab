@@ -23,7 +23,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             T_air_inlet=15.0, 
             dT_GC_min_tar=20.0, 
             T_gc_out_min=0.0, 
-            T_source_in=45.0, 
+            T_source_in=40.0, 
             Tsat_evap=10.0,
             dTmin_phx=5.0,
             n_comp=3, 
@@ -242,8 +242,8 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         #Evaporator
         self.evaporator.sink_in = self.exp_valve.flow_out
         self.evaporator.sink_out = self.evap_sup.sink_in
-        self.evaporator.source_in = MassStream( name='Exhaust air in', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000, RP=self.RP)
-        self.evaporator.source_out = MassStream( name='Exhaust air out', fluid=self.source, pressure=101, temperature=45.0, mass_flow=1000, RP=self.RP)
+        self.evaporator.source_in = MassStream( name='Exhaust air in', fluid=self.source, pressure=101, temperature=self.T_source_in, mass_flow=1000, RP=self.RP)
+        self.evaporator.source_out = MassStream( name='Exhaust air out', fluid=self.source, pressure=101, temperature=min(self.evaporator.sink_in.temperature + self.dTmin, self.T_source_in), mass_flow=1000, RP=self.RP)
 
         self.streams = [self.evaporator.sink_out, 
                         self.comp1.flow_out, 
@@ -361,7 +361,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             i += 1
 
             #Solve the performance of each component and update each special relationship
-            for obj in self.operations:
+            for obj in self.operations + self.operations:
                 obj.solve()
 
             dh = self.tol * h - abs(self.exp_valve.flow_in.enthalpy - h)
@@ -393,26 +393,6 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         except:
             print('Heat pump model failed to solve.') 
 
-    def solve_v2(self):
-        
-        r = self.get_target_value(x_init=self.comp3.flow_out.pressure,
-                                  x_obj=[self.comp3.flow_out.pressure],
-                                  y_obj=[self.gas_cooler4.sink_out.temperature],
-                                  y_target=[self.T_air_tar])
-
-        try:
-            if r[1].converged and self.converged:
-                self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
-
-            self.get_summary()
-
-        except:
-            print('Heat pump model failed to solve.') 
-            self.COP = 0
-            self.converged = False
-
-        return self.COP
-
     def get_summary(self):
         self.output = {
             #Key results
@@ -422,7 +402,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             #Parameters
             'refrigerant:' : self.refrigerant,
             'n_comp:' : self.n_comp,
-            'Dryer exh air T:' : self.evaporator.source_in.temperature,
+            'T_source_in:' : self.evaporator.source_in.temperature,
             'dT_min Gas Cooler:' : self.dT_GC_min_tar,
             'T_air_inlet:' : self.gas_cooler1.sink_in.temperature,
             'T_air_tar:' : self.T_air_tar,
