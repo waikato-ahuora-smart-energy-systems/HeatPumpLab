@@ -3,7 +3,7 @@ __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2021-2024'
 
-import concurrent.futures, os, sys, subprocess
+import concurrent.futures, os
 from timeit import default_timer as timer
 from heat_pumps import TRHP
 from optimise import get_TRHP_optimal
@@ -14,10 +14,6 @@ if __name__=='__main__':
     TIC = timer()
 
     if 1:
-        if 'darwin' in sys.platform:
-            print('Running \'caffeinate\' on MacOSX to prevent the system from sleeping')
-            subprocess.Popen('caffeinate')
-
         refrigerant = ['Propane', 'Isobutane', 'Butane', 'R1233zd(E)', 'R1234ze(E)', 'R1234ze(Z)', 'R1336mzz(Z)', 'Carbon dioxide', 'Ammonia', 'R1234yf', 'R1243zf', 'R1224yd(Z)']
 
         dT_GC_min_tar = [float(j) for j in range(20,30,10)]
