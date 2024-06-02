@@ -9,9 +9,9 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waik
 """
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
-from streams import get_property, MassStream, Properties
+from streams import get_property_value, MassStream, Properties
 from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver, Controller
-from scipy.optimize import brentq
+from scipy.optimize import brentq as root_finder
 
 class TRHP(FlowSheetSolver, Controller, Properties):
     def __init__(
@@ -34,7 +34,8 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             dT_phx3_cold=0.0, 
             comp2_power_frac=0.0, 
             comp3_power_frac=0.0,
-            tol=1e-6
+            P_H_est=0.0,
+            tol=1e-8
         ):
 
         self.refrigerant = refrigerant
@@ -55,6 +56,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         self.dT_phx1_cold = dT_phx1_cold
         self.dT_phx2_cold = dT_phx2_cold 
         self.dT_phx3_cold = dT_phx3_cold 
+        self.P_H_est = P_H_est
         self.tol = tol
         self.converged = False
         self.COP = 0.0
@@ -140,16 +142,23 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             self.phx1.sink_out = self.phx1.sink_in
 
         #Final discharge pressure
-        if self.T_air_tar < get_property('TCRIT', self.comp1.flow_in.fluid, 'PQ', 100, 0, RP=self.RP):
-            P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP) * 1000    
+        T_crit = get_property_value('TCRIT', self.comp1.flow_in.fluid, 'PQ', 100, 0, RP=self.RP)
+
+        if self.P_H_est > 0:
+            P_H = self.P_H_est
         else:
-            P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) * 0.7, self.phx1.sink_out.entropy, RP=self.RP) * 1000
-        
-        PR = max((P_H / P_L)**(1 / self.n_comp), 1.5)
+            T_crit = get_property_value('TCRIT', self.comp1.flow_in.fluid, 'PQ', 100, 0, RP=self.RP)
+            if self.T_air_tar < T_crit:
+                P_H = get_property_value('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP) * 1000    
+            else:
+                P_H = get_property_value('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) * 0.7, self.phx1.sink_out.entropy, RP=self.RP) * 1000
+            
+        PR = (P_H / P_L)**(1 / self.n_comp)
+        # PR = max((P_H / P_L)**(1 / self.n_comp), 1.5)
 
         #Compressor 1
         self.comp1.flow_in = self.phx1.sink_out
-        self.comp1.flow_out = MassStream( name='Comp1_out', fluid=self.refrigerant, pressure=(P_L * PR), temperature=get_property('T', self.refrigerant, 'PS', (P_L * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)
+        self.comp1.flow_out = MassStream( name='Comp1_out', fluid=self.refrigerant, pressure=(P_L * PR), temperature=get_property_value('T', self.refrigerant, 'PS', (P_L * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)
 
         #Plate heat exchanger 2 - cold-side
         self.phx2.sink_in = self.comp1.flow_out
@@ -161,7 +170,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         #Compressor 2
         self.comp2.flow_in = self.phx2.sink_out
         if self.comp2_on == 1:
-            self.comp2.flow_out = MassStream( name='Comp2_out', fluid=self.refrigerant, pressure=(P_L * PR * PR), temperature=get_property('T', self.refrigerant, 'PS', (P_L * PR * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
+            self.comp2.flow_out = MassStream( name='Comp2_out', fluid=self.refrigerant, pressure=(P_L * PR * PR), temperature=get_property_value('T', self.refrigerant, 'PS', (P_L * PR * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
         else:
             self.comp2.flow_out = self.comp2.flow_in
 
@@ -175,7 +184,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         #Compressor 3
         self.comp3.flow_in = self.phx3.sink_out
         if self.comp3_on == 1:
-            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=(P_L * PR * PR * PR), temperature=get_property('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
+            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=(P_L * PR * PR * PR), temperature=get_property_value('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
         else:
             self.comp3.flow_out = self.comp3.flow_in
 
@@ -382,7 +391,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
 
                 if feasible == 1:
                     #Solve the heat pump thermodynamics
-                    r = brentq(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
+                    r = root_finder(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
 
                     if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.05:
                         self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
@@ -392,6 +401,20 @@ class TRHP(FlowSheetSolver, Controller, Properties):
 
         except:
             print('Heat pump model failed to solve.') 
+
+    def f_cop(self, P_comp_out):
+        self.get_solve_state(P_comp_out=P_comp_out)
+        if self.converged:
+            self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
+        else:
+            self.COP = 0.0
+        return self.COP
+
+    def g_dt(self, P_comp_out):
+        dT = self.get_solve_state(P_comp_out=P_comp_out)
+        if not(self.converged):
+            dT = -self.T_air_tar
+        return dT
 
     def get_summary(self):
         self.output = {

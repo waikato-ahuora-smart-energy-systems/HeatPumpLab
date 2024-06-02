@@ -2,7 +2,7 @@ __author__ = 'Tim Walmsley and Lana Kong'
 __credits__ = ['']
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
-from streams import get_property, MassStream
+from streams import get_property_value, MassStream
 from logic_operations import SetRelationship, CustomRelationship
 from scipy.optimize import brentq
 
@@ -119,7 +119,7 @@ class HTTHP:
 
         #Bottom compressor
         self.comp_btm.flow_in = self.ihx_tb.sink_out
-        P_comp_btm_out_est = get_property('P', self.refrigerant_btm, 'TS', self.T_air_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3, self.comp_btm.flow_in.entropy, self.RP) * 1000        
+        P_comp_btm_out_est = get_property_value('P', self.refrigerant_btm, 'TS', self.T_air_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3, self.comp_btm.flow_in.entropy, self.RP) * 1000        
         self.comp_btm.flow_out = MassStream( 'Comp_btm_out', fluid=self.refrigerant_btm, pressure=P_comp_btm_out_est, temperature=(self.T_air_tar - (self.dT_ihx_btm + self.dT_ihx_top + self.dT_ihx_tb) / 3))
         
         #Cascade gas cooler - source side
@@ -160,7 +160,7 @@ class HTTHP:
 
         #Top compressor
         self.comp_top.flow_in = self.gas_cooler_cas.sink_out
-        P_comp_top_out_est = get_property('P', self.refrigerant_top, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp_top.flow_in.entropy, self.RP) * 1000        
+        P_comp_top_out_est = get_property_value('P', self.refrigerant_top, 'TS', self.T_air_tar + self.dT_GC_min_tar, self.comp_top.flow_in.entropy, self.RP) * 1000        
         self.comp_top.flow_out = MassStream( 'Comp_top_out', fluid=self.refrigerant_top, pressure=P_comp_top_out_est, temperature=(self.T_air_tar + self.dT_GC_min_tar * 2))
         
         #Top gas cooler for air heating
@@ -289,7 +289,7 @@ class HTTHP:
 
 
     def set_pressure_bounds(self):
-        P_gc_est = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.flow_in.entropy, self.RP) * 1000
+        P_gc_est = get_property_value('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.flow_in.entropy, self.RP) * 1000
 
         self.P_low_bound = P_gc_est
         self.P_upp_bound = P_gc_est

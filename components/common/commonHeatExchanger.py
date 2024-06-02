@@ -1,7 +1,7 @@
 __author__ = 'Tim Walmsley'
 __credits__ = ['']
 
-from streams import get_property, MassStream
+from streams import get_property_value, MassStream
 
 class BaseHeatExchanger:
     def __init__(self) -> None:
@@ -71,8 +71,8 @@ class BaseHeatExchanger:
         try:
             self.source_out.pressure = self.source_in.pressure - self.dP_h
             self.sink_out.pressure = self.sink_in.pressure - self.dP_c
-            self.dH_h_max = self.source_in.mass_flow * (self.source_in.enthalpy - get_property('H', self.source_out.fluid, 'PT', self.source_out.pressure / 1000, self.sink_in.temperature + self.dTmin, self.RP))
-            self.dH_c_max = self.sink_in.mass_flow * (get_property('H', self.sink_out.fluid, 'PT', self.sink_out.pressure / 1000, self.source_out.temperature - self.dTmin, self.RP) - self.sink_in.enthalpy )
+            self.dH_h_max = self.source_in.mass_flow * (self.source_in.enthalpy - get_property_value('H', self.source_out.fluid, 'PT', self.source_out.pressure / 1000, self.sink_in.temperature + self.dTmin, self.RP))
+            self.dH_c_max = self.sink_in.mass_flow * (get_property_value('H', self.sink_out.fluid, 'PT', self.sink_out.pressure / 1000, self.source_out.temperature - self.dTmin, self.RP) - self.sink_in.enthalpy )
             self.duty = min(self.dH_h_max, self.dH_c_max)
 
             self.source_out.enthalpy = self.source_in.enthalpy - self.duty / self.source_in.mass_flow
@@ -89,8 +89,8 @@ class BaseHeatExchanger:
             self.source_out.pressure = self.source_in.pressure - self.dP_h
             self.sink_out.pressure = self.sink_in.pressure - self.dP_c
             self.dT_max = abs( self.source_in.temperature - self.sink_in.temperature )
-            self.dH_h_max = self.source_in.mass_flow * (self.source_in.enthalpy - get_property('H', self.source_out.fluid, 'PT', self.source_out.pressure / 1000, self.source_in.temperature - self.dT_max * self.HX_Eff, self.RP))
-            self.dH_c_max = self.sink_in.mass_flow * (get_property('H', self.sink_out.fluid, 'PT', self.sink_out.pressure / 1000, self.sink_in.temperature + self.dT_max * self.HX_Eff, self.RP) - self.sink_in.enthalpy )
+            self.dH_h_max = self.source_in.mass_flow * (self.source_in.enthalpy - get_property_value('H', self.source_out.fluid, 'PT', self.source_out.pressure / 1000, self.source_in.temperature - self.dT_max * self.HX_Eff, self.RP))
+            self.dH_c_max = self.sink_in.mass_flow * (get_property_value('H', self.sink_out.fluid, 'PT', self.sink_out.pressure / 1000, self.sink_in.temperature + self.dT_max * self.HX_Eff, self.RP) - self.sink_in.enthalpy )
             self.duty = min(self.dH_h_max, self.dH_c_max)
 
             self.source_out.enthalpy = self.source_in.enthalpy - self.duty / self.source_in.mass_flow
@@ -195,11 +195,11 @@ class BaseHeatExchanger:
         for i in range(divisions + 1):
             dh_hot = (self.source_in.enthalpy - self.source_out.enthalpy) * i / divisions
             dP_hot = (self.source_in.pressure - self.source_out.pressure) * i / divisions
-            T_hot.append(get_property('T', self.source_out.fluid, 'PH', (self.source_out.pressure + dP_hot) / 1000, self.source_out.enthalpy + dh_hot, self.RP))
+            T_hot.append(get_property_value('T', self.source_out.fluid, 'PH', (self.source_out.pressure + dP_hot) / 1000, self.source_out.enthalpy + dh_hot, self.RP))
                         
             dh_cold = (self.sink_out.enthalpy - self.sink_in.enthalpy) * i / divisions
             dP_cold = (self.sink_in.pressure - self.sink_out.pressure) * i / divisions
-            T_cold.append(get_property('T', self.sink_in.fluid, 'PH', (self.sink_in.pressure - dP_cold) / 1000, self.sink_in.enthalpy + dh_cold, self.RP))
+            T_cold.append(get_property_value('T', self.sink_in.fluid, 'PH', (self.sink_in.pressure - dP_cold) / 1000, self.sink_in.enthalpy + dh_cold, self.RP))
 
             H.append(dh_hot * self.source_out.mass_flow)
 

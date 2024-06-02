@@ -20,13 +20,14 @@ if __name__=='__main__':
         T_air_tar = [float(k) for k in range(120,260,10)]
         T_air_inlet = [float(m) for m in range(15,40,20)]
         T_source_in = [40.0]
-        n_comp = [n + 1 for n in range(3)]
+        n_comp = [3 - n for n in range(1)]
+        Tsat_evap = [10.0]
 
         file_name='results/TRHP_results'
         transfer_results(file_name=file_name)
 
         prev_results = read_csv_to_results(file_name=file_name)
-        n_cpu = os.cpu_count() - 2
+        n_cpu = 1 #os.cpu_count() - 2
         
         for i in range(len(refrigerant)):
             cases = [{
@@ -35,7 +36,8 @@ if __name__=='__main__':
                         'T_air_tar' : T_air_tar[k],
                         'T_air_inlet' : T_air_inlet[l],
                         'T_source_in' : T_source_in[m],
-                        'n_comp' : n_comp[n]
+                        'n_comp' : n_comp[n],
+                        'Tsat_evap' : Tsat_evap[0]
                       } 
                         for j in range(len(dT_GC_min_tar))
                         for k in range(len(T_air_tar)) 
@@ -69,11 +71,12 @@ if __name__=='__main__':
                 print(len(cases))
             
             if cases != None and cases != []: 
-                executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
-                results = [executor.submit(get_TRHP_optimal, case) for case in cases]
-                executor.shutdown()
+                results = get_TRHP_optimal(parameters=cases[0])
+                # executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
+                # results = [executor.submit(get_TRHP_optimal, case) for case in cases]
+                # executor.shutdown()
 
-                transfer_results(file_name=file_name)
+                # transfer_results(file_name=file_name)
 
     else:
         m = TRHP(
@@ -110,6 +113,6 @@ if __name__=='__main__':
                 g.heat_exchangers([m.gas_cooler1, m.phx1, m.gas_cooler2, m.phx2, m.gas_cooler3, m.phx3, m.gas_cooler4])  
 
     TOC = timer()
-    print('Total time:',TOC - TIC) 
+    print('Total time:', TOC - TIC)
 
     
