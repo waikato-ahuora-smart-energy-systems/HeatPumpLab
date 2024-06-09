@@ -33,5 +33,9 @@ def get_properties_values(propsOut, fluid, propsIn, prop1, prop2, RP):
 def get_property(propOut, fluid, propsIn, prop1, prop2): 
     RP = Properties().init_properties()
     UNITS = RP.GETENUMdll(0,'SI with C').iEnum
-    return RP.REFPROPdll(fluid, propsIn, propOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output[0]
+    if propOut == 'P' or propOut == 'PCRIT' or propOut == 'Pcrit':
+        var = RP.REFPROPdll(fluid, propsIn, propOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output[0] * 1000
+    else:
+        var = RP.REFPROPdll(fluid, propsIn, propOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output[0]
+    return var
 

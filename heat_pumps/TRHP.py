@@ -10,10 +10,11 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waik
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import get_property_value, MassStream, Properties
-from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver, Controller
+from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver
 from scipy.optimize import brentq as root_finder
+import numpy as np
 
-class TRHP(FlowSheetSolver, Controller, Properties):
+class TRHP(FlowSheetSolver, Properties):
     def __init__(
             self, 
             refrigerant='R1336mzz(Z)', 
@@ -35,9 +36,9 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             comp2_power_frac=0.0, 
             comp3_power_frac=0.0,
             P_H_est=0.0,
-            tol=1e-8
+            tol=1e-12
         ):
-
+        
         self.refrigerant = refrigerant
         self.source = source
         self.Sink = Sink
@@ -53,13 +54,14 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         self.comp_PR_uniform = comp_PR_uniform
         self.dTmin = dTmin_phx
         self.eff_motor = eff_motor
-        self.dT_phx1_cold = dT_phx1_cold
-        self.dT_phx2_cold = dT_phx2_cold 
-        self.dT_phx3_cold = dT_phx3_cold 
+        self.min_dT_ihx = 5.0
+        self.dT_phx1_cold = dT_phx1_cold #if dT_phx1_cold >= self.min_dT_ihx else 0.0
+        self.dT_phx2_cold = dT_phx2_cold #if dT_phx1_cold >= self.min_dT_ihx else 0.0
+        self.dT_phx3_cold = dT_phx3_cold #if dT_phx1_cold >= self.min_dT_ihx else 0.0
         self.P_H_est = P_H_est
         self.tol = tol
         self.converged = False
-        self.COP = 0.0
+        self.COP = -np.inf
         
         self.init_properties()
         self.init_components()
@@ -321,8 +323,8 @@ class TRHP(FlowSheetSolver, Controller, Properties):
         self.operations.append(self.set_gc_air_massflow)
 
     def get_pressure_bounds(self):
-        P_lb = self.comp1.flow_out.pressure
-        P_ub = self.comp1.flow_out.pressure
+        P_lb = self.comp3.flow_out.pressure
+        P_ub = self.comp3.flow_out.pressure
 
         dt_plus = self.get_solve_state(P_lb)
         dt_neg = dt_plus
@@ -357,11 +359,14 @@ class TRHP(FlowSheetSolver, Controller, Properties):
     def get_solve_state(self, P_comp_out):
         self.converged = False
         self.comp3.flow_out.pressure = P_comp_out
-        i = 0
+        i = 0; i_max = 50
         h = 0.0; m = 0.0; P = 0.0; W = 0.0
         dh = 0; dm = 0; dP = 0; dW = 0
 
-        while ((i < 1 or min(dh, dm, dP, dW) < 0.0) and i < 20): #Check for model convergance
+        for obj in self.operations:
+            obj.solve()
+
+        while ((i == 0 or min(dh, dm, dP, dW) < 0.0) and i < i_max): #Check for model convergance
             #Saves critical pressure and temperature properties to check for solution convergance
             h = self.exp_valve.flow_in.enthalpy
             m = self.gas_cooler4.sink_out.mass_flow
@@ -370,7 +375,7 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             i += 1
 
             #Solve the performance of each component and update each special relationship
-            for obj in self.operations + self.operations:
+            for obj in self.operations:
                 obj.solve()
 
             dh = self.tol * h - abs(self.exp_valve.flow_in.enthalpy - h)
@@ -378,9 +383,15 @@ class TRHP(FlowSheetSolver, Controller, Properties):
             dP = self.tol * P - abs(self.gas_cooler4.source_in.pressure - self.gas_cooler1.source_out.pressure - P)
             dW = self.tol * W - abs(self.comp1.power + self.comp2.power + self.comp3.power - W)
 
-        self.converged = True if i < 20 else False
-            
-        return self.gas_cooler4.sink_out.temperature - self.T_air_tar
+        if i < i_max:
+            self.converged = True
+            self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
+            dT = self.gas_cooler4.sink_out.temperature - self.T_air_tar
+        else:
+            self.COP = 0.0
+            dT = - self.T_air_tar
+
+        return dT
 
     def solve(self):
         #Solve heat pump cycle
@@ -393,28 +404,21 @@ class TRHP(FlowSheetSolver, Controller, Properties):
                     #Solve the heat pump thermodynamics
                     r = root_finder(f=self.get_solve_state, a=P_lb, b=P_ub, full_output=True, rtol=self.tol, xtol=self.tol)
 
-                    if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.05:
+                    if r[1].converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.001:
                         self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
 
-            if self.COP == 0:
-                self.converged = False
+                    else:
+                        self.converged = False
+                        self.COP = -np.inf 
+
+                else:
+                    self.converged = False
+                    self.COP = -np.inf                       
 
         except:
             print('Heat pump model failed to solve.') 
-
-    def f_cop(self, P_comp_out):
-        self.get_solve_state(P_comp_out=P_comp_out)
-        if self.converged:
-            self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
-        else:
-            self.COP = 0.0
+        
         return self.COP
-
-    def g_dt(self, P_comp_out):
-        dT = self.get_solve_state(P_comp_out=P_comp_out)
-        if not(self.converged):
-            dT = -self.T_air_tar
-        return dT
 
     def get_summary(self):
         self.output = {

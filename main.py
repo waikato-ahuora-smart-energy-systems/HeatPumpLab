@@ -6,7 +6,7 @@ __date__ = '2021-2024'
 import concurrent.futures, os
 from timeit import default_timer as timer
 from heat_pumps import TRHP
-from optimise import get_TRHP_optimal
+from optimise import get_TRHP_optimal, get_TRHP_optimal_v2
 from outputs import print_result_to_terminal, read_csv_to_results, transfer_results
 from outputs import Graph
 
@@ -17,17 +17,17 @@ if __name__=='__main__':
         refrigerant = ['Propane', 'Isobutane', 'Butane', 'R1233zd(E)', 'R1234ze(E)', 'R1234ze(Z)', 'R1336mzz(Z)', 'Carbon dioxide', 'Ammonia', 'R1234yf', 'R1243zf', 'R1224yd(Z)']
 
         dT_GC_min_tar = [float(j) for j in range(20,30,10)]
-        T_air_tar = [float(k) for k in range(120,260,10)]
+        T_air_tar = [float(k) for k in range(120,260,10)] #120
         T_air_inlet = [float(m) for m in range(15,40,20)]
         T_source_in = [40.0]
-        n_comp = [3 - n for n in range(1)]
+        n_comp = [3 - n for n in range(3)]
         Tsat_evap = [10.0]
 
         file_name='results/TRHP_results'
         transfer_results(file_name=file_name)
 
         prev_results = read_csv_to_results(file_name=file_name)
-        n_cpu = 1 #os.cpu_count() - 2
+        n_cpu = os.cpu_count() - 1
         
         for i in range(len(refrigerant)):
             cases = [{
@@ -47,7 +47,7 @@ if __name__=='__main__':
                     ]
             
             print(len(cases))
-            print(cases)
+            # print(cases)
 
             if prev_results != None:
                 c = []
@@ -68,15 +68,15 @@ if __name__=='__main__':
                 for c_index in reversed(c):
                     cases.pop(c_index)
 
-                print(len(cases))
+                # print(len(cases))
             
             if cases != None and cases != []: 
                 results = get_TRHP_optimal(parameters=cases[0])
-                # executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
-                # results = [executor.submit(get_TRHP_optimal, case) for case in cases]
-                # executor.shutdown()
+                executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
+                results = [executor.submit(get_TRHP_optimal, case) for case in cases]
+                executor.shutdown()
 
-                # transfer_results(file_name=file_name)
+                transfer_results(file_name=file_name)
 
     else:
         m = TRHP(
