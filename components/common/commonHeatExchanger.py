@@ -72,12 +72,12 @@ class BaseHeatExchanger:
             self.source_out.pressure = self.source_in.pressure - self.dP_h
             self.sink_out.pressure = self.sink_in.pressure - self.dP_c
             self.dH_h_max = self.source_in.mass_flow * (self.source_in.enthalpy - get_property_value('H', self.source_out.fluid, 'PT', self.source_out.pressure / 1000, self.sink_in.temperature + self.dTmin, self.RP))
-            self.dH_c_max = self.sink_in.mass_flow * (get_property_value('H', self.sink_out.fluid, 'PT', self.sink_out.pressure / 1000, self.source_out.temperature - self.dTmin, self.RP) - self.sink_in.enthalpy )
+            self.dH_c_max = self.sink_in.mass_flow * (get_property_value('H', self.sink_out.fluid, 'PT', self.sink_out.pressure / 1000, self.source_in.temperature - self.dTmin, self.RP) - self.sink_in.enthalpy )
             self.duty = min(self.dH_h_max, self.dH_c_max)
 
             self.source_out.enthalpy = self.source_in.enthalpy - self.duty / self.source_in.mass_flow
             self.source_out.props_in_mPH()
-            self.sink_out.enthalpy = self.sink_in.enthalpy - self.duty / self.sink_in.mass_flow
+            self.sink_out.enthalpy = self.sink_in.enthalpy + self.duty / self.sink_in.mass_flow
             self.sink_out.props_in_mPH()        
         except:
             raise ValueError('Warning: Phase change occuring in heat exchanger ' + self.name)   
@@ -190,18 +190,30 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
     def get_graph_data(self, divisions=50):
-        H = []; T_hot = []; T_cold = []
+        data = {'source': 
+                    {'P': [], 'h': [], 'T': [], 's': [], 'v': [], 'H': []},
+                'sink': 
+                    {'P': [], 'h': [], 'T': [], 's': [], 'v': [], 'H': []}
+                }
 
         for i in range(divisions + 1):
-            dh_hot = (self.source_in.enthalpy - self.source_out.enthalpy) * i / divisions
             dP_hot = (self.source_in.pressure - self.source_out.pressure) * i / divisions
-            T_hot.append(get_property_value('T', self.source_out.fluid, 'PH', (self.source_out.pressure + dP_hot) / 1000, self.source_out.enthalpy + dh_hot, self.RP))
-                        
-            dh_cold = (self.sink_out.enthalpy - self.sink_in.enthalpy) * i / divisions
+            dh_hot = (self.source_in.enthalpy - self.source_out.enthalpy) * i / divisions
+            data['source']['P'].append(self.source_in.pressure - dP_hot)
+            data['source']['h'].append(self.source_in.enthalpy - dh_hot)            
+            data['source']['T'].append(    get_property_value('T', self.source_out.fluid, 'PH', data['source']['P'][-1] / 1000, data['source']['h'][-1], self.RP))
+            data['source']['s'].append(    get_property_value('S', self.source_out.fluid, 'PH', data['source']['P'][-1] / 1000, data['source']['h'][-1], self.RP))
+            data['source']['v'].append(1 / get_property_value('D', self.source_out.fluid, 'PH', data['source']['P'][-1] / 1000, data['source']['h'][-1], self.RP))
+            data['source']['H'].append(dh_hot * self.source_out.mass_flow)
+
             dP_cold = (self.sink_in.pressure - self.sink_out.pressure) * i / divisions
-            T_cold.append(get_property_value('T', self.sink_in.fluid, 'PH', (self.sink_in.pressure - dP_cold) / 1000, self.sink_in.enthalpy + dh_cold, self.RP))
-
-            H.append(dh_hot * self.source_out.mass_flow)
-
-        return H, T_hot, T_cold
+            dh_cold = (self.sink_in.enthalpy - self.sink_out.enthalpy) * i / divisions
+            data['sink']['P'].append(self.sink_in.pressure - dP_cold)
+            data['sink']['h'].append(self.sink_in.enthalpy - dh_cold)
+            data['sink']['T'].append(    get_property_value('T', self.sink_in.fluid, 'PH', data['sink']['P'][-1] / 1000, data['sink']['h'][-1], self.RP))
+            data['sink']['s'].append(    get_property_value('S', self.sink_in.fluid, 'PH', data['sink']['P'][-1] / 1000, data['sink']['h'][-1], self.RP))
+            data['sink']['v'].append(1 / get_property_value('D', self.sink_in.fluid, 'PH', data['sink']['P'][-1] / 1000, data['sink']['h'][-1], self.RP))
+            data['sink']['H'].append(dh_cold * self.sink_out.mass_flow)
+        
+        return data
         

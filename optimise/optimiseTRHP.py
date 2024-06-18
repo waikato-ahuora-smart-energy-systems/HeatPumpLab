@@ -1,159 +1,162 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from scipy.optimize import minimize, differential_evolution as DE_opt, dual_annealing as DA_opt, shgo, direct as DI_opt, basinhopping as BH_opt
+from scipy.optimize import minimize, differential_evolution as DE_opt, dual_annealing as DA_opt, shgo, direct as DI_opt, LinearConstraint
 from heat_pumps import TRHP
 from outputs import print_result_to_terminal, print_result_to_csv
 from timeit import default_timer as timer
-from streams.properties import get_property
-from math import log, exp
+from streams.properties import get_property, Properties
+from math import log
+import numpy as np
 
-def create_m(var, parameters):
-    if parameters['comp_PR_uniform'] == True:
-        if parameters['n_comp'] == 1:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=var[0]
-                )
-            
-        elif parameters['n_comp'] == 2:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=var[0], 
-                dT_phx2_cold=var[1]
-                )
-
-        elif parameters['n_comp'] == 3:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=var[0], 
-                dT_phx2_cold=var[1], 
-                dT_phx3_cold=var[2]
-            )
-
-        else:
-            raise ValueError("Number of compressors must be 1, 2 or 3.") 
-        
-    else:
-        if parameters['n_comp'] == 1:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=var[0]
-                )
-            
-        elif parameters['n_comp'] == 2:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=var[0], 
-                dT_phx2_cold=var[1], 
-                comp2_power_frac=var[2]/100
-                )
-
-        elif parameters['n_comp'] == 3:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=var[0], 
-                dT_phx2_cold=var[1], 
-                dT_phx3_cold=var[2], 
-                comp2_power_frac=var[3]/100, 
-                comp3_power_frac=var[4]/100
-            )
+def dict_var(var, parameters):
+    if parameters['n_comp'] > 3:
+        raise ValueError("Number of compressors must be 1, 2 or 3.")     
     
-        else:
-            raise ValueError("Number of compressors must be 1, 2 or 3.")    
-    
-    return m
+    d_var = {'dT_phx1_cold': var[0]}
+    if parameters['n_comp'] == 2:
+        d_var['dT_phx2_cold'] = var[1]
+    if parameters['n_comp'] == 3:
+        d_var['dT_phx3_cold'] = var[2]
+    if parameters['comp_PR_uniform'] == False and parameters['n_comp'] > 1:
+        if parameters['n_comp'] == 2:
+            d_var['comp2_power_frac'] = var[-1]
+        elif parameters['n_comp'] == 3:
+            d_var['comp2_power_frac'] = var[-2]
+            d_var['comp3_power_frac'] = var[-1]
+
+    return d_var
 
 def get_bounds_constraints(parameters, x=None, include_P=False):
-    #Define the bounds of the optimisation variables    
+    #Define the bounds of the optimisation variables 
+    dT_upper = 100.0 
+    dT_int = (parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3  
     if parameters['comp_PR_uniform'] == True:
         if parameters['n_comp'] == 1:
-            bnds = [(0.0, 60.0)]
-            xi = [10.0] 
+            bnds = [(0.0, dT_upper)]
+            xi = [0.0]
+            lc = LinearConstraint([[1]], 0.0, dT_int)
 
         elif parameters['n_comp'] == 2:
-            bnds = [(0.0, 60.0), (0.0, 60.0)]
-            xi = [10.0, 10.0] if x is None else [x[0], x[1]]
+            bnds = [(0.0, dT_upper), (0.0, dT_upper)]
+            xi = [0.0, 0.0] if x is None else [x[0], x[1]]
+            lc = LinearConstraint([[1, 1]], 0.0, dT_int)
 
         elif parameters['n_comp'] == 3:
-            bnds = [(0.0, 60.0), (0.0, 60.0), (0.0, 60.0)]
-            xi = [10.0, 10.0, 10.0] if x is None else [x[0], x[1], x[2]]
+            bnds = [(0.0, dT_upper), (0.0, dT_upper), (0.0, dT_upper)]
+            xi = [0.0, 0.0, 0.0] if x is None else [x[0], x[1], x[2]]
+            lc = LinearConstraint([[1, 1, 1]], 0.0, dT_int)
         
         else:
             raise ValueError("Number of compressors must be 1, 2 or 3.") 
 
     else:
         if parameters['n_comp'] == 1:
-            bnds = [(0.0, 60.0)]
-            xi = [10.0]
+            bnds = [(0.0, dT_upper)]
+            xi = [0.0]
+            lc = LinearConstraint([[1]], 0.0, dT_int)
 
         elif parameters['n_comp'] == 2:
-            bnds = [(0.0, 60.0), (0.0, 60.0), (25.0, 75.0)]
-            xi = [10.0, 10.0, 50.0] if x is None else [x[0], x[1], 100/2]
+            bnds = [(0.0, dT_upper), (0.0, dT_upper), (0.4, 0.6)]
+            xi = [0.0, 0.0, 50.0] if x is None else [x[0], x[1], 0.5]
+            lc = LinearConstraint([[1, 1, 0]], 0.0, dT_int)
 
         elif parameters['n_comp'] == 3:
-            bnds = [(0.0, 60.0), (0.0, 60.0), (0.0, 60.0), (15.0, 45.0), (15.0, 45.0)]
-            xi = [10.0, 10.0, 10.0, 100/3, 100/3] if x is None else [x[0], x[1], x[2], 100/3, 100/3]
+            bnds = [(0.0, dT_upper), (0.0, dT_upper), (0.0, dT_upper), (0.2333, 0.4333), (0.2333, 0.4333)]
+            xi = [0.0, 0.0, 0.0, 1/3, 1/3] if x is None else [x[0], x[1], x[2], 1/3, 1/3]
+            lc = LinearConstraint([[1, 1, 1, 0, 0]], 0.0, dT_int)
         
         else:
             raise ValueError("Number of compressors must be 1, 2 or 3.") 
 
     if include_P:
-        P_crit = get_property('PCRIT', parameters['refrigerant'], 'TQ', 100, 0)
-        P_low = get_property('P', parameters['refrigerant'], 'TQ', parameters['Tsat_evap'], 1.0)
+        RP = Properties().init_properties()
+        P_crit = get_property('PCRIT', parameters['refrigerant'], 'TQ', 100, 0, RP)
+        P_low = get_property('P', parameters['refrigerant'], 'TQ', parameters['Tsat_evap'], 1.0, RP)
         Log_P_h_min = log(P_low * 2)
         Log_P_h_max = log(P_crit * 2.5)
         bnds = bnds + [(Log_P_h_min, Log_P_h_max)]
 
-    cons = ({'type': 'ineq', 'fun': g, 'args': [parameters]})
+    return bnds, lc, xi
 
-    return bnds, cons, xi
-
-def get_TRHP_obj_fun(var, parameters):
+def get_max_multiObj(var, parameters):
+    w = parameters['result_parameters']['weight']
+    COP_0 = parameters['result_parameters']['COP_0']
+    P_0 = parameters['result_parameters']['P_0']
+    
     TIC = timer()
-    m = create_m(var, parameters)
-    COP = m.solve()
-    TOC = timer()
-    print('COP:', "{:.4f}".format(COP), '  dt:', "{:.1f}".format(TOC - TIC), '  ', ["{:.3f}".format(v) for v in var])
-    return COP * -1000
+    d_var = dict_var(var, parameters)
+    m = TRHP(**parameters, **d_var)
+    COP, P = m.solve()
+    obj = (COP / COP_0) * (w) + (1 - P / P_0) * (1 - w)
+    TOC = timer()    
+    
+    print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.3f}".format(TOC - TIC), '  Vars:', ["{:.8f}".format(v) for v in var])   
+    return obj * -1000
 
-def get_results_summary(result, parameters):  
-    if parameters['n_comp'] == 1:
-        m = TRHP(
-            **parameters,
-            dT_phx1_cold=result.x[0]
-            )
-    elif parameters['n_comp'] == 2:   
-        m = TRHP(
-            **parameters,
-            dT_phx1_cold=result.x[0], 
-            dT_phx2_cold=result.x[1],  
-            comp2_power_frac=result.x[2]
-            )        
-    elif parameters['n_comp'] == 3:
-        m = TRHP(
-            **parameters,
-            dT_phx1_cold=result.x[0], 
-            dT_phx2_cold=result.x[1], 
-            dT_phx3_cold=result.x[2], 
-            comp2_power_frac=result.x[3], 
-            comp3_power_frac=result.x[4]
-            )
+def get_results_summary(result, x, parameters):
+    if parameters['comp_PR_uniform'] == True:
+        if parameters['n_comp'] == 1:
+            m = TRHP(
+                **parameters,
+                dT_phx1_cold=x[0]
+                )
+        elif parameters['n_comp'] == 2:   
+            m = TRHP(
+                **parameters,
+                dT_phx1_cold=x[0], 
+                dT_phx2_cold=x[1]
+                )        
+        elif parameters['n_comp'] == 3:
+            m = TRHP(
+                **parameters,
+                dT_phx1_cold=x[0], 
+                dT_phx2_cold=x[1], 
+                dT_phx3_cold=x[2]
+                )
+            
+    else:  
+        if parameters['n_comp'] == 1:
+            m = TRHP(
+                **parameters,
+                dT_phx1_cold=x[0]
+                )
+        elif parameters['n_comp'] == 2:   
+            m = TRHP(
+                **parameters,
+                dT_phx1_cold=x[0], 
+                dT_phx2_cold=x[1],  
+                comp2_power_frac=x[2]
+                )        
+        elif parameters['n_comp'] == 3:
+            m = TRHP(
+                **parameters,
+                dT_phx1_cold=x[0], 
+                dT_phx2_cold=x[1], 
+                dT_phx3_cold=x[2], 
+                comp2_power_frac=x[3], 
+                comp3_power_frac=x[4]
+                )
     
     m.solve()
     m.get_summary()
-    m.output.update({
-        'Obj function:' : -result.fun / 1000,
-        'Iterations:' : result.nfev,
-        'Message:' : result.message,
-        'Success:' : result.success
-    })
+    if result != None:
+        m.output.update({
+            'weight' : parameters['result_parameters']['weight'], 
+            'COP_max' : parameters['result_parameters']['COP_0'],
+            'P_max' : parameters['result_parameters']['P_0'],
+            'Obj function:' : -result.fun / 1000,
+            'Iterations:' : result.nfev,
+            'Message:' : result.message,
+            'Success:' : result.success
+        })
 
     for ele in parameters:
         if ele == 'refrigerant':
             suffix = '-' + str(parameters[ele])
         else:
-            suffix = suffix + '-' + "{:.0f}".format(parameters[ele])
+            if ele != 'result_parameters':
+                suffix = suffix + '-' + "{:.0f}".format(parameters[ele])
 
     print_result_to_terminal(m.output)
     print_result_to_csv(output=m.output, suffix=suffix)
@@ -161,75 +164,106 @@ def get_results_summary(result, parameters):
     return m.output
 
 def get_TRHP_optimal(parameters):
-    
+    tol = 1e-4
     parameters.update({'comp_PR_uniform': True})
-    bnds, null, xi = get_bounds_constraints(parameters)
+    bnds, lc, xi = get_bounds_constraints(parameters)
+    d_xi = dict_var(xi, parameters)
 
-    # Stage 1 results
-    # TNC:         Obj function: 2.4460048742934912   time taken: 83.31311983399792   iter: 76  [10.33852704 11.10224061 12.06421683]
-    # COBYLA:      Obj function: 2.4472800163803337   time taken: 67.44320199999493   iter: 61  [10.59877176 12.06284308 11.6946918 ]
-    # L-BFGS-B:    Obj function: 2.450975749198941    time taken: 93.72743958298815   iter: 80  [ 8.89610068 13.70109655 11.76477823]
-    # DA           Obj function: 2.483999500956222    time taken: 285.50347345799673  iter: 249 [39.02741184 20.5775166   5.68172743]
-    # SHGO:        Obj function: 2.4928093772501727   time taken: 189.85609366599238  iter: 187 [60.          6.28234605  0.        ]
-    # SLSQP (-3):  Obj function: 2.5078354680816624   time taken: 98.8724535000074    iter: 69  [ 5.77521535 41.68543104  3.52243245]
-    # Powell(-2):  Obj function: 2.508021193791541    time taken: 134.78243087499868  iter: 103 [17.4705338  36.69965176  1.53318787]
-    # Powell(-3):  Obj function: 2.508032855605729    time taken: 169.6446572910063   iter: 128 [17.46920884 36.70298654  1.53294837]
-    # Powell:      Obj function: 2.508034717676362    time taken: 368.26358054199954  iter: 271 [17.46971595 36.70311604  1.53268726]
-    # DF:          Obj function: 2.5084170892152353   time taken: 976.7336959999957   iter: 695 [ 6.63906037 41.6696337   3.14823521]
-    # nelder (-3): Obj function: 2.509937861912262    time taken: 748.6417926249997   iter: 464 [12.21400893 39.73371679  2.14883141]
-    # nelder-mead: Obj function: 2.5099380782021825   time taken: 786.1336665419949   iter: 489 [12.21459005 39.73342848  2.14857862]
-
-    TIC = timer()
-    result = minimize(method='SLSQP', fun=get_TRHP_obj_fun, args=parameters, bounds=bnds, x0=xi, tol=1e-3)
-    TOC = timer()
-    dt5 = TOC - TIC
-
-    # Powell (-3): Obj function: 2.5080337810370046   time taken: 138.55814145899785  iter: 105 [17.4695599  36.70293412  1.53282015 33.33329619 33.33317214]
-    # nelder (-3): Obj function: 2.5366470558544436   time taken: 1283.897543625004   iter: 917 [30.60922086 41.4015971   0.         45.         44.99983587]
-    # SLSQP (-3):  Obj function: 2.5078355843904285   time taken: 21.571080500012613  iter: 13  [ 5.77522075 41.6854673   3.52240467 33.33329395 33.33331956]
-    # SLSQP (-4):  Obj function: 2.5078355843904285   time taken: 22.44235362499603   iter: 13  [ 5.77522075 41.6854673   3.52240467 33.33329395 33.33331956]
-    # SLSQP (-5):  Obj function: 2.5246633642281338   time taken: 1125.0843905830116  iter: 598 [ 8.74022909 53.9815596   1.73066445 37.32273063 45.        ]
+    m = TRHP(**parameters, **d_xi)
+    COP_0, P_0 = m.solve()
+    # m.get_cycle_plot(x_axis='h', y_axis='P')
+    # m.get_cycle_plot(x_axis='s', y_axis='T')
+    # m.get_cycle_plot(x_axis='h', y_axis='T')
+    # m.get_cycle_plot(x_axis='v', y_axis='P')
     
-    parameters.update({'comp_PR_uniform': False})
-    bnds, null, xi = get_bounds_constraints(parameters, result.x)
+    # if COP_0 > 0.0:
+    #     get_results_summary(None, xi, parameters)    
 
-    TIC = timer()
-    result = minimize(method='SLSQP', fun=get_TRHP_obj_fun, args=parameters, bounds=bnds, x0=xi, tol=1e-3)
-    TOC = timer()
-    dt4 = TOC - TIC
+    parameters['result_parameters'] = {'weight': 1.0, 
+                                       'COP_0':  COP_0,
+                                       'P_0':    P_0}
+    for j in range(10):
+        TIC = timer()
+        result = DE_opt(func=get_max_multiObj, args=[parameters], bounds=bnds, constraints=lc, workers=-1, polish=False, tol=tol) 
+        TOC = timer()
+        dt = TOC - TIC
 
-    # 3.337977405464159
+        print('SH - Obj function:', -result.fun / 1000, '  time taken:', dt,  '  iter:', result.nfev, result.x)
+
+        if result.success:
+            get_results_summary(result, result.x, parameters)
+
+        parameters['result_parameters']['weight'] -= 0.05
+
+    # TIC = timer()
+    # result = shgo(func=get_max_multiObj, args=[parameters], bounds=bnds, workers=1, iters=1, constraints=lc, options={'tol': tol}, minimizer_kwargs={'options': {'tol': tol}}) 
+    # TOC = timer()
+    # dt = TOC - TIC 
+
+    # TIC = timer()
+    # result1 = DE_opt(func=get_max_multiObj, args=[parameters], bounds=bnds, constraints=lc, workers=-1, popsize=30, init='sobol', polish=False, tol=tol)
+    # TOC = timer()
+    # dt1 = TOC - TIC
+
+    # TIC = timer()
+    # result2 = DE_opt(func=get_max_multiObj, args=[parameters], bounds=bnds, constraints=lc, workers=-1, init='sobol', polish=False, tol=tol) 
+    # # result2 = minimize(method='COBYLA', fun=get_max_multiObj, args=parameters, bounds=bnds, constraints=lc, x0=result1.x, tol=1e-4) 
+    # TOC = timer()
+    # dt2 = TOC - TIC 
+
+    # TIC = timer()
+    # result3 = DE_opt(func=get_max_multiObj, args=[parameters], bounds=bnds, constraints=lc, workers=-1, popsize=30, polish=False, tol=tol) 
+    # # result3 = minimize(method='SLSQP', fun=get_max_multiObj, args=parameters, bounds=bnds, x0=result1.x, constraints=lc, tol=1e-6) 
+    # TOC = timer()
+    # dt3 = TOC - TIC     
+
+    # TIC = timer()
+    # result4 = DE_opt(func=get_max_multiObj, args=[parameters], bounds=bnds, constraints=lc, workers=-1, polish=False, tol=tol) 
+    # # result4 = minimize(method='l-bfgs-b', fun=get_max_multiObj, args=parameters, bounds=bnds, x0=result1.x, tol=1e-6) 
+    # TOC = timer()
+    # dt4 = TOC - TIC    
+
+    # TIC = timer()
+    # result5 = minimize(method='nelder-mead', fun=get_max_multiObj, args=parameters, bounds=bnds, x0=xi, tol=1e-4) 
+    # TOC = timer()
+    # dt5 = TOC - TIC 
+
+    # TIC = timer()
+    # result6 = minimize(method='powell', fun=get_max_multiObj, args=parameters, bounds=bnds, x0=xi, tol=1e-4) 
+    # TOC = timer()
+    # dt6 = TOC - TIC 
+
     # print('Case:', parameters)
-    # print('1a: Obj function:',  -result3.fun / 1000, '  time taken:', dt3 , '  iter:', result3.nfev, result3.x)
-    # print('2a: Obj function:',  -result1.fun / 1000,  ' time taken:', dt1,  '  iter:', result1.nfev, result1.x)
-    # print('2b: Obj function:', -result0.fun / 1000, '  time taken:', dt0,  '  iter:', result0.nfev, result0.x)
-
-    if result.fun < 0.0:
-        return get_results_summary(result, parameters)
-
-def f(var, parameters):
-    m = create_m(var, parameters)
-    dT = m.get_solve_state(P_comp_out=exp(var[len(var) - 1]))
-    print('COP:', "{:.4f}".format(m.COP), '  T_sink_out:', "{:.4f}".format(m.gas_cooler4.sink_out.temperature), '  dT:', "{:.4f}".format(dT))
-    return m.COP * -1000
-
-def g(var, parameters):
-    m = create_m(var, parameters)
-    dT = m.get_solve_state(P_comp_out=exp(var[len(var) - 1]))
-    return dT * 1000
-
-def get_TRHP_optimal_v2(parameters):
-    parameters.update({'comp_PR_uniform': True})
-    bnds, cons, null = get_bounds_constraints(parameters)
+    # print('SH - Obj function:', -result.fun / 1000, '  time taken:', dt,  '  iter:', result.nfev, result.x)
+    # print('1 - Obj function:', -result1.fun / 1000, '  time taken:', dt1,  '  iter:', result1.nfev, result1.x)
+    # print('2 - Obj function:', -result2.fun / 1000, '  time taken:', dt2,  '  iter:', result2.nfev, result2.x)
+    # print('3 - Obj function:', -result3.fun / 1000, '  time taken:', dt3,  '  iter:', result3.nfev, result3.x)
+    # print('4 - Obj function:', -result4.fun / 1000, '  time taken:', dt4,  '  iter:', result4.nfev, result4.x)
+    # print('NM - Obj function:', -result5.fun / 1000, '  time taken:', dt5,  '  iter:', result5.nfev, result5.x)
+    # print('PO - Obj function:', -result6.fun / 1000, '  time taken:', dt6,  '  iter:', result6.nfev, result6.x)
     
-    TIC = timer()
-    result = shgo(func=f, args=[parameters], bounds=bnds, constraints=cons, workers=1, #sampling_method='sobol', iters=5,
-                  minimizer_kwargs={'method': 'SLSQP', 'bounds': bnds, 'options': {'ftol': 1e-3}, 'constraints': cons})
-    TOC = timer()
-    dt = TOC - TIC
+    # if result.fun < 0.0:
+    #     return get_results_summary(result, parameters)
 
-    print('Obj function:', -result.fun / 1000, '  time taken:', dt, '  iter:', result.nfev, result.success)
-    print(-f(result.x, parameters)/1000)
-    print(g(result.x, parameters)/100)
-    
-    # 3.337977405464159
+    # SH - Obj function: 1.0920403900035898   time taken: 291.5808960830036   iter: 337 [84.64207665  2.0065959   2.02504565]
+    # DE - Obj function: 1.0967210448531715   time taken: 205.5725983750017   iter: 282 [ 6.75369068 57.06274948  9.5667201 ]
+    # CO - Obj function: 1.081442095804895   time taken: 69.20527524998761   iter: 85 [ 8.11770086 14.74049575 27.44669489]
+    # SQ - Obj function: 1.087246330258263   time taken: 70.97270229199785   iter: 98 [43.84438408 35.99317723  0.        ]
+    # BF - Obj function: 1.0595740417601036   time taken: 19.200484708009753   iter: 32 [ 0.         56.97558247 64.93886961]
+    # NM - Obj function: 1.0817586292773815   time taken: 133.22085754200816   iter: 169 [ 6.29425085 14.57161934 27.94951824]
+    # PO - Obj function: 1.0892481746100446   time taken: 203.31527549997554   iter: 198 [8.86124212e+01 5.36344546e-05 1.41985683e-03]
+    # DE - Obj function: 1.0944394837116338   time taken: 206.553638124984   iter: 281 [10.48118176 56.37081546 13.74189146]
+    # SQ - Obj function: 1.096722148624305   time taken: 68.31465733301593   iter: 90 [ 9.57320536 57.88912903 11.5953677 ]
+    # DE - Obj function: 1.0966082201741973   time taken: 196.75819420898915   iter: 265 [ 9.50080573 57.88589885 11.75163457]
+    # BF - Obj function: 1.0966375611071375   time taken: 47.731355333002284   iter: 60 [ 9.50852004 57.90703301 11.73876879] 
+
+    # 1 - Obj function: 1.0915244080082995   time taken: 57.852384124998935   iter: 643 [87.05316307 25.72662237  3.06535077]
+    # 2 - Obj function: 1.091004199524171   time taken: 22.572867000009865   iter: 255 [86.84299188 47.91791973  3.41171639]
+    # 3 - Obj function: 1.0867617963993943   time taken: 28.0631263749965   iter: 288 [86.62229785 18.16989943 16.15693834]
+    # 4 - Obj function: 1.0917191333980216   time taken: 26.13374516699696   iter: 254 [87.04834626  2.03127733  2.40630719]
+
+    # 1 - Obj function: 1.0909664643762378   time taken: 55.44563954201294   iter: 599 [87.0855029  16.16188493  5.09221192]
+    # 2 - Obj function: 1.0914616019811294   time taken: 35.29208095901413   iter: 359 [87.26783893 38.60218709  3.89127883]
+    # 3 - Obj function: 1.0912989273159475   time taken: 35.56015595901408   iter: 400 [87.60361832 29.5333796   1.40794312]
+    # 4 - Obj function: 1.0861068135564136   time taken: 15.084947208000813   iter: 157 [87.09915641 33.63796361 22.0068382 ]  
+    # 4 - Obj function: 1.0920981096228377   time taken: 93.3139755000011   iter: 845 [87.19684774 20.05521968  1.94944369] 

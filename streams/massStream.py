@@ -56,7 +56,7 @@ class MassStream:
         del props
         
     def props_extend(self): 
-        props = get_properties_values('D;PRANDTL;VIS;TCX', self.fluid, 'PT', self.pressure / 1000, self.temperature, RP=self.RP)
+        props = get_properties_values('D;PRANDTL;VIS;TCX', self.fluid, 'PH', self.pressure / 1000, self.enthalpy, RP=self.RP)
         self.density = props[0];  self.prandtl = props[1];  self.viscosity = props[2] /1000000000; self.thermal_conductivity = props[3] / 1000000;  self.specific_volume = 1 / props[0]
         del props
         

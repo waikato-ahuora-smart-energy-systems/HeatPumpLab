@@ -52,8 +52,6 @@ class CustomRelationship:
         for gc in self.source_obj:
             gc.source_out.pressure = gc.source_in.pressure - gc.dP_h
             gc.source_out.props_in_mPT()
-            gc.duty = gc.source_in.heat_flow - gc.source_out.heat_flow
-            
             gc_duty = gc.source_in.heat_flow - gc.source_out.heat_flow
             dQ += gc_duty
             T_air_i = gc.source_in.temperature - gc.dTmin
@@ -82,6 +80,7 @@ class CustomRelationship:
                             T_air_i = get_property_value('T', gc.source_in.fluid, 'PH', gc.source_in.pressure / 1000, h_ref, RP=self.RP) - gc.dTmin
                             dh_air = get_property_value('H', gc.sink_in.fluid, 'PT', gc.sink_in.pressure / 1000, T_air_i, RP=self.RP) - self.source_obj[0].sink_in.enthalpy
                             m_air_list.append(dQ_i / dh_air)  
+        
         if not m_air_list == []:
             self.target_obj[0].sink_in.mass_flow = max(m_air_list)
             self.target_obj[0].sink_in.props_in_mPT()

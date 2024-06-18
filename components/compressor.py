@@ -2,6 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 from streams import get_property_value, MassStream
+from math import log
 
 class Compressor:
     def __init__(self, name='Compressor', flow_in = MassStream(), flow_out = MassStream(), model_index=0, motor_eff=1.0, RP=None):
@@ -40,3 +41,23 @@ class Compressor:
     def solve(self):
         self.isentropic_eff = self.get_isentropic_efficiency()
         self.power = self.get_compressor_power()
+
+    def get_graph_data(self, divisions=50):
+        data = {'siso': 
+                    {'P': [], 'h': [], 'T': [], 's': [], 'v': [], 'H': []},   
+                }
+        self.flow_in.props_extend()
+        self.flow_out.props_extend()
+        # PV^n = const
+        PR_i = (self.flow_out.pressure / self.flow_in.pressure) ** (1/divisions)
+        for i in range(divisions + 1):
+            dh = (self.flow_in.enthalpy - self.flow_out.enthalpy) * i / divisions
+            dP = (self.flow_in.pressure - self.flow_out.pressure) * i / divisions
+            data['siso']['P'].append(self.flow_in.pressure * (PR_i) ** i)
+            data['siso']['h'].append(self.flow_in.enthalpy - dh)            
+            data['siso']['v'].append(1 / get_property_value('D', self.flow_out.fluid, 'PH', data['siso']['P'][-1] / 1000, data['siso']['h'][-1], self.RP))            
+            data['siso']['T'].append(    get_property_value('T', self.flow_out.fluid, 'PH', data['siso']['P'][-1] / 1000, data['siso']['h'][-1], self.RP))
+            data['siso']['s'].append(    get_property_value('S', self.flow_out.fluid, 'PH', data['siso']['P'][-1] / 1000, data['siso']['h'][-1], self.RP))
+            data['siso']['H'].append((data['siso']['h'][-1] - data['siso']['h'][0]) * self.flow_out.mass_flow)
+
+        return data

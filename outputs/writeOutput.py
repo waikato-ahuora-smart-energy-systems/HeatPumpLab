@@ -43,6 +43,7 @@ def transfer_results(file_name='results/untitled'):
         csv_file_list = glob.glob(os.getcwd() + '/results/temp/*.csv')
         for f in csv_file_list:
             output = read_csv_to_results(file_name=f, file_ext='')
-            print_result_to_csv(output=output[0], file_name=file_name)
-            os.remove(f)
+            for o in output:
+                print_result_to_csv(output=o, file_name=file_name)
+            # os.remove(f)
    
