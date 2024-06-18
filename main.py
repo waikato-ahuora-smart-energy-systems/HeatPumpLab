@@ -37,7 +37,7 @@ if __name__=='__main__':
                     'T_source_in' : T_source_in[m],
                     'n_comp' : n_comp[n],
                     'Tsat_evap' : Tsat_evap[0],
-                    'result_parameters' : {'weight': w(o)}
+                    'result_parameters' : {'weight': w[o]}
                     } 
                     for i in range(len(refrigerant))
                     for j in range(len(dT_GC_min_tar))
@@ -70,12 +70,12 @@ if __name__=='__main__':
         print('Cases remaining: ', len(cases))
         
         if cases != None and cases != []: 
-            get_TRHP_optimal(parameters=cases[0])
-            # executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
-            # results = [executor.submit(get_TRHP_optimal, case) for case in cases]
-            # executor.shutdown()
+            # get_TRHP_optimal(parameters=cases[0])
+            executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
+            results = [executor.submit(get_TRHP_optimal, case) for case in cases]
+            executor.shutdown()
 
-            # transfer_results(file_name=file_name)
+            transfer_results(file_name=file_name)
 
     else:
         m = TRHP(
