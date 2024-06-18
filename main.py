@@ -20,6 +20,7 @@ if __name__=='__main__':
         T_air_inlet = [float(m) for m in range(35,10,-20)]
         T_source_in = [40.0]
         n_comp = [3 - n for n in range(3)]
+        w = [float(o/100) for o in range(100, 50, -10)]
         Tsat_evap = [10.0]
 
         file_name='results/TRHP_results'
@@ -35,14 +36,16 @@ if __name__=='__main__':
                     'T_air_inlet' : T_air_inlet[l],
                     'T_source_in' : T_source_in[m],
                     'n_comp' : n_comp[n],
-                    'Tsat_evap' : Tsat_evap[0]
+                    'Tsat_evap' : Tsat_evap[0],
+                    'result_parameters' : {'weight': w(o)}
                     } 
+                    for i in range(len(refrigerant))
                     for j in range(len(dT_GC_min_tar))
                     for k in range(len(T_air_tar)) 
                     for l in range(len(T_air_inlet))
                     for m in range(len(T_source_in))
                     for n in range(len(n_comp))
-                    for i in range(len(refrigerant))
+                    for o in range(len(w))
                 ]
 
         if prev_results != None:
@@ -72,7 +75,7 @@ if __name__=='__main__':
             # results = [executor.submit(get_TRHP_optimal, case) for case in cases]
             # executor.shutdown()
 
-            transfer_results(file_name=file_name)
+            # transfer_results(file_name=file_name)
 
     else:
         m = TRHP(

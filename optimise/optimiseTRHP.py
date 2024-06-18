@@ -84,68 +84,38 @@ def get_max_multiObj(var, parameters):
     COP_0 = parameters['result_parameters']['COP_0']
     P_0 = parameters['result_parameters']['P_0']
     
-    TIC = timer()
+    # TIC = timer()
     d_var = dict_var(var, parameters)
     m = TRHP(**parameters, **d_var)
     COP, P = m.solve()
     obj = (COP / COP_0) * (w) + (1 - P / P_0) * (1 - w)
-    TOC = timer()    
+    # TOC = timer()    
     
-    print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.3f}".format(TOC - TIC), '  Vars:', ["{:.8f}".format(v) for v in var])   
-    return obj * -1000
+    # print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.3f}".format(TOC - TIC), '  Vars:', ["{:.8f}".format(v) for v in var])   
+    print('Obj:', "{:.4f}".format(obj), '  Vars:', ["{:.4f}".format(v) for v in var])   
+    return -obj 
 
 def get_results_summary(result, x, parameters):
-    if parameters['comp_PR_uniform'] == True:
-        if parameters['n_comp'] == 1:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=x[0]
-                )
-        elif parameters['n_comp'] == 2:   
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=x[0], 
-                dT_phx2_cold=x[1]
-                )        
-        elif parameters['n_comp'] == 3:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=x[0], 
-                dT_phx2_cold=x[1], 
-                dT_phx3_cold=x[2]
-                )
-            
-    else:  
-        if parameters['n_comp'] == 1:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=x[0]
-                )
-        elif parameters['n_comp'] == 2:   
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=x[0], 
-                dT_phx2_cold=x[1],  
-                comp2_power_frac=x[2]
-                )        
-        elif parameters['n_comp'] == 3:
-            m = TRHP(
-                **parameters,
-                dT_phx1_cold=x[0], 
-                dT_phx2_cold=x[1], 
-                dT_phx3_cold=x[2], 
-                comp2_power_frac=x[3], 
-                comp3_power_frac=x[4]
-                )
-    
-    m.solve()
+    d_var = dict_var(x, parameters)
+    m = TRHP(**parameters, **d_var)    
+    COP, P = m.solve()
     m.get_summary()
+
+    w = parameters['result_parameters']['weight']
+    COP_0 = parameters['result_parameters']['COP_0']
+    P_0 = parameters['result_parameters']['P_0']
+    COP, P = m.solve()
+    obj = (COP / COP_0) * (w) + (1 - P / P_0) * (1 - w)
+
+    m.output.update({
+        'weight' : parameters['result_parameters']['weight'], 
+        'COP_max' : parameters['result_parameters']['COP_0'],
+        'P_max' : parameters['result_parameters']['P_0'],
+        'Obj function:' : obj
+    })
+
     if result != None:
         m.output.update({
-            'weight' : parameters['result_parameters']['weight'], 
-            'COP_max' : parameters['result_parameters']['COP_0'],
-            'P_max' : parameters['result_parameters']['P_0'],
-            'Obj function:' : -result.fun / 1000,
             'Iterations:' : result.nfev,
             'Message:' : result.message,
             'Success:' : result.success
@@ -166,42 +136,54 @@ def get_results_summary(result, x, parameters):
 def get_TRHP_optimal(parameters):
     tol = 1e-4
     parameters.update({'comp_PR_uniform': True})
+
     bnds, lc, xi = get_bounds_constraints(parameters)
     d_xi = dict_var(xi, parameters)
-
     m = TRHP(**parameters, **d_xi)
     COP_0, P_0 = m.solve()
+    parameters['result_parameters'] = {'COP_0':  COP_0,
+                                       'P_0':    P_0}
+    
+    if COP_0 > 0.0:        
+        result = shgo(func=get_max_multiObj, 
+                    args=[parameters], 
+                    bounds=bnds,
+                    workers=1, 
+                    iters=4, 
+                    n=50, 
+                    sampling_method='sobol', 
+                    options={'tol': tol}, 
+                    minimizer_kwargs={'method' : 'SLSQP',
+                                        'options': {'tol': tol}})
+
+        print('Obj:', -result.fun, '  iter:', result.nfev, result.x)
+
+        if result.success:
+            for x in xi + result.xl:
+                get_results_summary(result, x, parameters)
+
+
     # m.get_cycle_plot(x_axis='h', y_axis='P')
     # m.get_cycle_plot(x_axis='s', y_axis='T')
     # m.get_cycle_plot(x_axis='h', y_axis='T')
     # m.get_cycle_plot(x_axis='v', y_axis='P')
-    
-    # if COP_0 > 0.0:
-    #     get_results_summary(None, xi, parameters)    
-
-    parameters['result_parameters'] = {'weight': 1.0, 
-                                       'COP_0':  COP_0,
-                                       'P_0':    P_0}
-    for j in range(10):
-        TIC = timer()
-        result = DE_opt(func=get_max_multiObj, args=[parameters], bounds=bnds, constraints=lc, workers=-1, polish=False, tol=tol) 
-        TOC = timer()
-        dt = TOC - TIC
-
-        print('SH - Obj function:', -result.fun / 1000, '  time taken:', dt,  '  iter:', result.nfev, result.x)
-
-        if result.success:
-            get_results_summary(result, result.x, parameters)
-
-        parameters['result_parameters']['weight'] -= 0.05
-
+    #     
     # TIC = timer()
-    # result = shgo(func=get_max_multiObj, args=[parameters], bounds=bnds, workers=1, iters=1, constraints=lc, options={'tol': tol}, minimizer_kwargs={'options': {'tol': tol}}) 
+    # result = shgo(func=get_max_multiObj, 
+    #             args=[parameters], 
+    #             bounds=bnds,
+    #             workers=1, 
+    #             iters=4, 
+    #             n=50, 
+    #             sampling_method='sobol', 
+    #             options={'tol': tol}, 
+    #             minimizer_kwargs={'method': 'SLSQP',
+    #                               'options': {'tol': tol}})
     # TOC = timer()
     # dt = TOC - TIC 
 
     # TIC = timer()
-    # result1 = DE_opt(func=get_max_multiObj, args=[parameters], bounds=bnds, constraints=lc, workers=-1, popsize=30, init='sobol', polish=False, tol=tol)
+    # result1 = DE_opt(func=get_max_multiObj, args=[parameters], bounds=bnds, constraints=lc, workers=1, init='sobol', polish=False, tol=tol)
     # TOC = timer()
     # dt1 = TOC - TIC
 
@@ -234,8 +216,9 @@ def get_TRHP_optimal(parameters):
     # dt6 = TOC - TIC 
 
     # print('Case:', parameters)
-    # print('SH - Obj function:', -result.fun / 1000, '  time taken:', dt,  '  iter:', result.nfev, result.x)
-    # print('1 - Obj function:', -result1.fun / 1000, '  time taken:', dt1,  '  iter:', result1.nfev, result1.x)
+    # print('SH - Obj function:', -result.fun / 1, '  time taken:', dt,  '  iter:', result.nfev, result.x)
+    # print('DE - Obj function:', -result1.fun / 1, '  time taken:', dt1,  '  iter:', result1.nfev, result1.x)
+    # foo
     # print('2 - Obj function:', -result2.fun / 1000, '  time taken:', dt2,  '  iter:', result2.nfev, result2.x)
     # print('3 - Obj function:', -result3.fun / 1000, '  time taken:', dt3,  '  iter:', result3.nfev, result3.x)
     # print('4 - Obj function:', -result4.fun / 1000, '  time taken:', dt4,  '  iter:', result4.nfev, result4.x)
@@ -266,4 +249,9 @@ def get_TRHP_optimal(parameters):
     # 2 - Obj function: 1.0914616019811294   time taken: 35.29208095901413   iter: 359 [87.26783893 38.60218709  3.89127883]
     # 3 - Obj function: 1.0912989273159475   time taken: 35.56015595901408   iter: 400 [87.60361832 29.5333796   1.40794312]
     # 4 - Obj function: 1.0861068135564136   time taken: 15.084947208000813   iter: 157 [87.09915641 33.63796361 22.0068382 ]  
-    # 4 - Obj function: 1.0920981096228377   time taken: 93.3139755000011   iter: 845 [87.19684774 20.05521968  1.94944369] 
+    # 4 - Obj function: 1.0920981096228377   time taken: 93.3139755000011   iter: 845 [87.19684774 20.05521968  1.94944369]
+    
+    # SH-5 - Obj function: 1.092132803753534   time taken: 914.0407736659981   iter: 1733 [87.18340107 13.0859375   1.931833  ]
+    # DE-5 - Obj function: 1.092132310389645   time taken: 970.3476823329693   iter: 1808 [87.18330675 48.78706703  1.93282185]
+    # SH-4 - Obj function: 1.092132803753534   time taken: 911.5667335420148   iter: 1733 [87.18340107 13.0859375   1.931833  ]
+    # DE-4 - Obj function: 1.092123105908355   time taken: 617.3784450000385   iter: 1261 [87.17991522 52.96935914  1.94087938] 
