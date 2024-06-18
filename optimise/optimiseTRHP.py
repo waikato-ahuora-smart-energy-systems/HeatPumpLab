@@ -84,15 +84,15 @@ def get_max_multiObj(var, parameters):
     COP_0 = parameters['result_parameters']['COP_0']
     P_0 = parameters['result_parameters']['P_0']
     
-    # TIC = timer()
+    TIC = timer()
     d_var = dict_var(var, parameters)
     m = TRHP(**parameters, **d_var)
     COP, P = m.solve()
     obj = (COP / COP_0) * (w) + (1 - P / P_0) * (1 - w)
-    # TOC = timer()    
+    TOC = timer()    
     
-    # print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.3f}".format(TOC - TIC), '  Vars:', ["{:.8f}".format(v) for v in var])   
-    print('Obj:', "{:.4f}".format(obj), '  Vars:', ["{:.4f}".format(v) for v in var])   
+    print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.3f}".format(TOC - TIC), '  Vars:', ["{:.8f}".format(v) for v in var])   
+    # print('Obj:', "{:.4f}".format(obj), '  Vars:', ["{:.4f}".format(v) for v in var])   
     return -obj 
 
 def get_results_summary(result, x, parameters):
@@ -141,8 +141,8 @@ def get_TRHP_optimal(parameters):
     d_xi = dict_var(xi, parameters)
     m = TRHP(**parameters, **d_xi)
     COP_0, P_0 = m.solve()
-    parameters['result_parameters'] = {'COP_0':  COP_0,
-                                       'P_0':    P_0}
+    parameters['result_parameters']['COP_0'] = COP_0
+    parameters['result_parameters']['P_0'] = P_0
     
     if COP_0 > 0.0:        
         result = shgo(func=get_max_multiObj, 
