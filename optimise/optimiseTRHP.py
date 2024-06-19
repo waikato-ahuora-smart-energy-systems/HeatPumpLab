@@ -32,7 +32,7 @@ def get_bounds_constraints(parameters, x=None):
     
     bnds = [(0.0, dT_upper)]
     xi = [0.0] if x is None else [x[0]]
-    if parameters['n_comp'] == 2:
+    if parameters['n_comp'] >= 2:
         bnds += [(0.0, dT_upper)]
         xi += [0.0] if x is None else [x[1]]
     if parameters['n_comp'] == 3:

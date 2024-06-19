@@ -26,7 +26,7 @@ def optimisation_analysis():
     # Cycle parameters and their ranges tested
     dT_GC_min_tar = [float(j) for j in range(25,40,10)]
     T_air_tar = [float(k) for k in range(250,110,-10)]
-    T_air_inlet = [float(m) for m in range(15,35,20)]
+    T_air_inlet = [float(m) for m in range(15,40,20)]
     T_source_in = [40.0]
     n_comp = [3 - n for n in range(3)]
     w = [float(o/100) for o in range(100, 50, -10)]
