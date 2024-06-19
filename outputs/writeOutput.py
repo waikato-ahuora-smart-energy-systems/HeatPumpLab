@@ -24,7 +24,7 @@ def print_result_to_csv(output=[], file_name='results/temp/R', file_ext='.csv', 
             else:
                 with open(file_name, 'w', newline='') as csvfile:
                     writer = csv.DictWriter(csvfile, fieldnames=output.keys())
-                    writer.writeheader()  # file doesn't exist yet, write a header
+                    writer.writeheader()  
                     writer.writerow(output)  
                 
     except:
@@ -45,5 +45,5 @@ def transfer_results(file_name='results/untitled'):
             output = read_csv_to_results(file_name=f, file_ext='')
             for o in output:
                 print_result_to_csv(output=o, file_name=file_name)
-            # os.remove(f)
+            os.remove(f)
    

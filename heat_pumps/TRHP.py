@@ -10,7 +10,7 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tiself.walmsley@w
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import MassStream, Properties
-from streams.properties import get_property
+from streams.properties import get_property_value
 from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver
 from scipy.optimize import root_scalar
 from scipy.interpolate import CubicSpline
@@ -151,18 +151,18 @@ class TRHP(FlowSheetSolver, Properties):
         if self.P_H_est > 0.0:
             P_H = self.P_H_est
         else:
-            # T_crit = get_property('TCRIT', self.comp1.flow_in.fluid, 'TQ', 100, 0, RP=self.RP)
-            D = get_property('D', self.comp1.flow_in.fluid, 'TQ', self.Tsat_evap, 1, RP=self.RP) #(get_property('DCRIT', self.comp1.flow_in.fluid, 'TQ', 100, 0, RP=self.RP) + get_property('D', self.comp1.flow_in.fluid, 'TQ', self.Tsat_evap, 1, RP=self.RP)) / 2
+            # T_crit = get_property_value('TCRIT', self.comp1.flow_in.fluid, 'TQ', 100, 0, RP=self.RP)
+            D = get_property_value('D', self.comp1.flow_in.fluid, 'TQ', self.Tsat_evap, 1, RP=self.RP) #(get_property_value('DCRIT', self.comp1.flow_in.fluid, 'TQ', 100, 0, RP=self.RP) + get_property_value('D', self.comp1.flow_in.fluid, 'TQ', self.Tsat_evap, 1, RP=self.RP)) / 2
             # T_mid = max(self.T_air_tar - T_crit, 0.0) * 0.5 + min(self.T_air_tar, T_crit)
-            P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP)
+            P_H = get_property_value('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP)
             # T_ref_out_est = self.T_air_tar + self.dT_GC_min_tar - (self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) * 0.5
-            # P_H = get_property('P', self.comp1.flow_in.fluid, 'TS', T_ref_out_est, self.phx1.sink_out.entropy, RP=self.RP) 
+            # P_H = get_property_value('P', self.comp1.flow_in.fluid, 'TS', T_ref_out_est, self.phx1.sink_out.entropy, RP=self.RP) 
             
         PR = (P_H / P_L)**(1 / self.n_comp)
         
         #Compressor 1
         self.comp1.flow_in = self.phx1.sink_out
-        self.comp1.flow_out = MassStream( name='Comp1_out', fluid=self.refrigerant, pressure=(P_L * PR), temperature=get_property('T', self.refrigerant, 'PS', (P_L * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)
+        self.comp1.flow_out = MassStream( name='Comp1_out', fluid=self.refrigerant, pressure=(P_L * PR), temperature=get_property_value('T', self.refrigerant, 'PS', (P_L * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)
 
         #Plate heat exchanger 2 - cold-side
         self.phx2.sink_in = self.comp1.flow_out
@@ -174,7 +174,7 @@ class TRHP(FlowSheetSolver, Properties):
         #Compressor 2
         self.comp2.flow_in = self.phx2.sink_out
         if self.comp2_on == 1:
-            self.comp2.flow_out = MassStream( name='Comp2_out', fluid=self.refrigerant, pressure=(P_L * PR * PR), temperature=get_property('T', self.refrigerant, 'PS', (P_L * PR * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
+            self.comp2.flow_out = MassStream( name='Comp2_out', fluid=self.refrigerant, pressure=(P_L * PR * PR), temperature=get_property_value('T', self.refrigerant, 'PS', (P_L * PR * PR), self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
         else:
             self.comp2.flow_out = self.comp2.flow_in
 
@@ -188,7 +188,7 @@ class TRHP(FlowSheetSolver, Properties):
         #Compressor 3
         self.comp3.flow_in = self.phx3.sink_out
         if self.comp3_on == 1:
-            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=(P_L * PR * PR * PR), temperature=get_property('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
+            self.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=self.refrigerant, pressure=(P_L * PR * PR * PR), temperature=get_property_value('T', self.refrigerant, 'PS', P_H, self.phx1.sink_out.entropy, RP=self.RP), RP=self.RP)       
         else:
             self.comp3.flow_out = self.comp3.flow_in
 

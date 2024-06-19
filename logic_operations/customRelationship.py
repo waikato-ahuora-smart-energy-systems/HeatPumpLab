@@ -71,7 +71,7 @@ class CustomRelationship:
                         dh_air = get_property_value('H', gc.sink_in.fluid, 'PT', gc.sink_in.pressure / 1000, T_air_i, RP=self.RP) - self.source_obj[0].sink_in.enthalpy
                         m_air_list.append(dQ_i / dh_air)                
 
-                if gc.source_in.pressure < get_property_value('PCRIT', gc.source_in.fluid, 'PT', gc.source_in.pressure / 1000, gc.source_in.enthalpy, RP=self.RP) * 1000:
+                if gc.source_in.pressure < get_property_value('PCRIT', gc.source_in.fluid, 'PT', gc.source_in.pressure / 1000, gc.source_in.enthalpy, RP=self.RP) :
                     h_ref = get_property_value('H', gc.source_in.fluid, 'PQMASS', gc.source_in.pressure / 1000, 1.0, RP=self.RP)
                     
                     if h_ref < gc.source_in.enthalpy and h_ref > gc.source_out.enthalpy:
