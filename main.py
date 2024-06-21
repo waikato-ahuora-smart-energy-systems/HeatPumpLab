@@ -25,11 +25,11 @@ def optimisation_analysis():
                    'Ammonia']
 
     # Cycle parameters and their ranges tested
-    dT_GC_min_tar = [float(j) for j in range(25,40,10)]
+    dT_GC_min_tar = [20.0]
     T_air_tar = [float(k) for k in range(250,90,-10)] 
-    T_air_inlet = [float(m) for m in range(15,40,20)]
+    T_air_inlet = [15.0] 
     T_source_in = [40.0]
-    n_comp = [2 - n for n in range(2)]
+    n_comp = [2, 1]
     w = [float(o/100) for o in range(100, 40, -10)]
     Tsat_evap = [10.0]
 
@@ -87,11 +87,11 @@ def optimisation_analysis():
     # Use parallel processing distributed over all cores to speed up the analysis
     n_cpu = os.cpu_count() 
     if cases != None and cases != []: 
-        get_TRHP_optimal(parameters=cases[0])
-        # executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
-        # results = [executor.submit(get_TRHP_optimal, case) for case in cases]
-        # executor.shutdown()
-        # transfer_results(file_name=file_name)
+        # get_TRHP_optimal(parameters=cases[0])
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
+        results = [executor.submit(get_TRHP_optimal, case) for case in cases]
+        executor.shutdown()
+        transfer_results(file_name=file_name)
 
 def single_case_analysis():
         args = {'refrigerant': 'butane', 'dT_GC_min_tar': 25.0, 'T_air_tar': 200.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 0.0, 'dT_phx2_cold': 0.0, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.5, 'comp3_power_frac': 0.0, 'comp_PR_uniform': True}
@@ -140,6 +140,6 @@ def single_case_analysis():
             m.get_cycle_plot(x_axis='v', y_axis='P')
 
 if __name__=='__main__':
-    single_case_analysis()
-    # optimisation_analysis()
+    # single_case_analysis()
+    optimisation_analysis()
     
