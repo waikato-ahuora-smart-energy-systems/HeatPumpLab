@@ -18,8 +18,6 @@ class Graph:
         return [(x - array_to_scale[-1]) * m + c for x in array_to_scale]
 
     def cycle(self, cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=100):
-        h = []; T = []; P = []; s = []; v = []
-        ha = []; Ta = []; Pa = []; sa = []; va = []
         cycle_obj = cycle_obj + [cycle_obj[0]]
 
         plt
@@ -61,6 +59,10 @@ class Graph:
 
             if obj[0].name == 'Gas cooler':
                 plt.plot(x, y, color='red')
+            elif obj[0].name == 'Plate heat exchanger':
+                plt.plot(x, y, color='green')
+            elif obj[0].name == 'Evaporator':
+                plt.plot(x, y, color='orange')
             else:
                 plt.plot(x, y, color='black')
         

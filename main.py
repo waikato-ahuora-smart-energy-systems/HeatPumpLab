@@ -94,29 +94,7 @@ def optimisation_analysis():
         transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'butane', 'dT_GC_min_tar': 25.0, 'T_air_tar': 200.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 0.0, 'dT_phx2_cold': 0.0, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.5, 'comp3_power_frac': 0.0, 'comp_PR_uniform': True}
-        m = TRHP(**args)
-        m.solve()
-
-        if m.converged:
-            m.get_summary()
-            m.output.update({
-                'Obj function:' : '',
-                'Iterations:' : 0,
-                'Message:' : '',
-                'Success:' : m.converged
-            })
-
-            if type(m.output) is dict:
-                print_result_to_terminal(output=m.output)
-                # print('Solve time:', TOC - TIC)
-            
-            m.get_cycle_plot(x_axis='h', y_axis='T')
-            m.get_cycle_plot(x_axis='h', y_axis='P')
-            m.get_cycle_plot(x_axis='v', y_axis='P')
-        
-        
-        args = {'refrigerant': 'R436B', 'dT_GC_min_tar': 25.0, 'T_air_tar': 200.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 0.0, 'dT_phx2_cold': 70, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.5, 'comp3_power_frac': 0.0, 'comp_PR_uniform': True}
+        args = {'refrigerant': 'Butane', 'dT_GC_min_tar': 20.0, 'T_air_tar': 230.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 98.4375, 'dT_phx2_cold': 32.8125, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.2578125, 'comp3_power_frac': 0.0, 'comp_PR_uniform': False}
         m = TRHP(**args)
         TIC = timer()
         m.solve()
@@ -136,8 +114,8 @@ def single_case_analysis():
                 print('Solve time:', TOC - TIC)
             
             m.get_cycle_plot(x_axis='h', y_axis='T')
-            m.get_cycle_plot(x_axis='h', y_axis='P')
-            m.get_cycle_plot(x_axis='v', y_axis='P')
+            # m.get_cycle_plot(x_axis='h', y_axis='P')
+            # m.get_cycle_plot(x_axis='v', y_axis='P')
 
 if __name__=='__main__':
     # single_case_analysis()
