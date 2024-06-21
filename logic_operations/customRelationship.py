@@ -6,7 +6,7 @@ from streams import get_property_value
 from scipy.optimize import brentq, root_scalar
 
 class CustomRelationship:
-    def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-6, RP=None):
+    def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9, RP=None):
         self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
@@ -59,22 +59,20 @@ class CustomRelationship:
                 self.mcp_air = dQ / (T_air_i - self.source_obj[0].sink_in.temperature)
 
                 if self.mcp_air > gc.source_in.mass_flow * gc.source_in.heat_capacity and self.mcp_air < gc.source_out.mass_flow * gc.source_out.heat_capacity:
-                    try:
-                        h_ref = root_scalar(f=lambda h_ref: self.mcp_air - gc.source_in.mass_flow * get_property_value('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref, RP=self.RP), 
-                                            method='secant', 
-                                            bracket=(gc.source_in.enthalpy, gc.source_out.enthalpy), 
-                                            x0=(gc.source_in.enthalpy + gc.source_out.enthalpy) / 2, 
-                                            rtol=self.tol)
-                    except:
-                        h_ref = root_scalar(f=lambda h_ref: self.mcp_air - gc.source_in.mass_flow * get_property_value('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref, RP=self.RP), 
+                    result = root_scalar(f=lambda h_ref: self.mcp_air - gc.source_in.mass_flow * get_property_value('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref, RP=self.RP), 
+                                        method='brentq', 
+                                        bracket=(gc.source_in.enthalpy, gc.source_out.enthalpy), 
+                                        x0=(gc.source_in.enthalpy + gc.source_out.enthalpy) / 2, 
+                                        rtol=self.tol)
+                    e = (self.mcp_air - gc.source_in.mass_flow * get_property_value('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref, RP=self.RP)) / self.mcp_air
+                    if e > self.tol:
+                        result = root_scalar(f=lambda h_ref: self.mcp_air - gc.source_in.mass_flow * get_property_value('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref, RP=self.RP), 
                                             method='bisect', 
                                             bracket=(gc.source_in.enthalpy, gc.source_out.enthalpy), 
-                                            x0=(gc.source_in.enthalpy + gc.source_out.enthalpy) / 2, 
+                                            x0=result.x, 
                                             rtol=self.tol)
-                        # h_ref = brentq(f=lambda h_ref: self.mcp_air - gc.source_in.mass_flow * get_property_value('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref, RP=self.RP), 
-                        #             a=gc.source_in.enthalpy, 
-                        #             b=gc.source_out.enthalpy)
-                    
+                    e = (self.mcp_air - gc.source_in.mass_flow * get_property_value('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref, RP=self.RP)) / self.mcp_air
+                    h_ref = result['root']
                     dQ_i = dQ - gc.source_in.mass_flow * (gc.source_in.enthalpy - h_ref)
                     if dQ_i > self.tol:
                         T_air_i = get_property_value('T', gc.source_in.fluid, 'PH', gc.source_in.pressure / 1000, h_ref, RP=self.RP) - gc.dTmin

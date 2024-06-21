@@ -151,9 +151,9 @@ class TRHP(FlowSheetSolver, Properties):
         if self.P_H_est > 0.0:
             P_H = self.P_H_est
         else:
-            P_H = get_property_value('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP)
+            P_H = get_property_value('P', self.refrigerant, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP)
             
-        PR = (P_H / P_L)**(1 / self.n_comp)
+        PR = (P_H / P_L) ** (1 / self.n_comp)
         
         #Compressor 1
         self.comp1.flow_in = self.phx1.sink_out
@@ -336,13 +336,6 @@ class TRHP(FlowSheetSolver, Properties):
         if dt_neg > 0.0:
             #Find a lower bound pressure resulting in an air temperature less than the target
             while dt_neg > 0.0 and i < 100:
-                try:
-                    if i > 3 and dt_neg > 0:
-                        cs = CubicSpline(y=P, x=DT, bc_type='natural') if DT[0] < DT[1] else CubicSpline(y=P[::-1], x=DT[::-1], bc_type='natural')
-                        m_step = 0.95
-                        P_lb = float(cs(0.0))
-                except: 
-                    None
                 dt_plus = dt_neg
                 P_ub = P_lb
                 P_lb = self.comp1.flow_in.pressure + (P_lb - self.comp1.flow_in.pressure) * m_step
@@ -354,13 +347,6 @@ class TRHP(FlowSheetSolver, Properties):
         else:
             #Find a upper bound pressure resulting in an air temperature greater than the target
             while dt_plus < 0.0 and i < 100:
-                try:
-                    if i > 3 and dt_plus < 0.0:
-                        cs = CubicSpline(y=P, x=DT, bc_type='natural') if DT[0] < DT[1] else CubicSpline(y=P[::-1], x=DT[::-1], bc_type='natural')
-                        m_step = 0.95
-                        P_ub = float(cs(0.0))
-                except: 
-                    None
                 dt_neg = dt_plus
                 P_lb = P_ub
                 P_ub = self.comp1.flow_in.pressure + (P_ub - self.comp1.flow_in.pressure) / m_step
@@ -413,8 +399,8 @@ class TRHP(FlowSheetSolver, Properties):
             dW = self.tol * W - abs(self.comp1.power + self.comp2.power + self.comp3.power - W)
             dQ = self.tol * Q - abs(self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty - Q)
 
-        # self.get_cycle_plot(x_axis='h', y_axis='T')
         self.set_gc_air_massflow.solve()
+
         # self.get_cycle_plot(x_axis='h', y_axis='T')
 
         if i < i_max:
@@ -438,11 +424,16 @@ class TRHP(FlowSheetSolver, Properties):
                 try:
                     r = root_scalar(f=self.get_solve_state, method='secant', bracket=(P_lb, P_ub), x0=P_i, rtol=self.tol)
                 except:
+                    print('Heat pump model failed to solve.')
+                    self.converged = False
+                    
+                if r.converged == False or abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) > self.tol * self.T_air_tar:
                     try: 
-                        r = root_scalar(f=self.get_solve_state, method='bisect', bracket=(P_lb, P_ub), x0=P_i, rtol=self.tol)
+                        r = root_scalar(f=self.get_solve_state, method='bisect', bracket=(P_lb, P_ub), x0=self.comp3.flow_out.pressure, rtol=self.tol)
                     except:
                         print('Heat pump model failed to solve.') 
-                            
+                        self.converged = False
+                
                 if r.converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < self.tol * self.T_air_tar:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)                   
                     # self.get_cycle_plot(x_axis='h', y_axis='T')
@@ -460,6 +451,8 @@ class TRHP(FlowSheetSolver, Properties):
                           'dT_phx1_cold' : self.dT_phx1_cold,
                           'dT_phx2_cold' : self.dT_phx2_cold,
                           'dT_phx3_cold' : self.dT_phx3_cold,
+                          'comp2_power_frac' : self.comp2_power_frac,
+                          'comp3_power_frac' : self.comp3_power_frac,
                           'comp_PR_uniform' : self.comp_PR_uniform
                           })
                     None

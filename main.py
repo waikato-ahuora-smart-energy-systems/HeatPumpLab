@@ -26,11 +26,11 @@ def optimisation_analysis():
 
     # Cycle parameters and their ranges tested
     dT_GC_min_tar = [float(j) for j in range(25,40,10)]
-    T_air_tar = [float(k) for k in range(120,110,-10)] #250
+    T_air_tar = [float(k) for k in range(250,90,-10)] 
     T_air_inlet = [float(m) for m in range(15,40,20)]
     T_source_in = [40.0]
-    n_comp = [3 - n for n in range(3)]
-    w = [float(o/100) for o in range(100, 50, -10)]
+    n_comp = [2 - n for n in range(2)]
+    w = [float(o/100) for o in range(100, 40, -10)]
     Tsat_evap = [10.0]
 
     # Location of saved results
@@ -72,7 +72,7 @@ def optimisation_analysis():
                     abs(float(case['T_air_tar']) - float(res['T_air_tar:'])) < 0.01 and 
                     abs(float(case['T_air_inlet']) - float(res['T_air_inlet:'])) < 0.01 and 
                     abs(float(case['T_source_in']) - float(res['T_source_in:'])) < 0.01 and 
-                    abs(float(case['result_parameters']['weight']) - float(res['weight'])) < 0.01 and # Check this one!!!!
+                    abs(float(case['result_parameters']['weight']) - float(res['Weight:'])) < 0.01 and # Check this one!!!!
                     int(case['n_comp']) == int(res['n_comp:'])
                     ):
                     c.append(c_index)
@@ -94,7 +94,29 @@ def optimisation_analysis():
         # transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'Butane', 'dT_GC_min_tar': 25.0, 'T_air_tar': 120.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 3, 'dT_phx1_cold': 1.5625, 'dT_phx2_cold': 0.0, 'dT_phx3_cold': 35.9375, 'comp_PR_uniform': True}
+        args = {'refrigerant': 'butane', 'dT_GC_min_tar': 25.0, 'T_air_tar': 200.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 0.0, 'dT_phx2_cold': 0.0, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.5, 'comp3_power_frac': 0.0, 'comp_PR_uniform': True}
+        m = TRHP(**args)
+        m.solve()
+
+        if m.converged:
+            m.get_summary()
+            m.output.update({
+                'Obj function:' : '',
+                'Iterations:' : 0,
+                'Message:' : '',
+                'Success:' : m.converged
+            })
+
+            if type(m.output) is dict:
+                print_result_to_terminal(output=m.output)
+                # print('Solve time:', TOC - TIC)
+            
+            m.get_cycle_plot(x_axis='h', y_axis='T')
+            m.get_cycle_plot(x_axis='h', y_axis='P')
+            m.get_cycle_plot(x_axis='v', y_axis='P')
+        
+        
+        args = {'refrigerant': 'R436B', 'dT_GC_min_tar': 25.0, 'T_air_tar': 200.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 0.0, 'dT_phx2_cold': 70, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.5, 'comp3_power_frac': 0.0, 'comp_PR_uniform': True}
         m = TRHP(**args)
         TIC = timer()
         m.solve()
@@ -118,6 +140,6 @@ def single_case_analysis():
             m.get_cycle_plot(x_axis='v', y_axis='P')
 
 if __name__=='__main__':
-    # single_case_analysis()
-    optimisation_analysis()
+    single_case_analysis()
+    # optimisation_analysis()
     

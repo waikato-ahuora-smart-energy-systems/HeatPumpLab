@@ -58,10 +58,10 @@ def get_max_multiObj(var, parameters):
     d_var = dict_var(var, parameters)
     m = TRHP(**parameters, **d_var)
     COP, P = m.solve()
-    obj = (COP / COP_0) + (1 - P / P_0) * (1 - w) / w
+    obj = (COP / COP_0) * w - (P / P_0) * (1 - w)
     TOC = timer()
     
-    print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.3f}".format(TOC - TIC), '  Vars:', ["{:.12f}".format(v) for v in var])    
+    print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.2f}".format(TOC - TIC), '  Vars:', ["{:.6f}".format(v) for v in var])    
     return -obj 
 
 def get_results_summary(result, x, parameters):
@@ -77,9 +77,9 @@ def get_results_summary(result, x, parameters):
     obj = (COP / COP_0) * (w) + (1 - P / P_0) * (1 - w)
 
     m.output.update({
-        'weight' : parameters['result_parameters']['weight'], 
-        'COP_0' : parameters['result_parameters']['COP_0'],
-        'P_0' : parameters['result_parameters']['P_0'],
+        'Weight:' : parameters['result_parameters']['weight'], 
+        'COP_0:' : parameters['result_parameters']['COP_0'],
+        'P_0:' : parameters['result_parameters']['P_0'],
         'Obj function:' : obj
     })
 
@@ -104,7 +104,7 @@ def get_results_summary(result, x, parameters):
 
 def get_TRHP_optimal(parameters):
     tol = 1e-4
-    parameters.update({'comp_PR_uniform': True})
+    parameters.update({'comp_PR_uniform': False})
 
     bnds, xi = get_bounds(parameters)
     d_xi = dict_var(xi, parameters)
@@ -121,9 +121,9 @@ def get_TRHP_optimal(parameters):
                                                    lb=0.0, 
                                                    ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
                       workers=1, 
-                      iters=3, 
+                      iters=4, 
                       #n=50, 
-                      sampling_method='simplicial', 
+                      sampling_method='sobol', 
                       options={'tol': tol}, 
                       minimizer_kwargs={'method' : 'SLSQP',
                                         'options': {'tol': tol}})
@@ -133,8 +133,7 @@ def get_TRHP_optimal(parameters):
               '  Vars:' ,result.x)
 
         if result.success:
-            for x in xi + result.xl:
-                get_results_summary(result, x, parameters)
+            get_results_summary(result, result.x, parameters)
 
     # m.get_cycle_plot(x_axis='h', y_axis='P')
     # m.get_cycle_plot(x_axis='s', y_axis='T')
