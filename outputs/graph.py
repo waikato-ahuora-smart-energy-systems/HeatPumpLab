@@ -6,71 +6,108 @@ import matplotlib.pyplot as plt
 class Graph:
     def __init__(self) -> None:
         pass
-
-    def cycle(self, graph_obj, title='', x_axis='h', y_axis='T', res=50):
-        h = []; T = []; P = []; s = []; v = []
-        cycle_obj = graph_obj + [graph_obj[0]]
-        for obj in cycle_obj:
-            data = obj[0].get_graph_data()
-            P += data[obj[1]]['P']
-            h += data[obj[1]]['h']  
-            T += data[obj[1]]['T']  
-            s += data[obj[1]]['s']  
-            v += data[obj[1]]['v']
+    
+    def rescale(self, array_to_scale, array_new_scale):
+        if abs(array_to_scale[0] - array_to_scale[-1]) > 0.0:
+            m = (array_new_scale[-1] - array_new_scale[0]) / (array_to_scale[0] - array_to_scale[-1])
+        else:
+            m = 0.0
         
+        c = array_new_scale[0]
+        
+        return [(x - array_to_scale[-1]) * m + c for x in array_to_scale]
+
+    def cycle(self, cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=100):
+        h = []; T = []; P = []; s = []; v = []
+        ha = []; Ta = []; Pa = []; sa = []; va = []
+        cycle_obj = cycle_obj + [cycle_obj[0]]
+
         plt
         if x_axis == 'h' or x_axis == 'enthalpy':
-            x = h
             plt.xlabel('Enthalpy [kJ/kg]')
-            
         elif x_axis == 's' or x_axis == 'S' or x_axis == 'entropy':
-            x = s
             plt.xlabel('Entropy [kJ/kgK]')
         elif x_axis == 'p' or x_axis == 'P' or x_axis == 'pressure':
-            x = P
             plt.xscale('log')
             plt.xlabel('Pressure [kPa]')
         elif x_axis == 't' or x_axis == 'T' or x_axis == 'temperature':
-            x = T
             plt.xlabel('Temperature [°C]')
         else:
-            x = v
             plt.xlabel('Specific Volume [m^3/kg]')
 
         if y_axis == 't' or y_axis == 'T' or y_axis == 'temperature':
-            y = T
             plt.ylabel('Temperature [°C]')
         else:
-            y = P
             plt.yscale('log')
-            plt.ylabel('Pressure [kPa]')
+            plt.ylabel('Pressure [kPa]') 
 
-        plt.plot(x, y, color='black')    
+        for obj in cycle_obj:
+            data = obj[0].get_graph_data(divisions=res)
+            if x_axis == 'h' or x_axis == 'enthalpy':
+                x = data[obj[1]]['h'] 
+            elif x_axis == 's' or x_axis == 'S' or x_axis == 'entropy':
+                x = data[obj[1]]['s']
+            elif x_axis == 'p' or x_axis == 'P' or x_axis == 'pressure':
+                x = data[obj[1]]['P']
+            elif x_axis == 't' or x_axis == 'T' or x_axis == 'temperature':
+                x = data[obj[1]]['T'] 
+            else:
+                x = data[obj[1]]['v']
 
+            if y_axis == 't' or y_axis == 'T' or y_axis == 'temperature':
+                y = data[obj[1]]['T']
+            else:
+                y = data[obj[1]]['P']
+
+            if obj[0].name == 'Gas cooler':
+                plt.plot(x, y, color='red')
+            else:
+                plt.plot(x, y, color='black')
+        
+        if x_axis == 's' or x_axis == 'S' or x_axis == 'entropy' or x_axis == 'h' or x_axis == 'enthalpy':
+            for obj in reversed(sink_obj):
+                if obj[1] == 'sink':
+                    data = obj[0].get_graph_data(divisions=res)
+                    data[obj[1]]['h'] = self.rescale(data[obj[1]]['h'], data['source']['h'])
+                    data[obj[1]]['s'] = self.rescale(data[obj[1]]['s'], data['source']['s'])
+
+                    if x_axis == 'h' or x_axis == 'enthalpy':
+                        x = data[obj[1]]['h'] 
+                    elif x_axis == 's' or x_axis == 'S' or x_axis == 'entropy':
+                        x = data[obj[1]]['s']
+                    elif x_axis == 'p' or x_axis == 'P' or x_axis == 'pressure':
+                        x = data[obj[1]]['P']
+                    elif x_axis == 't' or x_axis == 'T' or x_axis == 'temperature':
+                        x = data[obj[1]]['T'] 
+                    else:
+                        x = data[obj[1]]['v']
+
+                    if y_axis == 't' or y_axis == 'T' or y_axis == 'temperature':
+                        y = data[obj[1]]['T']
+                    else:
+                        y = data[obj[1]]['P']
+
+                    plt.plot(x, y, color='blue')            
+
+        if x_axis == 'h' or x_axis == 'enthalpy':
+            plt.xlabel('Enthalpy [kJ/kg]')
+        elif x_axis == 's' or x_axis == 'S' or x_axis == 'entropy':
+            plt.xlabel('Entropy [kJ/kgK]')
+        elif x_axis == 'p' or x_axis == 'P' or x_axis == 'pressure':
+            plt.xscale('log')
+            plt.xlabel('Pressure [kPa]')
+        elif x_axis == 't' or x_axis == 'T' or x_axis == 'temperature':
+            plt.xlabel('Temperature [°C]')
+        else:
+            plt.xlabel('Specific Volume [m^3/kg]')
+
+        if y_axis == 't' or y_axis == 'T' or y_axis == 'temperature':
+            plt.ylabel('Temperature [°C]')
+        else:
+            plt.yscale('log')
+            plt.ylabel('Pressure [kPa]') 
+        
         if title != '':
             plt.title(title)
 
-        plt.show() 
-
-    # def heat_exchangers(self, graph_obj, title=''):
-    #     H = []; T_hot = []; T_cold = []
-    #     for obj in graph_obj:
-    #         H_i, T_hot_i, T_cold_i = obj.get_graph_data()
-    #         if len(H) > 0:
-    #             j = len(H) - 1
-    #             H_i = [H_i[i] + H[j] for i in range(len(H_i))]
-    #             H += H_i 
-    #         else:
-    #             H += H_i
-
-    #         T_hot += T_hot_i
-    #         T_cold += T_cold_i
-
-    #     plt.plot(H, T_hot, color='red', label = 'Hot stream')
-    #     plt.plot(H, T_cold, color='blue', label = 'Cold stream')
-
-    #     plt.xlabel('Heat Flow [kJ/kg(ref.)]')
-    #     plt.ylabel('Temperature [°C]')
-    #     if title != '':
-    #         plt.title(title)
-    #     plt.show()             
+        plt.show()           

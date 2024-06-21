@@ -1,6 +1,8 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
+from streams.properties import get_property_value
+
 class SetRelationship:
     def __init__(self, name='', source_obj='', target_obj='', m = 1, c = 0, prop = 'temperature', prop2 = 0):
         self.name = name

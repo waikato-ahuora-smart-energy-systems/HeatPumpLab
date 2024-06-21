@@ -141,6 +141,9 @@ class BaseHeatExchanger:
 
     def get_fixed_hot_T_outlet_model(self):
         self.source_out.pressure = self.source_in.pressure - self.dP_h
+        Tsat = get_property_value('T', self.source_out.fluid, 'PQ', self.source_out.pressure / 1000, 0, RP=self.source_out.RP)
+        if abs(Tsat - self.source_out.temperature) < 1 or abs(Tsat - self.source_in.temperature) < 1:
+            None
         self.source_out.props_in_mPT()
         self.duty = self.source_in.heat_flow - self.source_out.heat_flow
         

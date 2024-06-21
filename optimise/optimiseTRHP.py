@@ -1,19 +1,20 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from scipy.optimize import shgo
+from scipy.optimize import shgo, LinearConstraint
 from heat_pumps import TRHP
 from outputs import print_result_to_terminal, print_result_to_csv
 from timeit import default_timer as timer
+import numpy as np
 
 def dict_var(var, parameters):
     if parameters['n_comp'] > 3:
         raise ValueError("Number of compressors must be 1, 2 or 3.")     
     
     d_var = {'dT_phx1_cold': var[0]}
-    if parameters['n_comp'] == 2:
+    if parameters['n_comp'] > 1:
         d_var['dT_phx2_cold'] = var[1]
-    if parameters['n_comp'] == 3:
+    if parameters['n_comp'] > 2:
         d_var['dT_phx3_cold'] = var[2]
     if parameters['comp_PR_uniform'] == False and parameters['n_comp'] > 1:
         if parameters['n_comp'] == 2:
@@ -24,7 +25,7 @@ def dict_var(var, parameters):
 
     return d_var
 
-def get_bounds_constraints(parameters, x=None):
+def get_bounds(parameters, x=None):
     #Define the bounds of the optimisation variables 
     dT_upper = 100.0
     if parameters['n_comp'] > 3:
@@ -57,10 +58,10 @@ def get_max_multiObj(var, parameters):
     d_var = dict_var(var, parameters)
     m = TRHP(**parameters, **d_var)
     COP, P = m.solve()
-    obj = (COP / COP_0) * (w) + (1 - P / P_0) * (1 - w)
-    TOC = timer()    
+    obj = (COP / COP_0) + (1 - P / P_0) * (1 - w) / w
+    TOC = timer()
     
-    print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.3f}".format(TOC - TIC), '  Vars:', ["{:.8f}".format(v) for v in var])    
+    print('Obj:', "{:.4f}".format(obj), '  Solve time:', "{:.3f}".format(TOC - TIC), '  Vars:', ["{:.12f}".format(v) for v in var])    
     return -obj 
 
 def get_results_summary(result, x, parameters):
@@ -105,7 +106,7 @@ def get_TRHP_optimal(parameters):
     tol = 1e-4
     parameters.update({'comp_PR_uniform': True})
 
-    bnds, xi = get_bounds_constraints(parameters)
+    bnds, xi = get_bounds(parameters)
     d_xi = dict_var(xi, parameters)
     m = TRHP(**parameters, **d_xi)
     COP_0, P_0 = m.solve()
@@ -116,10 +117,13 @@ def get_TRHP_optimal(parameters):
         result = shgo(func=get_max_multiObj, 
                       args=[parameters], 
                       bounds=bnds,
+                      constraints=LinearConstraint(A=np.array([1.0] * len(xi)), 
+                                                   lb=0.0, 
+                                                   ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
                       workers=1, 
-                      iters=4, 
-                      n=50, 
-                      sampling_method='sobol', 
+                      iters=3, 
+                      #n=50, 
+                      sampling_method='simplicial', 
                       options={'tol': tol}, 
                       minimizer_kwargs={'method' : 'SLSQP',
                                         'options': {'tol': tol}})

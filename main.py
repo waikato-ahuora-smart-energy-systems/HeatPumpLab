@@ -4,6 +4,7 @@ __email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2021-2024'
 
 import concurrent.futures, os
+from timeit import default_timer as timer
 from heat_pumps import TRHP
 from optimise import get_TRHP_optimal
 from outputs import print_result_to_terminal, read_csv_to_results, transfer_results
@@ -25,7 +26,7 @@ def optimisation_analysis():
 
     # Cycle parameters and their ranges tested
     dT_GC_min_tar = [float(j) for j in range(25,40,10)]
-    T_air_tar = [float(k) for k in range(250,110,-10)]
+    T_air_tar = [float(k) for k in range(120,110,-10)] #250
     T_air_inlet = [float(m) for m in range(15,40,20)]
     T_source_in = [40.0]
     n_comp = [3 - n for n in range(3)]
@@ -86,27 +87,18 @@ def optimisation_analysis():
     # Use parallel processing distributed over all cores to speed up the analysis
     n_cpu = os.cpu_count() 
     if cases != None and cases != []: 
-        # get_TRHP_optimal(parameters=cases[0])
-        executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
-        results = [executor.submit(get_TRHP_optimal, case) for case in cases]
-        executor.shutdown()
-        transfer_results(file_name=file_name)
+        get_TRHP_optimal(parameters=cases[0])
+        # executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
+        # results = [executor.submit(get_TRHP_optimal, case) for case in cases]
+        # executor.shutdown()
+        # transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        m = TRHP(
-            refrigerant='Butane',
-            dT_GC_min_tar=20.0,
-            T_air_tar=250.0,
-            T_air_inlet=15.0,
-            T_source_in=40.0,
-            n_comp=3,
-            dT_phx1_cold=9.84375000,
-            dT_phx2_cold=30.46875000,
-            dT_phx3_cold=1.40625000, 
-            comp_PR_uniform=True 
-            )
-
+        args = {'refrigerant': 'Butane', 'dT_GC_min_tar': 25.0, 'T_air_tar': 120.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 3, 'dT_phx1_cold': 1.5625, 'dT_phx2_cold': 0.0, 'dT_phx3_cold': 35.9375, 'comp_PR_uniform': True}
+        m = TRHP(**args)
+        TIC = timer()
         m.solve()
+        TOC = timer()
         
         if m.converged:
             m.get_summary()
@@ -119,8 +111,13 @@ def single_case_analysis():
 
             if type(m.output) is dict:
                 print_result_to_terminal(output=m.output)
+                print('Solve time:', TOC - TIC)
             
-            m.get_cycle_plot()
+            m.get_cycle_plot(x_axis='h', y_axis='T')
+            m.get_cycle_plot(x_axis='h', y_axis='P')
+            m.get_cycle_plot(x_axis='v', y_axis='P')
 
 if __name__=='__main__':
+    # single_case_analysis()
     optimisation_analysis()
+    

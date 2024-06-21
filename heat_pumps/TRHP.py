@@ -81,8 +81,8 @@ class TRHP(FlowSheetSolver, Properties):
         self.comp3 = Compressor(motor_eff=self.eff_motor, model_index=1, RP=self.RP) 
         self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
         self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
-        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
         self.gas_cooler3 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
         self.ihx = PlateHeatExchanger(dTmin=self.dTmin, model='dTmin_terminal', RP=self.RP)
         self.phx1 = PlateHeatExchanger(dT_c=self.dT_phx1_cold, model='fixed cold delta temperature', RP=self.RP)
         self.phx2 = PlateHeatExchanger(dT_c=self.dT_phx2_cold, model='fixed cold delta temperature', RP=self.RP)        
@@ -151,12 +151,7 @@ class TRHP(FlowSheetSolver, Properties):
         if self.P_H_est > 0.0:
             P_H = self.P_H_est
         else:
-            # T_crit = get_property_value('TCRIT', self.comp1.flow_in.fluid, 'TQ', 100, 0, RP=self.RP)
-            D = get_property_value('D', self.comp1.flow_in.fluid, 'TQ', self.Tsat_evap, 1, RP=self.RP) #(get_property_value('DCRIT', self.comp1.flow_in.fluid, 'TQ', 100, 0, RP=self.RP) + get_property_value('D', self.comp1.flow_in.fluid, 'TQ', self.Tsat_evap, 1, RP=self.RP)) / 2
-            # T_mid = max(self.T_air_tar - T_crit, 0.0) * 0.5 + min(self.T_air_tar, T_crit)
             P_H = get_property_value('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP)
-            # T_ref_out_est = self.T_air_tar + self.dT_GC_min_tar - (self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold) * 0.5
-            # P_H = get_property_value('P', self.comp1.flow_in.fluid, 'TS', T_ref_out_est, self.phx1.sink_out.entropy, RP=self.RP) 
             
         PR = (P_H / P_L)**(1 / self.n_comp)
         
@@ -325,7 +320,6 @@ class TRHP(FlowSheetSolver, Properties):
 
         self.operations.append(self.exp_valve)
         self.operations.append(self.evaporator)
-        self.operations.append(self.set_gc_air_massflow)
 
     def get_pressure_bounds(self):
         P_lb = self.comp3.flow_out.pressure
@@ -349,6 +343,7 @@ class TRHP(FlowSheetSolver, Properties):
                         P_lb = float(cs(0.0))
                 except: 
                     None
+                dt_plus = dt_neg
                 P_ub = P_lb
                 P_lb = self.comp1.flow_in.pressure + (P_lb - self.comp1.flow_in.pressure) * m_step
                 dt_neg = self.get_solve_state(P_lb)
@@ -366,6 +361,7 @@ class TRHP(FlowSheetSolver, Properties):
                         P_ub = float(cs(0.0))
                 except: 
                     None
+                dt_neg = dt_plus
                 P_lb = P_ub
                 P_ub = self.comp1.flow_in.pressure + (P_ub - self.comp1.flow_in.pressure) / m_step
                 dt_plus = self.get_solve_state(P_ub)
@@ -384,11 +380,11 @@ class TRHP(FlowSheetSolver, Properties):
         feasible = int((-dt_plus * dt_neg) / abs(dt_plus * dt_neg))
         
         if feasible == 1:
-            cs = CubicSpline(y=P, x=DT) if DT[0] < DT[1] else CubicSpline(y=P[::-1], x=DT[::-1])
-            P_i = float(cs(0.0))
-            self.converged = True
-        else:
-            self.converged = False
+            try:
+                cs = CubicSpline(y=P, x=DT) if DT[0] < DT[1] else CubicSpline(y=P[::-1], x=DT[::-1])
+                P_i = float(cs(0.0))
+            except:
+                P_i = P_lb + dt_plus / (dt_plus - dt_neg) * (P_ub - P_lb)
 
         return P_lb, P_ub, P_i, feasible
 
@@ -417,37 +413,60 @@ class TRHP(FlowSheetSolver, Properties):
             dW = self.tol * W - abs(self.comp1.power + self.comp2.power + self.comp3.power - W)
             dQ = self.tol * Q - abs(self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty - Q)
 
-            # if i > 8:
-            #     self.get_graph()
+        # self.get_cycle_plot(x_axis='h', y_axis='T')
+        self.set_gc_air_massflow.solve()
+        # self.get_cycle_plot(x_axis='h', y_axis='T')
 
         if i < i_max:
             self.converged = True
-            self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)
-            dT = self.gas_cooler4.sink_out.temperature - self.T_air_tar
+            e = self.gas_cooler4.sink_out.temperature - self.T_air_tar
         else:
             self.converged = False
-            self.COP = -np.inf
-            dT = -self.T_air_tar
+            e = -self.T_air_tar
 
-        return dT
+        return e
 
     def solve(self):
         #Solve heat pump cycle
         self.converged = False
         self.COP = -np.inf
-        # try:
-        if (self.T_air_tar - self.T_air_inlet) * 2/3 >= self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold:
+        
+        if (self.T_air_tar - self.T_air_inlet) * 2/3 + 2 >= self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold:
             P_lb, P_ub, P_i, feasible = self.get_pressure_bounds()     
             if feasible == 1:
                 #Solve the heat pump thermodynamics
-                r = root_scalar(f=self.get_solve_state, method='secant', bracket=(P_lb, P_ub), x0=P_i, rtol=self.tol)
-                if r.converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < 0.001:
+                try:
+                    r = root_scalar(f=self.get_solve_state, method='secant', bracket=(P_lb, P_ub), x0=P_i, rtol=self.tol)
+                except:
+                    try: 
+                        r = root_scalar(f=self.get_solve_state, method='bisect', bracket=(P_lb, P_ub), x0=P_i, rtol=self.tol)
+                    except:
+                        print('Heat pump model failed to solve.') 
+                            
+                if r.converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < self.tol * self.T_air_tar:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)                   
-                    # self.get_graph(x_axis='h', y_axis='T')
-                    # self.get_graph(x_axis='S', y_axis='P')
-                    # self.get_graph(x_axis='V', y_axis='P')
-        # except:
-        #     print('Heat pump model failed to solve.') 
+                    # self.get_cycle_plot(x_axis='h', y_axis='T')
+                    # self.get_cycle_plot(x_axis='S', y_axis='P')
+                    # self.get_cycle_plot(x_axis='V', y_axis='P')
+                else:
+                    self.converged = False
+                    print({
+                          'refrigerant' : self.refrigerant,
+                          'dT_GC_min_tar' : self.dT_GC_min_tar,
+                          'T_air_tar' : self.T_air_tar,
+                          'T_air_inlet' : self.T_air_inlet,
+                          'T_source_in' : self.T_source_in,
+                          'n_comp' : self.n_comp,
+                          'dT_phx1_cold' : self.dT_phx1_cold,
+                          'dT_phx2_cold' : self.dT_phx2_cold,
+                          'dT_phx3_cold' : self.dT_phx3_cold,
+                          'comp_PR_uniform' : self.comp_PR_uniform
+                          })
+                    None
+                    # self.get_cycle_plot(x_axis='h', y_axis='T')
+                    # self.get_cycle_plot(x_axis='S', y_axis='T')
+                    # self.get_cycle_plot(x_axis='V', y_axis='P')  
+                    
         return self.COP, self.comp3.flow_out.pressure
 
     def get_summary(self):
@@ -486,7 +505,9 @@ class TRHP(FlowSheetSolver, Properties):
 
     def get_cycle_plot(self, x_axis='h', y_axis='T'):
         g = Graph()
-        g.cycle(graph_obj=[
+        g.cycle(cycle_obj=[
+            [self.ihx, 'source'],
+            [self.exp_valve, 'siso'],
             [self.evaporator, 'sink'],
             [self.evap_sup, 'sink'],
             [self.ihx, 'sink'],
@@ -503,7 +524,11 @@ class TRHP(FlowSheetSolver, Properties):
             [self.gas_cooler2, 'source'],
             [self.phx1, 'source'],
             [self.gas_cooler1, 'source'], 
-            [self.ihx, 'source'],
-            [self.exp_valve, 'siso'],
             ], 
+            sink_obj=[
+                [self.gas_cooler4, 'sink'],
+                [self.gas_cooler3, 'sink'],
+                [self.gas_cooler2, 'sink'],
+                [self.gas_cooler1, 'sink'],
+            ],
             x_axis=x_axis, y_axis=y_axis)
