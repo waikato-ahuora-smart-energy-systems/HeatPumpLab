@@ -52,6 +52,9 @@ class BaseHeatExchanger:
         elif self.model == 'fixed hot temperature outlet':
             self.get_fixed_hot_T_outlet_model()
 
+        elif self.model == 'fixed hot quality outlet':
+            self.get_fixed_hot_Q_outlet_model()
+
         elif self.model == 'fixed cold delta temperature':
             self.get_fixed_cold_delta_T_model()
         
@@ -141,10 +144,18 @@ class BaseHeatExchanger:
 
     def get_fixed_hot_T_outlet_model(self):
         self.source_out.pressure = self.source_in.pressure - self.dP_h
-        # Tsat = get_property_value('T', self.source_out.fluid, 'PQ', self.source_out.pressure / 1000, 0, RP=self.source_out.RP)
-        # if abs(Tsat - self.source_out.temperature) < 1 or abs(Tsat - self.source_in.temperature) < 1:
-        #     None
         self.source_out.props_in_mPT()
+        self.duty = self.source_in.heat_flow - self.source_out.heat_flow
+        
+        self.sink_out.pressure = self.sink_in.pressure - self.dP_c
+        self.sink_out.enthalpy = self.sink_in.enthalpy + self.duty / self.sink_in.mass_flow
+        self.sink_out.props_in_mPH()
+
+        self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
+
+    def get_fixed_hot_Q_outlet_model(self):
+        self.source_out.pressure = self.source_in.pressure - self.dP_h
+        self.source_out.props_in_mPX()
         self.duty = self.source_in.heat_flow - self.source_out.heat_flow
         
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c

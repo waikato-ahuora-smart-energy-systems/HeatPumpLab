@@ -113,11 +113,12 @@ def single_case_analysis():
                 print_result_to_terminal(output=m.output)
                 print('Solve time:', TOC - TIC)
             
-            m.get_cycle_plot(x_axis='h', y_axis='T')
+            # m.get_cycle_plot(x_axis='h', y_axis='T')
             # m.get_cycle_plot(x_axis='h', y_axis='P')
             # m.get_cycle_plot(x_axis='v', y_axis='P')
+            None
 
 if __name__=='__main__':
-    # single_case_analysis()
-    optimisation_analysis()
+    single_case_analysis()
+    # optimisation_analysis()
     

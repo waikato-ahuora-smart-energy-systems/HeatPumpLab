@@ -12,11 +12,14 @@ class SetRelationship:
         self.c = c
         self.prop = prop
         self.prop2 = prop2
-        self.solve() #Change this to being explicit
+        self.solve()
 
     def solve(self):
         if self.prop == 'temperature':
             self.set_temperature()
+
+        elif self.prop == 'quality':
+            self.set_quality()
 
         elif self.prop == 'Mass Flow':
             self.set_mass_flow()
@@ -27,6 +30,16 @@ class SetRelationship:
             if self.prop2 == 'pressure':
                 obj.props_in_mPT()
             elif self.prop2 == 'quality':
+                obj.props_in_mTX()
+            else:
+                raise ValueError('Set relationship failed: ' + self.name)   
+
+    def set_quality(self):
+        for obj in self.target_obj: 
+            obj.quality = self.source_obj[0]
+            if self.prop2 == 'pressure':
+                obj.props_in_mPX()
+            elif self.prop2 == 'temperature':
                 obj.props_in_mTX()
             else:
                 raise ValueError('Set relationship failed: ' + self.name)   

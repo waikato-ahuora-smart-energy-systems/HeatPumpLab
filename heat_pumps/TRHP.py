@@ -12,7 +12,7 @@ from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve
 from streams import MassStream, Properties
 from streams.properties import get_property_value
 from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver
-from scipy.optimize import root_scalar
+from scipy.optimize import root_scalar, minimize_scalar
 from scipy.interpolate import CubicSpline
 from outputs import Graph
 import numpy as np
@@ -66,6 +66,7 @@ class TRHP(FlowSheetSolver, Properties):
         self.tol = tol
         self.converged = False
         self.COP = -np.inf
+        self.disp = False
         
         self.init_properties()
         self.init_components()
@@ -268,15 +269,15 @@ class TRHP(FlowSheetSolver, Properties):
         #Set special relationships between points in the cycle 
         if self.phx3_on == 1:
             self.set_phx3_dT_cold = SetRelationship( source_obj=self.phx3.sink_in, target_obj=[self.phx3.sink_out], c=self.dT_phx3_cold, prop='temperature', prop2='pressure' ) 
-            self.set_phx3_hot_T_in = SetRelationship( source_obj=self.phx3.sink_out, target_obj=[self.phx3.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
+            self.set_gc4_hot_out = SetRelationship( source_obj=self.phx3.sink_out, target_obj=[self.phx3.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
 
         if self.phx2_on == 1:    
             self.set_phx2_dT_cold = SetRelationship( source_obj=self.phx2.sink_in, target_obj=[self.phx2.sink_out], c=self.dT_phx2_cold, prop='temperature', prop2='pressure' ) 
-            self.set_phx2_hot_T_in = SetRelationship( source_obj=self.phx2.sink_out, target_obj=[self.phx2.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
+            self.set_gc3_hot_out = SetRelationship( source_obj=self.phx2.sink_out, target_obj=[self.phx2.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
         
         if self.phx1_on == 1:
             self.set_phx1_dT_cold = SetRelationship( source_obj=self.phx1.sink_in, target_obj=[self.phx1.sink_out], c=self.dT_phx1_cold, prop='temperature', prop2='pressure' ) 
-            self.set_phx1_hot_T_in = SetRelationship( source_obj=self.phx1.sink_out, target_obj=[self.phx1.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
+            self.set_gc2_hot_out = SetRelationship( source_obj=self.phx1.sink_out, target_obj=[self.phx1.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
 
         self.set_P_ints = CustomRelationship( source_obj=[self.comp1.flow_in, self.comp3.flow_out, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.flow_out, self.comp2.flow_out], relation=1, RP=self.RP, tol=self.tol )
         self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2, RP=self.RP, tol=self.tol )
@@ -291,16 +292,16 @@ class TRHP(FlowSheetSolver, Properties):
 
         if self.phx1_on == 1:
             self.operations.append(self.set_phx1_dT_cold)
-            self.operations.append(self.set_phx1_hot_T_in)
+            self.operations.append(self.set_gc2_hot_out)
         self.operations.append(self.comp1)
         if self.phx2_on == 1:
             self.operations.append(self.set_phx2_dT_cold)
-            self.operations.append(self.set_phx2_hot_T_in)
+            self.operations.append(self.set_gc3_hot_out)
         if self.comp2_on == 1:
             self.operations.append(self.comp2)
         if self.phx3_on == 1:
             self.operations.append(self.set_phx3_dT_cold)
-            self.operations.append(self.set_phx3_hot_T_in)
+            self.operations.append(self.set_gc4_hot_out)
         if self.comp3_on == 1:
             self.operations.append(self.comp3)
         
@@ -401,7 +402,9 @@ class TRHP(FlowSheetSolver, Properties):
 
         self.set_gc_air_massflow.solve()
 
-        # self.get_cycle_plot(x_axis='h', y_axis='T')
+        if self.disp:
+            self.get_cycle_plot(x_axis='h', y_axis='T')
+            None
 
         if i < i_max:
             self.converged = True
@@ -412,53 +415,114 @@ class TRHP(FlowSheetSolver, Properties):
 
         return e
 
+    def get_solve_gas_pressure(self, method, bnds, x0):
+        r = root_scalar(f=self.get_solve_state, 
+                        method=method, 
+                        bracket=bnds, 
+                        x0=x0, 
+                        rtol=self.tol)
+        r['error'] = self.tol * 100 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
+        return r
+
+    def set_quality_relationship(self):
+        e = []
+        gcs = [self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4]
+        for g in gcs:
+            T_sat = get_property_value('T', self.refrigerant, 'PQ', g.source_out.pressure / 1000, 0.0, RP=self.RP)
+            e.append(abs(T_sat - g.source_out.temperature))
+        
+        self.q_gc_out = [1.0]
+
+        n = e.index(min(e))
+        new_rel = SetRelationship( source_obj=self.q_gc_out, target_obj=[gcs[n].source_out], prop='quality', prop2='pressure' )        
+        if n == 1:
+            old_rel = self.set_gc2_hot_out
+            self.set_gc2_hot_out = new_rel
+            self.phx_fixed_src_quality = self.phx1
+        elif n == 2:
+            old_rel = self.set_gc3_hot_out
+            self.set_gc3_hot_out = new_rel
+            self.phx_fixed_src_quality = self.phx2
+        elif n == 3:
+            old_rel = self.set_gc4_hot_out
+            self.set_gc4_hot_out = new_rel
+            self.phx_fixed_src_quality = self.phx3
+        else:
+            ValueError('Error in the model.')
+
+        for i in range(len(self.operations)):
+            if self.operations[i] == old_rel:
+                self.operations[i] = new_rel
+                i0 = i
+
+        gcs[n].model = 'fixed hot quality outlet'
+        return gcs[n]
+
+    def get_phx_min_dT_for_solve_quality_method(self, QMASS_gc_out):
+        hx = self.phx_fixed_src_quality
+        self.q_gc_out[0] = QMASS_gc_out
+        r = self.get_solve_gas_pressure(method='secant', 
+                                        x0=self.P_i, 
+                                        bnds=(self.P_lb, self.P_ub))
+        e = hx.source_in.temperature - hx.sink_out.temperature - self.dTmin
+        return e
+    
+    def get_solve_quality(self):
+        r = root_scalar(f=self.get_phx_min_dT_for_solve_quality_method,
+                        method='brentq',
+                        bracket=(0.0, 1.0),
+                        x0=1.0,
+                        rtol=self.tol
+                        )
+        hx = self.phx_fixed_src_quality
+        r['error'] = self.tol * 100 - abs(hx.source_in.temperature - hx.sink_out.temperature - self.dTmin)
+        return r
+
+    def print_currrent_case(self):
+        print({
+            'refrigerant' : self.refrigerant,
+            'dT_GC_min_tar' : self.dT_GC_min_tar,
+            'T_air_tar' : self.T_air_tar,
+            'T_air_inlet' : self.T_air_inlet,
+            'T_source_in' : self.T_source_in,
+            'n_comp' : self.n_comp,
+            'dT_phx1_cold' : self.dT_phx1_cold,
+            'dT_phx2_cold' : self.dT_phx2_cold,
+            'dT_phx3_cold' : self.dT_phx3_cold,
+            'comp2_power_frac' : self.comp2_power_frac,
+            'comp3_power_frac' : self.comp3_power_frac,
+            'comp_PR_uniform' : self.comp_PR_uniform
+            })
+
     def solve(self):
         #Solve heat pump cycle
         self.converged = False
         self.COP = -np.inf
         
         if (self.T_air_tar - self.T_air_inlet) * 2/3 + 2 >= self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold:
-            P_lb, P_ub, P_i, feasible = self.get_pressure_bounds()     
-            if feasible == 1:
-                #Solve the heat pump thermodynamics
-                try:
-                    r = root_scalar(f=self.get_solve_state, method='secant', bracket=(P_lb, P_ub), x0=P_i, rtol=self.tol)
-                except:
-                    print('Heat pump model failed to solve.')
-                    self.converged = False
-                    
-                if r.converged == False or abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) > self.tol * self.T_air_tar:
-                    try: 
-                        r = root_scalar(f=self.get_solve_state, method='bisect', bracket=(P_lb, P_ub), x0=self.comp3.flow_out.pressure, rtol=self.tol)
-                    except:
-                        print('Heat pump model failed to solve.') 
-                        self.converged = False
+            self.P_lb, self.P_ub, self.P_i, self.feasible = self.get_pressure_bounds()     
+            if self.feasible == 1:
+                r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
+                if r['error'] < 0.0:
+                    # Try brentq method instead
+                    r = self.get_solve_gas_pressure(method='brentq', x0=r['root'], bnds=(self.P_lb, self.P_ub))
+                    if r['error'] < 0.0:
+                        # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
+                        # being near the saturation temperature, causing instability
+                        self.set_quality_relationship()
+                        self.disp = False
+                        self.P_i = r['root']
+                        r = self.get_solve_quality()
+                        self.get_cycle_plot(x_axis='h', y_axis='T')
+                        if r['error'] < 0.0:
+                            ValueError('Heat pump model failed to solve.')
+                            self.print_currrent_case()
+                            None
                 
-                if r.converged and self.converged and abs(self.gas_cooler4.sink_out.temperature - self.T_air_tar) < self.tol * self.T_air_tar:
+                if r['error'] and self.converged:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)                   
-                    # self.get_cycle_plot(x_axis='h', y_axis='T')
-                    # self.get_cycle_plot(x_axis='S', y_axis='P')
-                    # self.get_cycle_plot(x_axis='V', y_axis='P')
                 else:
                     self.converged = False
-                    print({
-                          'refrigerant' : self.refrigerant,
-                          'dT_GC_min_tar' : self.dT_GC_min_tar,
-                          'T_air_tar' : self.T_air_tar,
-                          'T_air_inlet' : self.T_air_inlet,
-                          'T_source_in' : self.T_source_in,
-                          'n_comp' : self.n_comp,
-                          'dT_phx1_cold' : self.dT_phx1_cold,
-                          'dT_phx2_cold' : self.dT_phx2_cold,
-                          'dT_phx3_cold' : self.dT_phx3_cold,
-                          'comp2_power_frac' : self.comp2_power_frac,
-                          'comp3_power_frac' : self.comp3_power_frac,
-                          'comp_PR_uniform' : self.comp_PR_uniform
-                          })
-                    None
-                    # self.get_cycle_plot(x_axis='h', y_axis='T')
-                    # self.get_cycle_plot(x_axis='S', y_axis='T')
-                    # self.get_cycle_plot(x_axis='V', y_axis='P')  
                     
         return self.COP, self.comp3.flow_out.pressure
 
