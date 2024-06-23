@@ -1,20 +1,20 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
-__email__ = 'tiself.walmsley@waikato.ac.nz'
+__email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2023'
 
 """
 High temperature transcritical-recuperative heat pump model
-By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tiself.walmsley@waikato.ac.nz)
+By Tim Walmsley and Keri Adamson, University of Waikato, 2021 (tim.walmsley@waikato.ac.nz)
 """
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import MassStream, Properties
 from streams.properties import get_property_value
 from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver
-from scipy.optimize import root_scalar, minimize_scalar
+from scipy.optimize import root_scalar 
 from scipy.interpolate import CubicSpline
-from outputs import Graph
+from outputs import Graph, print_result_to_csv
 import numpy as np
 
 class TRHP(FlowSheetSolver, Properties):
@@ -44,6 +44,7 @@ class TRHP(FlowSheetSolver, Properties):
         ):
         
         self.refrigerant = refrigerant
+        self.cycle_type = None
         self.source = source
         self.Sink = Sink
         self.T_air_tar = T_air_tar
@@ -420,7 +421,8 @@ class TRHP(FlowSheetSolver, Properties):
                         method=method, 
                         bracket=bnds, 
                         x0=x0, 
-                        rtol=self.tol)
+                        rtol=self.tol,
+                        )
         r['error'] = self.tol * 100 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
         return r
 
@@ -459,11 +461,11 @@ class TRHP(FlowSheetSolver, Properties):
         return gcs[n]
 
     def get_phx_min_dT_for_solve_quality_method(self, QMASS_gc_out):
-        hx = self.phx_fixed_src_quality
         self.q_gc_out[0] = QMASS_gc_out
         r = self.get_solve_gas_pressure(method='secant', 
                                         x0=self.P_i, 
                                         bnds=(self.P_lb, self.P_ub))
+        hx = self.phx_fixed_src_quality
         e = hx.source_in.temperature - hx.sink_out.temperature - self.dTmin
         return e
     
@@ -471,11 +473,10 @@ class TRHP(FlowSheetSolver, Properties):
         r = root_scalar(f=self.get_phx_min_dT_for_solve_quality_method,
                         method='brentq',
                         bracket=(0.0, 1.0),
-                        x0=1.0,
+                        x0=0.5,
                         rtol=self.tol
                         )
-        hx = self.phx_fixed_src_quality
-        r['error'] = self.tol * 100 - abs(hx.source_in.temperature - hx.sink_out.temperature - self.dTmin)
+        r['error'] = self.tol * 100 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
         return r
 
     def print_currrent_case(self):
@@ -510,35 +511,39 @@ class TRHP(FlowSheetSolver, Properties):
                         # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
                         # being near the saturation temperature, causing instability
                         self.set_quality_relationship()
-                        self.disp = False
                         self.P_i = r['root']
                         r = self.get_solve_quality()
-                        self.get_cycle_plot(x_axis='h', y_axis='T')
+                        
                         if r['error'] < 0.0:
-                            ValueError('Heat pump model failed to solve.')
-                            self.print_currrent_case()
+                            print('Heat pump model failed to solve.')
+                            self.get_summary()
+                            print_result_to_csv(self.output,file_name='results/Cases', suffix= '-Unsolved')
                             None
                 
-                if r['error'] and self.converged:
+                if r['error'] > 0.0 and self.converged:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)                   
                 else:
                     self.converged = False
-                    
+        
+        P_crit = get_property_value('PCRIT', self.refrigerant, 'PT', 1, 100, RP=self.RP)
+        self.cycle_type = 'Transcritical' if self.comp3.flow_out.pressure > P_crit else 'Subcritical'
+
         return self.COP, self.comp3.flow_out.pressure
 
     def get_summary(self):
         self.output = {
-            #Key results
-            'COP:' : self.COP,
-            'Tol:' : abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature) / self.T_air_tar,
-            'Converged:' : self.converged,
             #Parameters
-            'refrigerant:' : self.refrigerant,
+            'Refrigerant:' : self.refrigerant,
+            'Type:' : self.cycle_type,
             'n_comp:' : self.n_comp,
             'T_source_in:' : self.evaporator.source_in.temperature,
             'dT_min Gas Cooler:' : self.dT_GC_min_tar,
             'T_air_inlet:' : self.gas_cooler1.sink_in.temperature,
             'T_air_tar:' : self.T_air_tar,
+            #Key results
+            'COP:' : self.COP,
+            'Tol:' : abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature) / self.T_air_tar,
+            'Converged:' : self.converged,
             #Additional results
             'Actual air T:' : self.gas_cooler4.sink_out.temperature,            
             'Evap T:' : self.Tsat_evap,

@@ -32,6 +32,7 @@ def optimisation_analysis():
     n_comp = [2, 1]
     w = [float(o/100) for o in range(100, 40, -10)]
     Tsat_evap = [10.0]
+    comp_PR_uniform = [False]
 
     # Location of saved results
     file_name='results/TRHP_results'
@@ -48,8 +49,10 @@ def optimisation_analysis():
                 'T_source_in' : T_source_in[m],
                 'n_comp' : n_comp[n],
                 'Tsat_evap' : Tsat_evap[0],
-                'result_parameters' : {'weight': w[o]}
+                'result_parameters' : {'weight': w[o]},
+                'comp_PR_uniform': comp_PR_uniform[p],
                 } 
+                for p in range(len(comp_PR_uniform))
                 for m in range(len(T_source_in))
                 for j in range(len(dT_GC_min_tar))
                 for l in range(len(T_air_inlet))
@@ -67,7 +70,7 @@ def optimisation_analysis():
         for case in cases:
             for res in prev_results:
                 if (
-                    case['refrigerant'] == res['refrigerant:'] and 
+                    case['refrigerant'] == res['Refrigerant:'] and 
                     abs(float(case['dT_GC_min_tar']) - float(res['dT_min Gas Cooler:'])) < 0.01 and 
                     abs(float(case['T_air_tar']) - float(res['T_air_tar:'])) < 0.01 and 
                     abs(float(case['T_air_inlet']) - float(res['T_air_inlet:'])) < 0.01 and 
@@ -77,7 +80,7 @@ def optimisation_analysis():
                     ):
                     c.append(c_index)
             c_index = c_index + 1
-                
+        
         for c_index in reversed(c):
             cases.pop(c_index)
 
@@ -94,7 +97,7 @@ def optimisation_analysis():
         transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'Butane', 'dT_GC_min_tar': 20.0, 'T_air_tar': 230.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 98.4375, 'dT_phx2_cold': 32.8125, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.2578125, 'comp3_power_frac': 0.0, 'comp_PR_uniform': False}
+        args = {'refrigerant': 'Butane', 'dT_GC_min_tar': 20.0, 'T_air_tar': 190.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 84.78010563748185, 'dT_phx2_cold': 1.4901161193847656e-08, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.75, 'comp3_power_frac': 0.0, 'comp_PR_uniform': False}
         m = TRHP(**args)
         TIC = timer()
         m.solve()
@@ -119,6 +122,7 @@ def single_case_analysis():
             None
 
 if __name__=='__main__':
-    single_case_analysis()
-    # optimisation_analysis()
+    # single_case_analysis()
+    optimisation_analysis()
+    None
     

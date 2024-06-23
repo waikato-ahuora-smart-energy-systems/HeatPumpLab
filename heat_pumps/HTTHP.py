@@ -272,7 +272,6 @@ class HTTHP:
         if self.phx1_on == 1:
             self.AP.append(self.gas_cooler2)
 
-
     def solve(self):
         #Solve heat pump cycle                        
         if self.set_pressure_bounds() > 0.0:
@@ -286,7 +285,6 @@ class HTTHP:
             self.converged = False          
         
         self.summarise_results()
-
 
     def set_pressure_bounds(self):
         P_gc_est = get_property_value('P', self.comp1.flow_in.fluid, 'TS', self.T_air_tar + (self.dT_GC_min_tar - self.dT_phx1_max + self.dT_phx2_max + self.dT_phx3_max) / 2, self.comp1.flow_in.entropy, self.RP) 
@@ -323,7 +321,6 @@ class HTTHP:
 
         return -dt_plus * dt_neg    
    
-
     def state_solve(self, P_comp_out):
         self.converged = False
         self.comp3.flow_out.pressure = P_comp_out
@@ -359,7 +356,6 @@ class HTTHP:
                 self.converged = True
             
         return self.gas_cooler4.sink_out.temperature - self.T_air_tar
-
 
     def summarise_results(self):
         self.output = {
