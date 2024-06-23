@@ -1,7 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from scipy.optimize import shgo, LinearConstraint
+from scipy.optimize import shgo, minimize, LinearConstraint
 from heat_pumps import TRHP
 from outputs import print_result_to_terminal, print_result_to_csv
 from timeit import default_timer as timer
@@ -104,7 +104,7 @@ def get_results_summary(result, x, parameters):
 
 def get_TRHP_optimal(parameters):
     tol = 1e-4
-
+    parameters['comp_PR_uniform'] = True
     bnds, xi = get_bounds(parameters)
     d_xi = dict_var(xi, parameters)
     m = TRHP(**parameters, **d_xi)
@@ -112,7 +112,7 @@ def get_TRHP_optimal(parameters):
     parameters['result_parameters']['COP_0'] = COP_0
     parameters['result_parameters']['P_0'] = P_0
     
-    if COP_0 > 0.0:        
+    if COP_0 > 0.0:
         result = shgo(func=get_max_multiObj, 
                       args=[parameters], 
                       bounds=bnds,
@@ -125,14 +125,32 @@ def get_TRHP_optimal(parameters):
                       sampling_method='sobol', 
                       options={'tol': tol}, 
                       minimizer_kwargs={'method' : 'SLSQP',
-                                        'options': {'tol': tol}})
-
+                                        'options': {'tol': tol}}
+                      )
         print('Obj:', -result.fun, 
               '  Iter:', result.nfev, 
               '  Vars:' ,result.x)
 
         if result.success:
             get_results_summary(result, result.x, parameters)
+        
+        parameters['comp_PR_uniform'] = False
+        result = minimize(fun=get_max_multiObj, 
+                          x0=result.x,
+                          args=parameters, 
+                          bounds=bnds,
+                          constraints=LinearConstraint(A=np.array([1.0] * len(xi)), 
+                                                       lb=0.0, 
+                                                       ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
+                          method='SLSQP',
+                          tol=tol,
+                          )
+        print('Obj:', -result.fun, 
+              '  Iter:', result.nfev, 
+              '  Vars:' ,result.x)
+
+        if result.success:
+            get_results_summary(result, result.x, parameters)     
 
     # m.get_cycle_plot(x_axis='h', y_axis='P')
     # m.get_cycle_plot(x_axis='s', y_axis='T')
