@@ -127,30 +127,36 @@ def get_TRHP_optimal(parameters):
                       minimizer_kwargs={'method' : 'SLSQP',
                                         'options': {'tol': tol}}
                       )
-        print('Obj:', -result.fun, 
-              '  Iter:', result.nfev, 
-              '  Vars:' ,result.x)
+        print('Obj:'   , -result.fun, 
+              '  Iter:',  result.nfev, 
+              '  Vars:',  result.x)
 
-        if result.success:
-            get_results_summary(result, result.x, parameters)
-        
-        parameters['comp_PR_uniform'] = False
-        result = minimize(fun=get_max_multiObj, 
-                          x0=result.x,
-                          args=parameters, 
-                          bounds=bnds,
-                          constraints=LinearConstraint(A=np.array([1.0] * len(xi)), 
-                                                       lb=0.0, 
-                                                       ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
-                          method='SLSQP',
-                          tol=tol,
-                          )
-        print('Obj:', -result.fun, 
-              '  Iter:', result.nfev, 
-              '  Vars:' ,result.x)
+        parameters0 = parameters
+        result0 = result
 
-        if result.success:
-            get_results_summary(result, result.x, parameters)     
+        if result0.success:
+            parameters['comp_PR_uniform'] = False
+            result = minimize(fun=get_max_multiObj, 
+                            x0=result.x,
+                            args=parameters, 
+                            bounds=bnds,
+                            constraints=LinearConstraint(A=np.array([1.0] * len(xi)), 
+                                                        lb=0.0, 
+                                                        ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
+                            method='SLSQP',
+                            tol=tol,
+                            )
+            print('Obj:'   , -result.fun, 
+                '  Iter:',  result.nfev, 
+                '  Vars:',  result.x)
+
+            parameters1 = parameters
+            result1 = result
+
+            get_results_summary(result0, result0.x, parameters0)
+
+            if result1.success:
+                get_results_summary(result1, result1.x, parameters1)     
 
     # m.get_cycle_plot(x_axis='h', y_axis='P')
     # m.get_cycle_plot(x_axis='s', y_axis='T')

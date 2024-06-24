@@ -373,6 +373,13 @@ class TRHP(FlowSheetSolver, Properties):
                 P_i = float(cs(0.0))
             except:
                 P_i = P_lb + dt_plus / (dt_plus - dt_neg) * (P_ub - P_lb)
+                
+            dt_plus = self.get_solve_state(min(P_i * 1.01, P_ub))
+            dt_neg = self.get_solve_state(min(P_i * 0.99, P_lb))
+            if dt_plus > 0.0:
+                P_ub = min(P_i * 1.01, P_ub)
+            if dt_neg < 0.0:
+                P_lb = min(P_i * 0.99, P_lb)
 
         return P_lb, P_ub, P_i, feasible
 
@@ -455,7 +462,6 @@ class TRHP(FlowSheetSolver, Properties):
         for i in range(len(self.operations)):
             if self.operations[i] == old_rel:
                 self.operations[i] = new_rel
-                i0 = i
 
         gcs[n].model = 'fixed hot quality outlet'
         return gcs[n]
@@ -470,13 +476,22 @@ class TRHP(FlowSheetSolver, Properties):
         return e
     
     def get_solve_quality(self):
-        r = root_scalar(f=self.get_phx_min_dT_for_solve_quality_method,
-                        method='brentq',
-                        bracket=(0.0, 1.0),
-                        x0=0.5,
-                        rtol=self.tol
-                        )
-        r['error'] = self.tol * 100 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
+        e_one = self.get_phx_min_dT_for_solve_quality_method(1.0)
+        P_one = self.comp3.flow_out.pressure
+        e_zero = self.get_phx_min_dT_for_solve_quality_method(0.0)
+        P_zero = self.comp3.flow_out.pressure
+        if e_zero * e_one < 0:
+            r = root_scalar(f=self.get_phx_min_dT_for_solve_quality_method,
+                            method='brentq',
+                            bracket=(0.0, 1.0),
+                            x0=0.5,
+                            rtol=self.tol
+                            )
+            r['error'] = self.tol * 100 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
+        else:
+            if abs(P_zero - P_one) > 1:
+                None
+            r = {'error' : 1.0}
         return r
 
     def print_currrent_case(self):
@@ -506,14 +521,18 @@ class TRHP(FlowSheetSolver, Properties):
                 r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
                 if r['error'] < 0.0:
                     # Try brentq method instead
-                    r = self.get_solve_gas_pressure(method='brentq', x0=r['root'], bnds=(self.P_lb, self.P_ub))
+                    r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(self.P_lb, self.P_ub))
                     if r['error'] < 0.0:
                         # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
                         # being near the saturation temperature, causing instability
-                        self.set_quality_relationship()
-                        self.P_i = r['root']
-                        r = self.get_solve_quality()
-                        
+                        if r['root'] < get_property_value('PCRIT', self.refrigerant, 'TQ', 10, 0.0, RP=self.RP):
+                            self.set_quality_relationship()
+                            self.P_i = r['root']
+                            r = self.get_solve_quality()
+                        else:
+                            # self.get_cycle_plot()
+                            None
+
                         if r['error'] < 0.0:
                             print('Heat pump model failed to solve.')
                             self.get_summary()
@@ -525,8 +544,8 @@ class TRHP(FlowSheetSolver, Properties):
                 else:
                     self.converged = False
         
-        P_crit = get_property_value('PCRIT', self.refrigerant, 'PT', 1, 100, RP=self.RP)
-        self.cycle_type = 'Transcritical' if self.comp3.flow_out.pressure > P_crit else 'Subcritical'
+                P_crit = get_property_value('PCRIT', self.refrigerant, 'PT', 1, 100, RP=self.RP)
+                self.cycle_type = 'Transcritical' if self.comp3.flow_out.pressure > P_crit else 'Subcritical'
 
         return self.COP, self.comp3.flow_out.pressure
 
@@ -540,6 +559,7 @@ class TRHP(FlowSheetSolver, Properties):
             'dT_min Gas Cooler:' : self.dT_GC_min_tar,
             'T_air_inlet:' : self.gas_cooler1.sink_in.temperature,
             'T_air_tar:' : self.T_air_tar,
+            'Comp_PR_uniform:' : self.comp_PR_uniform,
             #Key results
             'COP:' : self.COP,
             'Tol:' : abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature) / self.T_air_tar,
