@@ -91,7 +91,18 @@ def optimisation_analysis():
         transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'Carbon dioxide', 'dT_GC_min_tar': 20.0, 'T_air_tar': 150.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 4.7277914574402145, 'dT_phx2_cold': 26.560929850759248, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.5, 'comp3_power_frac': 0.0, 'comp_PR_uniform': True}
+        args = {'refrigerant': 'Carbon dioxide', 
+                'dT_GC_min_tar': 20.0, 
+                'T_air_tar': 170.0, 
+                'T_air_inlet': 15.0, 
+                'T_source_in': 40.0, 
+                'n_comp': 2, 
+                'dT_phx1_cold': 0.0, 
+                'dT_phx2_cold': 0.0, 
+                'dT_phx3_cold': 0.0, 
+                'comp2_power_frac': 0.5, 
+                'comp3_power_frac': 0.0, 
+                'comp_PR_uniform': True}
         m = TRHP(**args)
         TIC = timer()
         m.solve()

@@ -526,9 +526,9 @@ class TRHP(FlowSheetSolver, Properties):
                     if r['error'] < 0.0:
                         # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
                         # being near the saturation temperature, causing instability
-                        if r['root'] < get_property_value('PCRIT', self.refrigerant, 'TQ', 10, 0.0, RP=self.RP):
+                        if exp(r['root']) < get_property_value('PCRIT', self.refrigerant, 'TQ', 10, 0.0, RP=self.RP):
                             self.set_quality_relationship()
-                            self.P_i = r['root']
+                            self.P_i = exp(r['root'])
                             r = self.get_solve_quality()
                         else:
                             self.P_lb = get_property_value('PCRIT', self.refrigerant, 'TQ', 10, 0.0, RP=self.RP) + 10e-4
