@@ -6,10 +6,11 @@ from streams import get_property_value
 from scipy.optimize import brentq, root_scalar
 
 class CustomRelationship:
-    def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9, RP=None):
+    def __init__(self, source_obj=0, target_obj=0, additional_obj=0, relation=0, tol=1e-9, RP=None):
         self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
+        self.additional_obj = additional_obj
         self.relation = relation
         self.RP = RP
 
@@ -28,6 +29,8 @@ class CustomRelationship:
 
         else:
             pass
+
+        return 0
     
     def Determine_T(self):
         self.target_obj.temperature = max(
@@ -49,6 +52,12 @@ class CustomRelationship:
         m_air_list = []
         #Hot side terminal temperature
         dQ = 0
+
+        Q_tot = 0
+        for gc in self.source_obj:
+            Q_tot += gc.duty
+        self.mcp_air = Q_tot / (self.additional_obj[0] - self.source_obj[0].sink_in.temperature)
+
         for gc in self.source_obj:
             dQ += gc.source_in.heat_flow - gc.source_out.heat_flow
             T_air_i = gc.source_in.temperature - gc.dTmin
@@ -56,9 +65,22 @@ class CustomRelationship:
             
             if dh_air > 0:
                 m_air_list.append(dQ / dh_air)
-                self.mcp_air = dQ / (T_air_i - self.source_obj[0].sink_in.temperature)
+                # self.mcp_air = dQ / (T_air_i - self.source_obj[0].sink_in.temperature)
 
                 if self.mcp_air > gc.source_in.mass_flow * gc.source_in.heat_capacity and self.mcp_air < gc.source_out.mass_flow * gc.source_out.heat_capacity:
+                    # def get_parallel_mcp_with_h_ref(h_ref):
+                    #     P_ave = (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy)
+                    #     T_mid = get_property_value('T', gc.source_in.fluid, 'PH', P_ave / 1000, h_ref, RP=self.RP)
+                    #     H_plus = get_property_value('H', gc.source_in.fluid, 'PT', P_ave / 1000, T_mid + 0.5, RP=self.RP)
+                    #     H_minus = get_property_value('H', gc.source_in.fluid, 'PT', P_ave / 1000, T_mid - 0.5, RP=self.RP)
+                    #     mcp_ref = gc.source_in.mass_flow * (H_plus - H_minus)
+                    #     return self.mcp_air - mcp_ref
+                    
+                    # result = root_scalar(f=get_parallel_mcp_with_h_ref, 
+                    #                     method='brentq', 
+                    #                     bracket=(gc.source_in.enthalpy, gc.source_out.enthalpy), 
+                    #                     x0=(gc.source_in.enthalpy + gc.source_out.enthalpy) / 2, 
+                    #                     rtol=self.tol)
                     result = root_scalar(f=lambda h_ref: self.mcp_air - gc.source_in.mass_flow * get_property_value('CP', gc.source_in.fluid, 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy) / 1000, h_ref, RP=self.RP), 
                                         method='brentq', 
                                         bracket=(gc.source_in.enthalpy, gc.source_out.enthalpy), 
@@ -78,7 +100,7 @@ class CustomRelationship:
                         #     pprint.pprint([get_property_value('CP', gc.source_in.fluid, 'PH', gc.source_in.pressure / 1000, gc.source_in.enthalpy + (gc.source_out.enthalpy - gc.source_in.enthalpy) * i / 100, RP=self.RP) for i in range(101)])
 
                     dQ_i = dQ - gc.source_in.mass_flow * (gc.source_in.enthalpy - h_ref)
-                    if dQ_i > self.tol:
+                    if dQ_i > 1e-3:
                         T_air_i = get_property_value('T', gc.source_in.fluid, 'PH', gc.source_in.pressure / 1000, h_ref, RP=self.RP) - gc.dTmin
                         dh_air = get_property_value('H', gc.sink_in.fluid, 'PT', gc.sink_in.pressure / 1000, T_air_i, RP=self.RP) - self.source_obj[0].sink_in.enthalpy
                         m_air_list.append(dQ_i / dh_air)                

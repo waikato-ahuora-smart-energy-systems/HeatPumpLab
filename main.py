@@ -27,7 +27,7 @@ def optimisation_analysis():
 
     # Cycle parameters and their ranges tested
     dT_GC_min_tar = [20.0]
-    T_air_tar = [float(k) for k in range(250, 90, -10)] 
+    T_air_tar = [float(k) for k in range(200, 90, -10)] 
     T_air_inlet = [15.0] 
     T_source_in = [40.0]
     n_comp = [2, 1]
@@ -84,14 +84,14 @@ def optimisation_analysis():
     # Use parallel processing distributed over all cores to speed up the analysis
     n_cpu = os.cpu_count() 
     if cases != None and cases != []: 
-        get_TRHP_optimal(parameters=cases[0])
-        # executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
-        # results = [executor.submit(get_TRHP_optimal, case) for case in cases]
-        # executor.shutdown()
-        # transfer_results(file_name=file_name)
+        # get_TRHP_optimal(parameters=cases[0])
+        executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
+        results = [executor.submit(get_TRHP_optimal, case) for case in cases]
+        executor.shutdown()
+        transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'Butane', 'dT_GC_min_tar': 20.0, 'T_air_tar': 190.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 84.78010563748185, 'dT_phx2_cold': 1.4901161193847656e-08, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.75, 'comp3_power_frac': 0.0, 'comp_PR_uniform': False}
+        args = {'refrigerant': 'Carbon dioxide', 'dT_GC_min_tar': 20.0, 'T_air_tar': 150.0, 'T_air_inlet': 15.0, 'T_source_in': 40.0, 'n_comp': 2, 'dT_phx1_cold': 4.7277914574402145, 'dT_phx2_cold': 26.560929850759248, 'dT_phx3_cold': 0.0, 'comp2_power_frac': 0.5, 'comp3_power_frac': 0.0, 'comp_PR_uniform': True}
         m = TRHP(**args)
         TIC = timer()
         m.solve()
@@ -116,7 +116,7 @@ def single_case_analysis():
             None
 
 if __name__=='__main__':
-    # single_case_analysis()
-    optimisation_analysis()
+    single_case_analysis()
+    # optimisation_analysis()
     None
     

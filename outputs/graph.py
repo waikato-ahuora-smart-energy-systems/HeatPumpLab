@@ -59,10 +59,12 @@ class Graph:
 
             if obj[0].name == 'Gas cooler':
                 plt.plot(x, y, color='red')
-            elif obj[0].name == 'Plate heat exchanger':
+            elif obj[0].name == 'Recuperator':
                 plt.plot(x, y, color='green')
-            elif obj[0].name == 'Evaporator':
+            elif obj[0].name == 'Internal heat exchanger':
                 plt.plot(x, y, color='orange')
+            elif obj[0].name == 'Evaporator':
+                plt.plot(x, y, color='aqua')
             else:
                 plt.plot(x, y, color='black')
         
@@ -89,7 +91,15 @@ class Graph:
                     else:
                         y = data[obj[1]]['P']
 
-                    plt.plot(x, y, color='blue')            
+                    if obj[0].name == 'Gas cooler':
+                        plt.plot(x, y, color='blue')
+                    # elif obj[0].name == 'Recuperator':
+                    #     plt.plot(x, y, color='green')
+                    # elif obj[0].name == 'Internal heat exchanger':
+                    #     plt.plot(x, y, color='orange')
+                    else:
+                        plt.plot(x, y, color='black')
+                    # plt.plot(x, y, color='blue')            
 
         if x_axis == 'h' or x_axis == 'enthalpy':
             plt.xlabel('Enthalpy [kJ/kg]')

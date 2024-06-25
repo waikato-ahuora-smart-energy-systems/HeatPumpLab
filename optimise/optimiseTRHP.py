@@ -134,7 +134,7 @@ def get_TRHP_optimal(parameters):
         parameters0 = parameters
         result0 = result
 
-        if result0.success:
+        if result0.success and parameters['n_comp'] > 1:
             parameters['comp_PR_uniform'] = False
             result = minimize(fun=get_max_multiObj, 
                             x0=result.x,
@@ -153,8 +153,10 @@ def get_TRHP_optimal(parameters):
             parameters1 = parameters
             result1 = result
 
+        if result0.success:
             get_results_summary(result0, result0.x, parameters0)
 
+        if parameters['n_comp'] > 1: 
             if result1.success:
                 get_results_summary(result1, result1.x, parameters1)     
 

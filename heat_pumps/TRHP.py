@@ -15,6 +15,7 @@ from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolve
 from scipy.optimize import root_scalar 
 from scipy.interpolate import CubicSpline
 from outputs import Graph, print_result_to_csv
+from math import log, exp
 import numpy as np
 
 class TRHP(FlowSheetSolver, Properties):
@@ -78,20 +79,20 @@ class TRHP(FlowSheetSolver, Properties):
 
     def init_components(self):
         #Initialisation of unit operations
-        self.comp1 = Compressor(motor_eff=self.eff_motor, model_index=1, RP=self.RP)
-        self.comp2 = Compressor(motor_eff=self.eff_motor, model_index=1, RP=self.RP) 
-        self.comp3 = Compressor(motor_eff=self.eff_motor, model_index=1, RP=self.RP) 
-        self.gas_cooler1 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
-        self.gas_cooler2 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
-        self.gas_cooler3 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
-        self.gas_cooler4 = GasCooler(dTmin=self.dT_GC_min_tar, RP=self.RP)
-        self.ihx = PlateHeatExchanger(dTmin=self.dTmin, model='dTmin_terminal', RP=self.RP)
-        self.phx1 = PlateHeatExchanger(dT_c=self.dT_phx1_cold, model='fixed cold delta temperature', RP=self.RP)
-        self.phx2 = PlateHeatExchanger(dT_c=self.dT_phx2_cold, model='fixed cold delta temperature', RP=self.RP)        
-        self.phx3 = PlateHeatExchanger(dT_c=self.dT_phx3_cold, model='fixed cold delta temperature', RP=self.RP)
-        self.exp_valve = ExpansionValve(RP=self.RP)
-        self.evaporator = Evaporator(model='saturated gas outlet evaporator', RP=self.RP)
-        self.evap_sup = PlateHeatExchanger(model='fixed cold temperature outlet', RP=self.RP)
+        self.comp1 = Compressor(name='Compressor', motor_eff=self.eff_motor, model_index=1, RP=self.RP)
+        self.comp2 = Compressor(name='Compressor', motor_eff=self.eff_motor, model_index=1, RP=self.RP) 
+        self.comp3 = Compressor(name='Compressor', motor_eff=self.eff_motor, model_index=1, RP=self.RP) 
+        self.gas_cooler1 = GasCooler(name='Gas cooler', dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.gas_cooler2 = GasCooler(name='Gas cooler', dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.gas_cooler3 = GasCooler(name='Gas cooler', dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.gas_cooler4 = GasCooler(name='Gas cooler', dTmin=self.dT_GC_min_tar, RP=self.RP)
+        self.ihx = PlateHeatExchanger(name='Internal heat exchanger', dTmin=self.dTmin, model='dTmin_terminal', RP=self.RP)
+        self.phx1 = PlateHeatExchanger(name='Recuperator', dT_c=self.dT_phx1_cold, model='fixed cold delta temperature', RP=self.RP)
+        self.phx2 = PlateHeatExchanger(name='Recuperator', dT_c=self.dT_phx2_cold, model='fixed cold delta temperature', RP=self.RP)        
+        self.phx3 = PlateHeatExchanger(name='Recuperator', dT_c=self.dT_phx3_cold, model='fixed cold delta temperature', RP=self.RP)
+        self.exp_valve = ExpansionValve(name='Expansion valve', RP=self.RP)
+        self.evaporator = Evaporator(name='Evaporator', model='saturated gas outlet evaporator', RP=self.RP)
+        self.evap_sup = PlateHeatExchanger(name='Evaporator', model='fixed cold temperature outlet', RP=self.RP)
 
     def init_structure(self):
         #Check the PHE combo
@@ -281,7 +282,7 @@ class TRHP(FlowSheetSolver, Properties):
             self.set_gc2_hot_out = SetRelationship( source_obj=self.phx1.sink_out, target_obj=[self.phx1.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
 
         self.set_P_ints = CustomRelationship( source_obj=[self.comp1.flow_in, self.comp3.flow_out, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.flow_out, self.comp2.flow_out], relation=1, RP=self.RP, tol=self.tol )
-        self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2, RP=self.RP, tol=self.tol )
+        self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], additional_obj=[self.T_air_tar], relation=2, RP=self.RP, tol=self.tol )
         #self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
 
     def init_solver_pathway(self):
@@ -328,7 +329,7 @@ class TRHP(FlowSheetSolver, Properties):
         P_ub = P_lb
         P_i = P_lb
 
-        dt_plus = self.get_solve_state(P_lb)
+        dt_plus = self.get_solve_state(log(P_lb))
         dt_neg = dt_plus
         P = np.array(P_lb)
         DT = np.array(dt_plus)
@@ -341,7 +342,7 @@ class TRHP(FlowSheetSolver, Properties):
                 dt_plus = dt_neg
                 P_ub = P_lb
                 P_lb = self.comp1.flow_in.pressure + (P_lb - self.comp1.flow_in.pressure) * m_step
-                dt_neg = self.get_solve_state(P_lb)
+                dt_neg = self.get_solve_state(log(P_lb))
                 P = np.append(P, P_lb)
                 DT = np.append(DT, dt_neg)
                 i += 1
@@ -352,7 +353,7 @@ class TRHP(FlowSheetSolver, Properties):
                 dt_neg = dt_plus
                 P_lb = P_ub
                 P_ub = self.comp1.flow_in.pressure + (P_ub - self.comp1.flow_in.pressure) / m_step
-                dt_plus = self.get_solve_state(P_ub)
+                dt_plus = self.get_solve_state(log(P_ub))
                 P = np.append(P, P_ub)
                 DT = np.append(DT, dt_plus)
                 i += 1
@@ -360,7 +361,7 @@ class TRHP(FlowSheetSolver, Properties):
         if P_lb < self.comp1.flow_in.pressure:
             #Check the low pressure bound remains above the evaporator pressure
             P_lb = self.comp1.flow_in.pressure
-            dt_neg = self.get_solve_state(P_lb)
+            dt_neg = self.get_solve_state(log(P_lb))
             if P_ub < P_lb:
                 #Check the upper pressure bound stays above the low pressure bound
                 dt_neg = dt_plus
@@ -373,9 +374,9 @@ class TRHP(FlowSheetSolver, Properties):
                 P_i = float(cs(0.0))
             except:
                 P_i = P_lb + dt_plus / (dt_plus - dt_neg) * (P_ub - P_lb)
-                
-            dt_plus = self.get_solve_state(min(P_i * 1.01, P_ub))
-            dt_neg = self.get_solve_state(min(P_i * 0.99, P_lb))
+
+            dt_plus = self.get_solve_state(log(min(P_i * 1.01, P_ub)))
+            dt_neg = self.get_solve_state(log(min(P_i * 0.99, P_lb)))
             if dt_plus > 0.0:
                 P_ub = min(P_i * 1.01, P_ub)
             if dt_neg < 0.0:
@@ -383,8 +384,8 @@ class TRHP(FlowSheetSolver, Properties):
 
         return P_lb, P_ub, P_i, feasible
 
-    def get_solve_state(self, P_comp_out):
-        self.comp3.flow_out.pressure = P_comp_out
+    def get_solve_state(self, log_P_comp_out):
+        self.comp3.flow_out.pressure = exp(log_P_comp_out)
         i = 0; i_max = 10
         h = 0.0; m = 0.0; P = 0.0; W = 0.0
         dh = 0; dm = 0; dP = 0; dW = 0
@@ -410,7 +411,7 @@ class TRHP(FlowSheetSolver, Properties):
 
         self.set_gc_air_massflow.solve()
 
-        if self.disp:
+        if 0:
             self.get_cycle_plot(x_axis='h', y_axis='T')
             None
 
@@ -430,7 +431,7 @@ class TRHP(FlowSheetSolver, Properties):
                         x0=x0, 
                         rtol=self.tol,
                         )
-        r['error'] = self.tol * 100 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
+        r['error'] = self.tol * 1000 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
         return r
 
     def set_quality_relationship(self):
@@ -469,8 +470,8 @@ class TRHP(FlowSheetSolver, Properties):
     def get_phx_min_dT_for_solve_quality_method(self, QMASS_gc_out):
         self.q_gc_out[0] = QMASS_gc_out
         r = self.get_solve_gas_pressure(method='secant', 
-                                        x0=self.P_i, 
-                                        bnds=(self.P_lb, self.P_ub))
+                                        x0=log(self.P_i), 
+                                        bnds=(log(self.P_lb), log(self.P_ub)))
         hx = self.phx_fixed_src_quality
         e = hx.source_in.temperature - hx.sink_out.temperature - self.dTmin
         return e
@@ -518,10 +519,10 @@ class TRHP(FlowSheetSolver, Properties):
         if (self.T_air_tar - self.T_air_inlet) * 2/3 + 2 >= self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold:
             self.P_lb, self.P_ub, self.P_i, self.feasible = self.get_pressure_bounds()     
             if self.feasible == 1:
-                r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
+                r = self.get_solve_gas_pressure(method='secant', x0=log(self.P_i), bnds=(log(self.P_lb), log(self.P_ub)))
                 if r['error'] < 0.0:
                     # Try brentq method instead
-                    r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(self.P_lb, self.P_ub))
+                    r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(log(self.P_lb), log(self.P_ub)))
                     if r['error'] < 0.0:
                         # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
                         # being near the saturation temperature, causing instability
@@ -530,6 +531,11 @@ class TRHP(FlowSheetSolver, Properties):
                             self.P_i = r['root']
                             r = self.get_solve_quality()
                         else:
+                            self.P_lb = get_property_value('PCRIT', self.refrigerant, 'TQ', 10, 0.0, RP=self.RP) + 10e-4
+                            dt_neg = self.get_solve_state(log(self.P_lb))
+                            # print(dt_neg)
+                            if dt_neg < 0.0:
+                                r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(log(self.P_lb), log(self.P_ub)))
                             # self.get_cycle_plot()
                             None
 
