@@ -156,6 +156,8 @@ class TRHP(FlowSheetSolver, Properties):
             P_H = self.P_H_est
         else:
             P_H = get_property_value('P', self.refrigerant, 'TS', self.T_air_tar + self.dT_GC_min_tar * 2, self.phx1.sink_out.entropy, RP=self.RP)
+            if P_H < P_L:
+                P_H = P_L * 16
             
         PR = (P_H / P_L) ** (1 / self.n_comp)
         

@@ -25,16 +25,17 @@ class Properties:
         return self.RP
 
 # Retrieve more than one property value from REFPROP
-def get_properties_values(propsOut, fluid, propsIn, prop1, prop2, RP):
-    UNITS = RP.GETENUMdll(0,'SI with C').iEnum
-    return RP.REFPROPdll(fluid, propsIn, propsOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output
+def get_properties_values(propsOut, fluid, propsIn, prop1, prop2, RP, src='REFPROP'):
+    if src == 'REFPROP':
+        UNITS = RP.GETENUMdll(0,'SI with C').iEnum
+        return RP.REFPROPdll(fluid, propsIn, propsOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output
 
 # Retrieve one property value from REFPROP
-def get_property_value(propOut, fluid, propsIn, prop1, prop2, RP): 
-    UNITS = RP.GETENUMdll(0,'SI with C').iEnum
-    if propOut == 'P' or propOut == 'PCRIT' or propOut == 'Pcrit':
-        var = RP.REFPROPdll(fluid, propsIn, propOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output[0] * 1000
-    else:
-        var = RP.REFPROPdll(fluid, propsIn, propOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output[0]
+def get_property_value(propOut, fluid, propsIn, prop1, prop2, RP, src='REFPROP'): 
+    if src == 'REFPROP':
+        UNITS = RP.GETENUMdll(0,'SI with C').iEnum
+        if propOut == 'P' or propOut == 'p' or propOut == 'PCRIT' or propOut == 'Pcrit':
+            var = RP.REFPROPdll(fluid, propsIn, propOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output[0] * 1000
+        else:
+            var = RP.REFPROPdll(fluid, propsIn, propOut, UNITS, 0, 0, prop1, prop2, [1.0]).Output[0]
     return var
-

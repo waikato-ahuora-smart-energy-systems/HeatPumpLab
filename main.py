@@ -12,6 +12,9 @@ from outputs import print_result_to_terminal, read_csv_to_results, transfer_resu
 def optimisation_analysis():
     # Refrigerants analysed
     refrigerant = [
+                    # 'propane;isobutane;butane|.4;.3;.3 mol',
+                    'PROPYLEN',
+                    'DME',
                     'Butane', 
                     'Carbon dioxide', 
                     'Propane', 
@@ -28,7 +31,7 @@ def optimisation_analysis():
 
     # Cycle parameters and their ranges tested
     dT_GC_min_tar = [20.0]
-    T_air_tar = [float(k) for k in range(200, 90, -10)] 
+    T_air_tar = [float(k) for k in range(250, 90, -10)] 
     T_air_inlet = [15.0] 
     T_source_in = [40.0]
     n_comp = [2, 1]
@@ -93,7 +96,7 @@ def optimisation_analysis():
         transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'Propane', 
+        args = {'refrigerant': 'propane;butane|.5;.5 mol', 
                 'dT_GC_min_tar': 20.0, 
                 'T_air_tar': 140.0, 
                 'T_air_inlet': 15.0, 
@@ -105,7 +108,7 @@ def single_case_analysis():
                 'comp2_power_frac': 0.5, 
                 'comp3_power_frac': 0.0,
                 'comp_PR_uniform': True,
-                'display': True,
+                'display': False,
                 }
         m = TRHP(**args)
         TIC = timer()
@@ -125,8 +128,8 @@ def single_case_analysis():
                 print_result_to_terminal(output=m.output)
                 print('Solve time:', TOC - TIC)
             
-            # m.get_cycle_plot(x_axis='h', y_axis='T')
-            # m.get_cycle_plot(x_axis='h', y_axis='P')
+            m.get_cycle_plot(x_axis='h', y_axis='T')
+            m.get_cycle_plot(x_axis='h', y_axis='P')
             # m.get_cycle_plot(x_axis='v', y_axis='P')
             None
 
