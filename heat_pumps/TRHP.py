@@ -1,7 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
-__date__ = '2023'
+__date__ = '2024'
 
 """
 High temperature transcritical-recuperative heat pump model
@@ -40,7 +40,8 @@ class TRHP(FlowSheetSolver, Properties):
             comp2_power_frac=0.0, 
             comp3_power_frac=0.0,
             P_H_est=0.0,
-            tol=1e-9,
+            tol=1e-12,
+            display=False,
             result_parameters=None
         ):
         
@@ -68,7 +69,7 @@ class TRHP(FlowSheetSolver, Properties):
         self.tol = tol
         self.converged = False
         self.COP = -np.inf
-        self.disp = False
+        self.disp = display
         
         self.init_properties()
         self.init_components()
@@ -154,7 +155,7 @@ class TRHP(FlowSheetSolver, Properties):
         if self.P_H_est > 0.0:
             P_H = self.P_H_est
         else:
-            P_H = get_property_value('P', self.refrigerant, 'TS', self.T_air_tar, self.phx1.sink_out.entropy, RP=self.RP)
+            P_H = get_property_value('P', self.refrigerant, 'TS', self.T_air_tar + self.dT_GC_min_tar * 2, self.phx1.sink_out.entropy, RP=self.RP)
             
         PR = (P_H / P_L) ** (1 / self.n_comp)
         
@@ -429,9 +430,9 @@ class TRHP(FlowSheetSolver, Properties):
                         method=method, 
                         bracket=bnds, 
                         x0=x0, 
-                        rtol=self.tol,
+                        xtol=self.tol,
                         )
-        r['error'] = self.tol * 1000 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
+        r['error'] = 1e-6 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
         return r
 
     def set_quality_relationship(self):
@@ -486,7 +487,7 @@ class TRHP(FlowSheetSolver, Properties):
                             method='brentq',
                             bracket=(0.0, 1.0),
                             x0=0.5,
-                            rtol=self.tol
+                            xtol=self.tol
                             )
             r['error'] = self.tol * 100 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
         else:
@@ -517,12 +518,21 @@ class TRHP(FlowSheetSolver, Properties):
         self.COP = -np.inf
         
         if (self.T_air_tar - self.T_air_inlet) * 2/3 + 2 >= self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold:
-            self.P_lb, self.P_ub, self.P_i, self.feasible = self.get_pressure_bounds()     
+            self.P_lb, self.P_ub, self.P_i, self.feasible = self.get_pressure_bounds()
+
             if self.feasible == 1:
                 r = self.get_solve_gas_pressure(method='secant', x0=log(self.P_i), bnds=(log(self.P_lb), log(self.P_ub)))
+
+                if self.disp:
+                    self.get_cycle_plot()
+
                 if r['error'] < 0.0:
                     # Try brentq method instead
                     r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(log(self.P_lb), log(self.P_ub)))
+
+                    if self.disp:
+                        self.get_cycle_plot()
+
                     if r['error'] < 0.0:
                         # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
                         # being near the saturation temperature, causing instability
@@ -530,20 +540,21 @@ class TRHP(FlowSheetSolver, Properties):
                             self.set_quality_relationship()
                             self.P_i = exp(r['root'])
                             r = self.get_solve_quality()
+                            if self.disp:
+                                self.get_cycle_plot()
                         else:
                             self.P_lb = get_property_value('PCRIT', self.refrigerant, 'TQ', 10, 0.0, RP=self.RP) + 10e-4
                             dt_neg = self.get_solve_state(log(self.P_lb))
                             # print(dt_neg)
                             if dt_neg < 0.0:
                                 r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(log(self.P_lb), log(self.P_ub)))
-                            # self.get_cycle_plot()
-                            None
+                            if self.disp:
+                                self.get_cycle_plot()
 
                         if r['error'] < 0.0:
                             print('Heat pump model failed to solve.')
                             self.get_summary()
                             print_result_to_csv(self.output,file_name='results/Cases', suffix= '-Unsolved')
-                            None
                 
                 if r['error'] > 0.0 and self.converged:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)                   

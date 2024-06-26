@@ -11,18 +11,19 @@ from outputs import print_result_to_terminal, read_csv_to_results, transfer_resu
 
 def optimisation_analysis():
     # Refrigerants analysed
-    refrigerant = ['Butane', 
-                   'Carbon dioxide', 
-                   'Propane', 
-                   'Isobutane', 
-                   'R1233zd(E)', 
-                   'R1336mzz(Z)', 
-                   'R1234ze(E)', 
-                   'R1234ze(Z)', 
-                   'R1234yf', 
-                   'R1243zf', 
-                   'R1224yd(Z)', 
-                   'Ammonia'
+    refrigerant = [
+                    'Butane', 
+                    'Carbon dioxide', 
+                    'Propane', 
+                    'Isobutane', 
+                    'R1233zd(E)', 
+                    'R1336mzz(Z)', 
+                    'R1234ze(E)', 
+                    'R1234ze(Z)', 
+                    'R1234yf', 
+                    'R1243zf', 
+                    'R1224yd(Z)', 
+                    'Ammonia',
                    ]
 
     # Cycle parameters and their ranges tested
@@ -51,7 +52,8 @@ def optimisation_analysis():
                 'n_comp' : n_comp[n],
                 'Tsat_evap' : Tsat_evap[0],
                 'result_parameters' : {'weight': w[o]},
-                } 
+             } 
+
                 for m in range(len(T_source_in))
                 for j in range(len(dT_GC_min_tar))
                 for l in range(len(T_air_inlet))
@@ -91,18 +93,20 @@ def optimisation_analysis():
         transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'Carbon dioxide', 
+        args = {'refrigerant': 'Propane', 
                 'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 170.0, 
+                'T_air_tar': 140.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0, 
                 'n_comp': 2, 
-                'dT_phx1_cold': 0.0, 
-                'dT_phx2_cold': 0.0, 
+                'dT_phx1_cold': 42.44504513100736, 
+                'dT_phx2_cold': 14.062652616826133, 
                 'dT_phx3_cold': 0.0, 
                 'comp2_power_frac': 0.5, 
-                'comp3_power_frac': 0.0, 
-                'comp_PR_uniform': True}
+                'comp3_power_frac': 0.0,
+                'comp_PR_uniform': True,
+                'display': True,
+                }
         m = TRHP(**args)
         TIC = timer()
         m.solve()
@@ -127,7 +131,7 @@ def single_case_analysis():
             None
 
 if __name__=='__main__':
-    single_case_analysis()
-    # optimisation_analysis()
+    # single_case_analysis()
+    optimisation_analysis()
     None
     
