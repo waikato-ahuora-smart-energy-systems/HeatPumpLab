@@ -26,17 +26,25 @@ class ExpansionValve:
         self.flow_out.props_in_mPH()
 
     def get_graph_data(self, divisions=50):
-        data = {'siso': 
-                    {'P': [], 'h': [], 'T': [], 's': [], 'v': [], 'H': []}   
-                }
-
-        for i in range(divisions + 1):
-            dlog_P = (log(self.flow_in.pressure) - log(self.flow_out.pressure)) * i / divisions
-            data['siso']['P'].append(exp(log(self.flow_in.pressure) - dlog_P))
-            data['siso']['h'].append(self.flow_in.enthalpy)
-            data['siso']['T'].append(    get_property_value('T', self.flow_out.fluid, 'PH', data['siso']['P'][-1] / 1000, data['siso']['h'][-1], self.RP))
-            data['siso']['s'].append(    get_property_value('S', self.flow_out.fluid, 'PH', data['siso']['P'][-1] / 1000, data['siso']['h'][-1], self.RP))
-            data['siso']['v'].append(1 / get_property_value('D', self.flow_out.fluid, 'PH', data['siso']['P'][-1] / 1000, data['siso']['h'][-1], self.RP))
-            data['siso']['H'].append(0.0)
+        data = {'siso': []}
         
+        def get_inter_data(s_in, s_out):
+            ls = []
+            # PV^n = const
+            PR_i = (self.flow_out.pressure / self.flow_in.pressure) ** (1 / divisions)
+            dh_tot = s_in.enthalpy - s_out.enthalpy
+            for i in range(divisions + 1):
+                m_str = MassStream(name='source i',
+                                   fluid=s_in.fluid, 
+                                   pressure=s_in.pressure * (PR_i) ** i, 
+                                   enthalpy=s_in.enthalpy - dh_tot * i / divisions, 
+                                   mass_flow=s_in.mass_flow, 
+                                   RP=self.RP)
+                m_str.props_in_mPH()
+                ls.append(m_str)
+            
+            return ls
+
+        data['siso'] = get_inter_data(self.flow_in, self.flow_out)
+
         return data

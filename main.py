@@ -96,7 +96,7 @@ def optimisation_analysis():
         transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'propane;butane|.5;.5 mol', 
+        args = {'refrigerant': 'butane', 
                 'dT_GC_min_tar': 20.0, 
                 'T_air_tar': 140.0, 
                 'T_air_inlet': 15.0, 
@@ -134,7 +134,7 @@ def single_case_analysis():
             None
 
 if __name__=='__main__':
-    # single_case_analysis()
-    optimisation_analysis()
+    single_case_analysis()
+    # optimisation_analysis()
     None
     

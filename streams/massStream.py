@@ -13,6 +13,7 @@ class MassStream:
         self.enthalpy = enthalpy
         self.entropy = 0
         self.quality = quality
+        self.specific_volume = 0
         self.RP = RP
 
         if not (self.fluid == '') and underdefined == 0:
@@ -26,38 +27,38 @@ class MassStream:
                 self.props_in_mTX()
 
     def props_in_mPH(self):
-        props = get_properties_values('QMASS;T;S;CP', self.fluid, 'PH', self.pressure / 1000, self.enthalpy, RP=self.RP)
-        self.quality = props[0];  self.temperature = props[1];  self.entropy = props[2];  self.heat_capacity = props[3] 
+        props = get_properties_values('QMASS;T;S;CP;D', self.fluid, 'PH', self.pressure / 1000, self.enthalpy, RP=self.RP)
+        self.quality = props[0];  self.temperature = props[1];  self.entropy = props[2];  self.heat_capacity = props[3];  self.specific_volume = 1 / props[4] 
         self.heat_flow = self.enthalpy * self.mass_flow
         del props
 
     def props_in_mPT(self):
-        props = get_properties_values('QMASS;H;S;CP', self.fluid, 'PT', self.pressure / 1000, self.temperature, RP=self.RP)
-        self.quality = props[0];  self.enthalpy = props[1];  self.entropy = props[2];  self.heat_capacity = props[3]
+        props = get_properties_values('QMASS;H;S;CP;D', self.fluid, 'PT', self.pressure / 1000, self.temperature, RP=self.RP)
+        self.quality = props[0];  self.enthalpy = props[1];  self.entropy = props[2];  self.heat_capacity = props[3];  self.specific_volume = 1 / props[4]
         self.heat_flow = self.enthalpy * self.mass_flow
         del props
 
     def props_in_mPX(self):
-        props = get_properties_values('T;H;S;CP', self.fluid, 'PQMASS', self.pressure / 1000, self.quality, RP=self.RP)
-        self.temperature = props[0];  self.enthalpy = props[1];  self.entropy = props[2];  self.heat_capacity = props[3]
+        props = get_properties_values('T;H;S;CP;D', self.fluid, 'PQMASS', self.pressure / 1000, self.quality, RP=self.RP)
+        self.temperature = props[0];  self.enthalpy = props[1];  self.entropy = props[2];  self.heat_capacity = props[3];  self.specific_volume = 1 / props[4]
         self.heat_flow = self.enthalpy * self.mass_flow
         del props
 
     def props_in_mPS(self):
-        props = get_properties_values('T;H;QMASS;CP', self.fluid, 'PS', self.pressure / 1000, self.entropy, RP=self.RP)
-        self.temperature = props[0];  self.enthalpy = props[1];  self.quality = props[2];  self.heat_capacity = props[3]
+        props = get_properties_values('T;H;QMASS;CP;D', self.fluid, 'PS', self.pressure / 1000, self.entropy, RP=self.RP)
+        self.temperature = props[0];  self.enthalpy = props[1];  self.quality = props[2];  self.heat_capacity = props[3];  self.specific_volume = 1 / props[4]
         self.heat_flow = self.enthalpy * self.mass_flow
         del props
 
     def props_in_mTX(self):
-        props = get_properties_values('P;H;S;CP', self.fluid, 'TQMASS', self.temperature, self.quality, RP=self.RP)
-        self.pressure = props[0] * 1000;  self.enthalpy = props[1];  self.entropy = props[2];  self.heat_capacity = props[3]
+        props = get_properties_values('P;H;S;CP;D', self.fluid, 'TQMASS', self.temperature, self.quality, RP=self.RP)
+        self.pressure = props[0] * 1000;  self.enthalpy = props[1];  self.entropy = props[2];  self.heat_capacity = props[3];  self.specific_volume = 1 / props[4]
         self.heat_flow = self.enthalpy * self.mass_flow
         del props
         
     def props_extend(self): 
         props = get_properties_values('D;PRANDTL;VIS;TCX', self.fluid, 'PH', self.pressure / 1000, self.enthalpy, RP=self.RP)
-        self.density = props[0];  self.prandtl = props[1];  self.viscosity = props[2] /1000000000; self.thermal_conductivity = props[3] / 1000000;  self.specific_volume = 1 / props[0]
+        self.density = props[0];  self.prandtl = props[1];  self.viscosity = props[2] /1000000000; self.thermal_conductivity = props[3] / 1000000
         del props
         
     def get_combined_stream(self, fld1, fld2):
