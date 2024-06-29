@@ -1,12 +1,10 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-import math
-from streams import get_property_value
 from components.common.commonHeatExchanger import BaseHeatExchanger
 
 class PlateHeatExchanger(BaseHeatExchanger):   
-    def __init__(self, name='Plate heat exchanger', hx_eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-6, RP=None):
+    def __init__(self, name='Plate heat exchanger', hx_eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-6):
         self.name = name
         self.model = model
         self.bypassed = bypassed
@@ -18,7 +16,6 @@ class PlateHeatExchanger(BaseHeatExchanger):
         self.dP_h = dP_h
         self.dP_c = dP_c
         self.tol = tol
-        self.RP = RP
         self.variable_dP_model = False
         self.init_stream_connections()
         self.init_performance_metrics()
@@ -98,12 +95,12 @@ class PlateHeatExchanger(BaseHeatExchanger):
             self.source_in.props_extend()
             den_avg_h = (self.source_in.density + self.source_out.density) /2
             f_h = 1.22 /  ( RE_h ** 0.252 )
-            self.dP_h = ( ( 2 * f_h * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_h* self.phx_D_hyd ) )  / 1000
+            self.dP_h = ( ( 2 * f_h * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_h* self.phx_D_hyd ) ) 
             
             #Calculates coldside pressure drop
             den_avg_c = (self.sink_in.density + self.sink_out.density) /2
             f_c = 1.22 /  ( RE_c ** 0.252 )
-            self.dP_c = ( ( 2 * f_c * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.phx_D_hyd ) )  / 1000  
+            self.dP_c = ( ( 2 * f_c * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.phx_D_hyd ) )   
             test = 0           
 
     
@@ -126,13 +123,13 @@ class PlateHeatExchanger(BaseHeatExchanger):
             self.source_in.props_extend()
             self.source_out.props_extend()
             
-            k_h = ( get_property_value('TCX', self.source_in.fluid, 'PT', self.source_in.pressure / 1000, ( self.source_in.temperature + self.source_out.temperature ) / 2, self.RP) ) / 1000
-            Pr_h = get_property_value('prandtl', self.source_in.fluid, 'PT', self.source_in.pressure / 1000, ( ( self.source_in.temperature + self.source_out.temperature ) / 2 ), self.RP)
-            Vis_h = ( get_property_value('VIS', self.source_in.fluid, 'PT', self.source_in.pressure / 1000, ( self.source_in.temperature + self.source_out.temperature ) / 2, self.RP) ) * ( 10 ** - 6 )
+            k_h = ( get_property_value('TCX', self.source_in.fluid, 'PT', self.source_in.pressure, ( self.source_in.temperature + self.source_out.temperature ) / 2, self.RP) )
+            Pr_h = get_property_value('prandtl', self.source_in.fluid, 'PT', self.source_in.pressure, ( ( self.source_in.temperature + self.source_out.temperature ) / 2 ), self.RP)
+            Vis_h = ( get_property_value('VIS', self.source_in.fluid, 'PT', self.source_in.pressure, ( self.source_in.temperature + self.source_out.temperature ) / 2, self.RP) ) * ( 10 ** - 6 )
             
-            k_c = ( get_property_value('TCX', self.sink_in.fluid, 'PT', self.sink_in.pressure / 1000, ( self.sink_in.temperature + self.sink_out.temperature ) / 2, self.RP) ) / 1000
-            Pr_c = get_property_value('prandtl', self.sink_in.fluid, 'PT', self.sink_in.pressure / 1000, ( ( self.sink_in.temperature + self.sink_out.temperature ) / 2 ), self.RP)
-            Vis_c = ( get_property_value('VIS', self.sink_in.fluid, 'PT', self.sink_in.pressure / 1000, ( self.sink_in.temperature + self.sink_out.temperature ) / 2, self.RP) ) * ( 10 ** - 6 )
+            k_c = ( get_property_value('TCX', self.sink_in.fluid, 'PT', self.sink_in.pressure, ( self.sink_in.temperature + self.sink_out.temperature ) / 2, self.RP) )
+            Pr_c = get_property_value('prandtl', self.sink_in.fluid, 'PT', self.sink_in.pressure, ( ( self.sink_in.temperature + self.sink_out.temperature ) / 2 ), self.RP)
+            Vis_c = ( get_property_value('VIS', self.sink_in.fluid, 'PT', self.sink_in.pressure, ( self.sink_in.temperature + self.sink_out.temperature ) / 2, self.RP) ) * ( 10 ** - 6 )
             
             Wp = 0.5 * self.phx_Length
             
@@ -172,19 +169,19 @@ class PlateHeatExchanger(BaseHeatExchanger):
             
             #Calculates hotside pressure drop
             self.source_in.props_extend()
-            #density_h = get_property_value('D', self.source_in.fluid, 'PT', self.source_in.pressure / 1000, ( ( self.source_in.temperature + self.source_out.temperature )  / 2 ), self.RP)
+            #density_h = get_property_value('D', self.source_in.fluid, 'PT', self.source_in.pressure, ( ( self.source_in.temperature + self.source_out.temperature )  / 2 ), self.RP)
             den_avg_h = (self.source_in.density + self.source_out.density) /2
             #f_h = 1.22 /  ( RE_h ** 0.252 )
             f_h = 38 /  ( RE_h )
-            #self.dP_h = ( ( 2 * f_h * self.phx_Length *  ( G ** 2 ) )  /  ( density_h * self.phx_D_hyd ) )  / 1000
-            self.dP_h = ( ( 2 * f_h * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_h* self.phx_D_hyd ) )  / 1000
+            #self.dP_h = ( ( 2 * f_h * self.phx_Length *  ( G ** 2 ) )  /  ( density_h * self.phx_D_hyd ) ) 
+            self.dP_h = ( ( 2 * f_h * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_h* self.phx_D_hyd ) ) 
             
             #Calculates coldside pressure drop
-            #density_c = get_property_value('D', self.sink_in.fluid, 'PT', self.sink_in.pressure / 1000, ( ( self.sink_in.temperature + self.sink_out.temperature )  / 2 ), self.RP)
+            #density_c = get_property_value('D', self.sink_in.fluid, 'PT', self.sink_in.pressure, ( ( self.sink_in.temperature + self.sink_out.temperature )  / 2 ), self.RP)
             den_avg_c = (self.sink_in.density + self.sink_out.density) /2
             #f_c = 1.22 /  ( RE_c ** 0.252 )
             f_c = 38 /  ( RE_c)
-            #self.dP_c = ( ( 2 * f_c * self.phx_Length *  ( G ** 2 ) )  /  ( density_c * self.phx_D_hyd ) )  / 1000
-            self.dP_c = ( ( 2 * f_c * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.phx_D_hyd ) )  / 1000         
+            #self.dP_c = ( ( 2 * f_c * self.phx_Length *  ( G ** 2 ) )  /  ( density_c * self.phx_D_hyd ) ) 
+            self.dP_c = ( ( 2 * f_c * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_c * self.phx_D_hyd ) )          
         '''
        

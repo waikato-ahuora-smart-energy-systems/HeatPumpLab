@@ -1,18 +1,17 @@
 __author__ = 'Tim Walmsley'
 __credits__ = ['Keri Adamson']
 
-from streams import MassStream, get_property_value
+from streams import MassStream
 from math import log, exp
 
 class ExpansionValve:
-    def __init__(self, name='Expansion valve', flow_in = MassStream(), flow_out = MassStream(), specific_heat_loss=0.0, tol=1e-6, RP=None):
+    def __init__(self, name='Expansion valve', flow_in = MassStream('flow_in'), flow_out = MassStream('flow_out'), specific_heat_loss=0.0, tol=1e-6):
         self.name = name
         self.flow_in = flow_in
         self.flow_out = flow_out
         self.specific_heat_loss = specific_heat_loss
         self.tol = tol
         self.power = 0.0
-        self.RP = RP
 
     def get_outlet_enthalpy(self):
         if self.flow_in.mass_flow > self.tol:
@@ -35,11 +34,11 @@ class ExpansionValve:
             dh_tot = s_in.enthalpy - s_out.enthalpy
             for i in range(divisions + 1):
                 m_str = MassStream(name='source i',
-                                   fluid=s_in.fluid, 
+                                   fluid=s_in.RP_fluid, 
                                    pressure=s_in.pressure * (PR_i) ** i, 
                                    enthalpy=s_in.enthalpy - dh_tot * i / divisions, 
                                    mass_flow=s_in.mass_flow, 
-                                   RP=self.RP)
+                                   )
                 m_str.props_in_mPH()
                 ls.append(m_str)
             

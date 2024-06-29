@@ -1,14 +1,14 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from streams import get_property_value, MassStream
-from math import log
+from streams import MassStream, Properties
 
 class Compressor:
-    def __init__(self, name='Compressor', flow_in = MassStream(), flow_out = MassStream(), model_index=0, motor_eff=1.0, RP=None):
+    def __init__(self, name='Compressor', flow_in = MassStream('flow_in'), flow_out = MassStream('flow_out'), model_index=0, motor_eff=1.0, RP=Properties()):
         self.name = name
         self.flow_in = flow_in
         self.flow_out = flow_out
+        self.flow_out_isen = MassStream('flow_out_isen')
         self.motor_eff = motor_eff
         self.isentropic_eff = 0.0
         self.pressure_ratio = 1.0
@@ -31,7 +31,7 @@ class Compressor:
         return self.overall_eff / self.motor_eff
         
     def get_compressor_power(self):
-        h_isen = get_property_value('H', self.flow_in.fluid, 'PS', self.flow_out.pressure / 1000, self.flow_in.entropy, self.RP)
+        h_isen = self.flow_out.RP_fluid.get_properties('H', 'PS', self.flow_out.pressure, self.flow_in.entropy)[0]
         dh_shaft = (h_isen - self.flow_in.enthalpy)  / self.isentropic_eff
         self.shaft_work = dh_shaft * self.flow_in.mass_flow
         self.flow_out.enthalpy = self.flow_in.enthalpy + self.shaft_work / self.flow_in.mass_flow
@@ -52,11 +52,10 @@ class Compressor:
             dh_tot = s_in.enthalpy - s_out.enthalpy
             for i in range(divisions + 1):
                 m_str = MassStream(name='source i',
-                                   fluid=s_in.fluid, 
+                                   fluid=s_in.RP_fluid, 
                                    pressure=s_in.pressure * (PR_i) ** i, 
                                    enthalpy=s_in.enthalpy - dh_tot * i / divisions, 
-                                   mass_flow=s_in.mass_flow, 
-                                   RP=self.RP)
+                                   mass_flow=s_in.mass_flow)
                 m_str.props_in_mPH()
                 ls.append(m_str)
             

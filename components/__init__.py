@@ -1,5 +1,5 @@
 from components.compressor import Compressor
-from components.ejector import Ejector
+# from components.ejector import Ejector
 from components.evaporator import Evaporator
 from components.expansionValve import ExpansionValve
 from components.gasCooler import GasCooler

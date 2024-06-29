@@ -96,14 +96,14 @@ def optimisation_analysis():
         transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'butane', 
+        args = {'refrigerant': 'propane', #;butane|.5;.5|mass
                 'dT_GC_min_tar': 20.0, 
                 'T_air_tar': 140.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0, 
                 'n_comp': 2, 
-                'dT_phx1_cold': 42.44504513100736, 
-                'dT_phx2_cold': 14.062652616826133, 
+                'dT_phx1_cold': 40.0, 
+                'dT_phx2_cold': 0.0, 
                 'dT_phx3_cold': 0.0, 
                 'comp2_power_frac': 0.5, 
                 'comp3_power_frac': 0.0,
@@ -129,7 +129,7 @@ def single_case_analysis():
                 print('Solve time:', TOC - TIC)
             
             m.get_cycle_plot(x_axis='h', y_axis='T')
-            m.get_cycle_plot(x_axis='h', y_axis='P')
+            # m.get_cycle_plot(x_axis='h', y_axis='P')
             # m.get_cycle_plot(x_axis='v', y_axis='P')
             None
 

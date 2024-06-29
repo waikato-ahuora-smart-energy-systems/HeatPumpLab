@@ -2,7 +2,7 @@ __author__ = 'Tim Walmsley and Lana Kong'
 __credits__ = ['']
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
-from streams import get_property_value, MassStream
+from streams import MassStream
 from logic_operations import SetRelationship, CustomRelationship
 from scipy.optimize import brentq
 
