@@ -9,14 +9,13 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021-2024 (tim.walmsley
 
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator
 from streams import MassStream, Properties
-from logic_operations import SetRelationship, CustomRelationship, FlowSheetSolver
+from logic_operations import SetRelationship, CustomRelationship
 from scipy.optimize import root_scalar 
 from scipy.interpolate import CubicSpline
 from outputs import Graph, print_result_to_csv
-from math import log, exp
 import numpy as np
 
-class TRHP(FlowSheetSolver):
+class TRHP():
     def __init__(
             self, 
             refrigerant='R1336mzz(Z)', 
@@ -333,7 +332,7 @@ class TRHP(FlowSheetSolver):
         P_ub = P_lb
         P_i = P_lb
 
-        dt_plus = self.get_solve_state(log(P_lb))
+        dt_plus = self.get_solve_state(P_lb)
         dt_neg = dt_plus
         P = np.array(P_lb)
         DT = np.array(dt_plus)
@@ -346,7 +345,7 @@ class TRHP(FlowSheetSolver):
                 dt_plus = dt_neg
                 P_ub = P_lb
                 P_lb = self.comp1.flow_in.pressure + (P_lb - self.comp1.flow_in.pressure) * m_step
-                dt_neg = self.get_solve_state(log(P_lb))
+                dt_neg = self.get_solve_state(P_lb)
                 P = np.append(P, P_lb)
                 DT = np.append(DT, dt_neg)
                 i += 1
@@ -357,7 +356,7 @@ class TRHP(FlowSheetSolver):
                 dt_neg = dt_plus
                 P_lb = P_ub
                 P_ub = self.comp1.flow_in.pressure + (P_ub - self.comp1.flow_in.pressure) / m_step
-                dt_plus = self.get_solve_state(log(P_ub))
+                dt_plus = self.get_solve_state(P_ub)
                 P = np.append(P, P_ub)
                 DT = np.append(DT, dt_plus)
                 i += 1
@@ -365,7 +364,7 @@ class TRHP(FlowSheetSolver):
         if P_lb < self.comp1.flow_in.pressure:
             #Check the low pressure bound remains above the evaporator pressure
             P_lb = self.comp1.flow_in.pressure
-            dt_neg = self.get_solve_state(log(P_lb))
+            dt_neg = self.get_solve_state(P_lb)
             if P_ub < P_lb:
                 #Check the upper pressure bound stays above the low pressure bound
                 dt_neg = dt_plus
@@ -379,8 +378,8 @@ class TRHP(FlowSheetSolver):
             except:
                 P_i = P_lb + dt_plus / (dt_plus - dt_neg) * (P_ub - P_lb)
 
-            dt_plus = self.get_solve_state(log(min(P_i * 1.01, P_ub)))
-            dt_neg = self.get_solve_state(log(min(P_i * 0.99, P_lb)))
+            dt_plus = self.get_solve_state(min(P_i * 1.01, P_ub))
+            dt_neg = self.get_solve_state(min(P_i * 0.99, P_lb))
             if dt_plus > 0.0:
                 P_ub = min(P_i * 1.01, P_ub)
             if dt_neg < 0.0:
@@ -388,8 +387,8 @@ class TRHP(FlowSheetSolver):
 
         return P_lb, P_ub, P_i, feasible
 
-    def get_solve_state(self, log_P_comp_out):
-        self.comp3.flow_out.pressure = exp(log_P_comp_out)
+    def get_solve_state(self, P_comp_out):
+        self.comp3.flow_out.pressure = P_comp_out
         i = 0; i_max = 10
         h = 0.0; m = 0.0; P = 0.0; W = 0.0
         dh = 0; dm = 0; dP = 0; dW = 0
@@ -436,6 +435,9 @@ class TRHP(FlowSheetSolver):
                         xtol=self.tol,
                         )
         r['error'] = 1e-6 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
+        if self.disp:
+            # self.get_cycle_plot()
+            print(self.gas_cooler4.sink_out.temperature - self.T_air_tar)
         return r
 
     def set_quality_relationship(self):
@@ -474,8 +476,8 @@ class TRHP(FlowSheetSolver):
     def get_phx_min_dT_for_solve_quality_method(self, QMASS_gc_out):
         self.q_gc_out[0] = QMASS_gc_out
         r = self.get_solve_gas_pressure(method='secant', 
-                                        x0=log(self.P_i), 
-                                        bnds=(log(self.P_lb), log(self.P_ub)))
+                                        x0=self.P_i, 
+                                        bnds=(self.P_lb, self.P_ub))
         hx = self.phx_fixed_src_quality
         e = hx.source_in.temperature - hx.sink_out.temperature - self.dTmin
         return e
@@ -510,41 +512,36 @@ class TRHP(FlowSheetSolver):
             self.P_lb, self.P_ub, self.P_i, self.feasible = self.get_pressure_bounds()
 
             if self.feasible == 1:
-                r = self.get_solve_gas_pressure(method='secant', x0=log(self.P_i), bnds=(log(self.P_lb), log(self.P_ub)))
-
-                if self.disp:
-                    self.get_cycle_plot()
+                x = np.linspace(self.P_lb, self.P_ub, 100)
+                y = [self.get_solve_state(x_i) for x_i in x]
+                g = Graph().simple(x,y)
+                r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
 
                 if r['error'] < 0.0:
                     # Try brentq method instead
-                    r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(log(self.P_lb), log(self.P_ub)))
-
-                    if self.disp:
-                        self.get_cycle_plot()
+                    r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(self.P_lb, self.P_ub))
 
                     if r['error'] < 0.0:
                         # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
                         # being near the saturation temperature, causing instability
-                        if exp(r['root']) < self.RP_ref.pcrit:
+                        if r['root'] < self.RP_ref.pcrit:
                             self.set_quality_relationship()
-                            self.P_i = exp(r['root'])
+                            self.P_i = r['root']
                             r = self.get_solve_quality()
                             if self.disp:
                                 self.get_cycle_plot()
                         else:
                             self.P_lb = self.RP_ref.pcrit + 10e-4
-                            dt_neg = self.get_solve_state(log(self.P_lb))
+                            dt_neg = self.get_solve_state(self.P_lb)
                             
                             if dt_neg < 0.0:
-                                r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(log(self.P_lb), log(self.P_ub)))
+                                r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(self.P_lb, self.P_ub))
                             if self.disp:
                                 self.get_cycle_plot()
 
                         if r['error'] < 0.0:
-                            print('Heat pump model failed to solve.')
-                            self.get_summary()
-                            print_result_to_csv(self.output,file_name='results/Cases', suffix= '-Unsolved')
-                
+                            self.print_failed_to_solve_report()
+                             
                 if r['error'] > 0.0 and self.converged:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)                   
                 else:
@@ -554,20 +551,28 @@ class TRHP(FlowSheetSolver):
 
         return self.evaporator.sink_in.temperature - self.Tsat_evap_tar
 
+    def print_failed_to_solve_report(self):
+        print('Heat pump model failed to solve.')
+        self.get_summary()
+        print_result_to_csv(self.output,file_name='results/Cases', suffix= '-Unsolved')        
+
     def solve(self):
         #Solve heat pump cycle
         self.converged = False
         self.COP = -np.inf
+        # try:
         r = self.get_solve_T_evap(self.Tsat_evap_tar)
-        if abs(r) > self.tol:
+        if abs(r) > 1e-6 and abs(self.evaporator.sink_in.temperature - self.evaporator.sink_out.temperature) > 0.1:
             r = root_scalar(
                             f=self.get_solve_T_evap,
                             method='secant',
                             x0=self.Tsat_evap_tar,
                             bracket=(self.Tsat_evap_tar, self.T_source_in),
                             xtol=self.tol
-                           )
-
+                        )
+        # except:
+        #     self.print_failed_to_solve_report()
+                            
         return self.COP, self.comp3.flow_out.pressure
 
     def print_currrent_case(self):

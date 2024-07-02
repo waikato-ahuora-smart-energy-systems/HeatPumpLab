@@ -85,3 +85,17 @@ class Graph:
                         plt.plot(x, y, color='black')    
 
         plt.show()           
+
+    def simple(self, x, y, title='', x_axis='', y_axis=''):
+        plt
+        if title != '':
+            plt.title(title)
+
+        if x_axis != '':
+            plt.xlabel(x_axis)
+
+        if y_axis != '':
+            plt.ylabel(y_axis)
+
+        plt.plot(x, y, color='black')
+        plt.show()           

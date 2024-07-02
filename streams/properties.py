@@ -50,8 +50,7 @@ class Properties:
         self.iFlag = 0
 
     def get_properties(self, propsOut, propsIn, prop1, prop2):
-        prop1, prop2 = float(prop1), float(prop2)
-        return self.RP.REFPROPdll(self.fld_name, propsIn, propsOut, self.UNITS, self.iMass, self.iFlag, prop1, prop2, self.fld_composition).Output
+        return self.RP.REFPROPdll(self.fld_name, propsIn, propsOut, self.UNITS, self.iMass, self.iFlag, float(prop1), float(prop2), self.fld_composition).Output
     
     def set_critical_properties(self):
         v = self.get_properties('PCRIT;TCRIT;DCRIT', 'PH', 1.0, 500)
