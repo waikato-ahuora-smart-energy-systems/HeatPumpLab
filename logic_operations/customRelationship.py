@@ -65,25 +65,32 @@ class CustomRelationship:
             if dh_air > 0.0 and gc.duty > 0.0:
                 
                 def get_mid_pinch_point_error(h_ref, mcp_air):
-                    return mcp_air[0] - gc.source_in.mass_flow * gc.source_in.RP_fluid.get_properties('CP', 'PH', (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy), h_ref)[0]
+                    P_ave = (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy)
+                    return mcp_air[0] - gc.source_in.mass_flow * gc.source_in.RP_fluid.get_properties('CP', 'PH', P_ave, h_ref)[0]
 
                 def get_bounds_for_mid_pinch_point(mcp_air):
                     bnds = False
                     if mcp_air - 1e-6 > gc.source_in.mass_flow * gc.source_in.heat_capacity or mcp_air + 1e-6 < gc.source_out.mass_flow * gc.source_out.heat_capacity:
                         if mcp_air - 1e-6 > gc.source_in.mass_flow * gc.source_in.heat_capacity and mcp_air + 1e-6 < gc.source_out.mass_flow * gc.source_out.heat_capacity:
-                            bnds = (gc.source_in.enthalpy, gc.source_out.enthalpy)
+                            e0 = get_mid_pinch_point_error(h_ref=gc.source_in.enthalpy, mcp_air=[mcp_air])
+                            e1 = get_mid_pinch_point_error(h_ref=gc.source_out.enthalpy, mcp_air=[mcp_air])
+                            if e0 * e1 < 0.0:
+                                bnds = (gc.source_in.enthalpy, gc.source_out.enthalpy)
                         else:
                             dh = gc.source_in.enthalpy - gc.source_out.enthalpy
                             x = 0.1
                             if mcp_air - 1e-6 > gc.source_in.mass_flow * gc.source_in.heat_capacity:
                                 e0 = get_mid_pinch_point_error(h_ref=gc.source_in.enthalpy, mcp_air=[mcp_air])
                                 e1 = e0
-                                while e0 * e1 > 0.0 and x < 1.0:
+                                while e0 * e1 > 0.0 and x < 1.0 and abs(e1) < 1e-3:
                                     h = gc.source_in.enthalpy - x * dh
                                     e1 = get_mid_pinch_point_error(h_ref=h, mcp_air=[mcp_air])
                                     x += 0.1
                                 if e0 * e1 < 0.0:
                                     bnds = (gc.source_in.enthalpy, h)
+                                    a = get_mid_pinch_point_error(h_ref=bnds[0], mcp_air=[mcp_air])
+                                    b = get_mid_pinch_point_error(h_ref=bnds[1], mcp_air=[mcp_air])
+                                    None
 
                             else: #mcp_air + 1e-6 < gc.source_out.mass_flow * gc.source_out.heat_capacity
                                 e0 = get_mid_pinch_point_error(h_ref=gc.source_out.enthalpy, mcp_air=[mcp_air])

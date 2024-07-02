@@ -13,8 +13,6 @@ def optimisation_analysis():
     # Refrigerants analysed
     refrigerant = [
                     # 'propane;isobutane;butane|.4;.3;.3 mol',
-                    'PROPYLEN',
-                    'DME',
                     'Butane', 
                     'Carbon dioxide', 
                     'Propane', 
@@ -26,6 +24,9 @@ def optimisation_analysis():
                     'R1234yf', 
                     'R1243zf', 
                     'R1224yd(Z)', 
+                    'PROPYLEN',
+                    'DME',
+                    'Methanol'
                     'Ammonia',
                    ]
 
@@ -96,19 +97,19 @@ def optimisation_analysis():
         transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'propane', #;butane|.5;.5|mass
+        args = {'refrigerant': 'Carbon dioxide', #;butane|.5;.5|mass
                 'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 140.0, 
+                'T_air_tar': 195.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0, 
                 'n_comp': 2, 
-                'dT_phx1_cold': 40.0, 
+                'dT_phx1_cold': 0.0, 
                 'dT_phx2_cold': 0.0, 
                 'dT_phx3_cold': 0.0, 
                 'comp2_power_frac': 0.5, 
                 'comp3_power_frac': 0.0,
                 'comp_PR_uniform': True,
-                'display': False,
+                'display': True,
                 }
         m = TRHP(**args)
         TIC = timer()
