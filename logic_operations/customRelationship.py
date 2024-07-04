@@ -5,11 +5,10 @@ import math, pprint
 from scipy.optimize import brentq, root_scalar
 
 class CustomRelationship:
-    def __init__(self, source_obj=0, target_obj=0, additional_obj=0, relation=0, tol=1e-9, RP=None):
+    def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9, RP=None):
         self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
-        self.additional_obj = additional_obj
         self.relation = relation
         self.RP = RP
 
@@ -55,7 +54,6 @@ class CustomRelationship:
         Q_tot = 0
         for gc in self.source_obj:
             Q_tot += gc.duty
-        self.mcp_air_0 = Q_tot / (self.additional_obj[0] - self.source_obj[0].sink_in.temperature)
 
         for gc in self.source_obj:
             dQ += gc.duty
@@ -88,9 +86,9 @@ class CustomRelationship:
                                     x += 0.1
                                 if e0 * e1 < 0.0:
                                     bnds = (gc.source_in.enthalpy, h)
-                                    a = get_mid_pinch_point_error(h_ref=bnds[0], mcp_air=[mcp_air])
-                                    b = get_mid_pinch_point_error(h_ref=bnds[1], mcp_air=[mcp_air])
-                                    None
+                                    # a = get_mid_pinch_point_error(h_ref=bnds[0], mcp_air=[mcp_air])
+                                    # b = get_mid_pinch_point_error(h_ref=bnds[1], mcp_air=[mcp_air])
+                                    # None
 
                             else: #mcp_air + 1e-6 < gc.source_out.mass_flow * gc.source_out.heat_capacity
                                 e0 = get_mid_pinch_point_error(h_ref=gc.source_out.enthalpy, mcp_air=[mcp_air])
@@ -133,7 +131,6 @@ class CustomRelationship:
                     return m_air
 
                 m_air_list.append(dQ / dh_air)
-                m_air_list.append(get_m_air(self.mcp_air_0))
                 self.mcp_air_i = dQ / (T_air_i - self.source_obj[0].sink_in.temperature)
                 m_air_list.append(get_m_air(self.mcp_air_i))              
 

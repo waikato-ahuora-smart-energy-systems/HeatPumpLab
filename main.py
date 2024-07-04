@@ -99,7 +99,7 @@ def optimisation_analysis():
 def single_case_analysis():
         args = {'refrigerant': 'Carbon dioxide', #;butane|.5;.5|mass
                 'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 195.0, 
+                'T_air_tar': 200.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0, 
                 'n_comp': 2, 

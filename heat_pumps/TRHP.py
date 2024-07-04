@@ -285,7 +285,7 @@ class TRHP():
             self.set_gc2_hot_out = SetRelationship( source_obj=self.phx1.sink_out, target_obj=[self.phx1.source_in], c=self.dTmin, prop='temperature', prop2='pressure' ) 
 
         self.set_P_ints = CustomRelationship( source_obj=[self.comp1.flow_in, self.comp3.flow_out, self.comp2_power_frac, self.comp3_power_frac], target_obj=[self.comp1.flow_out, self.comp2.flow_out], relation=1, tol=self.tol )
-        self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], additional_obj=[self.T_air_tar], relation=2, tol=self.tol )
+        self.set_gc_air_massflow = CustomRelationship( source_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], target_obj=[self.gas_cooler1, self.gas_cooler2, self.gas_cooler3, self.gas_cooler4], relation=2, tol=self.tol )
         #self.set_evap_air_massflow = CustomRelationship( source_obj=[self.evaporator, self.evap_sup], target_obj=[self.evaporator, self.evap_sup], relation=3)
 
     def init_solver_pathway(self):
@@ -512,9 +512,6 @@ class TRHP():
             self.P_lb, self.P_ub, self.P_i, self.feasible = self.get_pressure_bounds()
 
             if self.feasible == 1:
-                x = np.linspace(self.P_lb, self.P_ub, 100)
-                y = [self.get_solve_state(x_i) for x_i in x]
-                g = Graph().simple(x,y)
                 r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
 
                 if r['error'] < 0.0:
