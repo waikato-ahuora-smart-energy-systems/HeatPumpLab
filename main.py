@@ -12,7 +12,7 @@ from outputs import print_result_to_terminal, read_csv_to_results, transfer_resu
 def optimisation_analysis():
     # Refrigerants analysed
     refrigerant = [
-                    'propane;butane|.5;.5|mol',
+                    # 'propane;butane|.5;.5|mol',
                     'Butane', 
                     'Carbon dioxide', 
                     'Propane', 
@@ -99,12 +99,12 @@ def optimisation_analysis():
 def single_case_analysis():
         args = {'refrigerant': 'Carbon dioxide', #;butane|.5;.5|mass
                 'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 200.0, 
+                'T_air_tar': 130.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0, 
                 'n_comp': 2, 
-                'dT_phx1_cold': 0.0, 
-                'dT_phx2_cold': 0.0, 
+                'dT_phx1_cold': 3.125,
+                'dT_phx2_cold': 53.125, 
                 'dT_phx3_cold': 0.0, 
                 'comp2_power_frac': 0.5, 
                 'comp3_power_frac': 0.0,

@@ -1,8 +1,8 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-import math, pprint
-from scipy.optimize import brentq, root_scalar
+import math
+from scipy.optimize import root_scalar
 
 class CustomRelationship:
     def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9, RP=None):
@@ -11,24 +11,25 @@ class CustomRelationship:
         self.target_obj = target_obj
         self.relation = relation
         self.RP = RP
+        r = False
 
     def solve(self):
         if self.relation == 0:
-            self.Determine_T()
+            r = self.Determine_T()
 
         elif self.relation == 1:
-            self.Determine_Pint()
+            r = self.Determine_Pint()
 
         elif self.relation == 2:
-            self.Air_Mass_Flow()
+            r = self.Air_Mass_Flow()
 
         elif self.relation == 3:
-            self.Airsource_Mass_Flow()
+            r = self.Airsource_Mass_Flow()
 
         else:
             pass
 
-        return 0
+        return r
     
     def Determine_T(self):
         self.target_obj.temperature = max(
@@ -36,6 +37,7 @@ class CustomRelationship:
             self.source_obj[0].temperature, 
             self.source_obj[1].temperature
             )
+        return True
     
     def Determine_Pint(self):
         #Determines the n-1 intermediate pressures between n compressors
@@ -45,6 +47,7 @@ class CustomRelationship:
         log_P2_star = (1 - F3) * log_P3_star
         self.target_obj[0].pressure = S0.pressure * math.exp(log_P1_star)
         self.target_obj[1].pressure = S0.pressure * math.exp(log_P2_star)
+        return True
 
     def Air_Mass_Flow(self):
         m_air_list = []
@@ -76,29 +79,44 @@ class CustomRelationship:
                                 bnds = (gc.source_in.enthalpy, gc.source_out.enthalpy)
                         else:
                             dh = gc.source_in.enthalpy - gc.source_out.enthalpy
-                            x = 0.1
                             if mcp_air - 1e-6 > gc.source_in.mass_flow * gc.source_in.heat_capacity:
-                                e0 = get_mid_pinch_point_error(h_ref=gc.source_in.enthalpy, mcp_air=[mcp_air])
-                                e1 = e0
-                                while e0 * e1 > 0.0 and x < 1.0 and abs(e1) < 1e-3:
-                                    h = gc.source_in.enthalpy - x * dh
-                                    e1 = get_mid_pinch_point_error(h_ref=h, mcp_air=[mcp_air])
-                                    x += 0.1
-                                if e0 * e1 < 0.0:
-                                    bnds = (gc.source_in.enthalpy, h)
-                                    # a = get_mid_pinch_point_error(h_ref=bnds[0], mcp_air=[mcp_air])
-                                    # b = get_mid_pinch_point_error(h_ref=bnds[1], mcp_air=[mcp_air])
-                                    # None
+                                h0 = gc.source_in.enthalpy
+                                dh = gc.source_in.enthalpy - gc.source_out.enthalpy
 
                             else: #mcp_air + 1e-6 < gc.source_out.mass_flow * gc.source_out.heat_capacity
-                                e0 = get_mid_pinch_point_error(h_ref=gc.source_out.enthalpy, mcp_air=[mcp_air])
-                                e1 = e0
-                                while e0 * e1 > 0.0 and x < 1.0:
-                                    h = gc.source_out.enthalpy + x * dh
-                                    e1 = get_mid_pinch_point_error(h_ref=h, mcp_air=[mcp_air])
-                                    x += 0.1
-                                if e0 * e1 < 0.0:
-                                    bnds = (h, gc.source_out.enthalpy)
+                                h0 = gc.source_out.enthalpy
+                                dh = gc.source_out.enthalpy - gc.source_in.enthalpy
+
+                            x = 0.1
+                            e0 = get_mid_pinch_point_error(h_ref=h0, mcp_air=[mcp_air])
+                            e1 = e0
+                            while (e0 * e1 > 0.0 or abs(e1) < 1e-3) and (x < 1.0):
+                                h = h0 - x * dh
+                                e1 = get_mid_pinch_point_error(h_ref=h, mcp_air=[mcp_air])
+                                x += 0.1
+                            if e0 * e1 < 0.0:
+                                bnds = (h0, h)
+
+                            # x = 0.1
+                            # if mcp_air - 1e-6 > gc.source_in.mass_flow * gc.source_in.heat_capacity:
+                            #     e0 = get_mid_pinch_point_error(h_ref=h0, mcp_air=[mcp_air])
+                            #     e1 = e0
+                            #     while (e0 * e1 > 0.0 or abs(e1) < 1e-3) and (x < 1.0):
+                            #         h = h0 - x * dh
+                            #         e1 = get_mid_pinch_point_error(h_ref=h, mcp_air=[mcp_air])
+                            #         x += 0.1
+                            #     if e0 * e1 < 0.0:
+                            #         bnds = (h0, h)
+
+                            # else: #mcp_air + 1e-6 < gc.source_out.mass_flow * gc.source_out.heat_capacity
+                            #     e0 = get_mid_pinch_point_error(h_ref=h0, mcp_air=[mcp_air])
+                            #     e1 = e0
+                            #     while (e0 * e1 > 0.0 or abs(e1) < 1e-3) and (x < 1.0):
+                            #         h = h0 - x * dh
+                            #         e1 = get_mid_pinch_point_error(h_ref=h, mcp_air=[mcp_air])
+                            #         x += 0.1
+                            #     if e0 * e1 < 0.0:
+                            #         bnds = (h0, h)
 
                     return bnds
                 
@@ -153,6 +171,8 @@ class CustomRelationship:
                 gc.sink_out.mass_flow = gc.sink_in.mass_flow
                 gc.sink_out.enthalpy = gc.sink_in.enthalpy + (gc.source_in.heat_flow - gc.source_out.heat_flow) / gc.sink_in.mass_flow
                 gc.sink_out.props_in_mPH()
+        
+        return m_air_list
 
     def Airsource_Mass_Flow(self):
         m_air_list = []
@@ -175,4 +195,5 @@ class CustomRelationship:
         self.target_obj[0].source_in.mass_flow = max(m_air_list)
         self.target_obj[0].source_out.mass_flow = self.target_obj[0].source_in.mass_flow
         self.target_obj[0].source_in.props_in_mPT()
+        return True
         

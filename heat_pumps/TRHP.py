@@ -501,6 +501,22 @@ class TRHP():
             r = {'error' : 1.0}
         return r
 
+    def get_p_test(self):
+        P = np.linspace(start=self.P_lb / 1.5, stop=self.P_ub * 3, num=1000)
+        dT = np.array([self.T_air_tar + self.get_solve_state(P_i) for P_i in P])
+        Graph().simple(x=P, y=dT)
+        ddT = np.diff(dT)
+        i = ddT.argmax()
+        P0, P1 = P[i], P[i+1]
+        # P0, P1 = 16.181339509277915, 16.221350320439466
+        # self.get_solve_state(P0)
+        # print(self.set_gc_air_massflow.solve())
+        # self.get_cycle_plot()
+        # self.get_solve_state(P1)
+        # print(self.set_gc_air_massflow.solve())
+        # self.get_cycle_plot()
+        None
+
     def get_solve_T_evap(self, T_evap_sat_out):
         #Solve heat pump cycle
         self.evaporator.sink_out.temperature = T_evap_sat_out
@@ -512,6 +528,7 @@ class TRHP():
             self.P_lb, self.P_ub, self.P_i, self.feasible = self.get_pressure_bounds()
 
             if self.feasible == 1:
+                # self.get_p_test()
                 r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
 
                 if r['error'] < 0.0:
