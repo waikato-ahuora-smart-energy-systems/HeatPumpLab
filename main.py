@@ -14,7 +14,7 @@ def get_analysis_parameters():
                     'Propane', 
                     'Isobutane', 
                     'R1233zd(E)', 
-                    'R1336mzz(Z)', 
+                    # 'R1336mzz(Z)', 
                     'R1234ze(E)', 
                     'R1234ze(Z)', 
                     'R1234yf', 

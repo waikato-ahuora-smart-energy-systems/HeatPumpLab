@@ -70,7 +70,7 @@ def get_previous_results(cases, file_name):
             for case in cases:
                 if (
                     case['refrigerant'] == res['Refrigerant:'] and 
-                    case['comp_PR_uniform'] == res['Comp_PR_uniform:'] and
+                    bool(case['comp_PR_uniform']) == bool(res['Comp_PR_uniform:']) and
                     abs(float(case['dT_GC_min_tar']) - float(res['dT_min Gas Cooler:'])) < 0.01 and 
                     abs(float(case['T_air_inlet']) - float(res['T_air_inlet:'])) < 0.01 and 
                     abs(float(case['T_source_in']) - float(res['T_source_in:'])) < 0.01 and 
@@ -82,9 +82,15 @@ def get_previous_results(cases, file_name):
                     break
     return cases
 
+def get_ordered_previous_results(cases):
+    for case in cases:
+        if len(case['results']) > 1:   
+            case['results'].sort(reverse=True, key=lambda x: x['T_air_tar:'])         
+    return cases
+
 def get_parallel_solve(cases):
     # Use parallel processing distributed over all cores to speed up the analysis
-    n_cpu = 1 #os.cpu_count()
+    n_cpu = os.cpu_count()
     executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
     results = [executor.submit(get_TRHP_optimal, case) for case in cases]
     executor.shutdown()
@@ -93,8 +99,9 @@ def massive_parallel_case_analysis(parameters):
     cases = get_case_list(**parameters)
     # Location of saved results
     file_name='results/TRHP_results'
-    cases_with_results = get_previous_results(cases, file_name)
-    get_parallel_solve(cases_with_results)
+    cases = get_previous_results(cases, file_name)
+    cases = get_ordered_previous_results(cases)
+    get_parallel_solve(cases)
     transfer_results(file_name=file_name)
 
 def single_case_analysis():

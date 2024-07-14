@@ -25,13 +25,23 @@ def dict_var(var, parameters):
 
     return d_var
 
-def get_initial(res): 
-    return  {'dT_phx1_cold' : res['dT_phx1_cold'],
-             'dT_phx2_cold' : res['dT_phx2_cold'],
-             'dT_phx3_cold' : res['dT_phx3_cold'],
-             'comp2_power_frac' : res['comp2_power_frac'],
-             'comp3_power_frac' : res['comp3_power_frac'],
-            }  
+def get_initial(res, parameters):
+    if parameters['n_comp'] > 3:
+        raise ValueError("Number of compressors must be 1, 2 or 3.")     
+    
+    var = [res['dT phx max 1:']]
+    if parameters['n_comp'] > 1:
+        var.append(res['dT phx max 2:'])
+    if parameters['n_comp'] > 2:
+        var.append(res['dT phx max 3:'])
+    if parameters['comp_PR_uniform'] == False and parameters['n_comp'] > 1:
+        if parameters['n_comp'] == 2:
+            var.append(res['Comp 2 power frac:'])
+        elif parameters['n_comp'] == 3:
+            var.append(res['Comp 2 power frac:'])
+            var.append(res['Comp 3 power frac:'])
+
+    return var  
 
 def get_bounds(parameters, x=None):
     #Define the bounds of the optimisation variables 
@@ -72,8 +82,8 @@ def get_max_multiObj(var, parameters):
     print('Obj:', "{:.4f}".format(-obj), '  Solve time:', "{:.2f}".format(TOC - TIC), '  Vars:', ["{:.6f}".format(v) for v in var])    
     return obj 
 
-def get_results_summary(result, x, parameters):
-    d_var = dict_var(x, parameters)
+def get_results_summary(result, parameters):
+    d_var = dict_var(result.x, parameters)
     m = TRHP(**parameters, **d_var)    
     COP, P = m.solve()
     m.get_summary()
@@ -126,16 +136,16 @@ def get_global_optimum(parameters, bnds, tol):
                                 'options': {'tol': tol}}
                 )    
 
-def get_local_optima(parameters, bnds, tol, xi):
+def get_local_optima(method, parameters, bnds, tol, xi):
     return minimize(fun=get_max_multiObj, 
                 x0=xi,
                 args=parameters, 
                 bounds=bnds,
                 constraints=LinearConstraint(A=np.array([1.0] * len(bnds)), 
-                                            lb=0.0, 
-                                            ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
-                method='SLSQP',
-                tol=tol,
+                                             lb=0.0, 
+                                             ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
+                method=method,
+                tol=tol / 10,
                 )
 
 def get_TRHP_optimal(parameters):
@@ -143,7 +153,7 @@ def get_TRHP_optimal(parameters):
     T_air_tar_ls = parameters['T_air_tar']
     results_ls = parameters['results']
     parameters.pop('results')
-    for i in range(len(results_ls), len(T_air_tar_ls) + 1):
+    for i in range(len(results_ls), len(T_air_tar_ls)):
         parameters['T_air_tar'] = T_air_tar_ls[i]
         bnds, x0 = get_bounds(parameters)
         d_x0 = dict_var(x0, parameters)
@@ -155,9 +165,11 @@ def get_TRHP_optimal(parameters):
         if i == 0:    
             result = get_global_optimum(parameters, bnds, tol) 
         else:
-            xi = get_initial(results_ls[i-1])
-            result = get_local_optima(parameters, bnds, tol, xi)
+            xi = get_initial(results_ls[i-1], parameters)
+            result = get_local_optima('trust-constr', parameters, bnds, tol, xi) #'SLSQP',
+            if result.success and -result.fun < 1.0:
+                result = get_local_optima('trust-constr', parameters, bnds, tol, x0)
 
         if result.success:
-            res = get_results_summary(result, result.xl, parameters)
+            res = get_results_summary(result, parameters)
             results_ls.append(res)
