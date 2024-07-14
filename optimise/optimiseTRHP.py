@@ -141,7 +141,9 @@ def get_local_optima(parameters, bnds, tol, xi):
 def get_TRHP_optimal(parameters):
     tol = 1e-3
     T_air_tar_ls = parameters['T_air_tar']
-    for i in range(len(parameters['results']), len(T_air_tar_ls) + 1):
+    results_ls = parameters['results']
+    parameters.pop('results')
+    for i in range(len(results_ls), len(T_air_tar_ls) + 1):
         parameters['T_air_tar'] = T_air_tar_ls[i]
         bnds, x0 = get_bounds(parameters)
         d_x0 = dict_var(x0, parameters)
@@ -153,8 +155,9 @@ def get_TRHP_optimal(parameters):
         if i == 0:    
             result = get_global_optimum(parameters, bnds, tol) 
         else:
-            xi = get_initial(parameters['results'][i-1])
+            xi = get_initial(results_ls[i-1])
             result = get_local_optima(parameters, bnds, tol, xi)
 
         if result.success:
-            get_results_summary(result, result.xl, parameters)
+            res = get_results_summary(result, result.xl, parameters)
+            results_ls.append(res)

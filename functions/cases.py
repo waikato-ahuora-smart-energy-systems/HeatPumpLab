@@ -38,8 +38,8 @@ def get_case_list(refrigerant,
                 for l in range(len(T_air_inlet))
                 for o in range(len(w))
                 for q in range(len(comp_PR_uniform))
-                for i in range(len(refrigerant))
                 for n in range(len(n_comp))
+                for i in range(len(refrigerant))
             ]
     print('Cases remaining: ', len(cases))
     return cases

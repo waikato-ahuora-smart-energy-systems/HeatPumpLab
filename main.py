@@ -14,16 +14,16 @@ def get_analysis_parameters():
                     'Propane', 
                     'Isobutane', 
                     'R1233zd(E)', 
-                    # 'R1336mzz(Z)', 
-                    # 'R1234ze(E)', 
-                    # 'R1234ze(Z)', 
-                    # 'R1234yf', 
-                    # 'R1243zf', 
-                    # 'R1224yd(Z)', 
-                    # 'PROPYLEN',
+                    'R1336mzz(Z)', 
+                    'R1234ze(E)', 
+                    'R1234ze(Z)', 
+                    'R1234yf', 
+                    'R1243zf', 
+                    'R1224yd(Z)', 
+                    'PROPYLEN',
                     # 'DME',
-                    # 'Methanol'
-                    # 'Ammonia',
+                    'Methanol'
+                    'Ammonia',
                    ]
 
     # Cycle parameters and their ranges tested
