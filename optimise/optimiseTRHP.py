@@ -1,9 +1,9 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from scipy.optimize import shgo, minimize, LinearConstraint
+from scipy.optimize import shgo, LinearConstraint, minimize
 from heat_pumps import TRHP
-from outputs import print_result_to_terminal, print_result_to_csv
+from functions import print_result_to_terminal, print_result_to_csv
 from timeit import default_timer as timer
 import numpy as np
 
@@ -25,6 +25,14 @@ def dict_var(var, parameters):
 
     return d_var
 
+def get_initial(res): 
+    return  {'dT_phx1_cold' : res['dT_phx1_cold'],
+             'dT_phx2_cold' : res['dT_phx2_cold'],
+             'dT_phx3_cold' : res['dT_phx3_cold'],
+             'comp2_power_frac' : res['comp2_power_frac'],
+             'comp3_power_frac' : res['comp3_power_frac'],
+            }  
+
 def get_bounds(parameters, x=None):
     #Define the bounds of the optimisation variables 
     dT_upper = 100.0
@@ -38,7 +46,7 @@ def get_bounds(parameters, x=None):
         xi += [0.0] if x is None else [x[1]]
     if parameters['n_comp'] == 3:
         bnds += [(0.0, dT_upper)]
-        xi += [0.0] if x is None else [x[1]] 
+        xi += [0.0] if x is None else [x[2]] 
     if parameters['comp_PR_uniform'] == False and parameters['n_comp'] > 1:
         if parameters['n_comp'] >= 2:
             bnds += [(0.25, 0.75)]
@@ -102,65 +110,51 @@ def get_results_summary(result, x, parameters):
 
     return m.output
 
+def get_global_optimum(parameters, bnds, tol):
+    return shgo(func=get_max_multiObj, 
+                args=[parameters], 
+                bounds=bnds,
+                constraints=LinearConstraint(A=np.array([1.0] * len(bnds)), 
+                                                lb=0.0, 
+                                                ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
+                workers=1, 
+                iters=3, 
+                n=40, 
+                sampling_method='sobol', 
+                options={'tol': tol}, 
+                minimizer_kwargs={'method' : 'SLSQP',
+                                'options': {'tol': tol}}
+                )    
+
+def get_local_optima(parameters, bnds, tol, xi):
+    return minimize(fun=get_max_multiObj, 
+                x0=xi,
+                args=parameters, 
+                bounds=bnds,
+                constraints=LinearConstraint(A=np.array([1.0] * len(bnds)), 
+                                            lb=0.0, 
+                                            ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
+                method='SLSQP',
+                tol=tol,
+                )
+
 def get_TRHP_optimal(parameters):
-    tol = 1e-4
-    parameters['comp_PR_uniform'] = True
-    bnds, xi = get_bounds(parameters)
-    d_xi = dict_var(xi, parameters)
-    m = TRHP(**parameters, **d_xi)
-    COP_0, P_0 = m.solve()
-    parameters['result_parameters']['COP_0'] = COP_0
-    parameters['result_parameters']['P_0'] = P_0
-    
-    if COP_0 > 0.0:
-        result = shgo(func=get_max_multiObj, 
-                      args=[parameters], 
-                      bounds=bnds,
-                      constraints=LinearConstraint(A=np.array([1.0] * len(xi)), 
-                                                   lb=0.0, 
-                                                   ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
-                      workers=1, 
-                      iters=4, 
-                      n=50, 
-                      sampling_method='sobol', 
-                      options={'tol': tol}, 
-                      minimizer_kwargs={'method' : 'SLSQP',
-                                        'options': {'tol': tol}}
-                      )
-        print('Obj:'   , -result.fun, 
-              '  Iter:',  result.nfev, 
-              '  Vars:',  result.x)
+    tol = 1e-3
+    T_air_tar_ls = parameters['T_air_tar']
+    for i in range(len(parameters['results']), len(T_air_tar_ls) + 1):
+        parameters['T_air_tar'] = T_air_tar_ls[i]
+        bnds, x0 = get_bounds(parameters)
+        d_x0 = dict_var(x0, parameters)
+        m = TRHP(**parameters, **d_x0)
+        COP_0, P_0 = m.solve()
+        parameters['result_parameters']['COP_0'] = COP_0
+        parameters['result_parameters']['P_0'] = P_0
 
-        parameters0 = parameters
-        result0 = result
+        if i == 0:    
+            result = get_global_optimum(parameters, bnds, tol) 
+        else:
+            xi = get_initial(parameters['results'][i-1])
+            result = get_local_optima(parameters, bnds, tol, xi)
 
-        if result0.success and parameters['n_comp'] > 1:
-            parameters['comp_PR_uniform'] = False
-            result = minimize(fun=get_max_multiObj, 
-                            x0=result.x,
-                            args=parameters, 
-                            bounds=bnds,
-                            constraints=LinearConstraint(A=np.array([1.0] * len(xi)), 
-                                                        lb=0.0, 
-                                                        ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
-                            method='SLSQP',
-                            tol=tol,
-                            )
-            print('Obj:'   , -result.fun, 
-                '  Iter:',  result.nfev, 
-                '  Vars:',  result.x)
-
-            parameters1 = parameters
-            result1 = result
-
-        if result0.success:
-            get_results_summary(result0, result0.x, parameters0)
-
-        if parameters['n_comp'] > 1: 
-            if result1.success:
-                get_results_summary(result1, result1.x, parameters1)     
-
-    # m.get_cycle_plot(x_axis='h', y_axis='P')
-    # m.get_cycle_plot(x_axis='s', y_axis='T')
-    # m.get_cycle_plot(x_axis='h', y_axis='T')
-    # m.get_cycle_plot(x_axis='v', y_axis='P')
+        if result.success:
+            get_results_summary(result, result.xl, parameters)

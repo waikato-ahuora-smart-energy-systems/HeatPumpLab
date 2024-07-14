@@ -12,7 +12,7 @@ from streams import MassStream, Properties
 from logic_operations import SetRelationship, CustomRelationship
 from scipy.optimize import root_scalar 
 from scipy.interpolate import CubicSpline
-from outputs import Graph, print_result_to_csv
+from functions import Graph, print_result_to_csv
 import numpy as np
 
 class TRHP():
@@ -434,10 +434,11 @@ class TRHP():
                         x0=x0, 
                         xtol=self.tol,
                         )
-        r['error'] = 1e-6 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
+        r['error'] = 1e-6 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature) / self.T_air_tar
         if self.disp:
             # self.get_cycle_plot()
-            print(self.gas_cooler4.sink_out.temperature - self.T_air_tar)
+            print(r['error'])
+            
         return r
 
     def set_quality_relationship(self):

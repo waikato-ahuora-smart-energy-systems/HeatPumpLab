@@ -1,7 +1,7 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-import os, csv, glob
+import os, csv
 
 def print_result_to_terminal(output):
     if type(output) is dict:
@@ -29,21 +29,4 @@ def print_result_to_csv(output=[], file_name='results/temp/R', file_ext='.csv', 
                 
     except:
         print('Failed to appended result to CSV file.')
-
-def read_csv_to_results(file_name='results/untitled', file_ext='.csv'):
-    try:
-        with open(file_name + file_ext, 'r') as csvfile:
-            reader = csv.DictReader(csvfile)
-            return list(reader)
-
-    except:
-        print('Failed to open CSV file.')
-
-def transfer_results(file_name='results/untitled'):
-        csv_file_list = glob.glob(os.getcwd() + '/results/temp/*.csv')
-        for f in csv_file_list:
-            output = read_csv_to_results(file_name=f, file_ext='')
-            for o in output:
-                print_result_to_csv(output=o, file_name=file_name)
-            os.remove(f)
-   
+  
