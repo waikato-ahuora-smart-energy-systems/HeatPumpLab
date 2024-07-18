@@ -328,6 +328,7 @@ class TRHP():
         self.operations.append(self.evaporator)
 
     def get_pressure_bounds(self):
+        feasible = 0
         P_lb = self.comp3.flow_out.pressure
         P_ub = P_lb
         P_i = P_lb
@@ -369,11 +370,10 @@ class TRHP():
                 #Check the upper pressure bound stays above the low pressure bound
                 dt_neg = dt_plus
         
-        feasible = int((-dt_plus * dt_neg) / abs(dt_plus * dt_neg))
-        
-        if feasible == 1:
+        if abs(dt_plus * dt_neg) == -dt_plus * dt_neg and abs(dt_plus * dt_neg) > 0.0:
+            feasible = 1
             try:
-                cs = CubicSpline(y=P, x=DT) if DT[0] < DT[1] else CubicSpline(y=P[::-1], x=DT[::-1])
+                cs = CubicSpline(y=P, x=DT) if DT[0] < DT[1] else CubicSpline(y=P[-3::], x=DT[-3::])
                 P_i = float(cs(0.0))
             except:
                 P_i = P_lb + dt_plus / (dt_plus - dt_neg) * (P_ub - P_lb)
@@ -530,7 +530,11 @@ class TRHP():
 
             if self.feasible == 1:
                 # self.get_p_test()
-                r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
+                try:
+                    r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
+                except:
+                    self.print_failed_to_solve_report()
+                    r = {'error' : -1}
 
                 if r['error'] < 0.0:
                     # Try brentq method instead

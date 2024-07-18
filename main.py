@@ -21,7 +21,7 @@ def get_analysis_parameters():
                     'R1243zf', 
                     'R1224yd(Z)', 
                     'PROPYLEN',
-                    # 'DME',
+                    'DME',
                     'Methanol'
                     'Ammonia',
                    ]
