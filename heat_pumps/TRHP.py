@@ -11,7 +11,7 @@ from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve
 from streams import MassStream, Properties
 from logic_operations import SetRelationship, CustomRelationship
 from scipy.optimize import root_scalar 
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import CubicSpline, interp1d
 from functions import Graph, print_result_to_csv
 import numpy as np
 
@@ -372,18 +372,19 @@ class TRHP():
         
         if abs(dt_plus * dt_neg) == -dt_plus * dt_neg and abs(dt_plus * dt_neg) > 0.0:
             feasible = 1
-            try:
-                cs = CubicSpline(y=P, x=DT) if DT[0] < DT[1] else CubicSpline(y=P[-3::], x=DT[-3::])
-                P_i = float(cs(0.0))
-            except:
-                P_i = P_lb + dt_plus / (dt_plus - dt_neg) * (P_ub - P_lb)
-
-            dt_plus = self.get_solve_state(min(P_i * 1.01, P_ub))
-            dt_neg = self.get_solve_state(min(P_i * 0.99, P_lb))
-            if dt_plus > 0.0:
-                P_ub = min(P_i * 1.01, P_ub)
-            if dt_neg < 0.0:
-                P_lb = min(P_i * 0.99, P_lb)
+            P_i = P_lb - dt_neg / (dt_plus - dt_neg) * (P_ub - P_lb)
+            if P_i * 1.01 < P_ub:
+                dt = self.get_solve_state(P_i * 1.01)
+                if dt > 0.0:
+                    P_ub = P_i * 1.01
+                    dt_plus = dt
+            if P_i * 0.99 > P_lb:
+                dt = self.get_solve_state(P_i * 0.99)
+                if dt < 0.0:
+                    P_lb = max(P_i * 0.99, P_lb)
+                    dt_neg = dt
+            
+            P_i = P_lb - dt_neg / (dt_plus - dt_neg) * (P_ub - P_lb)
 
         return P_lb, P_ub, P_i, feasible
 
@@ -534,7 +535,8 @@ class TRHP():
                     r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
                 except:
                     self.print_failed_to_solve_report()
-                    r = {'error' : -1}
+                    r = {'error' : -1,
+                         'root' : self.P_i}
 
                 if r['error'] < 0.0:
                     # Try brentq method instead
@@ -582,6 +584,7 @@ class TRHP():
         # try:
         r = self.get_solve_T_evap(self.Tsat_evap_tar)
         if abs(r) > 1e-6 and abs(self.evaporator.sink_in.temperature - self.evaporator.sink_out.temperature) > 0.1:
+
             r = root_scalar(
                             f=self.get_solve_T_evap,
                             method='secant',

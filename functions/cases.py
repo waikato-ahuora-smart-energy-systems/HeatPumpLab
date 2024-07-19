@@ -41,7 +41,7 @@ def get_case_list(refrigerant,
                 for n in range(len(n_comp))
                 for i in range(len(refrigerant))
             ]
-    print('Cases remaining: ', len(cases))
+    print('Cases total: ', len(cases) * len(T_air_tar))
     return cases
 
 def transfer_results(file_name='results/untitled'):
@@ -105,14 +105,14 @@ def massive_parallel_case_analysis(parameters):
     transfer_results(file_name=file_name)
 
 def single_case_analysis():
-        args = {'refrigerant': 'R1336mzz(Z)', #;butane|.5;.5|mass
+        args = {'refrigerant': 'Isobutane', #;butane|.5;.5|mass
                 'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 210.0, 
+                'T_air_tar': 215.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0, 
-                'n_comp': 2, 
-                'dT_phx1_cold': 30,
-                'dT_phx2_cold': 50, 
+                'n_comp': 1, 
+                'dT_phx1_cold': 95.5028864788391,
+                'dT_phx2_cold': 0.0,
                 'dT_phx3_cold': 0.0, 
                 'comp2_power_frac': 0.5, 
                 'comp3_power_frac': 0.0,
