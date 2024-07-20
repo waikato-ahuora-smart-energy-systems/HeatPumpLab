@@ -104,41 +104,72 @@ def massive_parallel_case_analysis(parameters):
     get_parallel_solve(cases)
     transfer_results(file_name=file_name)
 
-def single_case_analysis():
-        args = {'refrigerant': 'Isobutane', #;butane|.5;.5|mass
+def single_case_analysis(args=None):
+    if args == None:
+        args = {'refrigerant': 'Propane', #;butane|.5;.5|mass
                 'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 215.0, 
+                'T_air_tar': 115.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0, 
-                'n_comp': 1, 
-                'dT_phx1_cold': 95.5028864788391,
-                'dT_phx2_cold': 0.0,
+                'n_comp': 2, 
+                'dT_phx1_cold': 45.44998475518669,
+                'dT_phx2_cold': 0.027865620584986473,
                 'dT_phx3_cold': 0.0, 
                 'comp2_power_frac': 0.5, 
                 'comp3_power_frac': 0.0,
                 'comp_PR_uniform': True,
                 'display': True,
                 }
-        m = TRHP(**args)
-        TIC = timer()
-        m.solve()
-        TOC = timer()
         
-        if m.converged:
-            m.get_summary()
-            m.output.update({
-                'Obj function:' : '',
-                'Iterations:' : 0,
-                'Message:' : '',
-                'Success:' : m.converged
-            })
+    m = TRHP(**args)
+    TIC = timer()
+    m.solve()
+    TOC = timer()
+    
+    if m.converged:
+        m.get_summary()
+        m.output.update({
+            'Obj function:' : '',
+            'Iterations:' : 0,
+            'Message:' : '',
+            'Success:' : m.converged
+        })
 
-            if type(m.output) is dict:
-                print_result_to_terminal(output=m.output)
-                print('Solve time:', TOC - TIC)
-            
-            m.get_cycle_plot(x_axis='h', y_axis='T')
-            # m.get_cycle_plot(x_axis='h', y_axis='P')
-            # m.get_cycle_plot(x_axis='v', y_axis='P')
-            None
-            
+        if type(m.output) is dict:
+            print_result_to_terminal(output=m.output)
+            print('Solve time:', TOC - TIC)
+        
+        m.get_cycle_plot(x_axis='h', y_axis='T')
+        # m.get_cycle_plot(x_axis='h', y_axis='P')
+        # m.get_cycle_plot(x_axis='v', y_axis='P')
+        None
+
+def unsolved_case_analysis():
+    unsolved = read_csv_to_results(file_name='results/Cases-Unsolved')
+    
+    for case in unsolved:
+        args = {'refrigerant': case['Refrigerant:'],
+                'dT_GC_min_tar': case['dT_min Gas Cooler:'], 
+                'T_air_tar': case['T_air_tar:'],
+                'T_air_inlet': case['T_air_inlet:'], 
+                'T_source_in': case['T_source_in:'], 
+                'n_comp': case['n_comp:'], 
+                'dT_phx1_cold': case['dT phx max 1:'],
+                'dT_phx2_cold': case['dT phx max 2:'],
+                'dT_phx3_cold': case['dT phx max 3:'], 
+                'comp2_power_frac': case['Comp 2 power frac:'], 
+                'comp3_power_frac': case['Comp 3 power frac:'],
+                'comp_PR_uniform': case['Comp_PR_uniform:'],
+                'display': False,
+                }
+        m = TRHP(**args)
+        m.solve()
+        
+        if m.converged is False:
+            m.print_failed_to_solve_report('results/Cases-Unsolved-rechecked')
+        
+        # m.get_cycle_plot(x_axis='s', y_axis='T')
+        # m.get_cycle_plot(x_axis='h', y_axis='P')
+        # m.get_cycle_plot(x_axis='v', y_axis='P')
+        None
+        

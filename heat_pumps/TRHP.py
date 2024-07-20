@@ -45,25 +45,25 @@ class TRHP():
         
         self.refrigerant = refrigerant
         self.cycle_type = None
-        self.T_air_tar = T_air_tar
-        self.dT_GC_min_tar = dT_GC_min_tar
-        self.T_air_inlet = T_air_inlet
-        self.T_source_in = T_source_in
+        self.T_air_tar = float(T_air_tar)
+        self.dT_GC_min_tar = float(dT_GC_min_tar)
+        self.T_air_inlet = float(T_air_inlet)
+        self.T_source_in = float(T_source_in)
         self.T_gc_out = max(self.T_air_inlet + self.dT_GC_min_tar, T_gc_out_min)
-        self.Tsat_evap_tar = Tsat_evap
-        self.Tsat_evap = Tsat_evap
-        self.n_comp = n_comp
-        self.comp2_power_frac = comp2_power_frac
-        self.comp3_power_frac = comp3_power_frac
-        self.comp_PR_uniform = comp_PR_uniform
-        self.dTmin = dTmin_phx
-        self.eff_motor = eff_motor
-        self.min_dT_ihx = min_dT_ihx
-        self.dT_phx1_cold = dT_phx1_cold #if dT_phx1_cold >= self.min_dT_ihx else 0.0
-        self.dT_phx2_cold = dT_phx2_cold #if dT_phx1_cold >= self.min_dT_ihx else 0.0
-        self.dT_phx3_cold = dT_phx3_cold #if dT_phx1_cold >= self.min_dT_ihx else 0.0
-        self.P_H_est = P_H_est
-        self.tol = tol
+        self.Tsat_evap_tar = float(Tsat_evap)
+        self.Tsat_evap = float(Tsat_evap)
+        self.n_comp = int(n_comp)
+        self.comp2_power_frac = float(comp2_power_frac)
+        self.comp3_power_frac = float(comp3_power_frac)
+        self.comp_PR_uniform = bool(comp_PR_uniform)
+        self.dTmin = float(dTmin_phx)
+        self.eff_motor = float(eff_motor)
+        self.min_dT_ihx = float(min_dT_ihx)
+        self.dT_phx1_cold = float(dT_phx1_cold) #if dT_phx1_cold >= self.min_dT_ihx else 0.0
+        self.dT_phx2_cold = float(dT_phx2_cold) #if dT_phx1_cold >= self.min_dT_ihx else 0.0
+        self.dT_phx3_cold = float(dT_phx3_cold) #if dT_phx1_cold >= self.min_dT_ihx else 0.0
+        self.P_H_est = float(P_H_est)
+        self.tol = float(tol)
         self.converged = False
         self.COP = -np.inf
         self.disp = display
@@ -435,7 +435,7 @@ class TRHP():
                         x0=x0, 
                         xtol=self.tol,
                         )
-        r['error'] = 1e-6 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature) / self.T_air_tar
+        r['error'] = 1e-4 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature) / self.T_air_tar
         if self.disp:
             # self.get_cycle_plot()
             print(r['error'])
@@ -494,9 +494,9 @@ class TRHP():
                             method='brentq',
                             bracket=(0.0, 1.0),
                             x0=0.5,
-                            xtol=self.tol
+                            xtol=1e-3
                             )
-            r['error'] = self.tol * 100 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
+            r['error'] = 1e-4 - abs(self.T_air_tar - self.gas_cooler4.sink_out.temperature)
         else:
             if abs(P_zero - P_one) > 1:
                 None
@@ -538,30 +538,34 @@ class TRHP():
                     r = {'error' : -1,
                          'root' : self.P_i}
 
+                # if r['error'] < 0.0:
+                #     # Try bisect method instead
+                #     r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(self.P_lb, self.P_ub))
+                #     if self.disp:
+                #         self.get_cycle_plot()
+                #     if r['error'] > 0.0:
+                #         None
+
                 if r['error'] < 0.0:
-                    # Try brentq method instead
-                    r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(self.P_lb, self.P_ub))
+                    # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
+                    # being near the saturation temperature, causing instability
+                    if r['root'] < self.RP_ref.pcrit:
+                        self.set_quality_relationship()
+                        self.P_i = r['root']
+                        r = self.get_solve_quality()
+                        if self.disp:
+                            self.get_cycle_plot()
+                    else:
+                        self.P_lb = self.RP_ref.pcrit + 10e-4
+                        dt_neg = self.get_solve_state(self.P_lb)
+                        
+                        if dt_neg < 0.0:
+                            r = self.get_solve_gas_pressure(method='brentq', x0=r['root'], bnds=(self.P_lb, self.P_ub))
+                        if self.disp:
+                            self.get_cycle_plot()
 
                     if r['error'] < 0.0:
-                        # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
-                        # being near the saturation temperature, causing instability
-                        if r['root'] < self.RP_ref.pcrit:
-                            self.set_quality_relationship()
-                            self.P_i = r['root']
-                            r = self.get_solve_quality()
-                            if self.disp:
-                                self.get_cycle_plot()
-                        else:
-                            self.P_lb = self.RP_ref.pcrit + 10e-4
-                            dt_neg = self.get_solve_state(self.P_lb)
-                            
-                            if dt_neg < 0.0:
-                                r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(self.P_lb, self.P_ub))
-                            if self.disp:
-                                self.get_cycle_plot()
-
-                        if r['error'] < 0.0:
-                            self.print_failed_to_solve_report()
+                        self.print_failed_to_solve_report()
                              
                 if r['error'] > 0.0 and self.converged:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)                   
@@ -572,10 +576,10 @@ class TRHP():
 
         return self.evaporator.sink_in.temperature - self.Tsat_evap_tar
 
-    def print_failed_to_solve_report(self):
+    def print_failed_to_solve_report(self, filename='results/Cases-Unsolved'):
         print('Heat pump model failed to solve.')
         self.get_summary()
-        print_result_to_csv(self.output,file_name='results/Cases', suffix= '-Unsolved')        
+        print_result_to_csv(self.output, file_name=filename)        
 
     def solve(self):
         #Solve heat pump cycle
