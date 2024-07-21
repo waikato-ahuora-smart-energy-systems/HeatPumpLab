@@ -50,7 +50,7 @@ def get_analysis_parameters():
 
 if __name__=='__main__':
     # single_case_analysis()
-    unsolved_case_analysis()
-    # parameters = get_analysis_parameters()
-    # massive_parallel_case_analysis(parameters)
+    # unsolved_case_analysis()
+    parameters = get_analysis_parameters()
+    massive_parallel_case_analysis(parameters)
     None   
