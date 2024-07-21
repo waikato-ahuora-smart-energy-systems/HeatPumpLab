@@ -534,17 +534,9 @@ class TRHP():
                 try:
                     r = self.get_solve_gas_pressure(method='secant', x0=self.P_i, bnds=(self.P_lb, self.P_ub))
                 except:
-                    self.print_failed_to_solve_report()
+                    # self.print_failed_to_solve_report()
                     r = {'error' : -1,
                          'root' : self.P_i}
-
-                # if r['error'] < 0.0:
-                #     # Try bisect method instead
-                #     r = self.get_solve_gas_pressure(method='bisect', x0=r['root'], bnds=(self.P_lb, self.P_ub))
-                #     if self.disp:
-                #         self.get_cycle_plot()
-                #     if r['error'] > 0.0:
-                #         None
 
                 if r['error'] < 0.0:
                     # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
@@ -556,18 +548,29 @@ class TRHP():
                         if self.disp:
                             self.get_cycle_plot()
                     else:
-                        self.P_lb = self.RP_ref.pcrit + 10e-4
-                        dt_neg = self.get_solve_state(self.P_lb)
-                        
+                        dt_plus = self.get_solve_state(self.RP_ref.pcrit - 10e-4)
+                        dt_neg = self.get_solve_state(self.RP_ref.pcrit + 10e-4)                    
                         if dt_neg < 0.0:
-                            r = self.get_solve_gas_pressure(method='brentq', x0=r['root'], bnds=(self.P_lb, self.P_ub))
+                            self.P_lb = self.RP_ref.pcrit + 10e-4
+                            r = self.get_solve_gas_pressure(method='bisect', x0=max(r['root'], self.P_lb), bnds=(self.P_lb, self.P_ub))
+                            if self.T_air_tar < self.gas_cooler4.sink_out.temperature:
+                                if self.get_solve_state(r['root'] + 10e-6) > 0.0:
+                                    r['root'] += 10e-6
+                        
+                        if dt_plus > 0.0:
+                            self.P_ub = self.RP_ref.pcrit - 10e-4
+                            r = self.get_solve_gas_pressure(method='bisect', x0=min(r['root'], self.P_ub), bnds=(self.P_lb, self.P_ub))
+                            if self.T_air_tar < self.gas_cooler4.sink_out.temperature:
+                                if self.get_solve_state(r['root'] + 10e-6) > 0.0:
+                                    r['root'] += 10e-6
+                                
                         if self.disp:
                             self.get_cycle_plot()
 
-                    if r['error'] < 0.0:
+                    if r['error'] < 0.0 and self.T_air_tar > self.gas_cooler4.sink_out.temperature:
                         self.print_failed_to_solve_report()
                              
-                if r['error'] > 0.0 and self.converged:
+                if (r['error'] > 0.0 or self.T_air_tar > self.gas_cooler4.sink_out.temperature) and self.converged:
                     self.COP = (self.gas_cooler4.duty + self.gas_cooler3.duty + self.gas_cooler2.duty + self.gas_cooler1.duty) / (self.comp1.power + self.comp2.power + self.comp3.power)                   
                 else:
                     self.converged = False

@@ -106,14 +106,14 @@ def massive_parallel_case_analysis(parameters):
 
 def single_case_analysis(args=None):
     if args == None:
-        args = {'refrigerant': 'Propane', #;butane|.5;.5|mass
+        args = {'refrigerant': 'Isobutane', #;butane|.5;.5|mass
                 'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 115.0, 
+                'T_air_tar': 215.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0, 
-                'n_comp': 2, 
-                'dT_phx1_cold': 45.44998475518669,
-                'dT_phx2_cold': 0.027865620584986473,
+                'n_comp': 1, 
+                'dT_phx1_cold': 94.0219675610577,
+                'dT_phx2_cold': 0.0,
                 'dT_phx3_cold': 0.0, 
                 'comp2_power_frac': 0.5, 
                 'comp3_power_frac': 0.0,
