@@ -10,8 +10,10 @@ class BaseHeatExchanger:
     def init_stream_connections(self):
         #Set the stream connection points
         self.source_in = MassStream()
+        self.source_pinch = self.source_in
         self.source_out = self.source_in
         self.sink_in = MassStream()
+        self.sink_pinch = self.sink_in  
         self.sink_out = self.sink_in    
     
     def init_performance_metrics(self):
@@ -27,8 +29,8 @@ class BaseHeatExchanger:
             self.sink_out = self.sink_in
         else:
             if self.source_in.mass_flow <= self.tol or self.sink_in.mass_flow <= self.tol:
-                self.source_out.set_equal(fld=self.source_in)
-                self.sink_out.set_equal(fld=self.sink_in)          
+                self.source_out.copy_fld_props(fld=self.source_in)
+                self.sink_out.copy_fld_props(fld=self.sink_in)          
 
             else:
                 self.get_performance()

@@ -1,9 +1,6 @@
-from .graph import Graph
-from .writeOutput import print_result_to_csv
-from .writeOutput import print_result_to_terminal
-from .cases import get_case_list
-from .cases import single_case_analysis
-from .cases import read_csv_to_results
-from .cases import transfer_results
-from .cases import massive_parallel_case_analysis
-from .cases import unsolved_case_analysis
+from functions.cases import get_cases_to_solve
+from functions.solve import solve_cases_in_parallel, solve_single_case#, unsolved_case_analysis
+from functions.graph import Graph
+from functions.readWriteOutput import print_result_to_csv, print_result_to_terminal, transfer_temp_files_to_results, read_csv_to_results
+from functions.solver import solve_heat_pump_model
+

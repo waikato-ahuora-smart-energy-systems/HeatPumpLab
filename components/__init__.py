@@ -4,3 +4,5 @@ from components.expansionValve import ExpansionValve
 from components.gasCooler import GasCooler
 from components.plateHeatExc import PlateHeatExchanger
 from components.turbine import Turbine
+from components.customRelationship import CustomRelationship
+from components.setRelationship import SetRelationship

@@ -2,12 +2,13 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 from scipy.optimize import shgo, LinearConstraint, minimize
-from heat_pumps import TRHP
-from functions import print_result_to_terminal, print_result_to_csv
-from timeit import default_timer as timer
-import numpy as np
+from systems import TRHP
+from functions.readWriteOutput import print_result_to_terminal, print_result_to_csv
+from time import perf_counter as timer
+from concurrent.futures import ProcessPoolExecutor as pool
+import numpy as np, os
 
-def dict_var(var, parameters):
+def dict_var(var: list[float], parameters) -> dict[str, float]:
     if parameters['n_comp'] > 3:
         raise ValueError("Number of compressors must be 1, 2 or 3.")     
     
@@ -72,14 +73,14 @@ def get_max_multiObj(var, parameters):
     COP_0 = parameters['result_parameters']['COP_0']
     P_0 = parameters['result_parameters']['P_0']
     
-    TIC = timer()
+    tic = timer()
     d_var = dict_var(var, parameters)
     m = TRHP(**parameters, **d_var)
     COP, P = m.solve()
     obj = -(COP / COP_0) * k + (P / P_0 - 2) * (1 - k)
-    TOC = timer()
+    toc = timer()
     
-    print('Obj:', "{:.4f}".format(-obj), '  Solve time:', "{:.2f}".format(TOC - TIC), '  Vars:', ["{:.6f}".format(v) for v in var])    
+    print('Obj:', "{:.4f}".format(-obj), '  Solve time:', "{:.2f}".format(toc - tic), '  Vars:', ["{:.6f}".format(v) for v in var])    
     return obj 
 
 def get_results_summary(result, parameters):
@@ -125,15 +126,15 @@ def get_global_optimum(parameters, bnds, tol):
                 args=[parameters], 
                 bounds=bnds,
                 constraints=LinearConstraint(A=np.array([1.0] * len(bnds)), 
-                                                lb=0.0, 
-                                                ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
+                                             lb=0.0, 
+                                             ub=(parameters['T_air_tar'] - parameters['T_air_inlet']) * 2/3),
                 workers=1, 
                 iters=3, 
                 n=40, 
                 sampling_method='sobol', 
                 options={'tol': tol}, 
                 minimizer_kwargs={'method' : 'SLSQP',
-                                'options': {'tol': tol}}
+                                  'options': {'tol': tol}}
                 )    
 
 def get_local_optima(method, parameters, bnds, tol, xi):
@@ -162,7 +163,7 @@ def get_TRHP_optimal(parameters):
         parameters['result_parameters']['COP_0'] = COP_0
         parameters['result_parameters']['P_0'] = P_0
 
-        if i == 0:    
+        if i == 0 or 1:    
             result = get_global_optimum(parameters, bnds, tol) 
         else:
             xi = get_initial(results_ls[i-1], parameters)
@@ -173,3 +174,15 @@ def get_TRHP_optimal(parameters):
         if result.success:
             res = get_results_summary(result, parameters)
             results_ls.append(res)
+
+def get_parallel_solve(cases):
+    # Use parallel processing distributed over all cores to speed up the analysis
+    n_cpu: int
+    executor: pool
+    results: list[any]
+
+    n_cpu = os.cpu_count()
+    executor = pool(max_workers=n_cpu)
+    results = [executor.submit(get_TRHP_optimal, case) for case in cases]
+    executor.shutdown()
+

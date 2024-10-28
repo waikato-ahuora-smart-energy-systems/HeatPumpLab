@@ -1,2 +1,2 @@
-from streams.massStream import MassStream
-from streams.properties import Properties
+from streams.massStream import *
+from streams.propertiesPackage import *

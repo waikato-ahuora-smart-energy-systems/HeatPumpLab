@@ -3,67 +3,57 @@ __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2021-2024'
 
-from heat_pumps import TRHP
-from functions import print_result_to_terminal, print_result_to_csv
-from optimise.optimiseTRHP import get_TRHP_optimal
-from timeit import default_timer as timer
-import concurrent.futures, os, csv, glob
+from functions.readWriteOutput import transfer_temp_files_to_results, read_csv_to_results
 
-def get_case_list(refrigerant,
-                  dT_GC_min_tar,
-                  T_air_tar,
-                  T_air_inlet,
-                  T_source_in,
-                  n_comp,
-                  Tsat_evap,
-                  comp_PR_uniform,
-                  w,
-                  ):
+def get_cases_to_solve(file_name: str) -> list[list[float | str | bool]]:
+    all_cases: list[list[float | str | bool]]
+    unsolved_cases: list[list[float | str | bool]]
+    
+    all_cases = _get_all_case_list()
+    unsolved_cases = _get_previous_results(all_cases, file_name)
+    return _order_previous_results(unsolved_cases)
+
+def _get_all_case_list() -> list[list[float | str | bool]]:
+    refrigerant_ls: list[str] = [
+        'propane;butane|.5;.5|mol',
+        'Butane', 
+        'Carbon dioxide', 
+        'Propane', 
+        'Isobutane', 
+        'R1233zd(E)', 
+        'R1336mzz(Z)', 
+        'R1234ze(E)', 
+        'R1234ze(Z)', 
+        'R1234yf', 
+        'R1243zf', 
+        'R1224yd(Z)', 
+        'PROPYLEN',
+        'DME',
+        'Methanol'
+        'Ammonia',
+        ]
+    
     # Enumerate all the cases to be analysed
-    cases = [{
-                'refrigerant' : refrigerant[i],
-                'dT_GC_min_tar' : dT_GC_min_tar[j],
-                'T_air_tar' : [T_air_tar[k] for k in range(len(T_air_tar))],
-                'T_air_inlet' : T_air_inlet[l],
-                'T_source_in' : T_source_in[m],
-                'n_comp' : n_comp[n],
-                'Tsat_evap' : Tsat_evap[r],
-                'comp_PR_uniform' : comp_PR_uniform[q],
-                'result_parameters' : {'weight': w[o]},
+    return  [{
+                'refrigerant' : [r],
+                'dT_GC_min_tar' : [20.0],
+                'T_air_tar' : [float(x) for x in range(250, 99, -5)],
+                'T_air_inlet' : [15.0],
+                'T_source_in' : [40.0],
+                'n_comp' : [j + 1],
+                'Tsat_evap' : [10.0],
+                'comp_PR_uniform' : [True],
+                'result_parameters' : {'weight': [k / 100]},
                 'results' : [],
-             } 
-                for r in range(len(Tsat_evap))
-                for m in range(len(T_source_in))
-                for j in range(len(dT_GC_min_tar))
-                for l in range(len(T_air_inlet))
-                for o in range(len(w))
-                for q in range(len(comp_PR_uniform))
-                for n in range(len(n_comp))
-                for i in range(len(refrigerant))
+             }
+                for k in [k0 for k0 in range(100, 40, -10)]
+                for j in range(2)
+                for r in refrigerant_ls
             ]
-    print('Cases total: ', len(cases) * len(T_air_tar))
-    return cases
 
-def transfer_results(file_name='results/untitled'):
-        csv_file_list = glob.glob(os.getcwd() + '/results/temp/*.csv')
-        for f in csv_file_list:
-            output = read_csv_to_results(file_name=f, file_ext='')
-            for o in output:
-                print_result_to_csv(output=o, file_name=file_name)
-            os.remove(f)
-
-def read_csv_to_results(file_name='results/untitled', file_ext='.csv'):
-    try:
-        with open(file_name + file_ext, 'r') as csvfile:
-            reader = csv.DictReader(csvfile)
-            return list(reader)
-
-    except:
-        print('Failed to open CSV file.')
-
-def get_previous_results(cases, file_name): 
+def _get_previous_results(cases, file_name): 
     # Check if any past results in the temp folder need to be transferred and added to the complete results summary
-    transfer_results(file_name=file_name)
+    transfer_temp_files_to_results(file_name=file_name)
     prev_results = read_csv_to_results(file_name=file_name)
     if prev_results != None:
         for res in prev_results:
@@ -82,94 +72,8 @@ def get_previous_results(cases, file_name):
                     break
     return cases
 
-def get_ordered_previous_results(cases):
+def _order_previous_results(cases):
     for case in cases:
         if len(case['results']) > 1:   
             case['results'].sort(reverse=True, key=lambda x: x['T_air_tar:'])         
     return cases
-
-def get_parallel_solve(cases):
-    # Use parallel processing distributed over all cores to speed up the analysis
-    n_cpu = os.cpu_count()
-    executor = concurrent.futures.ProcessPoolExecutor(max_workers=n_cpu)
-    results = [executor.submit(get_TRHP_optimal, case) for case in cases]
-    executor.shutdown()
-
-def massive_parallel_case_analysis(parameters):
-    cases = get_case_list(**parameters)
-    # Location of saved results
-    file_name='results/TRHP_results'
-    cases = get_previous_results(cases, file_name)
-    cases = get_ordered_previous_results(cases)
-    get_parallel_solve(cases)
-    transfer_results(file_name=file_name)
-
-def single_case_analysis(args=None):
-    if args == None:
-        args = {'refrigerant': 'Isobutane', #;butane|.5;.5|mass
-                'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 215.0, 
-                'T_air_inlet': 15.0, 
-                'T_source_in': 40.0, 
-                'n_comp': 1, 
-                'dT_phx1_cold': 94.0219675610577,
-                'dT_phx2_cold': 0.0,
-                'dT_phx3_cold': 0.0, 
-                'comp2_power_frac': 0.5, 
-                'comp3_power_frac': 0.0,
-                'comp_PR_uniform': True,
-                'display': True,
-                }
-        
-    m = TRHP(**args)
-    TIC = timer()
-    m.solve()
-    TOC = timer()
-    
-    if m.converged:
-        m.get_summary()
-        m.output.update({
-            'Obj function:' : '',
-            'Iterations:' : 0,
-            'Message:' : '',
-            'Success:' : m.converged
-        })
-
-        if type(m.output) is dict:
-            print_result_to_terminal(output=m.output)
-            print('Solve time:', TOC - TIC)
-        
-        m.get_cycle_plot(x_axis='h', y_axis='T')
-        # m.get_cycle_plot(x_axis='h', y_axis='P')
-        # m.get_cycle_plot(x_axis='v', y_axis='P')
-        None
-
-def unsolved_case_analysis():
-    unsolved = read_csv_to_results(file_name='results/Cases-Unsolved')
-    
-    for case in unsolved:
-        args = {'refrigerant': case['Refrigerant:'],
-                'dT_GC_min_tar': case['dT_min Gas Cooler:'], 
-                'T_air_tar': case['T_air_tar:'],
-                'T_air_inlet': case['T_air_inlet:'], 
-                'T_source_in': case['T_source_in:'], 
-                'n_comp': case['n_comp:'], 
-                'dT_phx1_cold': case['dT phx max 1:'],
-                'dT_phx2_cold': case['dT phx max 2:'],
-                'dT_phx3_cold': case['dT phx max 3:'], 
-                'comp2_power_frac': case['Comp 2 power frac:'], 
-                'comp3_power_frac': case['Comp 3 power frac:'],
-                'comp_PR_uniform': case['Comp_PR_uniform:'],
-                'display': False,
-                }
-        m = TRHP(**args)
-        m.solve()
-        
-        if m.converged is False:
-            m.print_failed_to_solve_report('results/Cases-Unsolved-rechecked')
-        
-        # m.get_cycle_plot(x_axis='s', y_axis='T')
-        # m.get_cycle_plot(x_axis='h', y_axis='P')
-        # m.get_cycle_plot(x_axis='v', y_axis='P')
-        None
-        

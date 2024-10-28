@@ -152,7 +152,7 @@ class CustomRelationship:
                 self.mcp_air_i = dQ / (T_air_i - self.source_obj[0].sink_in.temperature)
                 m_air_list.append(get_m_air(self.mcp_air_i))              
 
-                if gc.source_in.pressure < gc.source_in.RP_fluid.pcrit:
+                if gc.source_in.pressure < gc.source_in.RP_fluid.P_crit:
                     h_ref = gc.source_in.RP_fluid.get_properties('H', 'PQMASS', gc.source_in.pressure, 1.0)[0]
                     
                     if h_ref < gc.source_in.enthalpy and h_ref > gc.source_out.enthalpy:

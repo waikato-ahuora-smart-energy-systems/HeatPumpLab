@@ -50,11 +50,6 @@ class PlateHeatExchanger(BaseHeatExchanger):
             
             self.UA = self.NTU * min( Ch, Cc )
             
-            self.sink_in.props_extend()
-            self.sink_out.props_extend()
-            self.source_in.props_extend()
-            self.source_out.props_extend()
-
             Wp = self.phx_Length / self.phx_LtoW           
             self.U = 1.5 #Intitial estimate
             self.Area_per_plate = self.phx_Length * self.phx_Factor * Wp
@@ -92,7 +87,6 @@ class PlateHeatExchanger(BaseHeatExchanger):
             self.Area = self.Area_per_plate * Nt
             
             #Calculates hotside pressure drop
-            self.source_in.props_extend()
             den_avg_h = (self.source_in.density + self.source_out.density) /2
             f_h = 1.22 /  ( RE_h ** 0.252 )
             self.dP_h = ( ( 2 * f_h * self.phx_Length *  ( G ** 2 ) )  /  ( den_avg_h* self.phx_D_hyd ) ) 
@@ -117,12 +111,7 @@ class PlateHeatExchanger(BaseHeatExchanger):
                 self.NTU = self.hx_eff /  ( 1 - self.hx_eff )
             
             self.UA = self.NTU * min( Ch, Cc )
-            
-            self.sink_in.props_extend()
-            self.sink_out.props_extend()
-            self.source_in.props_extend()
-            self.source_out.props_extend()
-            
+                        
             k_h = ( get_property_value('TCX', self.source_in.fluid, 'PT', self.source_in.pressure, ( self.source_in.temperature + self.source_out.temperature ) / 2, self.RP) )
             Pr_h = get_property_value('prandtl', self.source_in.fluid, 'PT', self.source_in.pressure, ( ( self.source_in.temperature + self.source_out.temperature ) / 2 ), self.RP)
             Vis_h = ( get_property_value('VIS', self.source_in.fluid, 'PT', self.source_in.pressure, ( self.source_in.temperature + self.source_out.temperature ) / 2, self.RP) ) * ( 10 ** - 6 )
@@ -168,7 +157,6 @@ class PlateHeatExchanger(BaseHeatExchanger):
             self.Area = self.Area_per_plate * Nt
             
             #Calculates hotside pressure drop
-            self.source_in.props_extend()
             #density_h = get_property_value('D', self.source_in.fluid, 'PT', self.source_in.pressure, ( ( self.source_in.temperature + self.source_out.temperature )  / 2 ), self.RP)
             den_avg_h = (self.source_in.density + self.source_out.density) /2
             #f_h = 1.22 /  ( RE_h ** 0.252 )

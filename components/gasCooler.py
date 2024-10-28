@@ -119,8 +119,6 @@ class GasCooler(BaseHeatExchanger):
 
     def area_solve(self):
         if self.duty > 0 and self.source_in.temperature > self.sink_out.temperature and self.source_out.temperature > self.sink_in.temperature:
-            self.sink_in.props_extend()
-            self.sink_out.props_extend()
             self.dT_max = ( self.source_in.temperature - self.sink_in.temperature )
             self.LMTD_linear = (( self.source_in.temperature - self.sink_out.temperature ) - ( self.source_out.temperature - self.sink_in.temperature )) / math.log(( self.source_in.temperature - self.sink_out.temperature ) / ( self.source_out.temperature - self.sink_in.temperature ))
             self.C_ratio_linear = ( self.sink_out.temperature - self.sink_in.temperature ) / ( self.source_in.temperature - self.source_out.temperature )

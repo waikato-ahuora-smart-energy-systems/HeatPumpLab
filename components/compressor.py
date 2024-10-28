@@ -1,10 +1,10 @@
 __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
-from streams import MassStream, Properties
+from streams import MassStream, PropertyPackage
 
 class Compressor:
-    def __init__(self, name='Compressor', flow_in = MassStream('flow_in'), flow_out = MassStream('flow_out'), model_index=0, motor_eff=1.0, RP=Properties()):
+    def __init__(self, name='Compressor', flow_in = MassStream('flow_in'), flow_out = MassStream('flow_out'), model_index=0, motor_eff=1.0, RP=PropertyPackage()):
         self.name = name
         self.flow_in = flow_in
         self.flow_out = flow_out

@@ -31,8 +31,6 @@ class CrossFlowElement:
         self.HT_Area_per_Element = HT_Area_per_Element
         self.Tube_Cross_Area = Tube_Cross_Area
         #self.sink_in.props_in_mPH() #test
-        self.sink_in.props_extend()
-        self.source_out.props_extend()
         self.source_out.props_in_mPH
   
         '''HEAT TRANSFER''' 
@@ -80,11 +78,9 @@ class CrossFlowElement:
             self.source_in.pressure = self.source_out.pressure
             self.source_in.props_in_mPH()
             #self.source_in.props_in_mPT()
-            self.source_in.props_extend()
             self.sink_out.enthalpy = self.sink_in.enthalpy + self.duty / self.sink_in.mass_flow
             self.sink_out.pressure = self.sink_in.pressure
             self.sink_out.props_in_mPH()
-            self.sink_out.props_extend()
         
             '''PRESSURE DROP per element'''
             #Calculate pressure drop refrigerant side for each segment 
