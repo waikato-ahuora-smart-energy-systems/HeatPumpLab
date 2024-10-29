@@ -4,7 +4,10 @@ __credits__ = ['']
 from common.commonHeatExchanger import BaseHeatExchanger
 
 class HeatExchanger(BaseHeatExchanger):
-    def __init__(self, name='Heat exchanger', HX_Eff=0.9, dTmin=5, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-6):
+    def __init__(self, source_fluid: str, sink_fluid: str, name: str='Heat exchanger', 
+                 HX_Eff: float =0.9, dTmin: float =5, dP_h: float =0.0, dP_c: float =0.0, 
+                 model: str ='dTmin_terminal', bypassed: bool =False, converged: bool =False, 
+                 tol: float =1e-6) -> None:
         self.name = name
         self.model = model
         self.bypassed = bypassed
@@ -14,6 +17,4 @@ class HeatExchanger(BaseHeatExchanger):
         self.dP_h = dP_h
         self.dP_c = dP_c
         self.tol = tol
-        self.variable_dP_model = False
-        self.init_stream_connections()
-        self.init_performance_metrics()
+        self.set_port_mass_streams(source_fluid, sink_fluid)

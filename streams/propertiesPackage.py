@@ -6,6 +6,7 @@ from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
 from sys import platform
 import numpy as np
 
+
 class PropertyPackage:
     RP: REFPROPFunctionLibrary
     if platform == "darwin":
@@ -25,34 +26,42 @@ class PropertyPackage:
     P_crit: float
     T_crit: float
     D_crit: float
-    _fld: list[str]
+    molar_mass: float
     fld_name: str
     fld_composition: list[float]
-    _composition: np.ndarray[float]
+    
     
     def __init__(self, fld_name: str ='water'):
         self.set_fluid(fld_name)
-        self.P_crit, self.T_crit, self.D_crit = self.get_properties('PCRIT;TCRIT;DCRIT', 'PH', 1.0, 500)[0:3]
+        self.set_critical_properties()
 
     def set_iMass(self, basis: str ='mass'):
         self.iMass = 0 if basis == 'mol' else 1
 
     def set_fluid(self, fld: str):
-        self._fld = fld.split('|')
-        if len(self._fld) == 1:
-            self.fld_name: str = self._fld[0]
+        _fld: list[str]
+        _composition: np.ndarray[float]
+
+        _fld = fld.split('|')
+        if len(_fld) == 1:
+            self.fld_name: str = _fld[0]
             self.fld_composition: float = [1.0]
-        elif len(self._fld) == 2 or len(self._fld) == 3:
-            self.fld_name = '*'.join([f+'.FLD' for f in self._fld[0].split(';')])
-            self._composition = np.array(self._fld[1].split(';'), dtype=float)
-            self.fld_composition = self._composition / self._composition.sum()
-            if len(self._fld) == 3:
-                self.set_iMass(self._fld[2])
+        elif len(_fld) == 2 or len(_fld) == 3:
+            self.fld_name = '*'.join([f+'.FLD' for f in _fld[0].split(';')])
+            _composition = np.array(_fld[1].split(';'), dtype=float)
+            self.fld_composition = _composition / _composition.sum()
+            if len(_fld) == 3:
+                self.set_iMass(_fld[2])
         else:
             ValueError('Invalid fluid string entry')
+        
+        return self.RP.SETFLUIDSdll(self.fld_name)
 
     def get_properties(self, propsOut:str, propsIn:str, prop1:float, prop2:float):
         return self.RP.REFPROPdll(self.fld_name, propsIn, propsOut, self.UNITS, self.iMass, self.iFlag, float(prop1), float(prop2), self.fld_composition).Output
     
+    def get_properties_fast(self, propsIn_str: str, prop1: float, prop2: float, comp: list[float]):
+        return self.RP.ABFLSHdll(propsIn_str, float(prop1), float(prop2), comp, 0)
+    
     def set_critical_properties(self):
-        self.P_crit, self.T_crit, self.D_crit = self.get_properties('PCRIT;TCRIT;DCRIT', 'PH', 1.0, 500)[0:3]
+        self.molar_mass, self.P_crit, self.T_crit, self.D_crit = self.RP.REFPROPdll(self.fld_name, 'PH', 'M;PCRIT;TCRIT;DCRIT', self.UNITS, self.iMass, self.iFlag, 1.0, 500, self.fld_composition).Output[0:4]

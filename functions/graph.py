@@ -9,23 +9,7 @@ class Graph:
     def __init__(self) -> None:
         pass
     
-    def rescale(self, array_to_scale, array_new_scale) -> list[float]:
-        m: float
-        c: float
-        if abs(array_to_scale[0] - array_to_scale[-1]) > 0.0:
-            m = (array_new_scale[-1] - array_new_scale[0]) / (array_to_scale[0] - array_to_scale[-1])
-        else:
-            m = 0.0
-        c = array_new_scale[0]
-        return [(x - array_to_scale[-1]) * m + c for x in array_to_scale]
-
-    def get_raw_data(self, ls, prop):
-        x = []
-        for s in ls:
-            x += [getattr(s, prop)]
-        return x
-
-    def cycle(self, cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=100):
+    def plot_cycle(self, cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=100):
         cycle_obj = cycle_obj + [cycle_obj[0]]
 
         plt = pyplot
@@ -37,8 +21,8 @@ class Graph:
 
         for obj in cycle_obj:
             data = obj[0].get_graph_data(divisions=res)
-            x = self.get_raw_data(data[obj[1]], x_axis)
-            y = self.get_raw_data(data[obj[1]], y_axis)
+            x = self._get_raw_data(data[obj[1]], x_axis)
+            y = self._get_raw_data(data[obj[1]], y_axis)
 
             if obj[0].name == 'Gas cooler':
                 plt.plot(x, y, color='red')
@@ -55,9 +39,9 @@ class Graph:
             for obj in reversed(sink_obj):
                 if obj[1] == 'sink':
                     data = obj[0].get_graph_data(divisions=res)
-                    x = self.rescale(self.get_raw_data(data['sink'],   x_axis), 
-                                     self.get_raw_data(data['source'], x_axis))
-                    y = self.get_raw_data(data['sink'], y_axis)
+                    x = self._rescale(self._get_raw_data(data['sink'],   x_axis), 
+                                     self._get_raw_data(data['source'], x_axis))
+                    y = self._get_raw_data(data['sink'], y_axis)
 
                     if obj[0].name == 'Gas cooler':
                         plt.plot(x, y, color='blue')
@@ -67,7 +51,7 @@ class Graph:
         plt.show()  
         del plt         
 
-    def driving_force(self, hx_obj, title='', x_axis='h', y_axis='dT*', res=100, dtmin=0):
+    def plot_driving_force(self, hx_obj, title='', x_axis='h', y_axis='dT*', res=100, dtmin=0):
         plt = pyplot
         if title != '':
             plt.title(title)
@@ -77,8 +61,8 @@ class Graph:
 
         for obj in hx_obj:
             data = obj.get_graph_data(divisions=res)
-            x = np.array(self.get_raw_data(data['source'], x_axis))
-            y1 = np.array(self.get_raw_data(data['source'], y_axis)) - np.array(self.get_raw_data(data['sink'], y_axis))[::-1]
+            x = np.array(self._get_raw_data(data['source'], x_axis))
+            y1 = np.array(self._get_raw_data(data['source'], y_axis)) - np.array(self._get_raw_data(data['sink'], y_axis))[::-1]
             y2 = np.repeat(dtmin, len(x))
 
             plt.plot(x, y1, color='red')
@@ -87,7 +71,7 @@ class Graph:
         plt.show()
         del plt           
 
-    def simple(self, x: list, y: list, title: str ='', x_axis: str ='', y_axis: str =''):
+    def plot_simple_xy(self, x: list, y: list, title: str ='', x_axis: str ='', y_axis: str =''):
         plt = pyplot
         if title != '':
             plt.title(title)
@@ -98,6 +82,22 @@ class Graph:
         plt.plot(x, y, color='black')
         plt.show()
         del plt
+ 
+    def _rescale(self, array_to_scale, array_new_scale) -> list[float]:
+        m: float
+        c: float
+        if abs(array_to_scale[0] - array_to_scale[-1]) > 0.0:
+            m = (array_new_scale[-1] - array_new_scale[0]) / (array_to_scale[0] - array_to_scale[-1])
+        else:
+            m = 0.0
+        c = array_new_scale[0]
+        return [(x - array_to_scale[-1]) * m + c for x in array_to_scale]
+
+    def _get_raw_data(self, ls, prop):
+        x = []
+        for s in ls:
+            x += [getattr(s, prop)]
+        return x
 
     def _add_xaxis_labels(self, plt: pyplot, x_axis: str) -> list[pyplot, str]: # type: ignore
         if x_axis == 'h' or x_axis == 'enthalpy':

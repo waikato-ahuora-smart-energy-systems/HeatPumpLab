@@ -3,17 +3,17 @@ __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2021-2024'
 
-from functions import solve_single_case
+from functions import analyse_single_case
 from time import perf_counter as timer
-# from functions import solve_single_case, solve_cases_in_parallel#, unsolved_case_analysis
+# from functions import analyse_single_case, analyse_cases_in_parallel#, analyse_unsolved_cases
 # import type_enforced 
 
 # @type_enforced.Enforcer
 def main() -> None:
     tic: float = timer()
-    solve_single_case()
-    # unsolved_case_analysis()
-    # solve_cases_in_parallel()
+    analyse_single_case()
+    # analyse_unsolved_cases()
+    # analyse_cases_in_parallel()
     toc: float = timer()
     print('Total time:', toc - tic)
 

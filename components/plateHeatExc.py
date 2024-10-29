@@ -4,7 +4,7 @@ __credits__ = ['Alex Geary']
 from components.common.commonHeatExchanger import BaseHeatExchanger
 
 class PlateHeatExchanger(BaseHeatExchanger):   
-    def __init__(self, name='Plate heat exchanger', hx_eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-6):
+    def __init__(self, source_fluid: str, sink_fluid: str, name='Plate heat exchanger', hx_eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-6):
         self.name = name
         self.model = model
         self.bypassed = bypassed
@@ -17,8 +17,7 @@ class PlateHeatExchanger(BaseHeatExchanger):
         self.dP_c = dP_c
         self.tol = tol
         self.variable_dP_model = False
-        self.init_stream_connections()
-        self.init_performance_metrics()
+        self.set_port_mass_streams(source_fluid, sink_fluid)
 
         if self.model == 'custom':
             self.init_detailed_model()

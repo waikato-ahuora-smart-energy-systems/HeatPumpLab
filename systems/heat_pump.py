@@ -48,6 +48,8 @@ class HeatPump():
         ):
         
         self.refrigerant = refrigerant
+        self.source = source
+        self.sink = sink
         self.cycle_type = None
         self.T_air_tar = float(T_air_tar)
         self.dT_GC_min_tar = float(dT_GC_min_tar)
@@ -71,10 +73,6 @@ class HeatPump():
         self.converged = False
         self.COP = -np.inf
         self.disp = display
-
-        self.RP_ref = PropertyPackage(refrigerant)
-        self.RP_sink = PropertyPackage(sink)
-        self.RP_src = PropertyPackage(source)
    
     def print_failed_to_solve_report(self, filename='results/Cases-Unsolved'):
         print('Heat pump model failed to solve.')
@@ -83,7 +81,7 @@ class HeatPump():
 
     def print_currrent_case(self):
         print({
-            'refrigerant' : self.RP_ref.fld_name,
+            'refrigerant' : self.refrigerant,
             'dT_GC_min_tar' : self.dT_GC_min_tar,
             'T_air_tar' : self.T_air_tar,
             'T_air_inlet' : self.T_air_inlet,
@@ -180,13 +178,13 @@ class HeatPump():
                 sink_obj.append([ getattr(locals()[obj], att), component[1] ])
 
         g = Graph()
-        g.cycle(cycle_obj=cycle_obj, 
+        g.plot_cycle(cycle_obj=cycle_obj, 
                 sink_obj=sink_obj,
                 x_axis=x_axis, y_axis=y_axis)
 
     def get_driving_force_plot(self, x_axis='h'):
         g = Graph()
-        g.driving_force(hx_obj=self.gas_coolers,
+        g.plot_driving_force(hx_obj=self.gas_coolers,
                         x_axis=x_axis,
                         dtmin=self.dT_GC_min_tar)
 
@@ -259,7 +257,7 @@ class HeatPump():
     def get_p_test(self):
         P = np.linspace(start=self.P_lb / 1.5, stop=self.P_ub * 3, num=1000)
         dT = np.array([self.T_air_tar + self.get_solve_state(P_i) for P_i in P])
-        Graph().simple(x=P, y=dT)
+        Graph().plot_simple_xy(x=P, y=dT)
         ddT = np.diff(dT)
         i = ddT.argmax()
         P0, P1 = P[i], P[i+1]
@@ -348,7 +346,7 @@ class HeatPump():
     def get_solve_T_evap(self, T_evap_sat_out):
         #Solve heat pump cycle
         self.evaporator.sink_out.temperature = T_evap_sat_out
-        self.evaporator.sink_out.props_in_mTX()
+        self.evaporator.sink_out.props_in_mTQ()
         self.converged = False
         self.COP = -np.inf
         
@@ -367,24 +365,24 @@ class HeatPump():
                 if r['error'] < 0.0:
                     # Possibly unconverged due to a fixed hot outlet temperature of a gas cooler 
                     # being near the saturation temperature, causing instability
-                    if r['root'] < self.RP_ref.P_crit:
+                    if r['root'] < self.evaporator.sink_out.P_crit:
                         self.set_quality_relationship()
                         self.P_i = r['root']
                         r = self.get_solve_quality()
                         if self.disp:
                             self.get_cycle_plot()
                     else:
-                        dt_plus = self.get_solve_state(self.RP_ref.P_crit - 10e-4)
-                        dt_neg = self.get_solve_state(self.RP_ref.P_crit + 10e-4)                    
+                        dt_plus = self.get_solve_state(self.evaporator.sink_out.P_crit - 10e-4)
+                        dt_neg = self.get_solve_state(self.evaporator.sink_out.P_crit + 10e-4)                    
                         if dt_neg < 0.0:
-                            self.P_lb = self.RP_ref.P_crit + 10e-4
+                            self.P_lb = self.evaporator.sink_out.P_crit + 10e-4
                             r = self.get_solve_gas_pressure(method='bisect', x0=max(r['root'], self.P_lb), bnds=(self.P_lb, self.P_ub))
                             if self.T_air_tar < self.gas_cooler4.sink_out.temperature:
                                 if self.get_solve_state(r['root'] + 10e-6) > 0.0:
                                     r['root'] += 10e-6
                         
                         if dt_plus > 0.0:
-                            self.P_ub = self.RP_ref.P_crit - 10e-4
+                            self.P_ub = self.evaporator.sink_out.P_crit - 10e-4
                             r = self.get_solve_gas_pressure(method='bisect', x0=min(r['root'], self.P_ub), bnds=(self.P_lb, self.P_ub))
                             if self.T_air_tar < self.gas_cooler4.sink_out.temperature:
                                 if self.get_solve_state(r['root'] + 10e-6) > 0.0:
@@ -403,7 +401,7 @@ class HeatPump():
                 else:
                     self.converged = False
         
-                self.cycle_type = 'Transcritical' if self.comp_discharge.pressure > self.RP_ref.P_crit else 'Subcritical'
+                self.cycle_type = 'Transcritical' if self.comp_discharge.pressure > self.evaporator.sink_out.P_crit else 'Subcritical'
 
         return self.evaporator.sink_in.temperature - self.Tsat_evap_tar
 

@@ -9,7 +9,7 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021-2024 (tim.walmsley
 
 from systems.heat_pump import HeatPump
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator, SetRelationship, CustomRelationship
-from streams import MassStream, PropertyPackage
+from streams import MassStream
 
 def set_trhp_model(hp: HeatPump, version: int = 1) -> HeatPump:
     hp = _get_trhp_structure(hp)
@@ -68,105 +68,98 @@ def _get_trhp_structure(hp: HeatPump) -> HeatPump:
 
 def _get_trhp_components(hp: HeatPump) -> HeatPump:
     #Initialisation of unit operations
-
-    hp.comp2_on = 1  if hp.n_comp > 1 else 0
-    hp.comp3_on = 1  if hp.n_comp > 2 else 0
-    hp.ihx_on = 1    if hp.T_source_in < hp.T_gc_out else 0
-            
-    hp.phx1_on = 1   if hp.dT_phx1_cold > 0.0 else 0
-    hp.phx2_on = 1   if hp.dT_phx2_cold > 0.0 else 0
-    hp.phx3_on = 1   if hp.dT_phx3_cold > 0.0 else 0
-
-    hp.comp1 = Compressor(name='Compressor', motor_eff=hp.eff_motor, model_index=1)
+    hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=1)
     if hp.comp2_on == 1:
-        hp.comp2 = Compressor(name='Compressor', motor_eff=hp.eff_motor, model_index=1)
-        hp.gas_cooler3 = GasCooler(name='Gas cooler', dTmin=hp.dT_GC_min_tar)
+        hp.comp2 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=1)
+        hp.gas_cooler3 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
         if hp.comp3_on == 1:
-            hp.comp3 = Compressor(name='Compressor', motor_eff=hp.eff_motor, model_index=1) 
-            hp.gas_cooler4 = GasCooler(name='Gas cooler', dTmin=hp.dT_GC_min_tar)
+            hp.comp3 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=1) 
+            hp.gas_cooler4 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
     
-    hp.gas_cooler1 = GasCooler(name='Gas cooler', dTmin=hp.dT_GC_min_tar)
-    hp.gas_cooler2 = GasCooler(name='Gas cooler', dTmin=hp.dT_GC_min_tar)
+    hp.gas_cooler1 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
+    hp.gas_cooler2 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
     
-    hp.ihx = PlateHeatExchanger(name='Internal heat exchanger', dTmin=hp.dTmin, model='dTmin_terminal')
+    hp.ihx = PlateHeatExchanger(name='Internal heat exchanger', source_fluid=hp.refrigerant, sink_fluid=hp.refrigerant, dTmin=hp.dTmin, model='dTmin_terminal')
     if hp.phx1_on == 1:
-        hp.phx1 = PlateHeatExchanger(name='Recuperator', dT_c=hp.dT_phx1_cold, model='fixed cold delta temperature')
+        hp.phx1 = PlateHeatExchanger(name='Recuperator', source_fluid=hp.refrigerant, sink_fluid=hp.refrigerant, dT_c=hp.dT_phx1_cold, model='fixed cold delta temperature')
     if hp.phx2_on == 1:
-        hp.phx2 = PlateHeatExchanger(name='Recuperator', dT_c=hp.dT_phx2_cold, model='fixed cold delta temperature') 
+        hp.phx2 = PlateHeatExchanger(name='Recuperator', source_fluid=hp.refrigerant, sink_fluid=hp.refrigerant, dT_c=hp.dT_phx2_cold, model='fixed cold delta temperature') 
     if hp.phx3_on == 1:       
-        hp.phx3 = PlateHeatExchanger(name='Recuperator', dT_c=hp.dT_phx3_cold, model='fixed cold delta temperature')
+        hp.phx3 = PlateHeatExchanger(name='Recuperator', source_fluid=hp.refrigerant, sink_fluid=hp.refrigerant, dT_c=hp.dT_phx3_cold, model='fixed cold delta temperature')
     
-    hp.exp_valve = ExpansionValve(name='Expansion valve')
-    hp.evaporator = Evaporator(name='Evaporator', model='saturated gas outlet evaporator')
-    hp.evap_sup = PlateHeatExchanger(name='Evaporator', model='fixed cold temperature outlet')
+    hp.exp_valve = ExpansionValve(name='Expansion valve', fluid=hp.refrigerant)
+    hp.evaporator = Evaporator(name='Evaporator', source_fluid=hp.source, sink_fluid=hp.refrigerant, model='saturated gas outlet evaporator')
+    hp.evap_sup = PlateHeatExchanger(name='Evaporator', source_fluid=hp.source, sink_fluid=hp.refrigerant, model='fixed cold temperature outlet')
     
     return hp
 
 def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     temp_ref_out: MassStream
+    P_H: float
+    P_L: float
 
     #Evaporator superheat section
-    hp.evap_sup.source_in = MassStream( name='source In', fluid=hp.RP_src, pressure=0.101, temperature=hp.T_source_in, mass_flow=10^6)
-    hp.evap_sup.source_out = MassStream( name='source Out', fluid=hp.RP_src, pressure=0.101, temperature=hp.T_source_in, mass_flow=10^6)
-    hp.evap_sup.sink_in = MassStream( name='LP Ref: Evap to Super', fluid=hp.RP_ref, temperature=hp.Tsat_evap, quality=1.0)
+    hp.evap_sup.source_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_source_in, mass_flow=1e6, name='Source in')
+    hp.evap_sup.source_out.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_source_in, mass_flow=1e6, name='Source out')
+    hp.evap_sup.sink_in.props_in_ab(input_str='TQ', prop1=hp.Tsat_evap, prop2=1.0, name='Evaporator sink outlet')
     P_L = hp.evap_sup.sink_in.pressure
-    hp.evap_sup.sink_out = MassStream( name='LP Ref: Super to IHX', fluid=hp.RP_ref, pressure=P_L, temperature=(hp.T_source_in - hp.dTmin))
+    hp.evap_sup.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_source_in - hp.dTmin), name='Superheater sink outlet')
     temp_ref_out = hp.evap_sup.sink_out
 
     #Internal heat exchanger, if present
     if hp.ihx_on == 1:
         hp.ihx.sink_in = temp_ref_out
-        hp.ihx.sink_out = MassStream( name='LP Ref: IHX to PHX1', fluid=hp.RP_ref, pressure=P_L, temperature=(hp.T_gc_out - hp.dTmin))
+        hp.ihx.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_gc_out - hp.dTmin), name='IHX sink outlet')
         temp_ref_out = hp.ihx.sink_out
 
     #Plate heat exchanger 1 - cold-side, if present
     if hp.phx1_on == 1:
         hp.phx1.sink_in = temp_ref_out
-        hp.phx1.sink_out = MassStream( name='LP Ref: PHX1 to Comp1', fluid=hp.RP_ref, pressure=P_L, temperature=(hp.phx1.sink_in.temperature + hp.dT_phx1_cold))
+        hp.phx1.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.phx1.sink_in.temperature + hp.dT_phx1_cold), name='PHX1 sink outlet')
         temp_ref_out = hp.phx1.sink_out
 
-    def _get_discharge_pressure_ratio_estimate(P_H_est: float, P_L: float, n_comp: int, T_tar: float, dT_min: float, s_out: float, RP: PropertyPackage) -> float:
+    def _get_discharge_pressure_ratio_estimate(P_H_est: float, P_L: float, n_comp: int, T_tar: float, dT_min: float, s_out: float, fld: str) -> float:
         #Final discharge pressure
         if P_H_est > 0.0:
             P_H = P_H_est
         else:
-            P_H = RP.get_properties('P', 'TS', T_tar + dT_min, s_out)[0]
+            P_H = MassStream(fluid=fld, temperature=T_tar + dT_min, entropy=s_out).pressure
             if P_H < P_L:
                 P_H = P_L * 16
             
         return (P_H / P_L) ** (1 / n_comp)
 
-    PR = _get_discharge_pressure_ratio_estimate(P_H_est=hp.P_H_est, P_L=P_L, n_comp=hp.n_comp, T_tar=hp.T_air_tar, dT_min=hp.dT_GC_min_tar, s_out=temp_ref_out.entropy, RP=hp.RP_ref)
+    PR = _get_discharge_pressure_ratio_estimate(P_H_est=hp.P_H_est, P_L=P_L, n_comp=hp.n_comp, T_tar=hp.T_air_tar, dT_min=hp.dT_GC_min_tar, s_out=temp_ref_out.entropy, fld=hp.refrigerant)
     
     #Compressor 1, always present
     hp.comp1.flow_in = temp_ref_out
-    hp.comp1.flow_out = MassStream( name='Comp1_out', fluid=hp.RP_ref, pressure=(P_L * PR), entropy=hp.phx1.sink_out.entropy)
+    hp.comp1.flow_out.props_in_ab(input_str='PS', prop1=(P_L * PR), prop2=hp.comp1.flow_in.entropy, name='Compressor 1 outlet') 
     temp_ref_out = hp.comp1.flow_out
     hp.compressors = [hp.comp1]
 
     #Plate heat exchanger 2 - cold-side
     if hp.phx2_on == 1:
         hp.phx2.sink_in = temp_ref_out
-        hp.phx2.sink_out = MassStream( name='Comp2_in', fluid=hp.RP_ref, pressure=hp.phx2.sink_in.pressure, temperature=hp.phx2.sink_in.temperature + hp.dT_phx2_cold)
+        hp.phx2.sink_out.props_in_ab(input_str='PT', prop1=hp.phx2.sink_in.pressure, prop2=(hp.phx2.sink_in.temperature + hp.dT_phx2_cold), name='PHX2 sink outlet') 
         temp_ref_out = hp.phx2.sink_out
     
     #Compressor 2
     if hp.comp2_on == 1:
         hp.comp2.flow_in = temp_ref_out
-        hp.comp2.flow_out = MassStream( name='Comp2_out', fluid=hp.RP_ref, pressure=(P_L * PR * PR), entropy=hp.phx1.sink_out.entropy)  
+        hp.comp2.flow_out.props_in_ab(input_str='PS', prop1=(P_L * PR * PR), prop2=hp.comp2.flow_in.entropy, name='Compressor 2 outlet') 
         temp_ref_out = hp.comp2.flow_out
         hp.compressors.append(hp.comp2)
 
     #Plate heat exchanger 3 - cold-side
     if hp.phx3_on == 1:
         hp.phx3.sink_in = temp_ref_out
-        hp.phx3.sink_out = MassStream( name='Comp3_in', fluid=hp.RP_ref, pressure=hp.phx3.sink_in.pressure, temperature=hp.phx3.sink_in.temperature + hp.dT_phx3_cold)
+        hp.phx3.sink_out.props_in_ab(input_str='PT', prop1=hp.phx3.sink_in.pressure, prop2=(hp.phx3.sink_in.temperature + hp.dT_phx3_cold), name='PHX3 sink outlet') 
         temp_ref_out = hp.phx3.sink_out
 
     #Compressor 3
     if hp.comp3_on == 1:
         hp.comp3.flow_in = temp_ref_out
-        hp.comp3.flow_out = MassStream( name='Ref: Comp3 to GC4', fluid=hp.RP_ref, pressure=(P_L * PR * PR * PR), entropy=hp.phx1.sink_out.entropy)
+        hp.comp3.flow_out.props_in_ab(input_str='PS', prop1=(P_L * PR * PR * PR), prop2=hp.comp3.flow_in.entropy, name='Compressor 3 outlet') 
         temp_ref_out = hp.comp3.flow_out
         hp.compressors.append(hp.comp3)
 
@@ -175,20 +168,21 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     hp.gas_coolers = []
 
     #Gas cooler 4 and Plate heat exchanger 3 - hot-sides
-    hp.air_out = MassStream( name='Air: Outlet', fluid=hp.RP_sink, pressure=0.101, temperature=hp.T_air_tar )
+    hp.air_out = MassStream( name='Air sink outlet', fluid=hp.sink, pressure=0.101, temperature=hp.T_air_tar )
     if hp.phx3_on == 1:
         hp.gas_cooler4.sink_out = hp.air_out
-        hp.gas_cooler4.sink_pinch = MassStream( name='Air: GC4 pinch point', fluid=hp.RP_sink, pressure=0.101, temperature=hp.T_air_tar )
-        hp.gas_cooler4.sink_in = MassStream( name='Air: GC3 to GC4', fluid=hp.RP_sink, pressure=0.101, temperature=hp.T_air_tar )
+        hp.gas_cooler4.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC4 sink pinch point') 
+        hp.gas_cooler4.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC4 sink inlet') 
         temp_air_in = hp.gas_cooler4.sink_in
 
         hp.gas_coolers.append(hp.gas_cooler4)
 
         hp.gas_cooler4.source_in = temp_ref_out
-        hp.gas_cooler4.source_pinch = MassStream( name='Ref: GC4 pinch point', fluid=hp.RP_ref )
-        hp.gas_cooler4.source_out = MassStream( name='Ref: GC4 to PHX3', fluid=hp.RP_ref )
+        hp.gas_cooler4.source_pinch.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='GC4 source pinch point') 
+        hp.gas_cooler4.source_out.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='GC4 source outlet')
+
         hp.phx3.source_in = hp.gas_cooler4.source_out
-        hp.phx3.source_out = MassStream( name='Ref: PHX3 to GC3', fluid=hp.RP_ref )     
+        hp.phx3.source_out.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='PHX3 source outlet')
         temp_ref_out = hp.phx3.source_out
     else:
         temp_air_in = hp.air_out
@@ -196,73 +190,67 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     #Gas cooler 3 and Plate heat exchanger 2 - hot-sides
     if hp.phx2_on == 1:
         hp.gas_cooler3.sink_out = temp_air_in
-        hp.gas_cooler3.sink_pinch = MassStream( name='Air: GC3 pinch point', fluid=hp.RP_sink )
-        hp.gas_cooler3.sink_in = MassStream( name='Air: GC2 to GC3', fluid=hp.RP_sink, pressure=0.101, temperature=hp.T_air_tar )
+        hp.gas_cooler3.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC3 sink pinch point') 
+        hp.gas_cooler3.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC3 sink inlet') 
         temp_air_in = hp.gas_cooler3.sink_in
 
         hp.gas_coolers.append(hp.gas_cooler3)
 
         hp.gas_cooler3.source_in = temp_ref_out
-        hp.gas_cooler3.source_pinch = MassStream( name='Ref: GC3 pinch point', fluid=hp.RP_ref )
-        hp.gas_cooler3.source_out = MassStream( name='Ref: GC3 to PHX2', fluid=hp.RP_ref )
+        hp.gas_cooler3.source_pinch.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='GC3 source pinch point') 
+        hp.gas_cooler3.source_out.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='GC3 source outlet')
+
         hp.phx2.source_in = hp.gas_cooler3.source_out
-        hp.phx2.source_out = MassStream( name='Ref: PHX2 to GC2', fluid=hp.RP_ref )
+        hp.phx2.source_out.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='PHX2 source outlet')
         temp_ref_out = hp.phx2.source_out
 
     #Gas cooler 2 and Plate heat exchanger 1 - hot-sides
     if hp.phx1_on == 1:
         hp.gas_cooler2.sink_out = temp_air_in
-        hp.gas_cooler2.sink_pinch = MassStream( name='Air: GC2 pinch point', fluid=hp.RP_sink )
-        hp.gas_cooler2.sink_in = MassStream( name='Air: GC1 to GC2', fluid=hp.RP_sink, pressure=0.101, temperature=hp.T_air_tar )
+        hp.gas_cooler2.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC2 sink pinch point') 
+        hp.gas_cooler2.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC2 sink inlet') 
         temp_air_in = hp.gas_cooler2.sink_in
 
         hp.gas_coolers.append(hp.gas_cooler2)
 
         hp.gas_cooler2.source_in = temp_ref_out
-        hp.gas_cooler2.source_pinch = MassStream( name='Ref: GC2 pinch point', fluid=hp.RP_ref )
-        hp.gas_cooler2.source_out = MassStream( name='Ref: GC2 to PHX1', fluid=hp.RP_ref )
+        hp.gas_cooler2.source_pinch.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='GC2 source pinch point') 
+        hp.gas_cooler2.source_out.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='GC2 source outlet')
+
         hp.phx1.source_in = hp.gas_cooler2.source_out
-        hp.phx1.source_out = MassStream( name='Ref: PHX1 to GC1', fluid=hp.RP_ref )
+        hp.phx1.source_out.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.comp_discharge.temperature, name='PHX1 source outlet')
         temp_ref_out = hp.phx1.source_out
 
     #Gas cooler 1
     hp.gas_cooler1.sink_out = temp_air_in
-    hp.gas_cooler1.sink_pinch = MassStream( name='Air: GC1 pinch point', fluid=hp.RP_sink )
-    hp.gas_cooler1.sink_in = MassStream( name='Air: Inlet to GC1', fluid=hp.RP_sink, pressure=0.101, temperature=hp.T_air_inlet )
+    hp.gas_cooler1.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_inlet, name='GC1 sink pinch point') 
+    hp.gas_cooler1.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_inlet, name='GC1 sink inlet')
     
     hp.gas_coolers.append(hp.gas_cooler1)
 
     hp.gas_cooler1.source_in = temp_ref_out
-    hp.gas_cooler1.source_pinch = MassStream( name='Ref: GC1 pinch point', fluid=hp.RP_ref )
-    hp.gas_cooler1.source_out = MassStream( name='Ref: GC1 to IHX', fluid=hp.RP_ref, pressure=P_H, temperature=hp.T_gc_out )
+    hp.gas_cooler1.source_pinch.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.T_gc_out, name='GC1 source pinch point') 
+    hp.gas_cooler1.source_out.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.T_gc_out, name='GC1 source outlet')
+
     temp_ref_out = hp.gas_cooler1.source_out
 
     #Internal heat exchanger
     if hp.ihx_on == 1:
         hp.ihx.source_in = temp_ref_out
-        hp.ihx.source_out = MassStream( name='Ref: IHX to Exp V', fluid=hp.RP_ref, pressure=P_H, temperature=hp.T_gc_out )
+        hp.ihx.source_out.props_in_ab(input_str='PT', prop1=P_H, prop2=hp.T_gc_out, name='IHX source outlet')
         temp_ref_out = hp.ihx.source_out
     
     #Expansion valve
     hp.exp_valve.flow_in = temp_ref_out
-    hp.exp_valve.flow_out = MassStream( name='Evap_in', fluid=hp.RP_ref, pressure=P_L, enthalpy=hp.exp_valve.flow_in.enthalpy )
+    hp.exp_valve.flow_out.props_in_ab(input_str='PH', prop1=P_L, prop2=hp.exp_valve.flow_in.enthalpy, name='Expansion valve outlet')
 
     #Evaporator
     hp.evaporator.sink_in = hp.exp_valve.flow_out
     hp.evaporator.sink_out = hp.evap_sup.sink_in
-    hp.evaporator.source_in = MassStream( name='Exhaust air in', fluid=hp.RP_src, pressure=0.101, temperature=hp.T_source_in, mass_flow=1000)
-    hp.evaporator.source_out = MassStream( name='Exhaust air out', fluid=hp.RP_src, pressure=0.101, temperature=min(hp.evaporator.sink_in.temperature + hp.dTmin, hp.T_source_in), mass_flow=1000)
 
-    # hp.streams = [hp.evaporator.sink_out, 
-    #                 hp.comp1.flow_out, 
-    #                 hp.comp2.flow_out, 
-    #                 hp.comp3.flow_out, 
-    #                 hp.gas_cooler1.sink_out, 
-    #                 hp.gas_cooler2.sink_out, 
-    #                 hp.gas_cooler3.sink_out, 
-    #                 hp.gas_cooler4.sink_out, 
-    #                 hp.ihx.source_out, 
-    #                 hp.exp_valve.flow_out]
+    hp.evaporator.source_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_source_in, mass_flow=1e6, name='Evaporator source inlet')
+    hp.evaporator.source_out.props_in_ab(input_str='PT', prop1=0.101, prop2=min(hp.evaporator.sink_in.temperature + hp.dTmin, hp.T_source_in), mass_flow=1e6, name='Evaporator source outlet')
+
     return hp
 
 def _get_trhp_logic_blocks(hp: HeatPump) -> HeatPump:
@@ -284,9 +272,6 @@ def _get_trhp_logic_blocks(hp: HeatPump) -> HeatPump:
     elif hp.n_comp == 3:
         hp.set_P_ints = CustomRelationship( source_obj=[hp.comp1.flow_in, hp.comp_discharge, hp.comp2_power_frac, hp.comp3_power_frac], target_obj=[hp.comp1.flow_out, hp.comp2.flow_out], relation=1, tol=hp.tol )
 
-    # hp.gas_coolers.reverse()
-    # hp.set_gc_air_massflow = CustomRelationship( source_obj=hp.gas_coolers, target_obj=hp.gas_coolers, relation=2, tol=hp.tol )
-    # hp.set_evap_air_massflow = CustomRelationship( source_obj=[hp.evaporator, hp.evap_sup], target_obj=[hp.evaporator, hp.evap_sup], relation=3)
     return hp
 
 def _get_trhp_solver_pathway(hp: HeatPump) -> HeatPump:
@@ -299,18 +284,18 @@ def _get_trhp_solver_pathway(hp: HeatPump) -> HeatPump:
         hp.operations.append(hp.ihx)
     if hp.phx1_on == 1:
         hp.operations.append(hp.set_phx1_dT_cold)
-        # hp.operations.append(hp.set_gc2_hot_out)
+        hp.operations.append(hp.set_gc2_hot_out)
 
     hp.operations.append(hp.comp1)
 
     if hp.phx2_on == 1:
         hp.operations.append(hp.set_phx2_dT_cold)
-        # hp.operations.append(hp.set_gc3_hot_out)
+        hp.operations.append(hp.set_gc3_hot_out)
     if hp.comp2_on == 1:
         hp.operations.append(hp.comp2)
     if hp.phx3_on == 1:
         hp.operations.append(hp.set_phx3_dT_cold)
-        # hp.operations.append(hp.set_gc4_hot_out)
+        hp.operations.append(hp.set_gc4_hot_out)
     if hp.comp3_on == 1:
         hp.operations.append(hp.comp3)
     
@@ -407,7 +392,7 @@ def set_quality_relationship_v1(hp: HeatPump) -> HeatPump:
     e = []
     gcs = [hp.gas_cooler1, hp.gas_cooler2, hp.gas_cooler3, hp.gas_cooler4]
     for g in gcs:
-        T_sat = hp.RP_ref.get_properties('T', 'PQ', g.source_out.pressure, 0.0)[0]
+        T_sat = MassStream(fluid=hp.refrigerant, pressure=g.source_out.pressure, quality=0.0).temperature
         e.append(abs(T_sat - g.source_out.temperature))
     
     hp.q_gc_out = [1.0]

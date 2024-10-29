@@ -28,7 +28,7 @@ class SetRelationship:
             if self.prop2 == 'pressure':
                 obj.props_in_mPT()
             elif self.prop2 == 'quality':
-                obj.props_in_mTX()
+                obj.props_in_mTQ()
             else:
                 raise ValueError('Set relationship failed: ' + self.name)   
 
@@ -36,9 +36,9 @@ class SetRelationship:
         for obj in self.target_obj: 
             obj.quality = self.source_obj[0]
             if self.prop2 == 'pressure':
-                obj.props_in_mPX()
+                obj.props_in_mPQ()
             elif self.prop2 == 'temperature':
-                obj.props_in_mTX()
+                obj.props_in_mTQ()
             else:
                 raise ValueError('Set relationship failed: ' + self.name)   
 

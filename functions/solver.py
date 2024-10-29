@@ -60,11 +60,11 @@ def _check_hp_model_convergance(hp: HeatPump) -> bool:
     return True if ( sum([c.power for c in hp.compressors]) > 0.0 and hp.converged == True ) else False
 
 def _get_hp_cycle_type(hp: HeatPump) -> str:
-    return 'Transcritical' if hp.comp_discharge.pressure > hp.RP_ref.P_crit else 'Subcritical'
+    return 'Transcritical' if hp.comp_discharge.pressure > hp.comp_discharge.P_crit else 'Subcritical'
 
 def _set_evap_out_temperature(hp: HeatPump, T_evap_sat_out) -> HeatPump:
     hp.evaporator.sink_out.temperature = T_evap_sat_out
-    hp.evaporator.sink_out.props_in_mTX()
+    hp.evaporator.sink_out.props_in_mTQ()
     return hp
 
 def _get_discharge_pressure_bounds(hp: HeatPump, prev_pressure_bounds: tuple[float, float] =None) -> list[tuple[float, float], float, bool]:
@@ -275,10 +275,7 @@ def _calc_dtmin_at_given_point(source: MassStream, sink: MassStream) -> float:
     return source.temperature - sink.temperature
 
 def _calc_jac_at_given_point(source: MassStream, sink: MassStream) -> float:
-    try: # if gc.source_pinch.heat_capacity is float:
-        return 1 / (source.heat_capacity * source.mass_flow) - 1 / (sink.heat_capacity * sink.mass_flow)
-    except: # else:
-        return - 1 / (sink.heat_capacity * sink.mass_flow)
+    return 1 / (source.heat_capacity * source.mass_flow) - 1 / (sink.heat_capacity * sink.mass_flow)
 
 def _print_failed_to_solve_report(hp: HeatPump, filename: str ='results/Cases-Unsolved') -> None:
     print('Heat pump model failed to solve.')
