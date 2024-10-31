@@ -4,7 +4,7 @@ __date__ = '2021-2024'
 
 from systems import HeatPump
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator, SetRelationship, CustomRelationship
-from streams import MassStream, PropertyPackage
+from streams import MassStream
 from scipy.optimize import root_scalar, minimize
 from functions.readWriteOutput import print_result_to_csv
 import numpy as np

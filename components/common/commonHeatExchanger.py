@@ -246,14 +246,15 @@ class BaseHeatExchanger:
     def get_graph_data(self, divisions=50):
         data = {'source': [], 'sink': []}
         
-        def get_inter_data(s_in, s_out):
+        def get_inter_data(s_in: MassStream, s_out: MassStream):
             ls = []
             dP_tot = s_in.pressure - s_out.pressure
             dh_tot = s_in.enthalpy - s_out.enthalpy
 
             for i in range(divisions + 1):
                 m_str = MassStream(name='source i', 
-                                   fluid=s_in.fluid, 
+                                   fluid=s_in.fluid,
+                                   pp_instance=s_in.pp_instance,
                                    pressure=s_in.pressure - dP_tot * i / divisions, 
                                    enthalpy=s_in.enthalpy - dh_tot * i / divisions, 
                                    mass_flow=s_in.mass_flow, 

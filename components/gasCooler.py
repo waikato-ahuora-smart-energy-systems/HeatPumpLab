@@ -102,8 +102,8 @@ class GasCooler(BaseHeatExchanger):
                     else:
                         self.matrix_elements[i][j].source_out = self.matrix_elements[i][j - step].source_in # refrigerant outlet - inlet relationship
 
-                self.matrix_elements[i][j].source_in = MassStream( name=str(i) + str(j), fluid=self.source_in.fluid, underdefined=1 ) # refrigerant inlet
-                self.matrix_elements[i][j].sink_out = MassStream( name=str(i) + str(j), fluid=self.sink_in.fluid, underdefined=1 ) # Air outlet
+                self.matrix_elements[i][j].source_in = MassStream( name=str(i) + str(j), pp_instance=self.source_in.pp_instance, fluid=self.source_in.fluid, underdefined=1 ) # refrigerant inlet
+                self.matrix_elements[i][j].sink_out = MassStream( name=str(i) + str(j), pp_instance=self.sink_in.pp_instance, fluid=self.sink_in.fluid, underdefined=1 ) # Air outlet
 
                 self.linear_elements.append(self.matrix_elements[i][j])
 

@@ -70,7 +70,7 @@ def analyse_single_case():
     print('Solve time:', toc - tic)
     print('Discharge pressure:', hp.compressors[-1].flow_out.pressure)
     print('')
-    hp.get_driving_force_plot()
+    # hp.get_driving_force_plot()
 
     tic = timer()
     hp = HeatPump(**args)
@@ -81,7 +81,7 @@ def analyse_single_case():
     # print_result_to_terminal(hp.output)
     print('Solve time:', toc - tic)
     print('Discharge pressure:', hp.compressors[-1].flow_out.pressure)
-    hp.get_driving_force_plot()
+    # hp.get_driving_force_plot()
     None
     # if hp.converged:
     #     hp.get_summary()

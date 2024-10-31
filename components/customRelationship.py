@@ -58,14 +58,14 @@ class CustomRelationship:
         for gc in self.source_obj:
             dQ += gc.duty
             T_air_i = gc.source_in.temperature - gc.dTmin
-            sink_in_i = MassStream(fluid=gc.sink_in.fluid, pressure=gc.sink_in.pressure, temperature=T_air_i)
+            sink_in_i = MassStream(fluid=gc.sink_in.fluid, pp_instance=gc.sink_in.pp_instance, pressure=gc.sink_in.pressure, temperature=T_air_i)
             dh_air = sink_in_i.enthalpy - self.source_obj[0].sink_in.enthalpy
             
             if dh_air > 0.0 and gc.duty > 0.0:
                 
                 def get_mid_pinch_point_error(h_ref, mcp_air):
                     P_ave = (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy)
-                    source_in_i = MassStream(fluid=gc.source_in.fluid, pressure=P_ave, temperature=h_ref)
+                    source_in_i = MassStream(fluid=gc.source_in.fluid, pp_instance=gc.source_in.pp_instance, pressure=P_ave, temperature=h_ref)
                     return mcp_air[0] - gc.source_in.mass_flow * source_in_i.heat_capacity
 
                 def get_bounds_for_mid_pinch_point(mcp_air):
@@ -107,7 +107,7 @@ class CustomRelationship:
                                          xtol=self.tol)
                     h_ref = result['root']
                     P_ref = (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy)
-                    source_in_i = MassStream(fluid=gc.source_in.fluid, pressure=P_ref, enthalpy=h_ref)
+                    source_in_i = MassStream(fluid=gc.source_in.fluid, pp_instance=gc.source_in.pp_instance, pressure=P_ref, enthalpy=h_ref)
                     e = abs(mcp_air - gc.source_in.mass_flow * source_in_i.heat_capacity) / mcp_air
                     return h_ref, e
                 
@@ -122,10 +122,10 @@ class CustomRelationship:
                         if abs(e) < 1e-6:
                             dQ_i = dQ - gc.source_in.mass_flow * (gc.source_in.enthalpy - h_ref)
                             if dQ_i > 1e-3:
-                                source_in_i = MassStream(fluid=gc.source_in.fluid, pressure=gc.source_in.pressure, enthalpy=h_ref)
+                                source_in_i = MassStream(fluid=gc.source_in.fluid, pp_instance=gc.source_in.pp_instance, pressure=gc.source_in.pressure, enthalpy=h_ref)
                                 T_ref_i = source_in_i.temperature
                                 T_air_i = T_ref_i - gc.dTmin
-                                sink_in_i = MassStream(fluid=gc.sink_in.fluid, pressure=gc.sink_in.pressure, temperature=T_air_i)
+                                sink_in_i = MassStream(fluid=gc.sink_in.fluid, pp_instance=gc.sink_in.pp_instance, pressure=gc.sink_in.pressure, temperature=T_air_i)
                                 dh_air = sink_in_i.enthalpy - self.source_obj[0].sink_in.enthalpy
                                 m_air = dQ_i / dh_air
                     return m_air
@@ -135,16 +135,16 @@ class CustomRelationship:
                 m_air_list.append(get_m_air(self.mcp_air_i))              
 
                 if gc.source_in.pressure < gc.source_in.P_crit:
-                    source_in_i = MassStream(fluid=gc.source_in.fluid, pressure=gc.source_in.pressure, quality=1.0)
+                    source_in_i = MassStream(fluid=gc.source_in.fluid, pp_instance=gc.source_in.pp_instance, pressure=gc.source_in.pressure, quality=1.0)
                     h_ref = source_in_i.enthalpy
                     
                     if h_ref < gc.source_in.enthalpy and h_ref > gc.source_out.enthalpy:
                         dQ_i = dQ - gc.source_in.mass_flow * (gc.source_in.enthalpy - h_ref)
                         
                         if dQ_i > self.tol:
-                            source_in_i = MassStream(fluid=gc.source_in.fluid, pressure=gc.source_in.pressure, enthalpy=h_ref)
+                            source_in_i = MassStream(fluid=gc.source_in.fluid, pp_instance=gc.source_in.pp_instance, pressure=gc.source_in.pressure, enthalpy=h_ref)
                             T_air_i = source_in_i.temperature - gc.dTmin
-                            sink_in_i = MassStream(fluid=gc.sink_in.fluid, pressure=gc.sink_in.pressure, temperature=T_air_i)
+                            sink_in_i = MassStream(fluid=gc.sink_in.fluid, pp_instance=gc.sink_in.pp_instance, pressure=gc.sink_in.pressure, temperature=T_air_i)
                             dh_air = sink_in_i.enthalpy - self.source_obj[0].sink_in.enthalpy
                             m_air_list.append(dQ_i / dh_air)  
         
@@ -172,7 +172,7 @@ class CustomRelationship:
             ev_duty = ev.sink_out.heat_flow - ev.sink_in.heat_flow
             dQ += ev_duty
             T_air_i = ev.sink_out.temperature - 25
-            source_out_i = MassStream(fluid=ev.source_out.fluid, pressure=ev.source_out.pressure, temperature=T_air_i)
+            source_out_i = MassStream(fluid=ev.source_out.fluid, pp_instance=ev.source_out.pp_instance, pressure=ev.source_out.pressure, temperature=T_air_i)
             dh_air = self.source_obj[0].source_out.enthalpy - source_out_i.enthalpy
             
             if dh_air > 0:

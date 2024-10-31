@@ -37,6 +37,7 @@ class ExpansionValve:
             dh_tot = s_in.enthalpy - s_out.enthalpy
             for i in range(divisions + 1):
                 m_str = MassStream(name='source i',
+                                   pp_instance =s_in.pp_instance,
                                    fluid=s_in.fluid, 
                                    pressure=s_in.pressure * (PR_i) ** i, 
                                    enthalpy=s_in.enthalpy - dh_tot * i / divisions, 

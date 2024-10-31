@@ -39,6 +39,7 @@ class Compressor:
         return self.overall_eff / self.motor_eff
         
     def get_compressor_power(self) -> float:
+        self.flow_out_isen.pp_instance = self.flow_out.pp_instance
         self.flow_out_isen.props_in_ab('PS', self.flow_out.pressure, self.flow_in.entropy)
         dh_shaft = (self.flow_out_isen.enthalpy - self.flow_in.enthalpy)  / self.isentropic_eff
         self.shaft_work = dh_shaft * self.flow_in.mass_flow
@@ -60,6 +61,7 @@ class Compressor:
             for i in range(divisions + 1):
                 m_str = MassStream(name='source i',
                                    fluid=s_in.fld, 
+                                   pp_instance=s_in.pp_instance,
                                    pressure=s_in.pressure * (PR_i) ** i, 
                                    enthalpy=s_in.enthalpy - dh_tot * i / divisions, 
                                    mass_flow=s_in.mass_flow)

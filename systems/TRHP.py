@@ -99,8 +99,8 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     P_L: float
 
     #Evaporator superheat section
-    hp.evap_sup.source_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_source_in, mass_flow=1e6, name='Source in')
-    hp.evap_sup.source_out.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_source_in, mass_flow=1e6, name='Source out')
+    hp.evap_sup.source_in.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Source in', pp_instance='src')
+    hp.evap_sup.source_out.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Source out', pp_instance='src')
     hp.evap_sup.sink_in.props_in_ab(input_str='TQ', prop1=hp.Tsat_evap, prop2=1.0, name='Evaporator sink outlet')
     P_L = hp.evap_sup.sink_in.pressure
     hp.evap_sup.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_source_in - hp.dTmin), name='Superheater sink outlet')
@@ -168,11 +168,11 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     hp.gas_coolers = []
 
     #Gas cooler 4 and Plate heat exchanger 3 - hot-sides
-    hp.air_out = MassStream( name='Air sink outlet', fluid=hp.sink, pressure=0.101, temperature=hp.T_air_tar )
+    hp.air_out = MassStream( name='Air sink outlet', fluid=hp.sink, pp_instance='snk', pressure=0.101, temperature=hp.T_air_tar )
     if hp.phx3_on == 1:
         hp.gas_cooler4.sink_out = hp.air_out
-        hp.gas_cooler4.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC4 sink pinch point') 
-        hp.gas_cooler4.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC4 sink inlet') 
+        hp.gas_cooler4.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC4 sink pinch point', pp_instance='snk') 
+        hp.gas_cooler4.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC4 sink inlet', pp_instance='snk') 
         temp_air_in = hp.gas_cooler4.sink_in
 
         hp.gas_coolers.append(hp.gas_cooler4)
@@ -190,8 +190,8 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     #Gas cooler 3 and Plate heat exchanger 2 - hot-sides
     if hp.phx2_on == 1:
         hp.gas_cooler3.sink_out = temp_air_in
-        hp.gas_cooler3.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC3 sink pinch point') 
-        hp.gas_cooler3.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC3 sink inlet') 
+        hp.gas_cooler3.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC3 sink pinch point', pp_instance='snk') 
+        hp.gas_cooler3.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC3 sink inlet', pp_instance='snk') 
         temp_air_in = hp.gas_cooler3.sink_in
 
         hp.gas_coolers.append(hp.gas_cooler3)
@@ -207,8 +207,8 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     #Gas cooler 2 and Plate heat exchanger 1 - hot-sides
     if hp.phx1_on == 1:
         hp.gas_cooler2.sink_out = temp_air_in
-        hp.gas_cooler2.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC2 sink pinch point') 
-        hp.gas_cooler2.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC2 sink inlet') 
+        hp.gas_cooler2.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC2 sink pinch point', pp_instance='snk') 
+        hp.gas_cooler2.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC2 sink inlet', pp_instance='snk') 
         temp_air_in = hp.gas_cooler2.sink_in
 
         hp.gas_coolers.append(hp.gas_cooler2)
@@ -223,8 +223,8 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
 
     #Gas cooler 1
     hp.gas_cooler1.sink_out = temp_air_in
-    hp.gas_cooler1.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_inlet, name='GC1 sink pinch point') 
-    hp.gas_cooler1.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_inlet, name='GC1 sink inlet')
+    hp.gas_cooler1.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_inlet, name='GC1 sink pinch point', pp_instance='snk') 
+    hp.gas_cooler1.sink_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_inlet, name='GC1 sink inlet', pp_instance='snk')
     
     hp.gas_coolers.append(hp.gas_cooler1)
 
@@ -248,8 +248,8 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     hp.evaporator.sink_in = hp.exp_valve.flow_out
     hp.evaporator.sink_out = hp.evap_sup.sink_in
 
-    hp.evaporator.source_in.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_source_in, mass_flow=1e6, name='Evaporator source inlet')
-    hp.evaporator.source_out.props_in_ab(input_str='PT', prop1=0.101, prop2=min(hp.evaporator.sink_in.temperature + hp.dTmin, hp.T_source_in), mass_flow=1e6, name='Evaporator source outlet')
+    hp.evaporator.source_in.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Evaporator source inlet', pp_instance='src')
+    hp.evaporator.source_out.props_in_ab(input_str='PT', prop1=0.5, prop2=min(hp.evaporator.sink_in.temperature + hp.dTmin, hp.T_source_in), mass_flow=1e6, name='Evaporator source outlet', pp_instance='src')
 
     return hp
 
