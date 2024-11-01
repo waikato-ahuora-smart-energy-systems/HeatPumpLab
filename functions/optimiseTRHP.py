@@ -2,7 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 from scipy.optimize import shgo, LinearConstraint, minimize
-from systems import TRHP
+from systems import TRHP_model_functions
 from functions.readWriteOutput import print_result_to_terminal, print_result_to_csv
 from time import perf_counter as timer
 from concurrent.futures import ProcessPoolExecutor as pool
@@ -75,7 +75,7 @@ def get_max_multiObj(var, parameters):
     
     tic = timer()
     d_var = dict_var(var, parameters)
-    m = TRHP(**parameters, **d_var)
+    m = TRHP_model_functions(**parameters, **d_var)
     COP, P = m.solve()
     obj = -(COP / COP_0) * k + (P / P_0 - 2) * (1 - k)
     toc = timer()
@@ -85,7 +85,7 @@ def get_max_multiObj(var, parameters):
 
 def get_results_summary(result, parameters):
     d_var = dict_var(result.x, parameters)
-    m = TRHP(**parameters, **d_var)    
+    m = TRHP_model_functions(**parameters, **d_var)    
     COP, P = m.solve()
     m.get_summary()
 
@@ -158,7 +158,7 @@ def get_TRHP_optimal(parameters):
         parameters['T_air_tar'] = T_air_tar_ls[i]
         bnds, x0 = get_bounds(parameters)
         d_x0 = dict_var(x0, parameters)
-        m = TRHP(**parameters, **d_x0)
+        m = TRHP_model_functions(**parameters, **d_x0)
         COP_0, P_0 = m.solve()
         parameters['result_parameters']['COP_0'] = COP_0
         parameters['result_parameters']['P_0'] = P_0

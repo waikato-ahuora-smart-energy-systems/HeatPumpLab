@@ -41,7 +41,7 @@ def _get_all_case_list() -> list[list[float | str | bool]]:
                 'T_air_inlet' : [15.0],
                 'T_source_in' : [40.0],
                 'n_comp' : [j + 1],
-                'Tsat_evap_inlet' : [10.0],
+                'Tref_evap_inlet' : [10.0],
                 'comp_PR_uniform' : [True],
                 'result_parameters' : {'weight': [k / 100]},
                 'results' : [],
@@ -64,7 +64,7 @@ def _get_previous_results(cases, file_name):
                     abs(float(case['dT_GC_min_tar']) - float(res['dT_min Gas Cooler:'])) < 0.01 and 
                     abs(float(case['T_air_inlet']) - float(res['T_air_inlet:'])) < 0.01 and 
                     abs(float(case['T_source_in']) - float(res['T_source_in:'])) < 0.01 and 
-                    abs(float(case['Tsat_evap_inlet']) - float(res['Evap T:'])) < 0.01 and
+                    abs(float(case['Tref_evap_inlet']) - float(res['Evap T:'])) < 0.01 and
                     abs(float(case['result_parameters']['weight']) - float(res['Weight:'])) < 0.01 and 
                     int(case['n_comp']) == int(res['n_comp:'])
                     ):

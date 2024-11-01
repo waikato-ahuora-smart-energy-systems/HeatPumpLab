@@ -7,30 +7,26 @@ High temperature transcritical-recuperative heat pump model
 By Tim Walmsley and Keri Adamson, University of Waikato, 2021-2024 (tim.walmsley@waikato.ac.nz)
 """
 
-from systems.heat_pump import HeatPump
+from systems.TRHP_class import TRHP
 from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve, Evaporator, SetRelationship, CustomRelationship
 from streams import MassStream
 
-def set_trhp_model(hp: HeatPump, version: int = 1) -> HeatPump:
+def set_trhp_model(hp: TRHP) -> TRHP:
     hp = _get_trhp_structure(hp)
     if _check_input_param_feasibility(hp) == True:
         hp.feasible = True
         hp = _get_trhp_components(hp)
         hp = _get_trhp_streams(hp)
-        if version == 2:
-            hp = _get_trhp_logic_blocks(hp)
-            hp = _get_trhp_solver_pathway(hp)
-        else:
-            hp = _get_trhp_logic_blocks_v1(hp)
-            hp = _get_trhp_solver_pathway_v1(hp)        
+        hp = _get_trhp_logic_blocks(hp)
+        hp = _get_trhp_solver_pathway(hp)
     else:
         hp.feasible = False
     return hp
 
-def _check_input_param_feasibility(hp: HeatPump):
+def _check_input_param_feasibility(hp: TRHP):
     return True if ((hp.T_air_tar - hp.T_air_inlet) * 2/3 >= hp.dT_phx1_cold + hp.dT_phx2_cold + hp.dT_phx3_cold) else False
 
-def _get_trhp_structure(hp: HeatPump) -> HeatPump:
+def _get_trhp_structure(hp: TRHP) -> TRHP:
     #Check the PHE combo
     hp.dT_phx1_cold = hp.dT_phx1_cold if hp.dT_phx1_cold > 0.0 else 0.0
     hp.dT_phx2_cold = hp.dT_phx2_cold if hp.n_comp > 1 and hp.dT_phx2_cold > 0.0 else 0.0
@@ -58,6 +54,7 @@ def _get_trhp_structure(hp: HeatPump) -> HeatPump:
     #Binary variables for the heat pump structure
     hp.comp2_on = 1  if hp.n_comp > 1 else 0
     hp.comp3_on = 1  if hp.n_comp > 2 else 0
+    hp.T_gc_out = max(hp.T_air_inlet + hp.dT_GC_min_tar, hp.T_gc_out_min)
     hp.ihx_on = 1    if hp.T_source_in < hp.T_gc_out else 0
             
     hp.phx1_on = 1   if hp.dT_phx1_cold > 0.0 else 0
@@ -66,7 +63,7 @@ def _get_trhp_structure(hp: HeatPump) -> HeatPump:
 
     return hp
 
-def _get_trhp_components(hp: HeatPump) -> HeatPump:
+def _get_trhp_components(hp: TRHP) -> TRHP:
     #Initialisation of unit operations
     hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=1)
     if hp.comp2_on == 1:
@@ -79,7 +76,7 @@ def _get_trhp_components(hp: HeatPump) -> HeatPump:
     hp.gas_cooler1 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
     hp.gas_cooler2 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
     
-    hp.ihx = PlateHeatExchanger(name='Internal heat exchanger', source_fluid=hp.refrigerant, sink_fluid=hp.refrigerant, dTmin=hp.dTmin, model='dTmin_terminal')
+    hp.ihx = PlateHeatExchanger(name='Internal heat exchanger', source_fluid=hp.refrigerant, sink_fluid=hp.refrigerant, dTmin=hp.dTmin_phx, model='dTmin_terminal')
     if hp.phx1_on == 1:
         hp.phx1 = PlateHeatExchanger(name='Recuperator', source_fluid=hp.refrigerant, sink_fluid=hp.refrigerant, dT_c=hp.dT_phx1_cold, model='fixed cold delta temperature')
     if hp.phx2_on == 1:
@@ -93,7 +90,7 @@ def _get_trhp_components(hp: HeatPump) -> HeatPump:
     
     return hp
 
-def _get_trhp_streams(hp: HeatPump) -> HeatPump:
+def _get_trhp_streams(hp: TRHP) -> TRHP:
     temp_ref_out: MassStream
     P_H: float
     P_L: float
@@ -101,15 +98,16 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     #Evaporator superheat section
     hp.evap_sup.source_in.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Source in', pp_instance='src')
     hp.evap_sup.source_out.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Source out', pp_instance='src')
-    hp.evap_sup.sink_in.props_in_ab(input_str='TQ', prop1=hp.Tsat_evap_inlet, prop2=1.0, name='Evaporator sink outlet')
+    hp.Tref_evap_outlet = hp.Tref_evap_inlet
+    hp.evap_sup.sink_in.props_in_ab(input_str='TQ', prop1=hp.Tref_evap_outlet, prop2=1.0, name='Evaporator sink outlet')
     P_L = hp.evap_sup.sink_in.pressure
-    hp.evap_sup.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_source_in - hp.dTmin), name='Superheater sink outlet')
+    hp.evap_sup.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_source_in - hp.dTmin_phx), name='Superheater sink outlet')
     temp_ref_out = hp.evap_sup.sink_out
 
     #Internal heat exchanger, if present
     if hp.ihx_on == 1:
         hp.ihx.sink_in = temp_ref_out
-        hp.ihx.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_gc_out - hp.dTmin), name='IHX sink outlet')
+        hp.ihx.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_gc_out - hp.dTmin_phx), name='IHX sink outlet')
         temp_ref_out = hp.ihx.sink_out
 
     #Plate heat exchanger 1 - cold-side, if present
@@ -249,23 +247,23 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     hp.evaporator.sink_out = hp.evap_sup.sink_in
 
     hp.evaporator.source_in.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Evaporator source inlet', pp_instance='src')
-    hp.evaporator.source_out.props_in_ab(input_str='PT', prop1=0.5, prop2=min(hp.evaporator.sink_in.temperature + hp.dTmin, hp.T_source_in), mass_flow=1e6, name='Evaporator source outlet', pp_instance='src')
+    hp.evaporator.source_out.props_in_ab(input_str='PT', prop1=0.5, prop2=min(hp.evaporator.sink_in.temperature + hp.dTmin_phx, hp.T_source_in), mass_flow=1e6, name='Evaporator source outlet', pp_instance='src')
 
     return hp
 
-def _get_trhp_logic_blocks(hp: HeatPump) -> HeatPump:
+def _get_trhp_logic_blocks(hp: TRHP) -> TRHP:
     #Set special relationships between points in the cycle 
     if hp.phx3_on == 1:
         hp.set_phx3_dT_cold = SetRelationship( source_obj=hp.phx3.sink_in, target_obj=[hp.phx3.sink_out], c=hp.dT_phx3_cold, prop='temperature', prop2='pressure' ) 
-        hp.set_gc4_hot_out = SetRelationship( source_obj=hp.phx3.sink_out, target_obj=[hp.phx3.source_in], c=hp.dTmin, prop='temperature', prop2='pressure' ) 
+        hp.set_gc4_hot_out = SetRelationship( source_obj=hp.phx3.sink_out, target_obj=[hp.phx3.source_in], c=hp.dTmin_phx, prop='temperature', prop2='pressure' ) 
 
     if hp.phx2_on == 1:    
         hp.set_phx2_dT_cold = SetRelationship( source_obj=hp.phx2.sink_in, target_obj=[hp.phx2.sink_out], c=hp.dT_phx2_cold, prop='temperature', prop2='pressure' ) 
-        hp.set_gc3_hot_out = SetRelationship( source_obj=hp.phx2.sink_out, target_obj=[hp.phx2.source_in], c=hp.dTmin, prop='temperature', prop2='pressure' ) 
+        hp.set_gc3_hot_out = SetRelationship( source_obj=hp.phx2.sink_out, target_obj=[hp.phx2.source_in], c=hp.dTmin_phx, prop='temperature', prop2='pressure' ) 
     
     if hp.phx1_on == 1:
         hp.set_phx1_dT_cold = SetRelationship( source_obj=hp.phx1.sink_in, target_obj=[hp.phx1.sink_out], c=hp.dT_phx1_cold, prop='temperature', prop2='pressure' ) 
-        hp.set_gc2_hot_out = SetRelationship( source_obj=hp.phx1.sink_out, target_obj=[hp.phx1.source_in], c=hp.dTmin, prop='temperature', prop2='pressure' ) 
+        hp.set_gc2_hot_out = SetRelationship( source_obj=hp.phx1.sink_out, target_obj=[hp.phx1.source_in], c=hp.dTmin_phx, prop='temperature', prop2='pressure' ) 
 
     if hp.n_comp == 2:
         hp.set_P_ints = CustomRelationship( source_obj=[hp.comp1.flow_in, hp.comp_discharge, hp.comp2_power_frac, hp.comp3_power_frac], target_obj=[hp.comp1.flow_out, hp.comp_discharge], relation=1, tol=hp.tol )
@@ -274,7 +272,7 @@ def _get_trhp_logic_blocks(hp: HeatPump) -> HeatPump:
 
     return hp
 
-def _get_trhp_solver_pathway(hp: HeatPump) -> HeatPump:
+def _get_trhp_solver_pathway(hp: TRHP) -> TRHP:
     #Solution pathway set-up
     hp.operations = [hp.evap_sup]
 
@@ -318,105 +316,3 @@ def _get_trhp_solver_pathway(hp: HeatPump) -> HeatPump:
     hp.operations.append(hp.evaporator)
 
     return hp
-
-def _get_trhp_logic_blocks_v1(hp: HeatPump) -> HeatPump:
-    #Set special relationships between points in the cycle 
-    if hp.phx3_on == 1:
-        hp.set_phx3_dT_cold = SetRelationship( source_obj=hp.phx3.sink_in, target_obj=[hp.phx3.sink_out], c=hp.dT_phx3_cold, prop='temperature', prop2='pressure' ) 
-        hp.set_gc4_hot_out = SetRelationship( source_obj=hp.phx3.sink_out, target_obj=[hp.phx3.source_in], c=hp.dTmin, prop='temperature', prop2='pressure' ) 
-
-    if hp.phx2_on == 1:    
-        hp.set_phx2_dT_cold = SetRelationship( source_obj=hp.phx2.sink_in, target_obj=[hp.phx2.sink_out], c=hp.dT_phx2_cold, prop='temperature', prop2='pressure' ) 
-        hp.set_gc3_hot_out = SetRelationship( source_obj=hp.phx2.sink_out, target_obj=[hp.phx2.source_in], c=hp.dTmin, prop='temperature', prop2='pressure' ) 
-    
-    if hp.phx1_on == 1:
-        hp.set_phx1_dT_cold = SetRelationship( source_obj=hp.phx1.sink_in, target_obj=[hp.phx1.sink_out], c=hp.dT_phx1_cold, prop='temperature', prop2='pressure' ) 
-        hp.set_gc2_hot_out = SetRelationship( source_obj=hp.phx1.sink_out, target_obj=[hp.phx1.source_in], c=hp.dTmin, prop='temperature', prop2='pressure' ) 
-
-    if hp.n_comp == 2:
-        hp.set_P_ints = CustomRelationship( source_obj=[hp.comp1.flow_in, hp.comp_discharge, hp.comp2_power_frac, hp.comp3_power_frac], target_obj=[hp.comp1.flow_out, hp.comp_discharge], relation=1, tol=hp.tol )
-    elif hp.n_comp == 3:
-        hp.set_P_ints = CustomRelationship( source_obj=[hp.comp1.flow_in, hp.comp_discharge, hp.comp2_power_frac, hp.comp3_power_frac], target_obj=[hp.comp1.flow_out, hp.comp2.flow_out], relation=1, tol=hp.tol )
-
-    hp.gas_coolers.reverse()
-    hp.set_gc_air_massflow = CustomRelationship( source_obj=hp.gas_coolers, target_obj=hp.gas_coolers, relation=2, tol=hp.tol )
-    #hp.set_evap_air_massflow = CustomRelationship( source_obj=[hp.evaporator, hp.evap_sup], target_obj=[hp.evaporator, hp.evap_sup], relation=3)
-    return hp
-
-def _get_trhp_solver_pathway_v1(hp: HeatPump) -> HeatPump:
-    #Solution pathway set-up
-    hp.operations = [hp.evap_sup]
-
-    if hp.n_comp > 1:
-        hp.operations.append(hp.set_P_ints)
-    if hp.ihx_on == 1:
-        hp.operations.append(hp.ihx)
-    if hp.phx1_on == 1:
-        hp.operations.append(hp.set_phx1_dT_cold)
-        hp.operations.append(hp.set_gc2_hot_out)
-
-    hp.operations.append(hp.comp1)
-
-    if hp.phx2_on == 1:
-        hp.operations.append(hp.set_phx2_dT_cold)
-        hp.operations.append(hp.set_gc3_hot_out)
-    if hp.comp2_on == 1:
-        hp.operations.append(hp.comp2)
-    if hp.phx3_on == 1:
-        hp.operations.append(hp.set_phx3_dT_cold)
-        hp.operations.append(hp.set_gc4_hot_out)
-    if hp.comp3_on == 1:
-        hp.operations.append(hp.comp3)
-    
-    if hp.phx3_on == 1:
-        hp.operations.append(hp.gas_cooler4)
-        hp.operations.append(hp.phx3)
-    if hp.phx2_on == 1:
-        hp.operations.append(hp.gas_cooler3)
-        hp.operations.append(hp.phx2)
-    if hp.phx1_on == 1:
-        hp.operations.append(hp.gas_cooler2)        
-        hp.operations.append(hp.phx1)
-
-    hp.operations.append(hp.gas_cooler1)
-
-    if hp.ihx_on == 1:
-        hp.operations.append(hp.ihx)
-
-    hp.operations.append(hp.exp_valve)
-    hp.operations.append(hp.evaporator)
-
-    return hp
- 
-def set_quality_relationship_v1(hp: HeatPump) -> HeatPump:
-    e = []
-    gcs = [hp.gas_cooler1, hp.gas_cooler2, hp.gas_cooler3, hp.gas_cooler4]
-    for g in gcs:
-        T_sat = MassStream(fluid=hp.refrigerant, pressure=g.source_out.pressure, quality=0.0).temperature
-        e.append(abs(T_sat - g.source_out.temperature))
-    
-    hp.q_gc_out = [1.0]
-
-    n = e.index(min(e))
-    new_rel = SetRelationship( source_obj=hp.q_gc_out, target_obj=[gcs[n].source_out], prop='quality', prop2='pressure' )        
-    if n == 1:
-        old_rel = hp.set_gc2_hot_out
-        hp.set_gc2_hot_out = new_rel
-        hp.phx_fixed_src_quality = hp.phx1
-    elif n == 2:
-        old_rel = hp.set_gc3_hot_out
-        hp.set_gc3_hot_out = new_rel
-        hp.phx_fixed_src_quality = hp.phx2
-    elif n == 3:
-        old_rel = hp.set_gc4_hot_out
-        hp.set_gc4_hot_out = new_rel
-        hp.phx_fixed_src_quality = hp.phx3
-    else:
-        ValueError('Error in the model.')
-
-    for i in range(len(hp.operations)):
-        if hp.operations[i] == old_rel:
-            hp.operations[i] = new_rel
-
-    gcs[n].model = 'fixed hot quality outlet'
-    return gcs[n]
