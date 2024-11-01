@@ -13,6 +13,7 @@ class Turbine:
     pressure_ratio: float =1.0
     power: float =0.0 
     dh: float =0.0
+    converged: bool = False
 
     def __init__(self, name: str ='Turbine', fluid: str =None, eff_isen: float =1.0, eff_gen: float =1.0) -> None:
         self.name = name
@@ -29,4 +30,5 @@ class Turbine:
         self.flow_out.enthalpy = self.flow_in.enthalpy - self.dh 
         self.flow_out.props_in_mPH()
         self.power = self.dh * self.flow_out.mass_flow * self.eff_gen
+        self.converged = True
         

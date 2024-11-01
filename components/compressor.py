@@ -16,6 +16,7 @@ class Compressor:
     motor_eff: float
     model_index: int
     model_coeffs: list[float] = []   
+    converged: bool = False
 
     def __init__(self, name='Compressor', fluid: str =None, model_index: int =0, motor_eff: float =1.0) -> None:
         self.name = name
@@ -50,6 +51,7 @@ class Compressor:
     def solve(self) -> None:
         self.isentropic_eff = self.get_isentropic_efficiency()
         self.power = self.get_compressor_power()
+        self.converged = True
 
     def get_graph_data(self, divisions: int =50) -> dict:
         data = {'siso': []}
@@ -60,7 +62,7 @@ class Compressor:
             dh_tot = s_in.enthalpy - s_out.enthalpy
             for i in range(divisions + 1):
                 m_str = MassStream(name='source i',
-                                   fluid=s_in.fld, 
+                                   fluid=s_in.fluid, 
                                    pp_instance=s_in.pp_instance,
                                    pressure=s_in.pressure * (PR_i) ** i, 
                                    enthalpy=s_in.enthalpy - dh_tot * i / divisions, 

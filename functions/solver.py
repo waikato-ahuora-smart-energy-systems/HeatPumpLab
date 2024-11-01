@@ -12,17 +12,17 @@ import numpy as np
 def solve_heat_pump_model(hp: HeatPump) -> HeatPump:
     #Solve heat pump cycle
     if hp.feasible:
-        hp, pressure_bounds = _get_solve_evap_out_temperature(hp.Tsat_evap_tar, hp)
+        hp = _get_solve_evap_out_temperature(hp.Tsat_evap_outlet, hp)
 
-        # if (abs(r) > 1e-6 and abs(hp.evaporator.sink_in.temperature - hp.evaporator.sink_out.temperature) > 0.1):
-        #     r = root_scalar(
-        #                     f=_get_solve_evap_out_temperature,
-        #                     method='secant',
-        #                     x0=hp.Tsat_evap_tar,
-        #                     bracket=(hp.Tsat_evap_tar, hp.T_source_in),
-        #                     xtol=hp.tol,
-        #                     args=(hp, pressure_bounds)
-        #                 )
+        if (hp.converged and abs(hp.evaporator.sink_in.temperature - hp.Tsat_evap_outlet) > 0.1):
+            r = root_scalar(
+                            f=_get_solve_evap_out_temperature,
+                            method='brentq',
+                            x0=hp.T_source_in - hp.dTmin,
+                            bracket=(hp.Tsat_evap_outlet, hp.T_source_in - hp.dTmin),
+                            xtol=hp.tol,
+                            args=(hp)
+                        )
 
     if _check_hp_model_convergance(hp):
         hp.converged = True

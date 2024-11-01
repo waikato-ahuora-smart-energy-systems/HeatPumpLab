@@ -44,7 +44,7 @@ def analyse_single_case():
         'Ammonia',
         ]
 
-    args = {'refrigerant': 'R1234ze(E)',
+    args = {'refrigerant': 'propane;butane|.5;.5|mol',
             'dT_GC_min_tar': 20.0, 
             'T_air_tar': 200.0, 
             'T_air_inlet': 15.0, 
@@ -70,17 +70,18 @@ def analyse_single_case():
     print('Solve time:', toc - tic)
     print('Discharge pressure:', hp.compressors[-1].flow_out.pressure)
     print('')
-    # hp.get_driving_force_plot()
+    hp.get_driving_force_plot()
+    hp.get_cycle_plot()
 
-    tic = timer()
-    hp = HeatPump(**args)
-    hp = set_trhp_model(hp)
-    hp.solve()
-    toc = timer()
-    hp.get_summary()
-    # print_result_to_terminal(hp.output)
-    print('Solve time:', toc - tic)
-    print('Discharge pressure:', hp.compressors[-1].flow_out.pressure)
+    # tic = timer()
+    # hp = HeatPump(**args)
+    # hp = set_trhp_model(hp)
+    # hp.solve()
+    # toc = timer()
+    # hp.get_summary()
+    # # print_result_to_terminal(hp.output)
+    # print('Solve time:', toc - tic)
+    # print('Discharge pressure:', hp.compressors[-1].flow_out.pressure)
     # hp.get_driving_force_plot()
     None
     # if hp.converged:

@@ -55,6 +55,7 @@ class BaseHeatExchanger:
 
             else:
                 self.get_performance()
+        self.converged = True
 
     def get_performance(self):
         if self.model == 'dTmin_terminal':

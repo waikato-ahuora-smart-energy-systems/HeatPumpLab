@@ -101,7 +101,7 @@ def _get_trhp_streams(hp: HeatPump) -> HeatPump:
     #Evaporator superheat section
     hp.evap_sup.source_in.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Source in', pp_instance='src')
     hp.evap_sup.source_out.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Source out', pp_instance='src')
-    hp.evap_sup.sink_in.props_in_ab(input_str='TQ', prop1=hp.Tsat_evap, prop2=1.0, name='Evaporator sink outlet')
+    hp.evap_sup.sink_in.props_in_ab(input_str='TQ', prop1=hp.Tsat_evap_inlet, prop2=1.0, name='Evaporator sink outlet')
     P_L = hp.evap_sup.sink_in.pressure
     hp.evap_sup.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_source_in - hp.dTmin), name='Superheater sink outlet')
     temp_ref_out = hp.evap_sup.sink_out
