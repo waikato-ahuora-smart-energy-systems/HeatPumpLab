@@ -5,6 +5,5 @@ def time_func(func) -> any:
         tic: float = perf_counter()
         r = func(*args, **kwargs)
         toc: float = perf_counter()
-        print('Time to run function:', toc - tic)
-        return r
+        return r, toc - tic
     return wrapper

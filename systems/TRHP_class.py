@@ -8,11 +8,6 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021-2024 (tim.walmsley
 """
 
 from systems.common.commonHeatPump import HeatPump
-from components import Compressor, GasCooler, PlateHeatExchanger, ExpansionValve, Evaporator, SetRelationship, CustomRelationship
-from functions.graph import Graph
-from functions.readWriteOutput import print_result_to_csv, print_result_to_terminal
-import numpy as np
-
 
 class TRHP(HeatPump):
     T_air_tar: float =200.0 
@@ -102,14 +97,14 @@ class TRHP(HeatPump):
             'Converged:' : self.converged,
             #Parameters
             'Refrigerant:' : self.refrigerant,
-            'n_comp:' : self.n_comp,
-            'T_source_in:' : self.evaporator.source_in.temperature,
-            'dT_GC_min_tar:' : self.dT_GC_min_tar,
-            'T_air_inlet:' : self.gas_cooler1.sink_in.temperature,
-            'T_air_tar:' : self.T_air_tar,
-            'Comp_PR_uniform:' : self.comp_PR_uniform,
-            'T_evap_inlet:' : self.Tref_evap_inlet,
-            #Optimisation variables
+            'n comp:' : self.n_comp,
+            'T source in:' : self.evaporator.source_in.temperature,
+            'dT GC min tar:' : self.dT_GC_min_tar,
+            'T air inlet:' : self.gas_cooler1.sink_in.temperature,
+            'T air tar:' : self.T_air_tar,
+            'Comp PR uniform:' : self.comp_PR_uniform,
+            'T evap inlet:' : self.Tref_evap_inlet,
+            #Optmisation variables
             'dT phx max 1:' : self.dT_phx1_cold,
             'dT phx max 2:' : self.dT_phx2_cold,
             'dT phx max 3:' : self.dT_phx3_cold,

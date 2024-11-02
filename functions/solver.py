@@ -10,7 +10,7 @@ from functions.readWriteOutput import print_result_to_csv
 import numpy as np
 from functions.decorator_functions import time_func
 
-@time_func
+# @time_func
 def solve_heat_pump_model(hp: TRHP) -> TRHP:
     #Solve heat pump cycle
     # try:

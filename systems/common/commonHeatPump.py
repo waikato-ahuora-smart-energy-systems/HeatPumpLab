@@ -8,7 +8,7 @@ By Tim Walmsley and Keri Adamson, University of Waikato, 2021-2024 (tim.walmsley
 """
 
 from functions.graph import Graph
-from functions.readWriteOutput import print_result_to_csv, print_result_to_terminal
+from functions.readWriteOutput import print_result_to_terminal
 import numpy as np
 
 
