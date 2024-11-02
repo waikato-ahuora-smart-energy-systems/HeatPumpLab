@@ -10,7 +10,7 @@ import type_enforced
 def main() -> None:
     # analyse_single_case()
     # analyse_unsolved_cases()
-    analyse_cases_in_parallel(n_cpu=1)
+    analyse_cases_in_parallel()
     
 
 if __name__=='__main__':

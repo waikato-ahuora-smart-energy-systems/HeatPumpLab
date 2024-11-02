@@ -28,9 +28,10 @@ def _optimise_case_set(case: dict) -> None:
     param: dict = case
     for i in range(start, end):
         param['T_air_tar'] = T_air_tar_ls[i]
-        bnds, x0 = _get_bounds(param)
-        var0 = _get_hp_args(x0, param)
-        hp, _, _ = _get_obj(var0, param)
+        bnds, var0 = _get_bounds(param)
+        hp, _ = solve_single_case(
+            _get_hp_args(var0, param)
+            )
         param['result_parameters']['COP_0'] = hp.COP
         param['result_parameters']['P_0'] = hp.comp_discharge.pressure
 
@@ -41,7 +42,7 @@ def _optimise_case_set(case: dict) -> None:
             xi = _get_initial(results_ls[i-1], param)
             result = _get_local_optima(method, param, bnds, tol, xi) 
             if result.success and -result.fun < 1.0:
-                result = _get_local_optima(method, param, bnds, tol, x0)
+                result = _get_local_optima(method, param, bnds, tol, var0)
 
         if result.success:
             res = _get_results_summary(result, param)
@@ -156,7 +157,7 @@ def _get_hp_args(var: list[float], param) -> dict[str, float]:
     return param | d_var
 
 @time_func
-def solve_single_case(**args) -> TRHP:
+def solve_single_case(args) -> TRHP:
     hp = TRHP(**args)
     hp = set_trhp_model(hp)
     if hp.feasible:
@@ -181,7 +182,7 @@ def _get_results_summary(result, param) -> dict:
     return hp.output
 
 def _get_unique_f_suffix(param) -> str:
-    suffix: str
+    suffix: str = ''
     for ele in param:
         if ele == 'refrigerant':
             suffix = '-' + str(param[ele])
@@ -190,6 +191,7 @@ def _get_unique_f_suffix(param) -> str:
     for ele in param:    
         if ele != 'result_parameters' and ele != 'refrigerant':
             suffix = suffix + '-' + "{:.0f}".format(param[ele])
+    return suffix
 
 def _print_results(results: dict, fsuffix: str) -> None:
     print_result_to_terminal(results)
