@@ -28,9 +28,13 @@ def _get_all_case_list() -> list[list[float | str | bool]]:
         'R1224yd(Z)', 
         'PROPYLEN',
         'DME',
-        'Methanol'
+        'Methanol',
         'Ammonia',
         'propane;butane|.5;.5|mol',
+        'Methanol;butane|.5;.5|mol',
+        'R1234ze(E);R1336mzz(Z)|.5;.5|mol',
+        'propane;Isobutane|.5;.5|mol',
+        'Propane;DME|.5;.5|mol',
         ]
     
     # Enumerate all the cases to be analysed

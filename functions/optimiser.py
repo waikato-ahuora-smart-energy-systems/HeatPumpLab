@@ -13,6 +13,7 @@ import numpy as np, os
 def analyse_cases_in_parallel(file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count()-1) -> None:
     # Use parallel processing distributed over all cores to speed up the analysis
     cases: list        = get_cases_to_solve(file_name)
+    print(len(cases))
     executor: pool     = pool(max_workers=n_cpu)
     results: list[any] = [executor.submit(_optimise_case_set, case) for case in cases]
     executor.shutdown()
