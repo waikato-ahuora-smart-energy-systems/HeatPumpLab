@@ -13,28 +13,28 @@ from functions.decorator_functions import time_func
 # @time_func
 def solve_heat_pump_model(hp: TRHP) -> TRHP:
     #Solve heat pump cycle
-    # try:
-    hp = _find_hp_with_min_discharge_pressure(hp)
-    if (abs(hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet) > 0.1 and _check_hp_model_convergance(hp)):
-        r = root_scalar(
-                        f=_find_evap_inlet_temperature_offset,
-                        method='brentq',
-                        x0=hp.Tref_evap_outlet,
-                        bracket=(hp.Tref_evap_outlet, hp.T_source_in - hp.dTmin_phx),
-                        xtol=hp.tol,
-                        args=(hp),
-                        )
-        hp.Tref_evap_outlet = r['root']
-        hp.evaporator.sink_out.props_in_ab('TQ', hp.Tref_evap_outlet, 1.0)
+    try:
         hp = _find_hp_with_min_discharge_pressure(hp)
+        if (abs(hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet) > 0.1 and _check_hp_model_convergance(hp)):
+            r = root_scalar(
+                            f=_find_evap_inlet_temperature_offset,
+                            method='brentq',
+                            x0=hp.Tref_evap_outlet,
+                            bracket=(hp.Tref_evap_outlet, hp.T_source_in - hp.dTmin_phx),
+                            xtol=hp.tol,
+                            args=(hp),
+                            )
+            hp.Tref_evap_outlet = r['root']
+            hp.evaporator.sink_out.props_in_ab('TQ', hp.Tref_evap_outlet, 1.0)
+            hp = _find_hp_with_min_discharge_pressure(hp)
 
-    hp.converged = _check_hp_model_convergance(hp)
-    hp.COP = _get_COP(hp)
-    hp.cycle_type = _get_hp_cycle_type(hp)
-    # except:
-    #     _print_failed_to_solve_report(hp)
-    #     print('Heat pump solver failed with an exception. The failed case has been recorded.')
-    #     hp.converged = False       
+        hp.converged = _check_hp_model_convergance(hp)
+        hp.COP = _get_COP(hp)
+        hp.cycle_type = _get_hp_cycle_type(hp)
+    except:
+        _print_failed_to_solve_report(hp)
+        print('Heat pump solver failed with an exception. The failed case has been recorded.')
+        hp.converged = False       
     return hp
 
 def _check_hp_model_convergance(hp: TRHP) -> bool:

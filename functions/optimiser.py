@@ -2,7 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 from systems import TRHP, set_trhp_model
-from functions.solver import solve_heat_pump_model
+from functions.solver import solve_heat_pump_model, _print_failed_to_solve_report
 from functions.cases import get_cases_to_solve
 from functions.readWriteOutput import print_result_to_terminal, print_result_to_csv, transfer_temp_files_to_results
 from functions.decorator_functions import time_func
@@ -10,7 +10,7 @@ from concurrent.futures import ProcessPoolExecutor as pool
 from scipy.optimize import shgo as glb_opt_mthd, LinearConstraint, minimize
 import numpy as np, os
 
-def analyse_cases_in_parallel(file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count()-1) -> None:
+def analyse_cases_in_parallel(file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count()) -> None:
     # Use parallel processing distributed over all cores to speed up the analysis
     cases: list        = get_cases_to_solve(file_name)
     print(len(cases))
@@ -121,7 +121,7 @@ def _get_local_optima(method: str, param: dict, bnds: tuple, tol: float, xi: flo
 
 def _get_obj_val(var: dict, param: dict) -> float:
     _, obj, dt = _get_obj(var, param)
-    print('Obj:', "{:.4f}".format(-obj), '  Solve time:', "{:.2f}".format(dt), '  Vars:', ["{:.6f}".format(v) for v in var])    
+    print('Obj:', "{:.4f}".format(-obj), '  Solve time:', "{:.2f}".format(dt), '  Vars:', ["{:.6f}".format(v) for v in var], '  Ref:', param['refrigerant'])    
     return obj 
 
 def _get_obj(var: dict, param: dict) -> any:
