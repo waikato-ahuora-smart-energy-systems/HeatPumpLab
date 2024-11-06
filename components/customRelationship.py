@@ -7,6 +7,7 @@ from components import GasCooler
 from scipy.optimize import root_scalar
 
 class CustomRelationship:
+    converged: bool = False
     def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9):
         self.tol = tol
         self.source_obj = source_obj
@@ -25,6 +26,7 @@ class CustomRelationship:
             r = self.Airsource_Mass_Flow()
         else:
             pass
+        self.converged = True
         return r
     
     def Determine_T(self): 

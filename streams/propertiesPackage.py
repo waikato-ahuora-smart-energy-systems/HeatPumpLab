@@ -38,7 +38,7 @@ class PropertyPackage:
     TC_to_K: float = 273.15
     DEFAULT_VAL: float = -9999990.0    
     
-    def __init__(self, fld_name: str =None, pp_instance: str =None) -> None:
+    def __init__(self, fld_name: str =None, pp_instance: str ='') -> None:
         self.fld_name, self.fld_composition, self.n_components, self.iMass = _get_fluid_info(fld_name)        
         self._set_RP_lib(pp_instance)
         self._set_database_fluid()

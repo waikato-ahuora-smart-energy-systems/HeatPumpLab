@@ -35,7 +35,7 @@ def print_result_to_csv(output: list[any] =[], file_name: str ='results/temp/R',
     except:
         print('Failed to appended result to CSV file.')
 
-def transfer_temp_files_to_results(file_name: str ='results/untitled'):
+def transfer_temp_files_to_results(file_name: str ='results/untitled') -> None:
     csv_file_list: glob
     f: str
     output: list[any]
@@ -50,7 +50,6 @@ def transfer_temp_files_to_results(file_name: str ='results/untitled'):
 
 def read_csv_to_results(file_name: str ='results/untitled', file_ext: str ='.csv') -> list[any]:
     reader: DictReader
-
     try:
         with open(file_name + file_ext, 'r') as csvfile:
             reader = DictReader(csvfile)

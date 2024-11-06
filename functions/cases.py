@@ -15,7 +15,6 @@ def get_cases_to_solve(file_name: str) -> list[list[float | str | bool]]:
 
 def _get_all_case_list() -> list[list[float | str | bool]]:
     refrigerant_ls: list[str] = [
-        'propane;butane|.5;.5|mol',
         'Butane', 
         'Carbon dioxide', 
         'Propane', 
@@ -29,21 +28,26 @@ def _get_all_case_list() -> list[list[float | str | bool]]:
         'R1224yd(Z)', 
         'PROPYLEN',
         'DME',
-        'Methanol'
+        'Methanol',
         'Ammonia',
+        'propane;butane|.5;.5|mol',
+        'Methanol;butane|.5;.5|mol',
+        'R1234ze(E);R1336mzz(Z)|.5;.5|mol',
+        'propane;Isobutane|.5;.5|mol',
+        'Propane;DME|.5;.5|mol',
         ]
     
     # Enumerate all the cases to be analysed
     return  [{
-                'refrigerant' : [r],
-                'dT_GC_min_tar' : [20.0],
+                'refrigerant' : r,
+                'dT_GC_min_tar' : 20.0,
                 'T_air_tar' : [float(x) for x in range(250, 99, -5)],
-                'T_air_inlet' : [15.0],
-                'T_source_in' : [40.0],
-                'n_comp' : [j + 1],
-                'Tsat_evap' : [10.0],
-                'comp_PR_uniform' : [True],
-                'result_parameters' : {'weight': [k / 100]},
+                'T_air_inlet' : 15.0,
+                'T_source_in' : 40.0,
+                'n_comp' : j + 1,
+                'Tref_evap_inlet' : 10.0,
+                'comp_PR_uniform' : True,
+                'result_parameters' : {'weight': k / 100},
                 'results' : [],
              }
                 for k in [k0 for k0 in range(100, 40, -10)]
@@ -60,13 +64,13 @@ def _get_previous_results(cases, file_name):
             for case in cases:
                 if (
                     case['refrigerant'] == res['Refrigerant:'] and 
-                    bool(case['comp_PR_uniform']) == bool(res['Comp_PR_uniform:']) and
-                    abs(float(case['dT_GC_min_tar']) - float(res['dT_min Gas Cooler:'])) < 0.01 and 
-                    abs(float(case['T_air_inlet']) - float(res['T_air_inlet:'])) < 0.01 and 
-                    abs(float(case['T_source_in']) - float(res['T_source_in:'])) < 0.01 and 
-                    abs(float(case['Tsat_evap']) - float(res['Evap T:'])) < 0.01 and
-                    abs(float(case['result_parameters']['weight']) - float(res['Weight:'])) < 0.01 and 
-                    int(case['n_comp']) == int(res['n_comp:'])
+                    int(case['n_comp']) == int(res['n comp:']) and
+                    bool(case['comp_PR_uniform']) == bool(res['Comp PR uniform:']) and
+                    abs(float(case['dT_GC_min_tar']) - float(res['dT GC min tar:'])) < 0.01 and 
+                    abs(float(case['T_air_inlet']) - float(res['T air inlet:'])) < 0.01 and 
+                    abs(float(case['T_source_in']) - float(res['T source in:'])) < 0.01 and 
+                    abs(float(case['Tref_evap_inlet']) - float(res['T evap inlet:'])) < 0.01 and
+                    abs(float(case['result_parameters']['weight']) - float(res['Weight:'])) < 0.01
                     ):
                     case['results'].append(res)
                     break
@@ -75,5 +79,5 @@ def _get_previous_results(cases, file_name):
 def _order_previous_results(cases):
     for case in cases:
         if len(case['results']) > 1:   
-            case['results'].sort(reverse=True, key=lambda x: x['T_air_tar:'])         
+            case['results'].sort(reverse=True, key=lambda x: x['T air tar:'])         
     return cases

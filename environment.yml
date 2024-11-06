@@ -1,9 +1,9 @@
-name: HTHP_313_env
+name: HTHP_311_env
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.13.*
+  - python=3.11
   - numpy
   - scipy
   - pandas

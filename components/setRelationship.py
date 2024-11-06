@@ -2,6 +2,8 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 class SetRelationship:
+    converged: bool = False
+    
     def __init__(self, name='', source_obj='', target_obj='', m = 1, c = 0, prop = 'temperature', prop2 = 0):
         self.name = name
         self.source_obj = source_obj
@@ -21,6 +23,8 @@ class SetRelationship:
 
         elif self.prop == 'Mass Flow':
             self.set_mass_flow()
+        
+        self.converged = True
 
     def set_temperature(self):
         for obj in self.target_obj: 
