@@ -4,4 +4,4 @@ from functions.graph import Graph
 from functions.readWriteOutput import print_result_to_csv, print_result_to_terminal, transfer_temp_files_to_results, read_csv_to_results
 from functions.solver import solve_heat_pump_model
 from functions.decorator_functions import time_func
-from functions.optimiser import analyse_cases_in_parallel
+from functions.analysis import analyse_cases_in_parallel

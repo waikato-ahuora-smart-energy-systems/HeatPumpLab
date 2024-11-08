@@ -8,9 +8,9 @@ import type_enforced
 
 # @type_enforced.Enforcer
 def main() -> None:
-    # analyse_single_case()
+    analyse_single_case()
     # analyse_unsolved_cases()
-    analyse_cases_in_parallel()
+    # analyse_cases_in_parallel()
     
 
 if __name__=='__main__':
