@@ -2,6 +2,7 @@ __author__ = 'Tim Walmsley and Keri Adamson'
 __credits__ = ['Alex Geary']
 
 from systems import TRHP, set_trhp_model
+from streams.propertiesPackage import PropertyPackage
 from functions.solver import solve_heat_pump_model
 from functions.cases import get_cases_to_solve
 from functions.readWriteOutput import print_result_to_terminal, print_result_to_csv, transfer_temp_files_to_results, read_csv_to_results
@@ -71,25 +72,29 @@ def analyse_single_case():
     else:
         print('Heat model failed to solve.')
 
-def analyse_unsolved_cases():
+def analyse_unsolved_cases(debug: bool =True):
     unsolved = read_csv_to_results(file_name='results/Cases-Unsolved')
     for case in unsolved:
-        args = {'refrigerant': case['Refrigerant:'],
-                'dT_GC_min_tar': case['dT_min Gas Cooler:'], 
-                'T_air_tar': case['T_air_tar:'],
-                'T_air_inlet': case['T_air_inlet:'], 
-                'T_source_in': case['T_source_in:'], 
-                'n_comp': case['n_comp:'], 
-                'dT_phx1_cold': case['dT phx max 1:'],
-                'dT_phx2_cold': case['dT phx max 2:'],
-                'dT_phx3_cold': case['dT phx max 3:'], 
-                'comp2_power_frac': case['Comp 2 power frac:'], 
-                'comp3_power_frac': case['Comp 3 power frac:'],
-                'comp_PR_uniform': case['Comp_PR_uniform:'],
-                'debug': False,
+        args = {'refrigerant': str(case['Refrigerant:']),
+                'dT_GC_min_tar': float(case['dT GC min tar:']), 
+                'T_air_tar': float(case['T air tar:']),
+                'T_air_inlet': float(case['T air inlet:']), 
+                'T_source_in': float(case['T source in:']), 
+                'n_comp': int(case['n comp:']), 
+                'dT_phx1_cold': float(case['dT phx max 1:']),
+                'dT_phx2_cold': float(case['dT phx max 2:']),
+                'dT_phx3_cold': float(case['dT phx max 3:']), 
+                'comp2_power_frac': float(case['Comp 2 power frac:']), 
+                'comp3_power_frac': float(case['Comp 3 power frac:']),
+                'comp_PR_uniform': bool(case['Comp PR uniform:']),
+                'debug': bool(debug),
                 }
-        hp = solve_single_case(args)
-        
+        hp, _ = solve_single_case(args)
+        if hp.converged:
+            hp.get_summary()
+            fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
+            _print_results(hp.output, fsuffix)
+    
         # hp.get_cycle_plot(x_axis='s', y_axis='T')
         # hp.get_cycle_plot(x_axis='h', y_axis='P')
         # hp.get_cycle_plot(x_axis='v', y_axis='P')
@@ -268,11 +273,19 @@ def _get_results_summary(result, param) -> dict:
     return hp.output
 
 def _get_unique_f_suffix(param) -> str:
-    suffix: str = ''
-    for ele in param:
-        if ele == 'refrigerant':
-            suffix = '-' + str(param[ele])
-            break
+    suffix: str = '-'
+    
+    r = PropertyPackage(param['refrigerant'])
+    fld_comp = r.fld_name.replace('.FLD', '').split('*')
+    if len(fld_comp) == 1:
+        suffix = '-' + param['refrigerant']
+    else:
+        for i in range(len(fld_comp)):
+            suffix += str(fld_comp[i]) + str(r.fld_composition[i]).replace('.', '_')
+            if i + 1 < len(fld_comp): 
+                suffix += '*'
+
+    # self.fld_name, self.fld_composition, self.n_components, self.iMass
 
     for ele in param:    
         if ele != 'result_parameters' and ele != 'refrigerant':

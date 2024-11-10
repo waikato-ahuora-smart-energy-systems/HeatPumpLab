@@ -7,9 +7,9 @@ from functions import analyse_single_case, analyse_cases_in_parallel, analyse_un
 import type_enforced 
 
 # @type_enforced.Enforcer
-def main() -> None:
-    analyse_single_case()
-    # analyse_unsolved_cases()
+def main():
+    # analyse_single_case()
+    analyse_unsolved_cases(debug=False)
     # analyse_cases_in_parallel()
     
 

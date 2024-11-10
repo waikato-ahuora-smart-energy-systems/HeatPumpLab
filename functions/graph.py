@@ -16,8 +16,10 @@ class Graph:
         if title != '':
             plt.title(title)
         
-        plt, x_axis = self._add_xaxis_labels(plt, x_axis)
-        plt, y_axis = self._add_yaxis_labels(plt, y_axis)
+        xlabel, x_axis, plt = self._get_axis_labels(plt, x_axis)
+        plt.xlabel(xlabel)
+        ylabel, y_axis, plt = self._get_axis_labels(plt, y_axis)
+        plt.ylabel(ylabel)
 
         for obj in cycle_obj:
             data = obj[0].get_graph_data(divisions=res)
@@ -48,7 +50,9 @@ class Graph:
                     else:
                         plt.plot(x, y, color='black')    
 
-        plt.show()  
+        plt.show()
+        filename = 'Heat pump - ' + y_axis + ' vs ' + x_axis + '.png'
+        plt.savefig('results/figures/' + filename) 
         del plt         
 
     def plot_driving_force(self, hx_obj, title='', x_axis='h', y_axis='dT*', res=100, dtmin=0):
@@ -56,9 +60,11 @@ class Graph:
         if title != '':
             plt.title(title)
         
-        plt, x_axis = self._add_xaxis_labels(plt, x_axis)
-        plt, y_axis = self._add_yaxis_labels(plt, y_axis)
-
+        xlabel, x_axis, plt = self._get_axis_labels(plt, x_axis)
+        plt.xlabel(xlabel)
+        ylabel, y_axis, plt = self._get_axis_labels(plt, y_axis)
+        plt.ylabel(ylabel)
+        
         for obj in hx_obj:
             data = obj.get_graph_data(divisions=res)
             x = np.array(self._get_raw_data(data['source'], x_axis))
@@ -99,38 +105,29 @@ class Graph:
             x += [getattr(s, prop)]
         return x
 
-    def _add_xaxis_labels(self, plt: pyplot, x_axis: str) -> list[pyplot, str]: # type: ignore
-        if x_axis == 'h' or x_axis == 'enthalpy':
-            plt.xlabel('Enthalpy [kJ/kg]')
-            x_axis = 'enthalpy'
-        elif x_axis == 's' or x_axis == 'S' or x_axis == 'entropy':
-            plt.xlabel('Entropy [kJ/kgK]')
-            x_axis = 'entropy'
-        elif x_axis == 'p' or x_axis == 'P' or x_axis == 'pressure':
+    def _get_axis_labels(self, plt: pyplot, axis: str) -> list[pyplot, str]: # type: ignore
+        axis = axis.lower()
+        if axis == 'h' or axis == 'enthalpy':
+            label = 'Enthalpy [kJ/kg]'
+            axis = 'enthalpy'
+        elif axis == 's' or axis == 'entropy':
+            label = 'Entropy [kJ/kgK]'
+            axis = 'entropy'
+        elif axis == 'p' or axis == 'pressure':
             plt.xscale('log')
-            plt.xlabel('Pressure [kPa]')
-            x_axis = 'pressure'
-        elif x_axis == 't' or x_axis == 'T' or x_axis == 'temperature':
-            plt.xlabel('Temperature [°C]')
-            x_axis == 'temperature'
+            label = 'Pressure [kPa]'
+            axis = 'pressure'
+        elif axis == 't' or axis == 'temperature':
+            label = 'Temperature [°C]'
+            axis = 'temperature'
+        elif axis == 'v' or axis == 'specific volume':
+            label = 'Specific Volume [m^3/kg]'
+            axis = 'specific_volume'
+        elif axis == 'dT*':
+            label = axis + ' [°C]'
+            axis = 'temperature'
         else:
-            plt.xlabel('Specific Volume [m^3/kg]')
-            x_axis == 'specific_volume'
-        return plt, x_axis
-
-    def _add_yaxis_labels(self, plt: pyplot, y_axis: str) -> list[pyplot, str]: # type: ignore
-        if y_axis == 't' or y_axis == 'T' or y_axis == 'temperature' or y_axis == 'Temperature':
-            plt.ylabel('Temperature [°C]')
-            y_axis = 'temperature'
-        elif y_axis == 'p' or y_axis == 'P' or y_axis == 'pressure' or y_axis == 'Pressure':
-            plt.yscale('log')
-            plt.ylabel('Pressure [kPa]') 
-            y_axis = 'pressure'
-        elif y_axis == 'dT*':
-            plt.ylabel(y_axis)
-            y_axis = 'temperature'
-        else:
-            plt.ylabel('Temperature [°C]')
-            y_axis = 'temperature'            
-        return plt, y_axis
+            label = 'Temperature [°C]'
+            axis = 'temperature'            
+        return label, axis, plt
               

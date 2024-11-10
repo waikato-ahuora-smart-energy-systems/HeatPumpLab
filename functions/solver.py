@@ -14,6 +14,9 @@ def solve_heat_pump_model(hp: TRHP) -> TRHP:
     #Solve heat pump cycle
     try:
         hp = _find_hp_with_min_discharge_pressure(hp)
+        # if hp.debug:
+        #     hp.get_cycle_plot()
+
         if (abs(hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet) > 0.1 and _check_hp_model_convergance(hp)):
             r = root_scalar(
                             f=_find_evap_inlet_temperature_offset,
@@ -30,6 +33,8 @@ def solve_heat_pump_model(hp: TRHP) -> TRHP:
         hp.converged = _check_hp_model_convergance(hp)
         hp.COP = _get_COP(hp)
         hp.cycle_type = _get_hp_cycle_type(hp)
+        if hp.debug:
+            hp.get_cycle_plot()
     except:
         _print_failed_to_solve_report(hp)
         print('Heat pump solver failed with an exception. The failed case has been recorded.')
@@ -186,7 +191,7 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
     if (_calc_jac_at_given_point(gc.source_in, gc.sink_out) > 0.0 # Implies converging temperature profiles from hot-side
         or 
         _calc_jac_at_given_point(gc.source_out, gc.sink_in) < 0.0 # Implies converging temperature profiles from cold-side
-        ):
+        ) and gc.duty >= 0.0:
         r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='TNC', x0=[gc.duty / 2], bounds=[(0.0, gc.duty)], jac=True) # l-bfgs-b args=(gc), 
         pinch_point = [r['fun'], r['x'] / gc.duty]
     else:

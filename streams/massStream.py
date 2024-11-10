@@ -96,18 +96,7 @@ class MassStream():
     def props_in_mPT(self) -> None:
         self._update_props(
             self.PP.get_std_properties('PT', self.pressure, self.temperature, self.fld_composition)
-        ) 
-        # self.props_in_mPT_old()
-        # if (abs(1 - self.pressure / self.pressure1) > 1e-6 or
-        #     abs(1 - self.temperature / self.temperature1) > 1e-6 or
-        #     abs(1 - self.enthalpy / self.enthalpy1) > 1e-6 or
-        #     abs(1 - self.quality / self.quality1) > 1e-6 or
-        #     abs(1 - self.entropy / self.entropy1) > 1e-6 or
-        #     abs(1 - self.heat_capacity / self.heat_capacity1) > 1e-6 or
-        #     abs(1 - self.density / self.density1) > 1e-6 or
-        #     abs(1 - self.specific_volume / self.specific_volume) > 1e-6
-        #     ):
-        #     print('Check')          
+        )         
 
     def props_in_mPS(self) -> None:
         self._update_props(
@@ -146,9 +135,25 @@ class MassStream():
         self.specific_volume1 = 1 / self.density1 if self.density1 > 0.0 else 0.0
         self.heat_flow1 = self.enthalpy1 * self.mass_flow          
 
+    def props_extend(self):
+        self.prandtl, self.viscosity, self.thermal_conductivity = self.PP.get_specified_properties('PRANDTL;VIS;TCX', 'PH', self.pressure, self.enthalpy)[0:3]
+
+    def copy_fld_props(self, fld):
+        self.mass_flow = fld.mass_flow
+        self.pressure = fld.pressure
+        self.temperature = fld.temperature
+        self.enthalpy = fld.enthalpy
+        self.entropy = fld.entropy
+        self.heat_capacity = fld.heat_capacity        
+        self.quality = fld.quality
+        self.density = fld.density
+        self.specific_volume = fld.specific_volume
+        self.prandtl = fld.prandtl
+        self.viscosity = fld.viscosity
+        self.thermal_conductivity = fld.thermal_conductivity
 
 
-
+        
     def props_in_mPH_old(self):
         self.quality, self.temperature, self.entropy, self.heat_capacity, self.density = self.PP.get_specified_properties('QMASS;T;S;CP;D', 'PH', self.pressure, self.enthalpy)[0:5]
         self.specific_volume = 1 / self.density
@@ -179,22 +184,3 @@ class MassStream():
         self.specific_volume = 1 / self.density
         self.heat_flow = self.enthalpy * self.mass_flow
 
-
-
-
-    def props_extend(self):
-        self.prandtl, self.viscosity, self.thermal_conductivity = self.PP.get_specified_properties('PRANDTL;VIS;TCX', 'PH', self.pressure, self.enthalpy)[0:3]
-
-    def copy_fld_props(self, fld):
-        self.mass_flow = fld.mass_flow
-        self.pressure = fld.pressure
-        self.temperature = fld.temperature
-        self.enthalpy = fld.enthalpy
-        self.entropy = fld.entropy
-        self.heat_capacity = fld.heat_capacity        
-        self.quality = fld.quality
-        self.density = fld.density
-        self.specific_volume = fld.specific_volume
-        self.prandtl = fld.prandtl
-        self.viscosity = fld.viscosity
-        self.thermal_conductivity = fld.thermal_conductivity
