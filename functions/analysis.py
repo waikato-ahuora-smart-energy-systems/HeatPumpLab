@@ -73,34 +73,54 @@ def analyse_single_case():
         print('Heat model failed to solve.')
 
 def analyse_unsolved_cases(debug: bool =True):
-    unsolved = read_csv_to_results(file_name='results/Cases-Unsolved')
-    for case in unsolved:
-        args = {'refrigerant': str(case['Refrigerant:']),
-                'dT_GC_min_tar': float(case['dT GC min tar:']), 
-                'T_air_tar': float(case['T air tar:']),
-                'T_air_inlet': float(case['T air inlet:']), 
-                'T_source_in': float(case['T source in:']), 
-                'n_comp': int(case['n comp:']), 
-                'dT_phx1_cold': float(case['dT phx max 1:']),
-                'dT_phx2_cold': float(case['dT phx max 2:']),
-                'dT_phx3_cold': float(case['dT phx max 3:']), 
-                'comp2_power_frac': float(case['Comp 2 power frac:']), 
-                'comp3_power_frac': float(case['Comp 3 power frac:']),
-                'comp_PR_uniform': bool(case['Comp PR uniform:']),
-                'debug': bool(debug),
-                }
-        hp, _ = solve_single_case(args)
-        if hp.converged:
-            hp.get_summary()
-            fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
-            _print_results(hp.output, fsuffix)
-    
-        # hp.get_cycle_plot(x_axis='s', y_axis='T')
-        # hp.get_cycle_plot(x_axis='h', y_axis='P')
-        # hp.get_cycle_plot(x_axis='v', y_axis='P')
-        None
+    transfer_temp_files_to_results('results/Cases-Resolved')
+    unsolved_cases = read_csv_to_results(file_name='results/Cases-Unsolved')
+    resolved_cases = read_csv_to_results(file_name='results/Cases-Resolved')
+
+    if resolved_cases != None:
+        for i in reversed(range(len(unsolved_cases))):
+            for sol in resolved_cases:
+                if (
+                    sol['Refrigerant:'] == unsolved_cases[i]['Refrigerant:'] and 
+                    int(sol['n comp:']) == int(unsolved_cases[i]['n comp:']) and
+                    bool(sol['Comp PR uniform:']) == bool(unsolved_cases[i]['Comp PR uniform:']) and
+                    abs(float(sol['dT GC min tar:']) - float(unsolved_cases[i]['dT GC min tar:'])) < 0.01 and 
+                    abs(float(sol['T air inlet:']) - float(unsolved_cases[i]['T air inlet:'])) < 0.01 and 
+                    abs(float(sol['T source in:']) - float(unsolved_cases[i]['T source in:'])) < 0.01 and 
+                    abs(float(sol['T evap inlet:']) - float(unsolved_cases[i]['T evap inlet:'])) < 0.01
+                    ):
+                    unsolved_cases.pop(i)
+                    break
+                    
+    if unsolved_cases != []:
+        for case in unsolved_cases:
+            args = {'refrigerant': str(case['Refrigerant:']),
+                    'dT_GC_min_tar': float(case['dT GC min tar:']), 
+                    'T_air_tar': float(case['T air tar:']),
+                    'T_air_inlet': float(case['T air inlet:']), 
+                    'T_source_in': float(case['T source in:']), 
+                    'n_comp': int(case['n comp:']), 
+                    'dT_phx1_cold': float(case['dT phx max 1:']),
+                    'dT_phx2_cold': float(case['dT phx max 2:']),
+                    'dT_phx3_cold': float(case['dT phx max 3:']), 
+                    'comp2_power_frac': float(case['Comp 2 power frac:']), 
+                    'comp3_power_frac': float(case['Comp 3 power frac:']),
+                    'comp_PR_uniform': bool(case['Comp PR uniform:']),
+                    'debug': bool(debug),
+                    }
+            hp, _ = solve_single_case(args)
+            if hp.converged:
+                hp.get_summary()
+                fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
+                _print_results(hp.output, fsuffix)
         
-def analyse_cases_in_parallel(file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count()) -> None:
+            # hp.get_cycle_plot(x_axis='s', y_axis='T')
+            # hp.get_cycle_plot(x_axis='h', y_axis='P')
+            # hp.get_cycle_plot(x_axis='v', y_axis='P')
+            None
+        transfer_temp_files_to_results('results/Cases-Resolved')
+        
+def analyse_cases_in_parallel(file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
     # Use parallel processing distributed over all cores to speed up the analysis
     cases: list        = get_cases_to_solve(file_name)
     print(len(cases))
@@ -225,7 +245,7 @@ def _get_obj(var: dict, param: dict) -> any:
     hp, dt = solve_single_case(
         _get_hp_args(var, param)
         )
-    COP, P = hp.COP, hp.comp_discharge.pressure
+    COP, P = [hp.COP, hp.comp_discharge.pressure] if hp.feasible else [-np.inf, 0.0]
     obj = -(COP / COP_0) * k + (P / P_0 - 2) * (1 - k) 
     return hp, obj, dt
 

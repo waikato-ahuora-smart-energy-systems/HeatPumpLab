@@ -7,7 +7,7 @@ High temperature transcritical-recuperative heat pump model
 By Tim Walmsley and Keri Adamson, University of Waikato, 2021-2024 (tim.walmsley@waikato.ac.nz)
 """
 
-from functions.graph import Graph
+from functions.graph import plot_cycle, plot_driving_force
 from functions.readWriteOutput import print_result_to_terminal
 import numpy as np
 
@@ -34,18 +34,14 @@ class HeatPump():
             self.get_summary()
             )
 
-    def get_cycle_plot(self, x_axis: str ='h', y_axis: str ='T') -> Graph:
+    def get_cycle_plot(self, x_axis: str ='h', y_axis: str ='T') -> any:
         cycle_obj, sink_obj = self.get_components_sets_to_graph()
-        g = Graph()
-        g.plot_cycle(cycle_obj=cycle_obj,
-                     sink_obj=sink_obj,
-                     x_axis=x_axis,
-                     y_axis=y_axis)
-        return g
+        return plot_cycle(cycle_obj=cycle_obj,
+                sink_obj=sink_obj,
+                x_axis=x_axis,
+                y_axis=y_axis)
 
-    def get_driving_force_plot(self, hx_obj_ls: list, dtmin: float =0.0, x_axis: str ='h') -> Graph:
-        g: Graph = Graph()
-        g.plot_driving_force(hx_obj=hx_obj_ls,
-                             x_axis=x_axis,
-                             dtmin=dtmin)
-        return g
+    def get_driving_force_plot(self, hx_obj_ls: list, dtmin: float =0.0, x_axis: str ='h') -> any:
+        return plot_driving_force(hx_obj=hx_obj_ls,
+                x_axis=x_axis,
+                dtmin=dtmin)

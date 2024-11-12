@@ -1,6 +1,6 @@
 from functions.cases import get_cases_to_solve
 from functions.analysis import analyse_single_case, analyse_unsolved_cases, analyse_cases_in_parallel
-from functions.graph import Graph
+from functions.graph import plot_driving_force, plot_cycle, plot_simple_xy
 from functions.readWriteOutput import print_result_to_csv, print_result_to_terminal, transfer_temp_files_to_results, read_csv_to_results
 from functions.solver import solve_heat_pump_model
 from functions.decorator_functions import time_func
