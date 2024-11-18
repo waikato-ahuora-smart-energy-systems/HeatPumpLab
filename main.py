@@ -10,8 +10,8 @@ from functions import analyse_single_case, analyse_cases_in_parallel, analyse_un
 def main():
     # analyse_single_case()
     # analyse_unsolved_cases(debug=False)
-    analyse_cases_in_parallel()
+    analyse_cases_in_parallel(n_cpu=1)
     
-
+ 
 if __name__=='__main__':
     main()

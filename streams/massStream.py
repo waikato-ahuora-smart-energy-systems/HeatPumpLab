@@ -124,17 +124,6 @@ class MassStream():
         self.specific_volume = 1 / self.density if self.density > 0.0 else 0.0
         self.heat_flow = self.enthalpy * self.mass_flow
 
-    def _update_props_2(self, props) -> None:
-        self.pressure1 = props.P / 1000
-        self.enthalpy1 = props.h / self.molar_mass
-        self.quality1 = props.q if (props.q >= 0.0 and props.q <= 1.0) else self.DEFAULT_VAL
-        self.temperature1 = props.T - self.TC_to_K
-        self.entropy1 = props.s / self.molar_mass
-        self.heat_capacity1 = props.Cp / self.molar_mass if props.Cp > 0.0 else self.DEFAULT_VAL
-        self.density1 = props.D * self.molar_mass
-        self.specific_volume1 = 1 / self.density1 if self.density1 > 0.0 else 0.0
-        self.heat_flow1 = self.enthalpy1 * self.mass_flow          
-
     def props_extend(self):
         self.prandtl, self.viscosity, self.thermal_conductivity = self.PP.get_specified_properties('PRANDTL;VIS;TCX', 'PH', self.pressure, self.enthalpy)[0:3]
 
@@ -151,36 +140,3 @@ class MassStream():
         self.prandtl = fld.prandtl
         self.viscosity = fld.viscosity
         self.thermal_conductivity = fld.thermal_conductivity
-
-
-        
-    def props_in_mPH_old(self):
-        self.quality, self.temperature, self.entropy, self.heat_capacity, self.density = self.PP.get_specified_properties('QMASS;T;S;CP;D', 'PH', self.pressure, self.enthalpy)[0:5]
-        self.specific_volume = 1 / self.density
-        self.heat_flow = self.enthalpy * self.mass_flow
-
-    def props_in_mPT_old(self):
-        self.quality, self.enthalpy, self.entropy, self.heat_capacity, self.density = self.PP.get_specified_properties('QMASS;H;S;CP;D', 'PT', self.pressure, self.temperature)[0:5]
-        self.specific_volume = 1 / self.density
-        self.heat_flow = self.enthalpy * self.mass_flow
-
-    def props_in_mPQ_old(self):
-        self.enthalpy, self.temperature, self.entropy, self.heat_capacity, self.density = self.PP.get_specified_properties('H;T;S;CP;D', 'PQ', self.pressure, self.quality)[0:5]
-        self.specific_volume = 1 / self.density
-        self.heat_flow = self.enthalpy * self.mass_flow
-
-    def props_in_mPS_old(self):
-        self.quality, self.temperature, self.enthalpy, self.heat_capacity, self.density = self.PP.get_specified_properties('QMASS;T;H;CP;D', 'PS', self.pressure, self.entropy)[0:5]
-        self.specific_volume = 1 / self.density
-        self.heat_flow = self.enthalpy * self.mass_flow
-
-    def props_in_mTQ_old(self):
-        self.pressure, self.enthalpy, self.entropy, self.heat_capacity, self.density = self.PP.get_specified_properties('P;H;S;CP;D', 'TQ', self.temperature, self.quality)[0:5]
-        self.specific_volume = 1 / self.density
-        self.heat_flow = self.enthalpy * self.mass_flow
-
-    def props_in_mTS_old(self):
-        self.quality, self.pressure, self.enthalpy, self.heat_capacity, self.density = self.PP.get_specified_properties('QMASS;P;H;CP;D', 'TS', self.temperature, self.entropy)[0:5]
-        self.specific_volume = 1 / self.density
-        self.heat_flow = self.enthalpy * self.mass_flow
-

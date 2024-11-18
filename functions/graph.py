@@ -7,14 +7,18 @@ import numpy as np
     
 def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=100):
     cycle_obj = cycle_obj + [cycle_obj[0]]
-    
+    fig: plt.Figure
+    ax: plt.Axes
+
+    fig, ax = plt.subplots()
+
     if title != '':
-        plt.title(title)
+        ax.set_title(title)
     
     xlabel, x_axis = _get_axis_labels(x_axis)
-    plt.xlabel(xlabel)
+    ax.set_xlabel(xlabel)
     ylabel, y_axis = _get_axis_labels(y_axis)
-    plt.ylabel(ylabel)
+    ax.set_ylabel(ylabel)
 
     for obj in cycle_obj:
         data = obj[0].get_graph_data(divisions=res)
@@ -22,15 +26,15 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=100):
         y = _get_raw_data(data[obj[1]], y_axis)
 
         if obj[0].name == 'Gas cooler':
-            plt.plot(x, y, color='red')
+            ax.plot(x, y, color='red')
         elif obj[0].name == 'Recuperator':
-            plt.plot(x, y, color='green')
+            ax.plot(x, y, color='green')
         elif obj[0].name == 'Internal heat exchanger':
-            plt.plot(x, y, color='orange')
+            ax.plot(x, y, color='orange')
         elif obj[0].name == 'Evaporator':
-            plt.plot(x, y, color='aqua')
+            ax.plot(x, y, color='aqua')
         else:
-            plt.plot(x, y, color='black')
+            ax.plot(x, y, color='black')
     
     if x_axis == 'entropy' or x_axis == 'enthalpy':
         for obj in reversed(sink_obj):
@@ -41,23 +45,28 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=100):
                 y = _get_raw_data(data['sink'], y_axis)
 
                 if obj[0].name == 'Gas cooler':
-                    plt.plot(x, y, color='blue')
+                    ax.plot(x, y, color='blue')
                 else:
-                    plt.plot(x, y, color='black')    
+                    ax.plot(x, y, color='black')    
 
-    plt.show()
-    filename = 'Heat pump - ' + y_axis + ' vs ' + x_axis + '.png'
-    plt.savefig('results/figures/' + filename) 
-    pass        
+    fig.show()
+    filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
+    fig.savefig('results/figures/' + filename) 
+    return fig, ax        
 
 def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=100, dtmin=0):
+    fig: plt.Figure
+    ax: plt.Axes
+
+    fig, ax = plt.subplots()
+
     if title != '':
-        plt.title(title)
+        ax.set_title(title)
     
     xlabel, x_axis = _get_axis_labels(x_axis)
-    plt.xlabel(xlabel)
+    ax.set_xlabel(xlabel)
     ylabel, y_axis = _get_axis_labels(y_axis)
-    plt.ylabel(ylabel)
+    ax.set_ylabel(ylabel)
     
     for obj in hx_obj:
         data = obj.get_graph_data(divisions=res)
@@ -65,23 +74,32 @@ def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=100, dtmi
         y1 = np.array(_get_raw_data(data['source'], y_axis)) - np.array(_get_raw_data(data['sink'], y_axis))[::-1]
         y2 = np.repeat(dtmin, len(x))
 
-        plt.plot(x, y1, color='red')
-        plt.plot(x, y2, color='black')
+        ax.plot(x, y1, color='red')
+        ax.plot(x, y2, color='black')
     
-    plt.show()
-    pass           
+    fig.show()
+    filename = 'Driving_force_plot.png'
+    fig.savefig('results/figures/' + filename)     
+    return fig, ax           
 
 def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: str =''):
+    fig: plt.Figure
+    ax: plt.Axes
+
+    fig, ax = plt.subplots()
+
     if title != '':
-        plt.title(title)
+        ax.set_title(title)
     if x_axis != '':
-        plt.xlabel(x_axis)
+        ax.set_xlabel(x_axis)
     if y_axis != '':
-        plt.ylabel(y_axis)
-    plt.plot(x, y, color='black')
-    plt.show()
-    pass
-    # return plt
+        ax.set_ylabel(y_axis)
+    ax.plot(x, y, color='black')
+
+    fig.show()
+    filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
+    fig.savefig('results/figures/' + filename) 
+    return fig, ax
 
 def _rescale(array_to_scale, array_new_scale) -> list[float]:
     m: float

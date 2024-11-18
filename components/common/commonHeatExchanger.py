@@ -97,15 +97,11 @@ class BaseHeatExchanger:
     def get_dTmin_terminal_model(self):
         try:
             self.source_out.pressure = self.source_in.pressure - self.dP_h
-            self.source_out_max.pressure = self.source_out.pressure
-            self.source_out_max.temperature = self.sink_in.temperature + self.dTmin
-            self.source_out_max.props_in_mPH()
-            self.dH_h_max = self.source_in.mass_flow * (self.source_in.enthalpy - self.source_out_max)
+            self.source_out_max.props_in_ab('PT', self.source_out.pressure, self.sink_in.temperature + self.dTmin)
+            self.dH_h_max = self.source_in.mass_flow * (self.source_in.enthalpy - self.source_out_max.enthalpy)
             
             self.sink_out.pressure = self.sink_in.pressure - self.dP_c
-            self.sink_out_max.pressure = self.sink_out.pressure
-            self.sink_out_max.temperature = self.source_in.temperature - self.dTmin
-            self.sink_out_max.props_in_mPH()
+            self.sink_out_max.props_in_ab('PT', self.sink_out.pressure, self.source_in.temperature - self.dTmin)
             self.dH_c_max = self.sink_in.mass_flow * (self.sink_out_max.enthalpy - self.sink_in.enthalpy)
 
             self.duty = min(self.dH_h_max, self.dH_c_max)

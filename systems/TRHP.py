@@ -15,7 +15,7 @@ class TRHP(HeatPump):
     T_air_tar: float =200.0 
     T_air_inlet: float =15.0 
     dT_GC_min_tar: float =20.0 
-    T_gc_out_min: float =0.0
+    dT_gc_out_min_offset: float =0.0
     T_gc_out: float 
     T_source_in: float =40.0 
     Tref_evap_inlet: float =10.0
@@ -33,7 +33,8 @@ class TRHP(HeatPump):
     comp2_power_frac: float =0.0 
     comp3_power_frac: float =0.0
     P_H_est: float =0.0
-    result_parameters: float =None    
+    compute_jac: bool =False
+    additional_obj: float =None    
 
     def __init__(self, **d_args):
         for key, value in d_args.items():
@@ -123,7 +124,7 @@ class TRHP(HeatPump):
             'PR 1:' : self.comp1.pressure_ratio,
             'PR 2:' : self.comp2.pressure_ratio if self.n_comp > 1 else 1.0,
             'PR 3:' : self.comp3.pressure_ratio if self.n_comp > 2 else 1.0,
-            'Overall P ratio:' : self.comp_discharge.pressure / self.evaporator.sink_in.pressure,
+            'Overall P ratio:' : self.comp1.pressure_ratio * self.comp2.pressure_ratio * self.comp3.pressure_ratio,
             'Comp discharge T:' : self.comp_discharge.temperature,
             }
         return self.output
@@ -156,7 +157,11 @@ def set_trhp_model(hp: TRHP) -> TRHP:
     return hp
 
 def _check_input_param_feasibility(hp: TRHP):
-    return True if ((hp.T_air_tar - hp.T_air_inlet) * 2/3 >= hp.dT_phx1_cold + hp.dT_phx2_cold + hp.dT_phx3_cold) else False
+    return True if (
+        (hp.T_air_tar - hp.T_air_inlet) * 2/3 >= hp.dT_phx1_cold + hp.dT_phx2_cold + hp.dT_phx3_cold and
+        0.0 <= hp.dT_gc_out_min_offset <= 50.0 and
+        hp.comp2_power_frac + hp.comp3_power_frac <= 1.0
+        ) else False
 
 def _get_trhp_structure(hp: TRHP) -> TRHP:
     #Check the PHE combo
@@ -186,7 +191,7 @@ def _get_trhp_structure(hp: TRHP) -> TRHP:
     #Binary variables for the heat pump structure
     hp.comp2_on = 1  if hp.n_comp > 1 else 0
     hp.comp3_on = 1  if hp.n_comp > 2 else 0
-    hp.T_gc_out = max(hp.T_air_inlet + hp.dT_GC_min_tar, hp.T_gc_out_min)
+    hp.T_gc_out = hp.T_air_inlet + hp.dT_GC_min_tar + hp.dT_gc_out_min_offset
     hp.ihx_on = 1    if hp.T_source_in < hp.T_gc_out else 0
             
     hp.phx1_on = 1   if hp.dT_phx1_cold > 0.0 else 0
@@ -294,6 +299,7 @@ def _get_trhp_streams(hp: TRHP) -> TRHP:
         hp.compressors.append(hp.comp3)
 
     hp.comp_discharge = temp_ref_out
+    hp.comp_discharge.pressure_bnds = None
     P_H = temp_ref_out.pressure
     hp.gas_coolers = []
 

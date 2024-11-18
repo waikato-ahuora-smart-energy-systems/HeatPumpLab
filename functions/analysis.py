@@ -8,14 +8,15 @@ from functions.cases import get_cases_to_solve
 from functions.readWriteOutput import print_result_to_terminal, print_result_to_csv, transfer_temp_files_to_results, read_csv_to_results
 from functions.decorator_functions import time_func
 from concurrent.futures import ProcessPoolExecutor as pool
-from scipy.optimize import shgo as glb_opt_mthd, LinearConstraint, minimize
+# from scipy.optimize import shgo as glb_opt_mthd, LinearConstraint, minimize
+from scipy.optimize import shgo as glb_opt_mthd, LinearConstraint, minimize, approx_fprime
 import numpy as np, os
 
 def analyse_single_case():
     args: list[float | str | bool]
     hp: TRHP
 
-    refrigerant_ls: list[str] = [
+    refrigerant_ls = [
         'propane;butane|.5;.5|mol',
         'Butane', 
         'Carbon dioxide', 
@@ -39,11 +40,11 @@ def analyse_single_case():
             'T_air_tar': 250.0, 
             'T_air_inlet': 15.0, 
             'T_source_in': 40.0, 
-            'T_gc_out_min': 35.0,
+            'dT_gc_out_min_offset': 0.0,
             'n_comp': 3, 
             'dTmin_phx': 5.0,
             'dT_phx1_cold': 20.0,
-            'dT_phx2_cold': 30.0,
+            'dT_phx2_cold': 20.0,
             'dT_phx3_cold': 20.0, 
             'comp2_power_frac': 0.5, 
             'comp3_power_frac': 0.0,
@@ -60,8 +61,8 @@ def analyse_single_case():
     if hp.converged:
         hp.get_summary()
 
-        if type(hp.output) is dict:
-            print_result_to_terminal(output=hp.output)
+        # if type(hp.output) is dict:
+        #     print_result_to_terminal(output=hp.output)
             # print_result_to_csv(output=hp.output)
         
         # hp.get_driving_force_plot(hp.gas_coolers, hp.dT_GC_min_tar)
@@ -71,6 +72,8 @@ def analyse_single_case():
         # hp.get_cycle_plot(x_axis='v', y_axis='P')
     else:
         print('Heat model failed to solve.')
+
+    return True
 
 def analyse_unsolved_cases(debug: bool =True):
     transfer_temp_files_to_results('results/Cases-Resolved')
@@ -124,148 +127,166 @@ def analyse_cases_in_parallel(file_name: str = 'results/TRHP_results', n_cpu: in
     # Use parallel processing distributed over all cores to speed up the analysis
     cases: list        = get_cases_to_solve(file_name)
     print(len(cases))
-    executor: pool     = pool(max_workers=n_cpu)
-    results: list[any] = [executor.submit(_optimise_case_set, case) for case in cases]
-    executor.shutdown()
-    transfer_temp_files_to_results(file_name)
+    _optimise_case_set(cases[0])
+    # executor: pool     = pool(max_workers=n_cpu)
+    # results: list[any] = [executor.submit(_optimise_case_set, case) for case in cases]
+    # executor.shutdown()
+    # transfer_temp_files_to_results(file_name)
 
 def _optimise_case_set(case: dict) -> None:
-    tol: float = 1e-3
+    tol: float = 1e-5
+    method: str = 'L-BFGS-B' #'SLSQP' 'L-BFGS-B' 'trust-constr'
     T_air_tar_ls: list = case['T_air_tar']
     results_ls: list = case['results']
-    case.pop('results')
     start: int = len(results_ls)
     end: int = len(T_air_tar_ls)
+
+    case.pop('results')
     param: dict = case
+    vars_input = _get_variable_input_data(param)
     for i in range(start, end):
         param['T_air_tar'] = T_air_tar_ls[i]
-        bnds, var0 = _get_bounds(param)
-        hp, _ = solve_single_case(
-            _get_hp_args(var0, param)
-            )
-        param['result_parameters']['COP_0'] = hp.COP
-        param['result_parameters']['P_0'] = hp.comp_discharge.pressure
-
+        param['additional_obj']['vars_input'] = vars_input
+        hp, _ = solve_single_case( param | _get_var_kwargs(_get_initial_val(vars_input), param) )
+        param['additional_obj']['COP_0'] = hp.COP
+        param['additional_obj']['P_0'] = hp.comp_discharge.pressure
+        
         if i == 0:    
-            result = _get_global_optimum(param, bnds, tol) 
+            result, dt = _get_global_optimum(param, vars_input, method, tol)
         else:
-            method = 'trust-constr' #'SLSQP'
-            xi = _get_initial(results_ls[i-1], param)
-            result = _get_local_optima(method, param, bnds, tol, xi) 
-            if result.success and -result.fun < 1.0:
-                result = _get_local_optima(method, param, bnds, tol, var0)
+            vars_input = _update_initial_val(vars_input, results_ls[i-1]['xi'])
+            xi = _get_initial_val(vars_input)
+            result, dt = _get_local_optima(param, vars_input, method, tol, xi)
 
-        if result.success:
-            res = _get_results_summary(result, param)
-            fsuffix = _get_unique_f_suffix(param)
-            _print_results(res, fsuffix)
-            results_ls.append(res)
+        results_ls = _get_results_report(param, result, dt, results_ls)
 
-def _get_initial(res: dict, param: dict) -> list:
-    if param['n_comp'] > 3:
-        raise ValueError("Number of compressors must be 1, 2 or 3.")
-    var = [res['dT phx max 1:']]
-    if param['n_comp'] > 1:
-        var.append(res['dT phx max 2:'])
-    if param['n_comp'] > 2:
-        var.append(res['dT phx max 3:'])
-    if param['comp_PR_uniform'] == False and param['n_comp'] > 1:
-        if param['n_comp'] == 2:
-            var.append(res['Comp 2 power frac:'])
-        elif param['n_comp'] == 3:
-            var.append(res['Comp 2 power frac:'])
-            var.append(res['Comp 3 power frac:'])
-    return var  
-
-def _get_bounds(param: dict, x: list =None) -> list:
+def _get_variable_input_data(param: dict, x: list =None) -> dict:
     #Define the bounds of the optimisation variables 
-    dT_upper = 100.0
+    vars_input = dict()
+    dT_upper: float = 100.0
+    i: int = 0
+
     if param['n_comp'] > 3:
         raise ValueError("Number of compressors must be 1, 2 or 3.")     
     
-    bnds = [(0.0, dT_upper)]
-    xi = [0.0] if x is None else [x[0]]
+    vars_input['dT_phx1_cold'] = {
+        'xi' : 0.0 if x is None else x[i],
+        'bnds' : (0.0, dT_upper),
+        }
+    i += 1
     if param['n_comp'] >= 2:
-        bnds += [(0.0, dT_upper)]
-        xi += [0.0] if x is None else [x[1]]
+        vars_input['dT_phx2_cold'] = {
+            'xi' : 0.0 if x is None else x[i],
+            'bnds' : (0.0, dT_upper),
+            }
+        i += 1
     if param['n_comp'] == 3:
-        bnds += [(0.0, dT_upper)]
-        xi += [0.0] if x is None else [x[2]] 
+        vars_input['dT_phx3_cold'] = {
+            'xi' : 0.0 if x is None else x[i],
+            'bnds' : (0.0, dT_upper),
+            }
+        i += 1
     if param['comp_PR_uniform'] == False and param['n_comp'] > 1:
-        if param['n_comp'] >= 2:
-            bnds += [(0.25, 0.75)]
-            xi += [0.5]
+        if param['n_comp'] == 2:
+            vars_input['comp2_power_frac'] = {
+                'xi' : 0.5 if x is None else x[i],
+                'bnds' : (0.2, 0.8),
+                }
+            i += 1
         if param['n_comp'] == 3:
-            bnds += [(0.25, 0.75)]
-            xi += [0.5] 
+            vars_input['comp2_power_frac'] = {
+                'xi' : 1/3 if x is None else x[i],
+                'bnds' : (0.1, 0.5),
+                }
+            i += 1
+            vars_input['comp3_power_frac'] = {
+                'xi' : 1/3 if x is None else x[i],
+                'bnds' : (0.1, 0.5),
+                }
+            i += 1
+    vars_input['dT_gc_out_min_offset'] = {
+        'xi' : 0.0 if x is None else x[i],
+        'bnds' : (0.0, dT_upper / 2),
+        }
 
-    return bnds, xi
+    return vars_input
 
-def _get_global_optimum(param: dict, bnds: tuple, tol: float) -> dict:
-    return glb_opt_mthd(func=_get_obj_val, 
-                        args=[param], 
-                        bounds=bnds,
-                        constraints=LinearConstraint(A=np.array([1.0] * len(bnds)), 
-                                                    lb=0.0, 
-                                                    ub=(param['T_air_tar'] - param['T_air_inlet']) * 2/3),
-                        workers=1, 
-                        iters=3, 
-                        n=40, 
-                        sampling_method='sobol', 
-                        options={'tol': tol}, 
-                        minimizer_kwargs={'method' : 'SLSQP',
-                                        'options': {'tol': tol}}
-                        )    
+def _get_initial_val(vars_input: dict) -> list:
+    return [vars_input[key]['xi'] for key in vars_input]
 
-def _get_local_optima(method: str, param: dict, bnds: tuple, tol: float, xi: float) -> dict:
-    return minimize(fun=_get_obj_val, 
+def _update_initial_val(vars_input: dict, prev_x0):
+    i: int = 0
+    for key in vars_input:
+        vars_input[key]['xi'] = prev_x0[i]
+        i += 1
+    return vars_input
+
+def _get_bounds(vars_input: dict) -> list:
+    return [vars_input[key]['bnds'] for key in vars_input]
+
+def _get_constraints(param: dict, vars_input: dict):
+    m = np.array([1.0 if ('dT_phx' in key and '_cold' in key) else 0.0 for key in vars_input])
+    return LinearConstraint(A=m, lb=0.0, ub=(param['T_air_tar'] - param['T_air_inlet']) * 2/3)   
+
+@time_func
+def _get_global_optimum(param: dict, vars_input: dict, method: str, tol: float) -> dict:
+    return glb_opt_mthd(func=lambda x: _get_opti_obj(x, param), 
+                        bounds=_get_bounds(vars_input),
+                        constraints=_get_constraints(param, vars_input),
+                        workers=1,
+                        iters=4,
+                        options={'f_tol': tol,
+                                 'jac'  : lambda x: _get_jac_val(x, param),
+                                 },
+                        minimizer_kwargs={
+                            'method' : method,
+                            'bounds' : _get_bounds(vars_input),
+                            'options': {'xtol': tol},
+                            }
+                        )
+
+@time_func
+def _get_local_optima(param: dict, vars_input: dict, method: str, tol: float, xi: float) -> dict:
+    return minimize(fun=lambda x: _get_opti_obj(x, param), 
                     x0=xi,
-                    args=param, 
-                    bounds=bnds,
-                    constraints=LinearConstraint(A=np.array([1.0] * len(bnds)), 
-                                                lb=0.0, 
-                                                ub=(param['T_air_tar'] - param['T_air_inlet']) * 2/3),
+                    bounds=_get_bounds(vars_input),
+                    constraints=_get_constraints(param, vars_input),
                     method=method,
-                    tol=tol / 10,
+                    jac=lambda x: _get_jac_val(x, param),
+                    tol=tol,
                     )
 
-def _get_obj_val(var: dict, param: dict) -> float:
-    _, obj, dt = _get_obj(var, param)
-    print('Obj:', "{:.4f}".format(-obj), '  Solve time:', "{:.2f}".format(dt), '  Vars:', ["{:.6f}".format(v) for v in var], '  Ref:', param['refrigerant'])    
-    return obj 
-
-def _get_obj(var: dict, param: dict) -> any:
+def _get_opti_obj(vars: list[float], param: dict) -> float:
     hp: TRHP
+    dt: float
+    hp, dt = solve_single_case(param | _get_var_kwargs(vars, param))
+    obj = _get_obj_val(hp, param)
+    # if obj < 0:
+    #     hp.compute_jac = True
+    #     jac, dt2 = _get_jac_val(hp, vars, param)
+    # else:
+    #     jac, dt2 = np.zeros(len(vars)), 0.0
+    print('Obj:', "{:.3f}".format(-obj), '  Solve time:', "{:.3f}".format(dt), '  Vars:', ["{:.3f}".format(v) for v in vars], '  Ref:', param['refrigerant'])    
+
+    return obj
+
+def _get_obj_val(hp: TRHP, param: dict) -> any:
     COP: float
     P: float
-    COP_0: float = param['result_parameters']['COP_0']
-    P_0: float   = param['result_parameters']['P_0']
-    k: float     = param['result_parameters']['weight']
-    
-    hp, dt = solve_single_case(
-        _get_hp_args(var, param)
-        )
+    COP_0: float = param['additional_obj']['COP_0']
+    P_0: float   = param['additional_obj']['P_0']
+    k: float     = param['additional_obj']['weight']
     COP, P = [hp.COP, hp.comp_discharge.pressure] if hp.feasible else [-np.inf, 0.0]
     obj = -(COP / COP_0) * k + (P / P_0 - 2) * (1 - k) 
-    return hp, obj, dt
+    return obj
 
-def _get_hp_args(var: list[float], param) -> dict[str, float]:
-    if param['n_comp'] > 3:
-        raise ValueError("Number of compressors must be 1, 2 or 3.")     
-    
-    d_var = {'dT_phx1_cold': var[0]}
-    if param['n_comp'] > 1:
-        d_var['dT_phx2_cold'] = var[1]
-    if param['n_comp'] > 2:
-        d_var['dT_phx3_cold'] = var[2]
-    if param['comp_PR_uniform'] == False and param['n_comp'] > 1:
-        if param['n_comp'] == 2:
-            d_var['comp2_power_frac'] = var[-1]
-        elif param['n_comp'] == 3:
-            d_var['comp2_power_frac'] = var[-2]
-            d_var['comp3_power_frac'] = var[-1]
-
-    return param | d_var
+def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
+    i: int = 0
+    d_var = dict()
+    for key in param['additional_obj']['vars_input']:
+        d_var[key] = var[i]
+        i += 1
+    return d_var
 
 @time_func
 def solve_single_case(args) -> TRHP:
@@ -275,20 +296,39 @@ def solve_single_case(args) -> TRHP:
         hp = solve_heat_pump_model(hp)
     return hp
 
+# @time_func
+def _get_jac_val(vars: list[float], param: dict):
+
+    def _get_jac_mat_ele(vars, hp):
+        kwargs = _get_var_kwargs(vars, param)
+        for key in kwargs:
+            setattr(hp, key, kwargs[key])
+        return _get_obj_val(solve_heat_pump_model(hp), param)
+
+    hp: TRHP
+    hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
+    obj = _get_obj_val(hp, param)
+    if obj < 0:
+        hp.compute_jac = True
+        eps = np.sqrt(np.finfo(float).eps) * vars * 10
+        return approx_fprime(vars, _get_jac_mat_ele, eps, hp)
+    else:
+        return np.zeros(len(vars)), 0.0
+
 def _get_results_summary(result, param) -> dict:
     hp: TRHP
-    hp, obj, _ = _get_obj(result.x, param)
+    hp, _ = solve_single_case(param | _get_var_kwargs(result.x, param))
+    obj = _get_obj_val(hp, param)
     hp.get_summary()
     hp.output.update({
-        'Weight:' : param['result_parameters']['weight'], 
-        'COP_0:' : param['result_parameters']['COP_0'],
-        'P_0:' : param['result_parameters']['P_0'],
-        'Obj function:' : obj
-    })
-    hp.output.update({
+        'Weight:' : param['additional_obj']['weight'], 
+        'COP_0:' : param['additional_obj']['COP_0'],
+        'P_0:' : param['additional_obj']['P_0'],
+        'Obj function:' : obj,
         'Iterations:' : result.nfev,
         'Message:' : result.message,
-        'Success:' : result.success
+        'Success:' : result.success,
+        'xi' : result.x,
     })
     return hp.output
 
@@ -308,9 +348,18 @@ def _get_unique_f_suffix(param) -> str:
     # self.fld_name, self.fld_composition, self.n_components, self.iMass
 
     for ele in param:    
-        if ele != 'result_parameters' and ele != 'refrigerant':
+        if ele != 'additional_obj' and ele != 'refrigerant':
             suffix = suffix + '-' + "{:.0f}".format(param[ele])
     return suffix
+
+def _get_results_report(param, result, dt, results_ls) -> list:
+    if result.success:
+        res = _get_results_summary(result, param)
+        fsuffix = _get_unique_f_suffix(param)
+        _print_results(res, fsuffix)
+        print('Time to optimise: ', dt)
+        results_ls.append(res)  
+    return results_ls
 
 def _print_results(results: dict, fsuffix: str) -> None:
     print_result_to_terminal(results)

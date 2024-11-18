@@ -73,7 +73,7 @@ class PropertyPackage:
         elif propsIn_str == 'PT':
             molar_props = prop1 * 1000, prop2 + self.TC_to_K
         elif propsIn_str == 'TP':
-            molar_props = prop1 + self.TC_to_K, prop2 + self.TC_to_K * 1000
+            molar_props = prop1 + self.TC_to_K, prop2 * 1000
         elif propsIn_str == 'PQ':
             molar_props = prop1 * 1000, prop2
         elif propsIn_str == 'QP':

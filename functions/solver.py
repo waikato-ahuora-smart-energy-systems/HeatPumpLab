@@ -7,6 +7,8 @@ from components import GasCooler
 from streams import MassStream
 from scipy.optimize import root_scalar, minimize
 from functions.readWriteOutput import print_result_to_csv
+from functions.graph import plot_driving_force
+from math import log, exp
 import numpy as np
 
 
@@ -17,16 +19,12 @@ def solve_heat_pump_model(hp: TRHP) -> TRHP:
         if hp.debug:
             hp.get_cycle_plot()
 
-        if (abs(hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet) > 0.1 and _check_hp_model_convergance(hp)):
-            r = root_scalar(
-                            f=_find_evap_inlet_temperature_offset,
-                            method='brentq',
-                            x0=hp.Tref_evap_outlet,
-                            bracket=(hp.Tref_evap_outlet, hp.T_source_in - hp.dTmin_phx),
-                            xtol=hp.tol,
-                            args=(hp),
-                            )
-            hp.Tref_evap_outlet = r['root']
+        dt_offset = hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
+        if (abs(dt_offset) > 0.1 and _check_hp_model_convergance(hp)):
+            while abs(_find_evap_inlet_temperature_offset(hp.evaporator.sink_out.temperature - dt_offset, hp)) > 1e-6:
+                dt_offset = hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
+
+            hp.Tref_evap_outlet = hp.Tref_evap_inlet + dt_offset
             hp.evaporator.sink_out.props_in_ab('TQ', hp.Tref_evap_outlet, 1.0)
             hp = _find_hp_with_min_discharge_pressure(hp)
 
@@ -57,6 +55,7 @@ def _find_evap_inlet_temperature_offset(Tref_evap_outlet: float, hp: TRHP) -> fl
 
 def _find_hp_with_min_discharge_pressure(hp: TRHP) -> TRHP:
     bnds, x0, hp.feasible, bnd_val = _get_discharge_pressure_bounds(hp)
+    hp.comp_discharge.pressure_bnds = bnds
     if hp.feasible == True:
         r = root_scalar(f=_find_current_gc_dtmin_offset, #find the gas discharge pressure resulting in the target dtmin
                         method='brentq', 
@@ -80,30 +79,47 @@ def _get_discharge_pressure_bounds(hp: TRHP) -> list[tuple[float, float], float,
     dt_neg: float
     dt_plus: float
     P_i: float
-
     # Positive dtmin is P_ub and negative dtmin is P_lb
-    P_ub = hp.comp_discharge.pressure * 2.0
-    dt_plus = _find_current_gc_dtmin_offset(P_ub, hp)
-    P_lb = hp.compressors[0].flow_in.pressure * 1.1 
-    dt_neg = _find_current_gc_dtmin_offset(P_lb, hp)
+    if hp.comp_discharge.pressure_bnds is not None:
+        if hp.compute_jac == False:
+            P_lb, P_ub = hp.comp_discharge.pressure_bnds
+        else:
+            P_lb, P_ub = hp.comp_discharge.pressure * 0.995, hp.comp_discharge.pressure * 1.005
+    else:
+        P_ub, P_lb = [hp.comp_discharge.pressure * i for i in (2.0, 0.5)]
+    dt_neg, dt_plus = [_find_current_gc_dtmin_offset(P, hp) for P in (P_lb, P_ub)]
 
-    def _recursive_find_bnds(P_suction: float, P_0: float, dt_0: float, P_1: float, dt_1: float, step: float, sign: int, i: int):
-        if dt_0 * sign > 1.0:
-            dt_1 = dt_0
-            P_1 = P_0
-        P_0 = max(P_suction + (P_0 - P_suction) * step, P_suction)
-        dt_0 = _find_current_gc_dtmin_offset(P_0, hp)
-        if (dt_0 * sign < -1.0 or i >= 100):
-            return P_0, dt_0, P_1, dt_1  
+    def _recursive_find_bnds(P_suction: float, P_ub: float, dt_plus: float, P_lb: float, dt_neg: float, step: float, i: int):
+        if dt_plus < 0.0:
+            dt_neg = dt_plus
+            P_lb = P_ub
+        P_ub = max(P_suction + (P_ub - P_suction) * step, P_suction)
+        dt_plus = _find_current_gc_dtmin_offset(P_ub, hp)
+        if (dt_plus < 0.0 and i < 100):
+            return _recursive_find_bnds(P_suction, P_ub, dt_plus, P_lb, dt_neg, step, i+1)
         else: 
-            return _recursive_find_bnds(P_suction, P_0, dt_0, P_1, dt_1, step, sign, i+1)
-
+            return P_ub, dt_plus, P_lb, dt_neg
+            
     if dt_plus < 0.0:
-        P_ub, dt_plus, P_lb, dt_neg = _recursive_find_bnds(hp.comp1.flow_in.pressure, P_ub, dt_plus, P_lb, dt_neg, 1.5, -1, 0)
+        P_ub, dt_plus, P_lb, dt_neg = _recursive_find_bnds(hp.comp1.flow_in.pressure, P_ub, dt_plus, P_lb, dt_neg, 1.5, 0)
     
+    if dt_neg > 0.0:
+        hp = _do_sequential_iterative_cycle_analysis(P_ub, hp)
+        hp.compressors[-1].flow_out.props_in_ab(
+            input_str='TS', 
+            prop1=(hp.T_air_tar + hp.dT_GC_min_tar / 2), 
+            prop2=hp.compressors[-1].flow_out.entropy
+            )
+        P_lb = hp.compressors[-1].flow_out.pressure
+        dt_neg = _find_current_gc_dtmin_offset(P_lb, hp)
+
+    if hp.comp_discharge.pressure < P_lb or hp.comp_discharge.pressure > P_ub:
+        P_i = exp( log(P_lb) - dt_neg / (dt_plus - dt_neg) * (log(P_ub) - log(P_lb)) )
+    else:
+        P_i = hp.comp_discharge.pressure
+
     if abs(dt_plus * dt_neg) == -dt_plus * dt_neg and abs(dt_plus * dt_neg) > 0.0:
         feasible = True
-        P_i = P_lb - dt_neg / (dt_plus - dt_neg) * (P_ub - P_lb)
 
     return (P_lb, P_ub), P_i, feasible, (dt_plus, dt_neg)
 
@@ -129,6 +145,9 @@ def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: TRHP) -> list[list[flo
         dtmin_ls.append(_find_gc_dt_approaches(gc))                       # Pinch in the middle of the gc
         dtmin_ls.append([gc.source_out.temperature - gc.sink_in.temperature, 0.0])  # Pinch on the cold side of the gc
 
+    if hp.debug:
+        plot_driving_force(hp.gas_coolers, dtmin=hp.dT_GC_min_tar)
+        
     return dtmin_ls
 
 def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: TRHP) -> TRHP:
@@ -185,7 +204,8 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
     gc.source_pinch.pressure = gc.source_out.pressure
     gc.sink_pinch.pressure = gc.sink_in.pressure
 
-    i_max = 8
+    i_max = 8 if gc.pinch_length is None else 1
+    
     dtmin_len = []
     jac_len = []
     for i in range(i_max + 1):
@@ -201,10 +221,12 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
     i_ub = min(min_pos + 1, i_max)
     Q_ub = (gc.duty * i_ub / i_max)
     jac_ub = jac_len[i_ub]
+       
     
     if  (jac_ub > 0.0 or jac_lb < 0.0 ) and gc.duty >= 0.0: # jac_ub > 0.0 implies converging temperature profiles from hot-side; jac_lb < 0.0 implies converging temperature profiles from cold-side
-        r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='TNC', x0=[gc.duty / 2], bounds=[(Q_lb, Q_ub)], jac=True) # TNC L-BFGS-B
+        r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[(Q_lb + Q_ub) / 2], bounds=[(Q_lb, Q_ub)], jac=True) # TNC L-BFGS-B
         pinch_point = [r['fun'], r['x'] / gc.duty]
+        gc.pinch_length = r['x'] / gc.duty
     else:
         pinch_point = min(
             [_calc_dtmin_at_given_point(gc.source_in, gc.sink_out), 1.0], 
