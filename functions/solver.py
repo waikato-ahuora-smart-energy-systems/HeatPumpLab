@@ -64,9 +64,9 @@ def _find_hp_with_min_discharge_pressure(hp: TRHP) -> TRHP:
                         xtol=hp.tol,
                         args=(hp),
                         )
-        hp = _do_sequential_iterative_cycle_analysis(r['root'], hp)
-        hp = _update_pinch_props_for_gcs(P_comp_out=r['root'], hp=hp)    
-        hp.converged = r['converged']
+        hp = _do_sequential_iterative_cycle_analysis(r.root, hp)
+        hp = _update_pinch_props_for_gcs(P_comp_out=r.root, hp=hp)    
+        hp.converged = r.converged
     else:
         _print_failed_to_solve_report(hp)
         raise Exception("Infeasible pressure bounds. The failed case has been recorded.")

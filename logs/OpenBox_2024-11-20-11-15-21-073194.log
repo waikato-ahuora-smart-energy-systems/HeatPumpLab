@@ -1,0 +1,2 @@
+[2024-11-20 11:15:21,074][OpenBox][INFO][color_logger.py:203] Logfile: /Users/timothyw/Github Local/Transcritical-Recuperative-Heat-Pump/logs/OpenBox_2024-11-20-11-15-21-073194.log
+[2024-11-20 11:15:21,081][OpenBox][INFO][generic_advisor.py:227] [BO auto selection]  acq_type: ei. acq_optimizer_type: random_scipy.

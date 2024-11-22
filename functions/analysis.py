@@ -8,8 +8,9 @@ from functions.cases import get_cases_to_solve
 from functions.readWriteOutput import print_result_to_terminal, print_result_to_csv, transfer_temp_files_to_results, read_csv_to_results
 from functions.decorator_functions import time_func
 from concurrent.futures import ProcessPoolExecutor as pool
-# from scipy.optimize import shgo as glb_opt_mthd, LinearConstraint, minimize
-from scipy.optimize import shgo as glb_opt_mthd, LinearConstraint, minimize, approx_fprime
+from scipy.optimize import dual_annealing as glb_min, LinearConstraint, minimize as loc_min, approx_fprime
+# from openbox import Optimizer, space as sp
+# from bayes_opt import BayesianOptimization
 import numpy as np, os
 
 def analyse_single_case():
@@ -127,38 +128,23 @@ def analyse_cases_in_parallel(file_name: str = 'results/TRHP_results', n_cpu: in
     # Use parallel processing distributed over all cores to speed up the analysis
     cases: list        = get_cases_to_solve(file_name)
     print(len(cases))
-    _optimise_case_set(cases[0])
-    # executor: pool     = pool(max_workers=n_cpu)
-    # results: list[any] = [executor.submit(_optimise_case_set, case) for case in cases]
-    # executor.shutdown()
-    # transfer_temp_files_to_results(file_name)
+    # _optimise_case(cases[0])
+    executor: pool     = pool(max_workers=n_cpu)
+    results: list[any] = [executor.submit(_optimise_case, case) for case in cases]
+    executor.shutdown()
+    transfer_temp_files_to_results(file_name)
 
-def _optimise_case_set(case: dict) -> None:
+def _optimise_case(case: dict) -> None:
     tol: float = 1e-5
-    method: str = 'L-BFGS-B' #'SLSQP' 'L-BFGS-B' 'trust-constr'
-    T_air_tar_ls: list = case['T_air_tar']
-    results_ls: list = case['results']
-    start: int = len(results_ls)
-    end: int = len(T_air_tar_ls)
-
-    case.pop('results')
-    param: dict = case
-    vars_input = _get_variable_input_data(param)
-    for i in range(start, end):
-        param['T_air_tar'] = T_air_tar_ls[i]
-        param['additional_obj']['vars_input'] = vars_input
-        hp, _ = solve_single_case( param | _get_var_kwargs(_get_initial_val(vars_input), param) )
-        param['additional_obj']['COP_0'] = hp.COP
-        param['additional_obj']['P_0'] = hp.comp_discharge.pressure
-        
-        if i == 0:    
-            result, dt = _get_global_optimum(param, vars_input, method, tol)
-        else:
-            vars_input = _update_initial_val(vars_input, results_ls[i-1]['xi'])
-            xi = _get_initial_val(vars_input)
-            result, dt = _get_local_optima(param, vars_input, method, tol, xi)
-
-        results_ls = _get_results_report(param, result, dt, results_ls)
+    dt: float = 0.0
+    print_result_to_terminal(case)
+    vars_input = _get_variable_input_data(case)
+    case['additional_obj']['vars_input'] = vars_input
+    hp, _ = solve_single_case( case | _get_var_kwargs(_get_initial_val(vars_input), case) )
+    case['additional_obj']['COP_0'] = hp.COP
+    case['additional_obj']['P_0'] = hp.comp_discharge.pressure
+    result, dt = _get_global_optimum(case, vars_input, tol)
+    result = _get_results_report(case, result, dt)
 
 def _get_variable_input_data(param: dict, x: list =None) -> dict:
     #Define the bounds of the optimisation variables 
@@ -214,12 +200,12 @@ def _get_variable_input_data(param: dict, x: list =None) -> dict:
 def _get_initial_val(vars_input: dict) -> list:
     return [vars_input[key]['xi'] for key in vars_input]
 
-def _update_initial_val(vars_input: dict, prev_x0):
-    i: int = 0
+def _update_initial_val(vars_input: dict, prev_res):
+    vi = dict()
     for key in vars_input:
-        vars_input[key]['xi'] = prev_x0[i]
-        i += 1
-    return vars_input
+        vi[key] = {'xi'   : float(prev_res[key]),
+                   'bnds' : vars_input[key]['bnds']}
+    return vi
 
 def _get_bounds(vars_input: dict) -> list:
     return [vars_input[key]['bnds'] for key in vars_input]
@@ -229,56 +215,63 @@ def _get_constraints(param: dict, vars_input: dict):
     return LinearConstraint(A=m, lb=0.0, ub=(param['T_air_tar'] - param['T_air_inlet']) * 2/3)   
 
 @time_func
-def _get_global_optimum(param: dict, vars_input: dict, method: str, tol: float) -> dict:
-    return glb_opt_mthd(func=lambda x: _get_opti_obj(x, param), 
-                        bounds=_get_bounds(vars_input),
-                        constraints=_get_constraints(param, vars_input),
-                        workers=1,
-                        iters=4,
-                        options={'f_tol': tol,
-                                 'jac'  : lambda x: _get_jac_val(x, param),
-                                 },
-                        minimizer_kwargs={
-                            'method' : method,
-                            'bounds' : _get_bounds(vars_input),
-                            'options': {'xtol': tol},
-                            }
-                        )
+def _get_global_optimum(param: dict, vars_input: dict, tol: float) -> dict:
+    return glb_min(func=lambda x: _get_obj(x, param), 
+                   x0=_get_initial_val(vars_input),
+                   bounds=_get_bounds(vars_input),
+                   minimizer_kwargs={
+                        'method' : 'L-BFGS-B',
+                        'bounds' : _get_bounds(vars_input),
+                        'jac'    : lambda x: _get_jac(x, param),
+                   },
+                   no_local_search=False,
+                   maxiter=100,
+                   )
 
 @time_func
-def _get_local_optima(param: dict, vars_input: dict, method: str, tol: float, xi: float) -> dict:
-    return minimize(fun=lambda x: _get_opti_obj(x, param), 
-                    x0=xi,
+def _get_local_optimum(param: dict, vars_input: dict, tol: float) -> dict:
+    return loc_min(fun=lambda x: _get_obj(x, param), 
+                    x0=_get_initial_val(vars_input),
                     bounds=_get_bounds(vars_input),
-                    constraints=_get_constraints(param, vars_input),
-                    method=method,
-                    jac=lambda x: _get_jac_val(x, param),
+                    # constraints=_get_constraints(param, vars_input),
+                    method='SLSQP', #'SLSQP' 'L-BFGS-B'
+                    # jac=lambda x: _get_jac(x, param),
                     tol=tol,
                     )
 
-def _get_opti_obj(vars: list[float], param: dict) -> float:
+def _get_obj(vars: list[float], param: dict) -> float:
     hp: TRHP
     dt: float
     hp, dt = solve_single_case(param | _get_var_kwargs(vars, param))
-    obj = _get_obj_val(hp, param)
-    # if obj < 0:
-    #     hp.compute_jac = True
-    #     jac, dt2 = _get_jac_val(hp, vars, param)
-    # else:
-    #     jac, dt2 = np.zeros(len(vars)), 0.0
-    print('Obj:', "{:.3f}".format(-obj), '  Solve time:', "{:.3f}".format(dt), '  Vars:', ["{:.3f}".format(v) for v in vars], '  Ref:', param['refrigerant'])    
+    obj = _compute_obj(hp, param)
+    print('Obj:', "{:.3f}".format(obj), '  Solve time:', "{:.3f}".format(dt), '  Vars:', ["{:.3f}".format(v) for v in vars], '  Ref:', param['refrigerant'])
+    return -obj * 1000
 
-    return obj
-
-def _get_obj_val(hp: TRHP, param: dict) -> any:
+def _compute_obj(hp: TRHP, param: dict) -> float:
     COP: float
     P: float
     COP_0: float = param['additional_obj']['COP_0']
     P_0: float   = param['additional_obj']['P_0']
     k: float     = param['additional_obj']['weight']
     COP, P = [hp.COP, hp.comp_discharge.pressure] if hp.feasible else [-np.inf, 0.0]
-    obj = -(COP / COP_0) * k + (P / P_0 - 2) * (1 - k) 
-    return obj
+    return (COP / COP_0) * k - (P / P_0 - 2) * (1 - k) 
+
+def _get_jac(vars: list[float], param: dict):
+    hp: TRHP
+    hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
+    obj = _compute_obj(hp, param)
+    if obj < 0:
+        hp.compute_jac = True
+        eps = np.sqrt(np.finfo(float).eps) * vars * 10
+        return approx_fprime(vars, _compute_jac, eps, hp, param)
+    else:
+        return np.zeros(len(vars))
+
+def _compute_jac(vars, hp, param):
+    kwargs = _get_var_kwargs(vars, param)
+    for key in kwargs:
+        setattr(hp, key, kwargs[key])
+    return _compute_obj(solve_heat_pump_model(hp), param)
 
 def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
     i: int = 0
@@ -296,39 +289,30 @@ def solve_single_case(args) -> TRHP:
         hp = solve_heat_pump_model(hp)
     return hp
 
-# @time_func
-def _get_jac_val(vars: list[float], param: dict):
+def _get_results_report(param: dict, result: dict, dt: float) -> list:
+    if result.success:
+        res = _get_results_summary(result, param, dt)
+        fsuffix = _get_unique_f_suffix(param)
+        _print_results(res, fsuffix)
+        print('Time to optimise:', dt)
 
-    def _get_jac_mat_ele(vars, hp):
-        kwargs = _get_var_kwargs(vars, param)
-        for key in kwargs:
-            setattr(hp, key, kwargs[key])
-        return _get_obj_val(solve_heat_pump_model(hp), param)
+def _print_results(results: dict, fsuffix: str) -> None:
+    print_result_to_terminal(results)
+    print_result_to_csv(output=results, suffix=fsuffix)    
 
-    hp: TRHP
-    hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
-    obj = _get_obj_val(hp, param)
-    if obj < 0:
-        hp.compute_jac = True
-        eps = np.sqrt(np.finfo(float).eps) * vars * 10
-        return approx_fprime(vars, _get_jac_mat_ele, eps, hp)
-    else:
-        return np.zeros(len(vars)), 0.0
-
-def _get_results_summary(result, param) -> dict:
-    hp: TRHP
+def _get_results_summary(result, param, dt: float =None) -> dict:
     hp, _ = solve_single_case(param | _get_var_kwargs(result.x, param))
-    obj = _get_obj_val(hp, param)
+    obj = _compute_obj(hp, param)
     hp.get_summary()
     hp.output.update({
-        'Weight:' : param['additional_obj']['weight'], 
-        'COP_0:' : param['additional_obj']['COP_0'],
-        'P_0:' : param['additional_obj']['P_0'],
-        'Obj function:' : obj,
-        'Iterations:' : result.nfev,
-        'Message:' : result.message,
-        'Success:' : result.success,
-        'xi' : result.x,
+        'Weight' : param['additional_obj']['weight'], 
+        'COP_0' : param['additional_obj']['COP_0'],
+        'P_0' : param['additional_obj']['P_0'],
+        'Obj_function' : obj,
+        'Iterations' : result.nfev,
+        'Message' : result.message,
+        'Success' : result.success,
+        'Time_to_optimise' : dt,
     })
     return hp.output
 
@@ -345,23 +329,7 @@ def _get_unique_f_suffix(param) -> str:
             if i + 1 < len(fld_comp): 
                 suffix += '*'
 
-    # self.fld_name, self.fld_composition, self.n_components, self.iMass
-
     for ele in param:    
         if ele != 'additional_obj' and ele != 'refrigerant':
             suffix = suffix + '-' + "{:.0f}".format(param[ele])
     return suffix
-
-def _get_results_report(param, result, dt, results_ls) -> list:
-    if result.success:
-        res = _get_results_summary(result, param)
-        fsuffix = _get_unique_f_suffix(param)
-        _print_results(res, fsuffix)
-        print('Time to optimise: ', dt)
-        results_ls.append(res)  
-    return results_ls
-
-def _print_results(results: dict, fsuffix: str) -> None:
-    print_result_to_terminal(results)
-    print_result_to_csv(output=results, suffix=fsuffix)    
-

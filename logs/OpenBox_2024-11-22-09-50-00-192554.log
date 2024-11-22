@@ -1,0 +1,25 @@
+[2024-11-22 09:50:00,193][OpenBox][INFO][color_logger.py:203] Logfile: /Users/timothyw/Github Local/Transcritical-Recuperative-Heat-Pump/logs/OpenBox_2024-11-22-09-50-00-192554.log
+[2024-11-22 09:50:00,200][OpenBox][INFO][generic_advisor.py:227] [BO auto selection]  acq_type: ei. acq_optimizer_type: random_scipy.
+[2024-11-22 09:50:00,383][OpenBox][INFO][html_visualizer.py:462] Please open the html file to view visualization result: file:///Users/timothyw/Github Local/Transcritical-Recuperative-Heat-Pump/logs/history/OpenBox/OpenBox_2024-11-22-09-50-00-343320.html
+[2024-11-22 09:50:00,997][OpenBox][INFO][generic_smbo.py:310] Iter 1, objectives: [1090.282778290991].
+[2024-11-22 09:50:01,191][OpenBox][INFO][generic_smbo.py:310] Iter 2, objectives: [1080.2703759173896].
+[2024-11-22 09:50:01,393][OpenBox][INFO][generic_smbo.py:310] Iter 3, objectives: [1109.7040097900515].
+[2024-11-22 09:50:02,525][OpenBox][INFO][generic_smbo.py:310] Iter 4, objectives: [1121.0188816029781].
+[2024-11-22 09:50:02,924][OpenBox][INFO][generic_smbo.py:310] Iter 5, objectives: [1081.1655462792796].
+[2024-11-22 09:50:03,515][OpenBox][INFO][generic_smbo.py:310] Iter 6, objectives: [1075.4169109357972].
+[2024-11-22 09:50:04,535][OpenBox][INFO][generic_smbo.py:310] Iter 7, objectives: [1073.0138958015987].
+[2024-11-22 09:50:05,345][OpenBox][INFO][generic_smbo.py:310] Iter 8, objectives: [1040.902571785167].
+[2024-11-22 09:50:06,188][OpenBox][INFO][generic_smbo.py:310] Iter 9, objectives: [1038.1074953909795].
+[2024-11-22 09:50:07,414][OpenBox][INFO][generic_smbo.py:310] Iter 10, objectives: [1086.644303548949].
+[2024-11-22 09:50:07,417][OpenBox][INFO][generic_advisor.py:467] Sample random config. rand_prob=0.100000.
+[2024-11-22 09:50:07,418][OpenBox][ERROR][history.py:232] Invalid observation: Observation(config=Configuration(values={
+  'comp2_power_frac': 0.5272173886425053,
+  'dT_gc_out_min_offset': 33.37216123955931,
+  'dT_phx1_cold': 89.07379095963938,
+  'dT_phx2_cold': 71.50411328025487,
+})
+, objectives=[-inf], trial_state=0, elapsed_time=0.00010514259338378906, create_time=2024-11-22 09:50:07.417973)
+Traceback (most recent call last):
+  File "/opt/anaconda3/envs/HTHP_env/lib/python3.11/site-packages/openbox/utils/history.py", line 219, in is_valid_observation
+    raise ValueError(f'invalid values (inf, nan) are not allowed in objectives in a SUCCESS trial, '
+ValueError: invalid values (inf, nan) are not allowed in objectives in a SUCCESS trial, got [-inf]

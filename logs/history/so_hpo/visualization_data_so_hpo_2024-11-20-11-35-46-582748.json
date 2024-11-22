@@ -1,0 +1,200 @@
+var info={
+  "data": {
+    "num_objectives": 1,
+    "num_constraints": 0,
+    "advance": false,
+    "line_data": [
+      {
+        "best": [
+          [
+            1,
+            -1.090283
+          ],
+          [
+            3,
+            -1.133289
+          ]
+        ],
+        "infeasible": [],
+        "feasible": [
+          [
+            2,
+            -1.076104
+          ],
+          [
+            4,
+            -1.099886
+          ],
+          [
+            5,
+            -1.067791
+          ]
+        ]
+      }
+    ],
+    "cons_line_data": [],
+    "cons_list_rev": [],
+    "parallel_data": {
+      "data": [
+        [
+          1,
+          0.5,
+          25.0,
+          50.0,
+          50.0,
+          -1.090283
+        ],
+        [
+          2,
+          0.25179552627823487,
+          0.7914444855430858,
+          2.0494340687772894,
+          98.74594218478488,
+          -1.076104
+        ],
+        [
+          3,
+          0.758792939488437,
+          19.448243886482054,
+          0.8495042458137037,
+          96.36314580937947,
+          -1.133289
+        ],
+        [
+          4,
+          0.2455796165745791,
+          10.148603406643748,
+          77.22293920842783,
+          52.40631817559248,
+          -1.099886
+        ],
+        [
+          5,
+          0.613143597808643,
+          49.9744966080638,
+          1.1815859355086555,
+          75.35461850521153,
+          -1.067791
+        ]
+      ],
+      "schema": [
+        "Uid",
+        "comp2_power_frac",
+        "dT_gc_out_min_offset",
+        "dT_phx1_cold",
+        "dT_phx2_cold",
+        "Objs 1"
+      ],
+      "visualMap": {
+        "min": 1,
+        "max": 5,
+        "dimension": 0
+      }
+    },
+    "table_list": [
+      [
+        1,
+        [
+          -1.090283
+        ],
+        null,
+        {
+          "comp2_power_frac": 0.5,
+          "dT_gc_out_min_offset": 25.0,
+          "dT_phx1_cold": 50.0,
+          "dT_phx2_cold": 50.0
+        },
+        "'comp2_power_frac': 0.5, 'dT_gc_ou",
+        0,
+        0.186
+      ],
+      [
+        2,
+        [
+          -1.076104
+        ],
+        null,
+        {
+          "comp2_power_frac": 0.25179552627823487,
+          "dT_gc_out_min_offset": 0.7914444855430858,
+          "dT_phx1_cold": 2.0494340687772894,
+          "dT_phx2_cold": 98.74594218478488
+        },
+        "'comp2_power_frac': 0.251795526278",
+        0,
+        0.192
+      ],
+      [
+        3,
+        [
+          -1.133289
+        ],
+        null,
+        {
+          "comp2_power_frac": 0.758792939488437,
+          "dT_gc_out_min_offset": 19.448243886482054,
+          "dT_phx1_cold": 0.8495042458137037,
+          "dT_phx2_cold": 96.36314580937947
+        },
+        "'comp2_power_frac': 0.758792939488",
+        0,
+        0.168
+      ],
+      [
+        4,
+        [
+          -1.099886
+        ],
+        null,
+        {
+          "comp2_power_frac": 0.2455796165745791,
+          "dT_gc_out_min_offset": 10.148603406643748,
+          "dT_phx1_cold": 77.22293920842783,
+          "dT_phx2_cold": 52.40631817559248
+        },
+        "'comp2_power_frac': 0.245579616574",
+        0,
+        0.152
+      ],
+      [
+        5,
+        [
+          -1.067791
+        ],
+        null,
+        {
+          "comp2_power_frac": 0.613143597808643,
+          "dT_gc_out_min_offset": 49.9744966080638,
+          "dT_phx1_cold": 1.1815859355086555,
+          "dT_phx2_cold": 75.35461850521153
+        },
+        "'comp2_power_frac': 0.613143597808",
+        0,
+        0.155
+      ]
+    ],
+    "pareto_data": {},
+    "task_inf": {
+      "table_field": [
+        "Task Id",
+        "Advisor Type",
+        "Surrogate Type",
+        "Current Run",
+        "Max Runs",
+        "Max Runtime Per Trial"
+      ],
+      "table_data": [
+        "so_hpo",
+        "default",
+        "prf",
+        5,
+        1000,
+        null
+      ]
+    },
+    "importance_data": null,
+    "pred_label_data": null,
+    "grade_data": null,
+    "cons_pred_label_data": null
+  }
+};

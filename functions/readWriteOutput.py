@@ -42,7 +42,7 @@ def transfer_temp_files_to_results(file_name: str ='results/untitled') -> None:
     o: list[any]
 
     csv_file_list = glob(os.getcwd() + '/results/temp/*.csv')
-    for f in csv_file_list:
+    for f in reversed(csv_file_list):
         output = read_csv_to_results(file_name=f, file_ext='')
         for o in output:
             print_result_to_csv(output=o, file_name=file_name)

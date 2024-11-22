@@ -1,0 +1,15 @@
+[2024-11-20 11:16:06,972][OpenBox][INFO][color_logger.py:203] Logfile: /Users/timothyw/Github Local/Transcritical-Recuperative-Heat-Pump/logs/OpenBox_2024-11-20-11-16-06-971139.log
+[2024-11-20 11:16:06,978][OpenBox][INFO][generic_advisor.py:227] [BO auto selection]  acq_type: ei. acq_optimizer_type: random_scipy.
+[2024-11-20 11:16:13,010][OpenBox][INFO][generic_smbo.py:310] Iter 1, objectives: [-1.090282778290991].
+[2024-11-20 11:16:14,901][OpenBox][INFO][generic_smbo.py:310] Iter 2, objectives: [-1.082970508224903].
+[2024-11-20 11:16:16,395][OpenBox][ERROR][history.py:232] Invalid observation: Observation(config=Configuration(values={
+  'comp2_power_frac': 0.20243189264278938,
+  'dT_gc_out_min_offset': 47.07385277607619,
+  'dT_phx1_cold': 97.81152543581001,
+  'dT_phx2_cold': 64.93551518208191,
+})
+, objectives=[inf], trial_state=0, elapsed_time=1.492400884628296, create_time=2024-11-20 11:16:16.394987)
+Traceback (most recent call last):
+  File "/opt/anaconda3/envs/HTHP_env/lib/python3.11/site-packages/openbox/utils/history.py", line 219, in is_valid_observation
+    raise ValueError(f'invalid values (inf, nan) are not allowed in objectives in a SUCCESS trial, '
+ValueError: invalid values (inf, nan) are not allowed in objectives in a SUCCESS trial, got [inf]
