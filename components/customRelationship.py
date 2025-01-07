@@ -8,12 +8,13 @@ from scipy.optimize import root_scalar
 
 class CustomRelationship:
     converged: bool = False
+    r: bool = False
+
     def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9):
         self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
         self.relation = relation
-        r = False
 
     def solve(self):
         if self.relation == 0:
@@ -24,8 +25,8 @@ class CustomRelationship:
             r = self.Air_Mass_Flow()
         elif self.relation == 3:
             r = self.Airsource_Mass_Flow()
-        else:
-            pass
+        elif self.relation == 4:
+            r = self.Determine_EV_sm_outlet()
         self.converged = True
         return r
     
@@ -185,4 +186,50 @@ class CustomRelationship:
         self.target_obj[0].source_out.mass_flow = self.target_obj[0].source_in.mass_flow
         self.target_obj[0].source_in.props_in_mPT()
         return True
+
+    def Determine_EV_sm_outlet(self):
+        EV, SP = self.target_obj
+        Comp1, Econ, Comp_discharge, gc_2_dP_h = self.source_obj
+
+        EV.flow_in.pressure = Comp_discharge.pressure - gc_2_dP_h - Econ.dP_h
+        EV.flow_out.pressure = Comp1.flow_out.pressure + Econ.dP_c
+
+        # First estimate
+        if EV.flow_out.pressure < EV.flow_out.P_crit:
+            EV.flow_in.mass_flow = Comp1.flow_out.mass_flow * SP.r_ratio
+            Econ.source_out.mass_flow = Comp1.flow_out.mass_flow + EV.flow_in.mass_flow
+
+            EV.flow_out.quality = 0.001
+            EV.flow_out.props_in_mPQ()
+
+            h_EV = EV.flow_out.enthalpy
+
+            def _calc_dt_drop(h, F_in, F_out, dTmin):
+                F_in.enthalpy = h
+                F_in.props_in_mPH()
+                F_out.enthalpy = h
+                F_out.props_in_mPH()
+                return F_in.temperature - F_out.temperature - dTmin
+
+            h_min, h_max = EV.flow_out.enthalpy, Comp_discharge.enthalpy
+            if _calc_dt_drop(h_min, EV.flow_in, EV.flow_out, EV.dTmin) < 0.0:
+                r = root_scalar(f=lambda x: _calc_dt_drop(x, EV.flow_in, EV.flow_out, EV.dTmin), method='brentq', x0=h_min, bracket=[h_min, h_max])
+                h_EV = r.root
+    
+        else:
+            EV.flow_in.mass_flow = 0.0
+            Econ.source_out.mass_flow = Comp1.flow_out.mass_flow
+            h_EV = Comp_discharge.enthalpy
+
+
+        EV.flow_out.enthalpy = h_EV
+        EV.flow_out.props_in_mPH()
+
+        EV.flow_in.enthalpy = h_EV
+        EV.flow_in.props_in_mPH()
+
+        SP.flow_in.pressure = Comp_discharge.pressure - gc_2_dP_h
+        SP.flow_in.enthalpy = EV.flow_in.enthalpy
+        SP.flow_in.props_in_mPH()
         
+        pass

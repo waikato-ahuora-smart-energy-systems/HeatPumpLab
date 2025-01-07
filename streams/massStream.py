@@ -9,6 +9,7 @@ class MassStream():
     fluid: str
     pp_instance: str
     mass_flow: float
+    vol_flow: float
     pressure: float
     temperature: float
     enthalpy: float
@@ -103,6 +104,11 @@ class MassStream():
             self.PP.get_std_properties('PS', self.pressure, self.entropy, self.fld_composition)
         )           
 
+    def props_in_mPD(self) -> None:
+        self._update_props(
+            self.PP.get_std_properties('PD', self.pressure, self.density, self.fld_composition)
+        )  
+    
     def props_in_mTQ(self) -> None:
         self._update_props(
             self.PP.get_std_properties('TQ', self.temperature, self.quality, self.fld_composition)
@@ -123,12 +129,27 @@ class MassStream():
         self.density = props['D']
         self.specific_volume = 1 / self.density if self.density > 0.0 else 0.0
         self.heat_flow = self.enthalpy * self.mass_flow
+        self.vol_flow = self.specific_volume * self.mass_flow
 
     def props_extend(self):
         self.prandtl, self.viscosity, self.thermal_conductivity = self.PP.get_specified_properties('PRANDTL;VIS;TCX', 'PH', self.pressure, self.enthalpy)[0:3]
 
+    def get_Tsat(self, quality):
+        if self.pressure < self.P_crit:
+            return self.PP.get_std_properties('PQ', self.pressure, quality, self.fld_composition)['T']
+        else:
+            return self.PP.get_std_properties('PD', self.pressure, self.D_crit, self.fld_composition)['T']
+    
+    def get_Psat(self, quality):
+        return self.PP.get_std_properties('TQ', self.temperature, quality, self.fld_composition)['P']   
+
+    def get_hsat(self, quality):
+        if self.pressure < self.P_crit:
+            return self.PP.get_std_properties('PQ', self.pressure, quality, self.fld_composition)['h']  
+        else:
+            return self.PP.get_std_properties('PD', self.pressure, self.D_crit, self.fld_composition)['h']         
+
     def copy_fld_props(self, fld):
-        self.mass_flow = fld.mass_flow
         self.pressure = fld.pressure
         self.temperature = fld.temperature
         self.enthalpy = fld.enthalpy
@@ -137,6 +158,8 @@ class MassStream():
         self.quality = fld.quality
         self.density = fld.density
         self.specific_volume = fld.specific_volume
-        self.prandtl = fld.prandtl
-        self.viscosity = fld.viscosity
-        self.thermal_conductivity = fld.thermal_conductivity
+
+    def set_flows(self, mass_flow):
+        self.mass_flow = mass_flow
+        self.heat_flow = self.enthalpy * self.mass_flow
+        self.vol_flow = self.specific_volume * self.mass_flow

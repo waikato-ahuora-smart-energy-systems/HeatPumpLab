@@ -8,43 +8,34 @@ from components.common.commonHeatExchanger import BaseHeatExchanger
 from scipy.optimize import brentq
 
 class GasCooler(BaseHeatExchanger):
-    pinch_length = None
-    NTU = 0
-    c = 0
-    duty = 0
-    area = 0
-    converged = True
+    # #Initial guesses
+    # f_length = 0.5 # m
+    # depth = 1 # m
 
-    #Initial guesses
-    U = 0.1 # kW/[m^2 C]
-    eff = 0.8
-    f_length = 0.5 # m
-    depth = 1 # m
+    # #Model constants
+    # beta = 587 # m^2/m^3
+    # N_passes = 6
+    # face_velocity = 4 # m/
+    # gc = 9.81 #m/s
+    # length_longitudinal = 0.022 #m
+    # length_transverse = 0.0254 #m
 
-    #Model constants
-    beta = 587 # m^2/m^3
-    N_passes = 6
-    face_velocity = 4 # m/
-    gc = 9.81 #m/s
-    length_longitudinal = 0.022 #m
-    length_transverse = 0.0254 #m
-
-    #Constants air side 
-    sigma = 0.534
-    hydralic_diameter = 0.003632 #m
-    fin_conductivity = 237 #W/m°C - Al fin 
-    fin_thickness = 0.0003 #m
-    fin_diameter = 0.0102 #m
-    fin_area_per_total_area = 0.913 #m^2/m^2
+    # #Constants air side 
+    # sigma = 0.534
+    # hydralic_diameter = 0.003632 #m
+    # fin_conductivity = 237 #W/m°C - Al fin 
+    # fin_thickness = 0.0003 #m
+    # fin_diameter = 0.0102 #m
+    # fin_area_per_total_area = 0.913 #m^2/m^2
     
-    #Constants refrigerant side
-    tube_O_Diameter = 0.0102 #m
-    tube_I_Diameter = 0.00855 #m
-    tube_Spacing = 0.022 #m
-    tube_Conductivity = 16 #W/m°C - SS tube
-    #tube_thickness = 0.00165 #m
-    #tubes_per_pass = 4 #assumption
-    #gap_spacing = 0.0005 #m 
+    # #Constants refrigerant side
+    # tube_O_Diameter = 0.0102 #m
+    # tube_I_Diameter = 0.00855 #m
+    # tube_Spacing = 0.022 #m
+    # tube_Conductivity = 16 #W/m°C - SS tube
+    # tube_thickness = 0.00165 #m
+    # tubes_per_pass = 4 #assumption
+    # gap_spacing = 0.0005 #m 
 
     def __init__(self, source_fluid: str, sink_fluid: str, name='Gas cooler', dTmin=15.0, dP_h=0.0, dP_c=0.0, model='fixed hot temperature outlet', bypassed=False, converged=False, tol=1e-6):
         self.name = name

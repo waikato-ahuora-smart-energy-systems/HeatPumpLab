@@ -29,8 +29,8 @@ def solve_heat_pump_model(hp: TRHP) -> TRHP:
             hp = _find_hp_with_min_discharge_pressure(hp)
 
         hp.converged = _check_hp_model_convergance(hp)
-        hp.COP = _get_COP(hp)
-        hp.cycle_type = _get_hp_cycle_type(hp)
+        hp = _get_metrics(hp)
+        
         if hp.debug:
             hp.get_cycle_plot()
     except:
@@ -42,11 +42,35 @@ def solve_heat_pump_model(hp: TRHP) -> TRHP:
 def _check_hp_model_convergance(hp: TRHP) -> bool:
     return True if ( sum([c.power for c in hp.compressors]) > 0.0 and hp.converged == True and hp.feasible == True ) else False
 
-def _get_COP(hp: TRHP) -> float:
-    return sum([g.duty for g in hp.gas_coolers]) / sum([c.power for c in hp.compressors]) if hp.converged else -np.inf    
+def _get_metrics(hp: TRHP) -> TRHP:
 
-def _get_hp_cycle_type(hp: TRHP) -> str:
-    return 'Transcritical' if hp.comp_discharge.pressure > hp.comp_discharge.P_crit else 'Subcritical'
+    def _get_COP(hp: TRHP) -> float:
+        return sum([g.duty for g in hp.gas_coolers]) / sum([c.power for c in hp.compressors]) if hp.converged else 0.0   
+
+    def _get_SEC(hp: TRHP) -> float:
+        return sum([c.power for c in hp.compressors]) / (sum([g.duty for g in hp.gas_coolers]) - sum([c.power for c in hp.compressors])) if hp.converged else np.inf    
+
+    def _get_VHC(hp: TRHP) -> float:
+        return sum([g.duty for g in hp.gas_coolers]) / hp.comp1.flow_in.vol_flow if hp.converged else 0.0   
+
+    def _get_eDT(hp: TRHP) -> float:
+        eT_h_ave = sum([g.duty for g in hp.gas_coolers]) / sum([g.delta_entropy_src for g in hp.gas_coolers])
+        eT_c_ave = sum([e.duty for e in hp.evaporators]) / sum([e.delta_entropy_snk for e in hp.evaporators])
+        return eT_h_ave - eT_c_ave if hp.converged else 0.0  
+
+    def _get_SLE(hp: TRHP) -> float:
+        return hp.SEC / hp.eDT * 1000 if hp.converged else 0.0 
+
+    def _get_hp_cycle_type(hp: TRHP) -> str:
+        return 'Transcritical' if hp.comp_discharge.pressure > hp.comp_discharge.P_crit else 'Subcritical'
+
+    hp.COP = _get_COP(hp)
+    hp.SEC = _get_SEC(hp)
+    hp.VHC = _get_VHC(hp)
+    hp.eDT = _get_eDT(hp)
+    hp.SLE = _get_SLE(hp)
+    hp.cycle_type = _get_hp_cycle_type(hp)
+    return hp
 
 def _find_evap_inlet_temperature_offset(Tref_evap_outlet: float, hp: TRHP) -> float:
     hp.evaporator.sink_out.props_in_ab('TQ', Tref_evap_outlet, 1.0)
@@ -177,6 +201,12 @@ def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: TRHP) -> TRHP
             hp.tol * Q - abs(sum([g.duty for g in hp.gas_coolers]) - Q),    
         )
     hp = _set_gas_coolers_sink_temperatures(hp)
+    if hp.debug:
+        hp.get_cycle_plot(x_axis='s', y_axis='T')
+        hp.get_cycle_plot(x_axis='h', y_axis='P')
+        hp.get_cycle_plot(x_axis='h', y_axis='T')
+        pass
+
     return hp
 
 def _set_gas_coolers_sink_temperatures(hp: TRHP) -> TRHP:
@@ -198,42 +228,44 @@ def _set_gas_coolers_sink_temperatures(hp: TRHP) -> TRHP:
     return hp
 
 def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
-    pinch_point: list[float, float]
-    r: dict
-
     gc.source_pinch.pressure = gc.source_out.pressure
     gc.sink_pinch.pressure = gc.sink_in.pressure
 
-    i_max = 8 if gc.pinch_length is None else 1
-    
-    dtmin_len = []
-    jac_len = []
-    for i in range(i_max + 1):
-        dt_min, jac = _calc_pinch_dtmin_and_jac(Q=(gc.duty * i / i_max), gc=gc)
-        dtmin_len.append(dt_min)
-        jac_len.append(jac)
-    
-    min_pos = np.argmin(np.array(dtmin_len))
-    i_lb = max(min_pos - 1, 0)
-    Q_lb = (gc.duty * i_lb / i_max)
-    jac_lb = jac_len[i_lb]
+    r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='TNC', x0=[gc.duty / 2], bounds=[(0.0, gc.duty)], jac=True) # TNC L-BFGS-B
+    return [r['fun'], r['x'] / gc.duty]
 
-    i_ub = min(min_pos + 1, i_max)
-    Q_ub = (gc.duty * i_ub / i_max)
-    jac_ub = jac_len[i_ub]
+    # gc.pinch_length = r['x'] / gc.duty    
+
+    # i_max = 8 #if gc.pinch_length is None else 1
+    
+    # dtmin_len = []
+    # jac_len = []
+    # for i in range(i_max + 1):
+    #     dt_min, jac = _calc_pinch_dtmin_and_jac(Q=(gc.duty * i / i_max), gc=gc)
+    #     dtmin_len.append(dt_min)
+    #     jac_len.append(jac)
+    
+    # min_pos = np.argmin(np.array(dtmin_len))
+    # i_lb = max(min_pos - 1, 0)
+    # Q_lb = (gc.duty * i_lb / i_max)
+    # jac_lb = jac_len[i_lb]
+
+    # i_ub = min(min_pos + 1, i_max)
+    # Q_ub = (gc.duty * i_ub / i_max)
+    # jac_ub = jac_len[i_ub]
        
     
-    if  (jac_ub > 0.0 or jac_lb < 0.0 ) and gc.duty >= 0.0: # jac_ub > 0.0 implies converging temperature profiles from hot-side; jac_lb < 0.0 implies converging temperature profiles from cold-side
-        r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[(Q_lb + Q_ub) / 2], bounds=[(Q_lb, Q_ub)], jac=True) # TNC L-BFGS-B
-        pinch_point = [r['fun'], r['x'] / gc.duty]
-        gc.pinch_length = r['x'] / gc.duty
-    else:
-        pinch_point = min(
-            [_calc_dtmin_at_given_point(gc.source_in, gc.sink_out), 1.0], 
-            [_calc_dtmin_at_given_point(gc.source_out, gc.sink_in), 0.0]
-            )
+    # if  (jac_ub > 0.0 or jac_lb < 0.0 ) and gc.duty >= 0.0: # jac_ub > 0.0 implies converging temperature profiles from hot-side; jac_lb < 0.0 implies converging temperature profiles from cold-side
+    #     r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[(Q_lb + Q_ub) / 2], bounds=[(Q_lb, Q_ub)], jac=True) # TNC L-BFGS-B
+    #     pinch_point = [r['fun'], r['x'] / gc.duty]
+    #     gc.pinch_length = r['x'] / gc.duty
+    # else:
+    #     pinch_point = min(
+    #         [_calc_dtmin_at_given_point(gc.source_in, gc.sink_out), 1.0], 
+    #         [_calc_dtmin_at_given_point(gc.source_out, gc.sink_in), 0.0]
+    #         )
     
-    return pinch_point
+    # return pinch_point
 
 def _calc_pinch_dtmin_and_jac(Q: float, gc: GasCooler):
     gc = _calc_pinch_props_at_Q(Q, gc)

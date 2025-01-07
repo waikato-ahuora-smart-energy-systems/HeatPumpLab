@@ -13,6 +13,7 @@ class Compressor:
     overall_eff: float = 0.0
     shaft_work: float = 0.0
     power: float = 0.0 
+    delta_entropy: float = 0.0 
     motor_eff: float
     model_index: int
     model_coeffs: list[float] = []   
@@ -28,16 +29,18 @@ class Compressor:
         self.model_coeffs = self.set_model_coeff(model_index)
 
     def set_model_coeff(self, model_index: int) -> list[float]:    
-        available_model_coeffs = [[       1.0,   0.0,     0.0],  # Ideal compression
-                                  [(0.7/0.96),   0.0,     0.0],  # Typical isentropic efficiency
-                                  [      0.65, 0.015, -0.0015]]  # Compressor model constants (Wang & Cleland, 2018)       
+        available_model_coeffs = [['Proportional', 1.0],  # Ideal compression
+                                  ['Proportional', 0.7],  # Typical isentropic efficiency
+                                  ['Polynomial', 0.65 / self.motor_eff, 0.015, -0.0015]]  # Compressor model constants (Wang & Cleland, 2018)       
         return available_model_coeffs[model_index]
 
     def get_isentropic_efficiency(self) -> float:
         self.pressure_ratio = self.flow_out.pressure / self.flow_in.pressure
-        self.overall_eff = self.model_coeffs[0] + self.model_coeffs[1] * self.pressure_ratio + self.model_coeffs[2] * pow( self.pressure_ratio, 2 )
-        self.overall_eff = min(max(self.overall_eff, 0.0), 1.0)
-        return self.overall_eff / self.motor_eff
+        if self.model_coeffs[0] == 'Proportional':
+            shaft_eff = self.model_coeffs[1]
+        elif self.model_coeffs[0] == 'Polynomial':
+            shaft_eff = self.model_coeffs[1] + self.model_coeffs[2] * self.pressure_ratio + self.model_coeffs[3] * pow( self.pressure_ratio, 2 )
+        return min(max(shaft_eff, 0.0), 1.0)
         
     def get_compressor_power(self) -> float:
         self.flow_out_isen.pp_instance = self.flow_out.pp_instance
@@ -49,8 +52,11 @@ class Compressor:
         return self.shaft_work / self.motor_eff
     
     def solve(self) -> None:
+        self.flow_out.mass_flow = self.flow_in.mass_flow
         self.isentropic_eff = self.get_isentropic_efficiency()
+        self.overall_eff = self.isentropic_eff * self.motor_eff
         self.power = self.get_compressor_power()
+        self.delta_entropy = (self.flow_out.entropy - self.flow_in.entropy) * self.flow_in.mass_flow
         self.converged = True
 
     def get_graph_data(self, divisions: int =50) -> dict:

@@ -11,20 +11,44 @@ from functions.graph import plot_cycle, plot_driving_force
 from functions.readWriteOutput import print_result_to_terminal
 import numpy as np
 
-
 class HeatPump():
     gas_coolers: list
+    evaporators: list
     compressors: list
+    operations: list
+
     feasible: bool
     cycle_type: str = None
     converged: bool = False
     COP: np.float32 = -np.inf
+    SEC: np.float32 = np.inf
+    VHC: np.float32 = 0
+    eDT: np.float32 = 0
+    SLE: np.float32 = 0
+
     refrigerant: float
     source: float ='Water'
     sink: float ='Air'
     tol: float =1e-8
     debug: float =False
     output: dict
+
+    T_air_tar: float =200.0 
+    T_air_inlet: float =15.0 
+    dT_GC_min_tar: float =20.0 
+    dT_gc_out_min_offset: float =0.0
+    T_gc_out: float 
+    T_source_in: float =40.0 
+    Tref_evap_inlet: float =10.0
+    Tref_evap_outlet: float =10.0    
+    eff_motor: float =0.96 
+    ihx_on: int = 1
+    P_H_est: float =0.0
+    min_dT_ihx : float = 5.0
+    comp_model_index: int =1     
+
+    compute_jac: bool =False
+    additional_obj: float =None                
 
     def __init__(self) -> None:
         pass

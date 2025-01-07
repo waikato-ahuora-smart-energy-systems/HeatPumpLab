@@ -17,6 +17,7 @@ class BaseHeatExchanger:
     sink_pinch: MassStream 
     sink_out: MassStream
     sink_out_max: MassStream
+    pinch_length = None
     bypassed: bool = False
     converged: bool = False
     HX_Eff: float = 0.0
@@ -25,6 +26,8 @@ class BaseHeatExchanger:
     U: float = 0.0
     Area: float = 0.0
     duty: float = 0.0
+    delta_entropy_src: float = 0.0
+    delta_entropy_snk: float = 0.0
     dP_h: float = 0.0
     dP_c: float = 0.0
     variable_dP_model: bool = False
@@ -55,6 +58,10 @@ class BaseHeatExchanger:
 
             else:
                 self.get_performance()
+        
+        self.duty = self.sink_out.heat_flow - self.sink_in.heat_flow
+        self.delta_entropy_src = abs(self.source_in.entropy - self.source_out.entropy) * self.source_out.mass_flow
+        self.delta_entropy_snk = abs(self.sink_in.entropy - self.sink_out.entropy) * self.sink_out.mass_flow
         self.converged = True
 
     def get_performance(self):
@@ -159,11 +166,10 @@ class BaseHeatExchanger:
 
     def get_fixed_hot_duty_model(self):
         self.duty = self.source_in.heat_flow - self.source_out.heat_flow
-        self.source_out.pressure = self.source_out.pressure - self.dP_h
-        self.source_in.props_in_mPH()
+        self.source_out.pressure = self.source_in.pressure - self.dP_h
+        self.source_out.props_in_mPH()
 
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c
-        self.sink_out.enthalpy = self.sink_in.enthalpy + self.duty / self.sink_in.mass_flow
         self.sink_out.props_in_mPH()
 
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False

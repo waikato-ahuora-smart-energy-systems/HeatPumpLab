@@ -3,14 +3,14 @@ __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2021-2024'
 
-from functions import analyse_single_case, analyse_cases_in_parallel, analyse_unsolved_cases
-# import type_enforced 
+from functions import analyse_cases, optimise_cases, analyse_unsolved_cases, analyse_single_TEHP_case, analyse_single_case
 
-# @type_enforced.Enforcer
 def main():
+    # analyse_single_TEHP_case()
     # analyse_single_case()
     # analyse_unsolved_cases(debug=False)
-    analyse_cases_in_parallel(n_cpu=1)
+    analyse_cases()
+    # optimise_cases()
     
  
 if __name__=='__main__':

@@ -12,29 +12,39 @@ from components import Compressor, PlateHeatExchanger, GasCooler, ExpansionValve
 from streams import MassStream
 
 class TRHP(HeatPump):
-    T_air_tar: float =200.0 
-    T_air_inlet: float =15.0 
-    dT_GC_min_tar: float =20.0 
-    dT_gc_out_min_offset: float =0.0
-    T_gc_out: float 
-    T_source_in: float =40.0 
-    Tref_evap_inlet: float =10.0
-    Tref_evap_outlet: float =10.0
-    dTmin_phx: float =5.0
-    
-    min_dT_ihx : float = 5.0
-    n_comp: float =3 
+    n_comp: float =3
     comp_PR_uniform: float =False 
-    eff_motor: float =0.96 
-    dT_phx1_cold: float =0.0 
-    dT_phx2_cold: float =0.0 
-    dT_phx3_cold: float =0.0 
     comp1_power_frac: float =1.0
     comp2_power_frac: float =0.0 
     comp3_power_frac: float =0.0
-    P_H_est: float =0.0
-    compute_jac: bool =False
-    additional_obj: float =None    
+
+    comp1: Compressor
+    comp2: Compressor
+    comp3: Compressor
+
+    phx1: PlateHeatExchanger
+    phx2: PlateHeatExchanger
+    phx3: PlateHeatExchanger
+
+    gas_cooler1: GasCooler
+    gas_cooler2: GasCooler
+    gas_cooler3: GasCooler
+    gas_cooler4: GasCooler
+
+    ihx: PlateHeatExchanger
+    exp_valve: ExpansionValve
+    evaporator: Evaporator
+    evap_sup: PlateHeatExchanger
+
+    set_P_ints: CustomRelationship
+    set_phx1_dT_cold: SetRelationship
+    set_gc2_hot_out: SetRelationship
+    set_phx2_dT_cold: SetRelationship
+    set_gc3_hot_out: SetRelationship
+    set_phx3_dT_cold: SetRelationship
+    set_gc4_hot_out: SetRelationship
+
+    comp_discharge: MassStream
 
     def __init__(self, **d_args):
         for key, value in d_args.items():
@@ -55,6 +65,49 @@ class TRHP(HeatPump):
             'comp3_power_frac' : self.comp3_power_frac,
             'comp_PR_uniform' : self.comp_PR_uniform
             }
+    
+    def get_summary(self) -> dict[str, float | bool]:
+        self.output = {
+            #Headline results
+            'cycle_type' : self.cycle_type,
+            'COP' : self.COP,
+            'SEC' : self.SEC,
+            'VHC' : self.VHC,
+            'eDT' : self.eDT,
+            'SLE': self.SLE,
+            'Pmax' : self.comp_discharge.pressure * 1000,
+            'converged' : self.converged,
+            #Parameters
+            'refrigerant' : self.refrigerant,
+            'n_comp' : self.n_comp,
+            'T_source_in' : self.T_source_in,
+            'dT_GC_min_tar' : self.dT_GC_min_tar,
+            'T_air_inlet' : self.T_air_inlet,
+            'T_air_tar' : self.T_air_tar,
+            'comp_PR_uniform' : self.comp_PR_uniform,
+            'Tref_evap_inlet' : self.Tref_evap_inlet,
+            #Optmisation variables
+            'dT_phx1_cold' : self.dT_phx1_cold,
+            'dT_phx2_cold' : self.dT_phx2_cold,
+            'dT_phx3_cold' : self.dT_phx3_cold,
+            'comp1_power_frac' : self.comp1_power_frac, 
+            'comp2_power_frac' : self.comp2_power_frac, 
+            'comp3_power_frac' : self.comp3_power_frac,  
+            'dT_gc_out_min_offset' : self.dT_gc_out_min_offset,
+            #Additional results
+            'T_comp_discharge' : self.comp_discharge.temperature,
+            'T_gc_out' : self.T_gc_out,
+            'Tref_evap_outlet' : self.Tref_evap_outlet,
+            'P_evap_sink_in' : self.evaporator.sink_in.pressure * 1000,
+            'Comp_1_P_out' : self.comp1.flow_out.pressure * 1000,
+            'Comp_2_P_out' : self.comp2.flow_out.pressure * 1000 if self.n_comp > 1 else self.comp_discharge.pressure * 1000,
+            'Comp_3_P_out' : self.comp_discharge.pressure * 1000,
+            'PR_1' : self.comp1.pressure_ratio,
+            'PR_2' : self.comp2.pressure_ratio if self.n_comp > 1 else 1.0,
+            'PR_3' : self.comp3.pressure_ratio if self.n_comp > 2 else 1.0,
+            'Overall_PR' : self.comp_discharge.pressure / self.evaporator.sink_in.pressure,
+            }
+        return self.output
 
     def get_components_sets_to_graph(self) -> list:
         cycle_ls: list[list[str, str]]
@@ -92,44 +145,6 @@ class TRHP(HeatPump):
             self._get_component_objs_for_graphing(ls) for ls in [cycle_ls, sink_ls]
             ] 
     
-    def get_summary(self) -> dict[str, float | bool]:
-        self.output = {
-            #Headline results
-            'cycle_type' : self.cycle_type,
-            'COP' : self.COP,
-            'converged' : self.converged,
-            #Parameters
-            'refrigerant' : self.refrigerant,
-            'n_comp' : self.n_comp,
-            'T_source_in' : self.T_source_in,
-            'dT_GC_min_tar' : self.dT_GC_min_tar,
-            'T_air_inlet' : self.T_air_inlet,
-            'T_air_tar' : self.T_air_tar,
-            'comp_PR_uniform' : self.comp_PR_uniform,
-            'Tref_evap_inlet' : self.Tref_evap_inlet,
-            #Optmisation variables
-            'dT_phx1_cold' : self.dT_phx1_cold,
-            'dT_phx2_cold' : self.dT_phx2_cold,
-            'dT_phx3_cold' : self.dT_phx3_cold,
-            'comp1_power_frac' : self.comp1_power_frac, 
-            'comp2_power_frac' : self.comp2_power_frac, 
-            'comp3_power_frac' : self.comp3_power_frac,  
-            'dT_gc_out_min_offset' : self.dT_gc_out_min_offset,
-            #Additional results
-            'T_comp_discharge' : self.comp_discharge.temperature,
-            'T_gc_out' : self.T_gc_out,
-            'Tref_evap_outlet' : self.Tref_evap_outlet,
-            'P_evap_sink_in' : self.evaporator.sink_in.pressure * 1000,
-            'Comp_1_P_out' : self.comp1.flow_out.pressure * 1000,
-            'Comp_2_P_out' : self.comp2.flow_out.pressure * 1000 if self.n_comp > 1 else self.comp_discharge.pressure * 1000,
-            'Comp_3_P_out' : self.comp_discharge.pressure * 1000,
-            'PR_1' : self.comp1.pressure_ratio,
-            'PR_2' : self.comp2.pressure_ratio if self.n_comp > 1 else 1.0,
-            'PR_3' : self.comp3.pressure_ratio if self.n_comp > 2 else 1.0,
-            'Overall_PR' : self.comp1.pressure_ratio * self.comp2.pressure_ratio * self.comp3.pressure_ratio,
-            }
-        return self.output
-
     def _get_component_objs_for_graphing(self, ls: list) -> list:
         obj_ls: list = []
         obj_id: list[str, str]
@@ -193,7 +208,7 @@ def _get_trhp_structure(hp: TRHP) -> TRHP:
     hp.comp2_on = 1  if hp.n_comp > 1 else 0
     hp.comp3_on = 1  if hp.n_comp > 2 else 0
     hp.T_gc_out = hp.T_air_inlet + hp.dT_GC_min_tar + hp.dT_gc_out_min_offset
-    hp.ihx_on = 1    if hp.T_source_in < hp.T_gc_out else 0
+    hp.ihx_on = 1    if hp.T_source_in < hp.T_gc_out and hp.ihx_on == 1 else 0
             
     hp.phx1_on = 1   if hp.dT_phx1_cold > 0.0 else 0
     hp.phx2_on = 1   if hp.dT_phx2_cold > 0.0 and hp.comp2_on == 1 else 0
@@ -203,12 +218,12 @@ def _get_trhp_structure(hp: TRHP) -> TRHP:
 
 def _get_trhp_components(hp: TRHP) -> TRHP:
     #Initialisation of unit operations
-    hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=1)
+    hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=hp.comp_model_index)
     if hp.comp2_on == 1:
-        hp.comp2 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=1)
+        hp.comp2 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=hp.comp_model_index)
         hp.gas_cooler3 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
         if hp.comp3_on == 1:
-            hp.comp3 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=1) 
+            hp.comp3 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=hp.comp_model_index) 
             hp.gas_cooler4 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
     
     hp.gas_cooler1 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
@@ -232,6 +247,8 @@ def _get_trhp_streams(hp: TRHP) -> TRHP:
     temp_ref_out: MassStream
     P_H: float
     P_L: float
+    hp.gas_coolers = []
+    hp.evaporators = []
 
     #Evaporator superheat section
     hp.evap_sup.source_in.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Source in', pp_instance='src')
@@ -241,6 +258,8 @@ def _get_trhp_streams(hp: TRHP) -> TRHP:
     P_L = hp.evap_sup.sink_in.pressure
     hp.evap_sup.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.T_source_in - hp.dTmin_phx), name='Superheater sink outlet')
     temp_ref_out = hp.evap_sup.sink_out
+
+    hp.evaporators.append(hp.evap_sup)
 
     #Internal heat exchanger, if present
     if hp.ihx_on == 1:
@@ -302,7 +321,6 @@ def _get_trhp_streams(hp: TRHP) -> TRHP:
     hp.comp_discharge = temp_ref_out
     hp.comp_discharge.pressure_bnds = None
     P_H = temp_ref_out.pressure
-    hp.gas_coolers = []
 
     #Gas cooler 4 and Plate heat exchanger 3 - hot-sides
     hp.air_out = MassStream( name='Air sink outlet', fluid=hp.sink, pp_instance='snk', pressure=0.101, temperature=hp.T_air_tar )
@@ -387,6 +405,8 @@ def _get_trhp_streams(hp: TRHP) -> TRHP:
 
     hp.evaporator.source_in.props_in_ab(input_str='PT', prop1=0.5, prop2=hp.T_source_in, mass_flow=1e6, name='Evaporator source inlet', pp_instance='src')
     hp.evaporator.source_out.props_in_ab(input_str='PT', prop1=0.5, prop2=min(hp.evaporator.sink_in.temperature + hp.dTmin_phx, hp.T_source_in), mass_flow=1e6, name='Evaporator source outlet', pp_instance='src')
+    
+    hp.evaporators.append(hp.evaporator)
 
     return hp
 

@@ -6,3 +6,6 @@ from components.plateHeatExc import PlateHeatExchanger
 from components.turbine import Turbine
 from components.customRelationship import CustomRelationship
 from components.setRelationship import SetRelationship
+from components.economiser import Economiser
+from components.mixer import Mixer
+from components.splitter import Splitter
