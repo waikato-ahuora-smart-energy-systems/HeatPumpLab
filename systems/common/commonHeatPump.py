@@ -49,7 +49,7 @@ class HeatPump():
     comp_model_index: int =1     
 
     compute_jac: bool =False
-    additional_obj: float =None                
+    additional_data: float =None                
 
     def __init__(self) -> None:
         pass

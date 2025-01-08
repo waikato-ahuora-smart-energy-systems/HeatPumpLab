@@ -182,48 +182,65 @@ def analyse_unsolved_cases(debug: bool =True):
         transfer_temp_files_to_results('results/Cases-Resolved')
 
 def analyse_cases():
-    _get_cases_in_parallel(
+    _solve_in_parallel(
         f_cases=get_analysis_cases_to_solve,
         f_solve=_analyse_case,
         # n_cpu=1,        
     )
 
 def optimise_cases():
-    _get_cases_in_parallel(
+    _solve_in_parallel(
         f_cases_to_solve=get_optimisation_cases_to_solve,
         f_solve=_optimise_case,
         # n_cpu=1,
     )
 
-def _get_cases_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
+def _solve_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
     # Use parallel processing distributed over all cores to speed up the analysis
     cases: list        = f_cases(file_name)
     print(len(cases))
     executor: pool     = pool(max_workers=n_cpu)
     [executor.submit(f_solve, case) for case in cases]
     executor.shutdown()
+    print('All cases completed.')
     transfer_temp_files_to_results(file_name)
 
 def _analyse_case(case: dict) -> None:
-    hp: TRHP
-    hp, dt = solve_single_case(case)
-    # print('Time to solve case:', dt)
-    if hp.converged:
-        hp.get_summary(dt)
-        if type(hp.output) is dict:
-            print_result_to_csv(output=hp.output)
-    else:
-        print('Heat model failed to solve.')
+    # hp: TRHP
+    vars_input = { 'dT_gc_out_min_offset' : { 'xi' : 0.0, 'bnds' : (0.0, 40.0) } }
+    case['additional_data'] = {'vars_input' : vars_input}
+
+    result, dt = _get_local_optimum(
+        param=case,
+        vars_input=vars_input,
+        tol=1e-5,
+        f_obj=_compute_SEC_obj,
+        )
+    result = _get_results_report(
+        param=case, 
+        result=result, 
+        f_obj=_compute_SEC_obj, 
+        dt=dt, 
+        print_to_terminal=False
+        )
+
+    # hp, dt = solve_single_case(case)
+    # if hp.converged:
+    #     hp.get_summary(dt)
+    #     if type(hp.output) is dict:
+    #         print_result_to_csv(output=hp.output)
+    # else:
+    #     print('Heat model failed to solve.')
 
 def _optimise_case(case: dict) -> None:
     tol = 1e-5
     dt = 0.0
     # print_result_to_terminal(case)
     vars_input = _get_variable_input_data(case)
-    case['additional_obj']['vars_input'] = vars_input
+    case['additional_data']['vars_input'] = vars_input
     hp, _ = solve_single_case( case | _get_var_kwargs(_get_initial_val(vars_input), case) )
-    case['additional_obj']['SEC_0'] = hp.SEC
-    case['additional_obj']['P_0'] = hp.comp_discharge.pressure
+    case['additional_data']['SEC_0'] = hp.SEC
+    case['additional_data']['P_0'] = hp.comp_discharge.pressure
     result, dt = _get_global_optimum(case, vars_input, tol)
     result = _get_results_report(case, result, dt)
 
@@ -297,7 +314,7 @@ def _get_constraints(param: dict, vars_input: dict):
 
 @time_func
 def _get_global_optimum(param: dict, vars_input: dict, tol: float) -> dict:
-    return glb_min(func=lambda x: _get_obj(x, param), 
+    return glb_min(func=lambda x: _get_obj(x, param, _compute_multi_obj), 
                    x0=_get_initial_val(vars_input),
                    bounds=_get_bounds(vars_input),
                 #    constraints=_get_constraints(param, vars_input),
@@ -312,35 +329,36 @@ def _get_global_optimum(param: dict, vars_input: dict, tol: float) -> dict:
                    )
 
 @time_func
-def _get_local_optimum(param: dict, vars_input: dict, tol: float) -> dict:
-    return loc_min(fun=lambda x: _get_obj(x, param), 
+def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict:
+    return loc_min(fun=lambda x: _get_obj(x, param, f_obj), 
                     x0=_get_initial_val(vars_input),
                     bounds=_get_bounds(vars_input),
                     # constraints=_get_constraints(param, vars_input),
-                    method='SLSQP', #'SLSQP' 'L-BFGS-B'
-                    # jac=lambda x: _get_jac(x, param),
+                    method='L-BFGS-B', #'SLSQP' 
+                    # jac=lambda x: _get_jac(x, param, f_obj),
                     tol=tol,
                     )
 
-def _get_obj(vars: list[float], param: dict) -> float:
+def _get_obj(vars: list[float], param: dict, f_obj) -> float:
     hp: TRHP
-    dt: float
-    hp, dt = solve_single_case(param | _get_var_kwargs(vars, param))
-    obj = _compute_obj(hp, param)
-    # print('Obj:', "{:.3f}".format(obj), '  Solve time:', "{:.3f}".format(dt), '  Vars:', ["{:.3f}".format(v) for v in vars], '  Ref:', param['refrigerant'])
+    hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
+    obj = f_obj(hp, param)
     return obj * 1000
 
-def _compute_obj(hp: TRHP, param: dict) -> float:
-    SEC_0 = param['additional_obj']['SEC_0']
-    P_0   = param['additional_obj']['P_0']
-    k     = param['additional_obj']['weight']
+def _compute_SEC_obj(hp: TRHP, param: dict) -> float:
+    return hp.SEC
+
+def _compute_multi_obj(hp: TRHP, param: dict) -> float:
+    SEC_0 = param['additional_data']['SEC_0']
+    P_0   = param['additional_data']['P_0']
+    k     = param['additional_data']['weight']
     SEC, P = [hp.SEC, hp.comp_discharge.pressure] if hp.feasible else [np.inf, np.inf]
     return (SEC / SEC_0) * k + (P / P_0) * (1 - k)
 
-def _get_jac(vars: list[float], param: dict):
+def _get_jac(vars: list[float], param: dict, f_obj):
     hp: TRHP
     hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
-    obj = _compute_obj(hp, param)
+    obj = f_obj(hp, param)
     if obj < 0:
         hp.compute_jac = True
         eps = np.sqrt(np.finfo(float).eps) * vars * 10
@@ -348,16 +366,16 @@ def _get_jac(vars: list[float], param: dict):
     else:
         return np.zeros(len(vars))
 
-def _compute_jac(vars, hp, param):
+def _compute_jac(vars, hp, param, f_obj):
     kwargs = _get_var_kwargs(vars, param)
     for key in kwargs:
         setattr(hp, key, kwargs[key])
-    return _compute_obj(solve_heat_pump_model(hp), param)
+    return f_obj(solve_heat_pump_model(hp), param)
 
 def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
     i: int = 0
     d_var = dict()
-    for key in param['additional_obj']['vars_input']:
+    for key in param['additional_data']['vars_input']:
         d_var[key] = var[i]
         i += 1
     return d_var
@@ -370,25 +388,29 @@ def solve_single_case(args) -> TRHP:
         hp = solve_heat_pump_model(hp)
     return hp
 
-def _get_results_report(param: dict, result: dict, dt: float) -> list:
+def _get_results_report(param: dict, result: dict, f_obj, dt: float, print_to_terminal: bool=False) -> list:
     if result.success:
-        res = _get_results_summary(result, param, dt)
+        res = _get_results_summary(result, param, f_obj, dt)
         fsuffix = _get_unique_f_suffix(param)
-        _print_results(res, fsuffix)
+        _print_results(res, fsuffix, print_to_terminal)
 
-def _print_results(results: dict, fsuffix: str) -> None:
-    print_result_to_terminal(results)
+def _print_results(results: dict, fsuffix: str, print_to_terminal: bool) -> None:
+    if print_to_terminal:
+        print_result_to_terminal(results)
     print_result_to_csv(output=results, suffix=fsuffix)    
 
-def _get_results_summary(result, param, dt: float =None) -> dict:
+def _get_results_summary(result, param, f_obj, dt: float =None) -> dict:
     hp: TRHP
     hp, _ = solve_single_case(param | _get_var_kwargs(result.x, param))
-    obj = _compute_obj(hp, param)
+    obj = f_obj(hp, param)
     hp.get_summary()
+    if 'weight' in param['additional_data']:
+        hp.output.update({
+            'Weight' : param['additional_data']['weight'], 
+            'SEC_0' : param['additional_data']['SEC_0'],
+            'P_0' : param['additional_data']['P_0'],
+        })
     hp.output.update({
-        'Weight' : param['additional_obj']['weight'], 
-        'SEC_0' : param['additional_obj']['SEC_0'],
-        'P_0' : param['additional_obj']['P_0'],
         'Obj_function' : obj,
         'Function evaluations' : result.nfev,
         'Message' : result.message,
@@ -397,7 +419,7 @@ def _get_results_summary(result, param, dt: float =None) -> dict:
     })
     return hp.output
 
-def _get_unique_f_suffix(param) -> str:
+def _get_unique_f_suffix(param, fld_only=False) -> str:
     suffix: str = '-'
     
     r = PropertyPackage(param['refrigerant'])
@@ -409,8 +431,8 @@ def _get_unique_f_suffix(param) -> str:
             suffix += str(fld_comp[i]) + str(r.fld_composition[i]).replace('.', '_')
             if i + 1 < len(fld_comp): 
                 suffix += '*'
-
-    for ele in param:    
-        if ele != 'additional_obj' and ele != 'refrigerant':
-            suffix = suffix + '-' + "{:.0f}".format(param[ele])
+    if fld_only:
+        for ele in param:    
+            if ele != 'additional_data' and ele != 'refrigerant':
+                suffix = suffix + '-' + "{:.0f}".format(param[ele])
     return suffix

@@ -59,7 +59,7 @@ def _get_metrics(hp: TRHP) -> TRHP:
         return eT_h_ave - eT_c_ave if hp.converged else 0.0  
 
     def _get_SLE(hp: TRHP) -> float:
-        return hp.SEC / hp.eDT * 1000 if hp.converged else 0.0
+        return hp.SEC / hp.eDTL * 1000 if hp.converged else 0.0
     
     def _get_LMTD_gcs(hp: TRHP):
         return sum([g.duty * g.get_LMTD_ave() for g in hp.gas_coolers]) / sum([g.duty for g in hp.gas_coolers])

@@ -43,7 +43,6 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
                 'T_air_tar': 200.0, 
                 'T_air_inlet': 15.0, 
                 'T_source_in': 40.0,
-                'dT_gc_out_min_offset': 0.0, #optimise
                 'n_comp': 2,
                 'ihx_on': 1,
                 'dTmin_phx': 5.0, #float(dtphx),
@@ -57,10 +56,10 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
                 'source': 'water',
                 'Tref_evap_inlet' : 10.0,
              }
-                for r in refrigerant_ls
                 for dt2 in range(0, 101, 1)
                 for cpf2 in range(30, 71, 1)
                 # for dtphx in range(5, 21, 5)
+                for r in refrigerant_ls
             ]
 
 def get_optimisation_cases_to_solve(file_name: str ='') -> list[list[float | str | bool]]:
@@ -117,7 +116,7 @@ def _get_all_optimisation_case_list() -> list[list[float | str | bool]]:
                 'n_comp' : j + 1 + 1,
                 'Tref_evap_inlet' : 10.0,
                 'comp_PR_uniform' : False,
-                'additional_obj' : {'weight': 0.98}, #k / 100
+                'additional_data' : {'weight': 0.98}, #k / 100
              }
                 # for k in [k0 for k0 in range(100, 40, -10)]
                 for j in range(1)
@@ -134,13 +133,13 @@ def _get_previous_results(cases: list, file_name):
             for i in range(len(cases)):
                 case = cases[i]
                 if get_optimisation_case_comparison(res, case):
-                    if abs(float(case['additional_obj']['weight']) - float(res['Weight'])) < 0.01:
+                    if abs(float(case['additional_data']['weight']) - float(res['Weight'])) < 0.01:
                         cases.pop(i)
                         break
     return cases
 
 def _order_all_cases(cases):
-    cases.sort(reverse=True, key=lambda x: x['additional_obj']['weight'])  
+    cases.sort(reverse=True, key=lambda x: x['additional_data']['weight'])  
     cases.sort(reverse=False, key=lambda x: x['refrigerant']) 
     cases.sort(reverse=True, key=lambda x: x['n_comp'])
     cases.sort(reverse=True, key=lambda x: x['T_air_tar']) 
