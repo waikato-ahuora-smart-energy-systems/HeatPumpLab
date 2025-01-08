@@ -185,12 +185,14 @@ def analyse_cases():
     _get_cases_in_parallel(
         f_cases=get_analysis_cases_to_solve,
         f_solve=_analyse_case,
+        # n_cpu=1,        
     )
 
 def optimise_cases():
     _get_cases_in_parallel(
         f_cases_to_solve=get_optimisation_cases_to_solve,
         f_solve=_optimise_case,
+        # n_cpu=1,
     )
 
 def _get_cases_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
@@ -198,15 +200,16 @@ def _get_cases_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_resu
     cases: list        = f_cases(file_name)
     print(len(cases))
     executor: pool     = pool(max_workers=n_cpu)
-    results: list[any] = [executor.submit(f_solve, case) for case in cases]
+    [executor.submit(f_solve, case) for case in cases]
     executor.shutdown()
     transfer_temp_files_to_results(file_name)
 
 def _analyse_case(case: dict) -> None:
+    hp: TRHP
     hp, dt = solve_single_case(case)
     # print('Time to solve case:', dt)
     if hp.converged:
-        hp.get_summary()
+        hp.get_summary(dt)
         if type(hp.output) is dict:
             print_result_to_csv(output=hp.output)
     else:

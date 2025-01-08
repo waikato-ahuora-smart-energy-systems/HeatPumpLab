@@ -66,15 +66,16 @@ class TRHP(HeatPump):
             'comp_PR_uniform' : self.comp_PR_uniform
             }
     
-    def get_summary(self) -> dict[str, float | bool]:
+    def get_summary(self, dt=0) -> dict[str, float | bool]:
         self.output = {
             #Headline results
             'cycle_type' : self.cycle_type,
             'COP' : self.COP,
             'SEC' : self.SEC,
             'VHC' : self.VHC,
-            'eDT' : self.eDT,
-            'SLE': self.SLE,
+            'eDTL' : self.eDTL,
+            'SLE' : self.SLE,
+            'LMTD_gcs' : self.LMTD_gcs,
             'Pmax' : self.comp_discharge.pressure * 1000,
             'converged' : self.converged,
             #Parameters
@@ -106,6 +107,7 @@ class TRHP(HeatPump):
             'PR_2' : self.comp2.pressure_ratio if self.n_comp > 1 else 1.0,
             'PR_3' : self.comp3.pressure_ratio if self.n_comp > 2 else 1.0,
             'Overall_PR' : self.comp_discharge.pressure / self.evaporator.sink_in.pressure,
+            'Solve time' : dt,
             }
         return self.output
 

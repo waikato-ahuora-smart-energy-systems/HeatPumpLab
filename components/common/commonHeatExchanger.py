@@ -2,6 +2,7 @@ __author__ = 'Tim Walmsley'
 __credits__ = ['']
 
 from streams import MassStream
+from math import log
 
 class BaseHeatExchanger:
     #Set the stream connection points
@@ -269,4 +270,22 @@ class BaseHeatExchanger:
         data['sink'] = get_inter_data(self.sink_in, self.sink_out)
         data['source'] = get_inter_data(self.source_in, self.source_out)
         return data
+        
+    def get_LMTD_ave(self):
+        data = self.get_graph_data()
+        div = len(data['source']) - 1
+        LMTD_seg = []
+        for i in range(div):
+            LMTD_seg.append(
+                _get_LMTD(
+                    Thin=data['source'][div - i].temperature,
+                    Thout=data['source'][div - 1 - i].temperature,
+                    Tcin=data['sink'][i].temperature,
+                    Tcout=data['sink'][i + 1].temperature,
+                )
+            )
+        return sum(LMTD_seg) / len(LMTD_seg)
+
+def _get_LMTD(Thin, Thout, Tcin, Tcout):
+    return ((Thin - Tcout) - (Thout - Tcin)) / log((Thin - Tcout) / (Thout - Tcin))
         

@@ -23,8 +23,9 @@ class HeatPump():
     COP: np.float32 = -np.inf
     SEC: np.float32 = np.inf
     VHC: np.float32 = 0
-    eDT: np.float32 = 0
+    eDTL: np.float32 = 0
     SLE: np.float32 = 0
+    LMTD_gcs: np.float32 = 0
 
     refrigerant: float
     source: float ='Water'

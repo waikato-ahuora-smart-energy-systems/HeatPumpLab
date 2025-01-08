@@ -3,9 +3,10 @@ __credits__ = ['Alex Geary']
 __email__ = 'tim.walmsley@waikato.ac.nz'
 __date__ = '2021-2024'
 
-from functions import analyse_cases, optimise_cases, analyse_unsolved_cases, analyse_single_TEHP_case, analyse_single_case
+from functions import analyse_cases, transfer_temp_files_to_results, optimise_cases, analyse_unsolved_cases, analyse_single_TEHP_case, analyse_single_case
 
 def main():
+    # transfer_temp_files_to_results()
     # analyse_single_TEHP_case()
     # analyse_single_case()
     # analyse_unsolved_cases(debug=False)

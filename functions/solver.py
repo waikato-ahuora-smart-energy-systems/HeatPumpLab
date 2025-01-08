@@ -36,7 +36,7 @@ def solve_heat_pump_model(hp: TRHP) -> TRHP:
     except:
         _print_failed_to_solve_report(hp)
         print('Heat pump solver failed with an exception. The failed case has been recorded.')
-        hp.converged = False       
+        hp.converged = False    
     return hp
 
 def _check_hp_model_convergance(hp: TRHP) -> bool:
@@ -53,13 +53,16 @@ def _get_metrics(hp: TRHP) -> TRHP:
     def _get_VHC(hp: TRHP) -> float:
         return sum([g.duty for g in hp.gas_coolers]) / hp.comp1.flow_in.vol_flow if hp.converged else 0.0   
 
-    def _get_eDT(hp: TRHP) -> float:
+    def _get_eDTL(hp: TRHP) -> float:
         eT_h_ave = sum([g.duty for g in hp.gas_coolers]) / sum([g.delta_entropy_src for g in hp.gas_coolers])
         eT_c_ave = sum([e.duty for e in hp.evaporators]) / sum([e.delta_entropy_snk for e in hp.evaporators])
         return eT_h_ave - eT_c_ave if hp.converged else 0.0  
 
     def _get_SLE(hp: TRHP) -> float:
-        return hp.SEC / hp.eDT * 1000 if hp.converged else 0.0 
+        return hp.SEC / hp.eDT * 1000 if hp.converged else 0.0
+    
+    def _get_LMTD_gcs(hp: TRHP):
+        return sum([g.duty * g.get_LMTD_ave() for g in hp.gas_coolers]) / sum([g.duty for g in hp.gas_coolers])
 
     def _get_hp_cycle_type(hp: TRHP) -> str:
         return 'Transcritical' if hp.comp_discharge.pressure > hp.comp_discharge.P_crit else 'Subcritical'
@@ -67,8 +70,9 @@ def _get_metrics(hp: TRHP) -> TRHP:
     hp.COP = _get_COP(hp)
     hp.SEC = _get_SEC(hp)
     hp.VHC = _get_VHC(hp)
-    hp.eDT = _get_eDT(hp)
+    hp.eDTL = _get_eDTL(hp)
     hp.SLE = _get_SLE(hp)
+    hp.LMTD_gcs = _get_LMTD_gcs(hp)
     hp.cycle_type = _get_hp_cycle_type(hp)
     return hp
 

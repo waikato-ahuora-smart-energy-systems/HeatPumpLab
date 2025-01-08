@@ -38,15 +38,28 @@ def print_result_to_csv(output: list[any] =[], file_name: str ='results/temp/R',
 def transfer_temp_files_to_results(file_name: str ='results/untitled') -> None:
     csv_file_list: glob
     f: str
-    output: list[any]
+    fout: list[any]
     o: list[any]
 
     csv_file_list = glob(os.getcwd() + '/results/temp/*.csv')
-    for f in reversed(csv_file_list):
-        output = read_csv_to_results(file_name=f, file_ext='')
-        for o in output:
-            print_result_to_csv(output=o, file_name=file_name)
-        os.remove(f)
+    header_saved = False
+    with open(file_name + '.csv','a') as fout:
+        for f in reversed(csv_file_list):
+            with open(f) as fin:
+                header = next(fin)
+                if not header_saved:
+                    fout.write(header)
+                    header_saved = True
+                for line in fin:
+                    fout.write(line)
+            os.remove(f)
+
+    # csv_file_list = glob(os.getcwd() + '/results/temp/*.csv')
+    # for f in reversed(csv_file_list):
+    #     fout = read_csv_to_results(file_name=f, file_ext='')
+    #     for o in fout:
+    #         print_result_to_csv(fout=o, file_name=file_name)
+    #     os.remove(f)
 
 def read_csv_to_results(file_name: str ='results/untitled', file_ext: str ='.csv') -> list[any]:
     reader: DictReader
