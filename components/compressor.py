@@ -29,9 +29,12 @@ class Compressor:
         self.model_coeffs = self.set_model_coeff(model_index)
 
     def set_model_coeff(self, model_index: int) -> list[float]:    
-        available_model_coeffs = [['Proportional', 1.0],  # Ideal compression
-                                  ['Proportional', 0.7],  # Typical isentropic efficiency
-                                  ['Polynomial', 0.65 / self.motor_eff, 0.015, -0.0015]]  # Compressor model constants (Wang & Cleland, 2018)       
+        available_model_coeffs = [
+            ['Proportional', 1.0],  # Ideal compression
+            ['Proportional', 0.7],  # Typical isentropic efficiency
+            ['Polynomial', 0.65 / self.motor_eff, 0.015, -0.0015],  # Compressor model constants (Wang & Cleland, 2018)  
+            ['Brendel et al'],
+        ]     
         return available_model_coeffs[model_index]
 
     def get_isentropic_efficiency(self) -> float:
@@ -39,8 +42,10 @@ class Compressor:
         if self.model_coeffs[0] == 'Proportional':
             shaft_eff = self.model_coeffs[1]
         elif self.model_coeffs[0] == 'Polynomial':
-            shaft_eff = self.model_coeffs[1] + self.model_coeffs[2] * self.pressure_ratio + self.model_coeffs[3] * pow( self.pressure_ratio, 2 )
-        return min(max(shaft_eff, 0.0), 1.0)
+            shaft_eff = self.model_coeffs[1] + self.model_coeffs[2] * self.pressure_ratio + self.model_coeffs[3] * pow( self.pressure_ratio, 2.0 )
+        elif self.model_coeffs[0] == 'Brendel et al':
+            shaft_eff = (0.66981 - 0.6 / pow( self.pressure_ratio - 0.01466, 8.38 * self.flow_in.pressure ) - 0.00102 * pow( self.pressure_ratio, 1.8 )) / self.motor_eff
+        return min(max(shaft_eff, 0.2), 1.0)
         
     def get_compressor_power(self) -> float:
         self.flow_out_isen.pp_instance = self.flow_out.pp_instance

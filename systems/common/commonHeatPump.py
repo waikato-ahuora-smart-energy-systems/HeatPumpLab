@@ -42,10 +42,10 @@ class HeatPump():
     T_source_in: float =40.0 
     Tref_evap_inlet: float =10.0
     Tref_evap_outlet: float =10.0    
-    eff_motor: float =0.96 
+    motor_eff: float =0.96 
     ihx_on: int = 1
     P_H_est: float =0.0
-    min_dT_ihx : float = 5.0
+    dTmin_phx : float = 5.0
     comp_model_index: int =1     
 
     compute_jac: bool =False

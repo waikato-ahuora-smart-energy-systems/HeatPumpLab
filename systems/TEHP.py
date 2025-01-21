@@ -155,8 +155,8 @@ def _get_tehp_structure(hp: TEHP) -> TEHP:
 
 def _get_tehp_components(hp: TEHP) -> TEHP:
     #Initialisation of unit operations
-    hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=hp.comp_model_index)
-    hp.comp2 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=hp.comp_model_index)
+    hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.motor_eff, model_index=hp.comp_model_index)
+    hp.comp2 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.motor_eff, model_index=hp.comp_model_index)
   
     hp.gas_cooler1 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
     hp.gas_cooler2 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, model='fixed hot duty', dTmin=hp.dT_GC_min_tar)

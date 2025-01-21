@@ -18,6 +18,10 @@ class TRHP(HeatPump):
     comp2_power_frac: float =0.0 
     comp3_power_frac: float =0.0
 
+    dT_phx1_cold: float =0.0
+    dT_phx2_cold: float =0.0
+    dT_phx3_cold: float =0.0
+
     comp1: Compressor
     comp2: Compressor
     comp3: Compressor
@@ -87,6 +91,7 @@ class TRHP(HeatPump):
             'T_air_tar' : self.T_air_tar,
             'comp_PR_uniform' : self.comp_PR_uniform,
             'Tref_evap_inlet' : self.Tref_evap_inlet,
+            'dTmin_phx' : self.dTmin_phx,
             #Optmisation variables
             'dT_phx1_cold' : self.dT_phx1_cold,
             'dT_phx2_cold' : self.dT_phx2_cold,
@@ -107,6 +112,13 @@ class TRHP(HeatPump):
             'PR_2' : self.comp2.pressure_ratio if self.n_comp > 1 else 1.0,
             'PR_3' : self.comp3.pressure_ratio if self.n_comp > 2 else 1.0,
             'Overall_PR' : self.comp_discharge.pressure / self.evaporator.sink_in.pressure,
+            'Comp_1_T_out' : self.comp1.flow_out.temperature,
+            'Comp_2_T_out' : self.comp2.flow_out.temperature if self.n_comp > 1 else self.comp_discharge.temperature,
+            'Comp_3_T_out' : self.comp_discharge.temperature,
+            'n_is_1' : self.comp1.isentropic_eff,
+            'n_is_2' : self.comp2.isentropic_eff if self.n_comp > 1 else 1.0,
+            'n_is_3' : self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,
+            'n_motor': self.motor_eff,
             'Solve time' : dt,
             }
         return self.output
@@ -220,12 +232,12 @@ def _get_trhp_structure(hp: TRHP) -> TRHP:
 
 def _get_trhp_components(hp: TRHP) -> TRHP:
     #Initialisation of unit operations
-    hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=hp.comp_model_index)
+    hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.motor_eff, model_index=hp.comp_model_index)
     if hp.comp2_on == 1:
-        hp.comp2 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=hp.comp_model_index)
+        hp.comp2 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.motor_eff, model_index=hp.comp_model_index)
         hp.gas_cooler3 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
         if hp.comp3_on == 1:
-            hp.comp3 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.eff_motor, model_index=hp.comp_model_index) 
+            hp.comp3 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.motor_eff, model_index=hp.comp_model_index) 
             hp.gas_cooler4 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)
     
     hp.gas_cooler1 = GasCooler(name='Gas cooler', source_fluid=hp.refrigerant, sink_fluid=hp.sink, dTmin=hp.dT_GC_min_tar)

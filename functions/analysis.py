@@ -35,26 +35,27 @@ def analyse_single_case():
         'Ammonia',
         ]
     
-    args = {'refrigerant': 'Neopentane',
+    args = {'refrigerant': 'PROPYLEN',
             'dT_GC_min_tar': 20.0, 
             'T_air_tar': 200.0, 
-            'T_air_inlet': 15.0, 
+            'T_air_inlet': 15.0,
             'T_source_in': 40.0,
             'dT_gc_out_min_offset': 0.0,
             'n_comp': 2,
             'ihx_on': 1,
             'dTmin_phx': 5.0,
-            'dT_phx1_cold': 0.0,
-            'dT_phx2_cold': 0.0,
+            'dT_phx1_cold': 10.0,
+            'dT_phx2_cold': 52.0,
             'dT_phx3_cold': 0.0,
-            'comp2_power_frac': 0.5,
+            'comp2_power_frac': 0.9,
             'comp3_power_frac': 0.0,
             'comp_PR_uniform': False,
-            # 'eff_motor': 1.00,
+            # 'motor_eff': 1.00,
+            'comp_model_index': 3,
             'debug': False,
             'sink': 'Air',
             'source': 'water',
-            'Tref_evap_inlet' : 20,
+            'Tref_evap_inlet' : 10,
             }
     
     hp, dt = solve_single_case(args)
@@ -66,11 +67,11 @@ def analyse_single_case():
             print_result_to_terminal(output=hp.output)
             print_result_to_csv(output=hp.output)
         
-        # hp.get_driving_force_plot(hp.gas_coolers, hp.dT_GC_min_tar)
-        # hp.get_cycle_plot(x_axis='h', y_axis='T')
-        # hp.get_cycle_plot(x_axis='s', y_axis='T')
-        # hp.get_cycle_plot(x_axis='h', y_axis='P')
-        # hp.get_cycle_plot(x_axis='v', y_axis='P')
+        hp.get_driving_force_plot(hp.gas_coolers, hp.dT_GC_min_tar)
+        hp.get_cycle_plot(x_axis='h', y_axis='T')
+        hp.get_cycle_plot(x_axis='s', y_axis='T')
+        hp.get_cycle_plot(x_axis='h', y_axis='P')
+        hp.get_cycle_plot(x_axis='v', y_axis='P')
     else:
         print('Heat model failed to solve.')
 
@@ -112,7 +113,7 @@ def analyse_single_TEHP_case():
             'y_econ': 0.5,
             'comp2_power_frac': 0.5,
             'comp_PR_uniform': False,
-            'eff_motor': 1.0,
+            'motor_eff': 1.0,
             'debug': False,
             'sink': 'Air',
             'source': 'water',
@@ -185,7 +186,8 @@ def analyse_cases():
     _solve_in_parallel(
         f_cases=get_analysis_cases_to_solve,
         f_solve=_analyse_case,
-        # n_cpu=1,        
+        file_name='results/TRHP_results',
+        # n_cpu=4,
     )
 
 def optimise_cases():
@@ -206,31 +208,23 @@ def _solve_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results'
     transfer_temp_files_to_results(file_name)
 
 def _analyse_case(case: dict) -> None:
-    # hp: TRHP
     vars_input = { 'dT_gc_out_min_offset' : { 'xi' : 0.0, 'bnds' : (0.0, 40.0) } }
     case['additional_data'] = {'vars_input' : vars_input}
 
     result, dt = _get_local_optimum(
         param=case,
         vars_input=vars_input,
-        tol=1e-5,
+        tol=1e-4,
         f_obj=_compute_SEC_obj,
         )
+    
     result = _get_results_report(
         param=case, 
         result=result, 
         f_obj=_compute_SEC_obj, 
         dt=dt, 
-        print_to_terminal=False
+        print_to_terminal=False,
         )
-
-    # hp, dt = solve_single_case(case)
-    # if hp.converged:
-    #     hp.get_summary(dt)
-    #     if type(hp.output) is dict:
-    #         print_result_to_csv(output=hp.output)
-    # else:
-    #     print('Heat model failed to solve.')
 
 def _optimise_case(case: dict) -> None:
     tol = 1e-5
@@ -334,8 +328,8 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict
                     x0=_get_initial_val(vars_input),
                     bounds=_get_bounds(vars_input),
                     # constraints=_get_constraints(param, vars_input),
-                    method='L-BFGS-B', #'SLSQP' 
-                    # jac=lambda x: _get_jac(x, param, f_obj),
+                    method='L-BFGS-B', #'SLSQP'
+                    # jac=lambda y: _get_jac(y, param, f_obj),
                     tol=tol,
                     )
 
@@ -358,13 +352,13 @@ def _compute_multi_obj(hp: TRHP, param: dict) -> float:
 def _get_jac(vars: list[float], param: dict, f_obj):
     hp: TRHP
     hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
-    obj = f_obj(hp, param)
-    if obj < 0:
+    _ = f_obj(hp, param)
+    if hp.converged:
         hp.compute_jac = True
         eps = np.sqrt(np.finfo(float).eps) * vars * 10
         return approx_fprime(vars, _compute_jac, eps, hp, param) * 1000
     else:
-        return np.zeros(len(vars))
+        return np.inf(len(vars))
 
 def _compute_jac(vars, hp, param, f_obj):
     kwargs = _get_var_kwargs(vars, param)
