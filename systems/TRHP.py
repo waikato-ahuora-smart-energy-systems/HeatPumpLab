@@ -79,6 +79,7 @@ class TRHP(HeatPump):
             'VHC' : self.VHC,
             'eDTL' : self.eDTL,
             'SLE' : self.SLE,
+            'dQ/dQ' : self.dQdW,
             'LMTD_gcs' : self.LMTD_gcs,
             'Pmax' : self.comp_discharge.pressure * 1000,
             'converged' : self.converged,

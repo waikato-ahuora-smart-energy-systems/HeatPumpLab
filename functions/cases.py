@@ -95,6 +95,7 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
                 'comp2_power_frac': float(cpf2) / 100, 
                 'comp3_power_frac': 0.0,
                 'comp_PR_uniform': False,
+                'comp_model_index': 2,
                 'sink': 'Air',
                 'source': 'water',
                 'Tref_evap_inlet' : 10.0,

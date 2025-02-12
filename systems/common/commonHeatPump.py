@@ -25,6 +25,7 @@ class HeatPump():
     VHC: np.float32 = 0
     eDTL: np.float32 = 0
     SLE: np.float32 = 0
+    dQdW: np.float32 = 0
     LMTD_gcs: np.float32 = 0
 
     refrigerant: float

@@ -187,7 +187,7 @@ def analyse_cases():
         f_cases=get_analysis_cases_to_solve,
         f_solve=_analyse_case,
         file_name='results/TRHP_results',
-        # n_cpu=4,
+        # n_cpu=1,
     )
 
 def optimise_cases():
@@ -225,7 +225,7 @@ def _analyse_case(case: dict) -> None:
         dt=dt, 
         print_to_terminal=False,
         )
-
+    
 def _optimise_case(case: dict) -> None:
     tol = 1e-5
     dt = 0.0
@@ -382,7 +382,7 @@ def solve_single_case(args) -> TRHP:
         hp = solve_heat_pump_model(hp)
     return hp
 
-def _get_results_report(param: dict, result: dict, f_obj, dt: float, print_to_terminal: bool=False) -> list:
+def _get_results_report(param: dict, result: list[dict], f_obj: float, dt: float, print_to_terminal: bool=False) -> list:
     if result.success:
         res = _get_results_summary(result, param, f_obj, dt)
         fsuffix = _get_unique_f_suffix(param)
@@ -397,6 +397,14 @@ def _get_results_summary(result, param, f_obj, dt: float =None) -> dict:
     hp: TRHP
     hp, _ = solve_single_case(param | _get_var_kwargs(result.x, param))
     obj = f_obj(hp, param)
+
+    dtemp = 0.1
+    param['T_air_tar'] = param['T_air_tar'] + dtemp
+    param['P_H_est'] = hp.comp_discharge.pressure
+    hp1, _ = solve_single_case(param | _get_var_kwargs(result.x, param))
+    tcop = [(p.T_air_tar - p.T_air_inlet) / p.COP if p.COP > 0 else np.inf for p in [hp, hp1]]
+    hp.dQdW = dtemp / (tcop[1] - tcop[0]) if tcop[1] - tcop[0] != 0 and tcop[0] != np.inf and tcop[1] != np.inf else None
+
     hp.get_summary()
     if 'weight' in param['additional_data']:
         hp.output.update({
@@ -411,6 +419,8 @@ def _get_results_summary(result, param, f_obj, dt: float =None) -> dict:
         'Success' : result.success,
         'Time_to_optimise' : dt,
     })
+
+
     return hp.output
 
 def _get_unique_f_suffix(param, fld_only=False) -> str:
