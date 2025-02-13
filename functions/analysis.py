@@ -9,7 +9,7 @@ from functions.readWriteOutput import print_result_to_terminal, print_result_to_
 from functions.decorator_functions import time_func
 from concurrent.futures import ProcessPoolExecutor as pool
 from scipy.optimize import dual_annealing as glb_min, LinearConstraint, minimize as loc_min, approx_fprime
-import numpy as np, os
+import numpy as np, os, copy
 
 def analyse_single_case():
     args: list[float | str | bool]
@@ -398,12 +398,22 @@ def _get_results_summary(result, param, f_obj, dt: float =None) -> dict:
     hp, _ = solve_single_case(param | _get_var_kwargs(result.x, param))
     obj = f_obj(hp, param)
 
-    dtemp = 0.1
-    param['T_air_tar'] = param['T_air_tar'] + dtemp
-    param['P_H_est'] = hp.comp_discharge.pressure
-    hp1, _ = solve_single_case(param | _get_var_kwargs(result.x, param))
-    tcop = [(p.T_air_tar - p.T_air_inlet) / p.COP if p.COP > 0 else np.inf for p in [hp, hp1]]
-    hp.dQdW = dtemp / (tcop[1] - tcop[0]) if tcop[1] - tcop[0] != 0 and tcop[0] != np.inf and tcop[1] != np.inf else None
+    def _get_dQdW(hp: TRHP) -> float:
+        hp1: TRHP
+        dtemp = 0.001
+        args = copy.deepcopy(hp.args)
+        args['T_air_tar'] = hp.T_air_tar + dtemp
+        args['P_H_est'] = hp.comp_discharge.pressure
+        args['T_gc_out'] = hp.gas_cooler1.source_out.temperature
+        hp1, _ = solve_single_case(args)
+        if hp1.feasible:
+            tcop = [(p.T_air_tar - p.T_air_inlet) / p.COP if p.COP > 0 else np.inf for p in [hp, hp1]]
+            dqdw = dtemp / (tcop[1] - tcop[0]) if tcop[1] - tcop[0] != 0 and tcop[0] != np.inf and tcop[1] != np.inf else 0.0  
+        else:
+            dqdw = 0.0
+        return dqdw   
+
+    hp.dQdW = _get_dQdW(hp)
 
     hp.get_summary()
     if 'weight' in param['additional_data']:
@@ -419,8 +429,6 @@ def _get_results_summary(result, param, f_obj, dt: float =None) -> dict:
         'Success' : result.success,
         'Time_to_optimise' : dt,
     })
-
-
     return hp.output
 
 def _get_unique_f_suffix(param, fld_only=False) -> str:

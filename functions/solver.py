@@ -15,28 +15,30 @@ import numpy as np
 def solve_heat_pump_model(hp: TRHP) -> TRHP:
     #Solve heat pump cycle
     try:
-        hp = _find_hp_with_min_discharge_pressure(hp)
-        if hp.debug:
-            hp.get_cycle_plot()
-
-        dt_offset = hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
-        if (abs(dt_offset) > 0.1 and _check_hp_model_convergance(hp)):
-            while abs(_find_evap_inlet_temperature_offset(hp.evaporator.sink_out.temperature - dt_offset, hp)) > 1e-6:
-                dt_offset = hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
-
-            hp.Tref_evap_outlet = hp.Tref_evap_inlet + dt_offset
-            hp.evaporator.sink_out.props_in_ab('TQ', hp.Tref_evap_outlet, 1.0)
-            hp = _find_hp_with_min_discharge_pressure(hp)
-
-        hp.converged = _check_hp_model_convergance(hp)
-        hp = _get_metrics(hp)
-        
+        hp = _solve_case(hp)
         if hp.debug:
             hp.get_cycle_plot()
     except:
         _print_failed_to_solve_report(hp)
         print('Heat pump solver failed with an exception. The failed case has been recorded.')
         hp.converged = False    
+    return hp
+
+def _solve_case(hp: TRHP) -> TRHP:
+    hp = _find_hp_with_min_discharge_pressure(hp)
+    if hp.debug:
+        hp.get_cycle_plot()
+
+    dt_offset = hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
+    if (abs(dt_offset) > 0.1 and _check_hp_model_convergance(hp)):
+        while abs(_find_evap_inlet_temperature_offset(hp.evaporator.sink_out.temperature - dt_offset, hp)) > 1e-6:
+            dt_offset = hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
+
+        hp.Tref_evap_outlet = hp.Tref_evap_inlet + dt_offset
+        hp.evaporator.sink_out.props_in_ab('TQ', hp.Tref_evap_outlet, 1.0)
+        hp = _find_hp_with_min_discharge_pressure(hp)
+
+    hp = _get_metrics(hp)
     return hp
 
 def _check_hp_model_convergance(hp: TRHP) -> bool:
@@ -67,6 +69,7 @@ def _get_metrics(hp: TRHP) -> TRHP:
     def _get_hp_cycle_type(hp: TRHP) -> str:
         return 'Transcritical' if hp.comp_discharge.pressure > hp.comp_discharge.P_crit else 'Subcritical'
 
+    hp.converged = _check_hp_model_convergance(hp)
     hp.COP = _get_COP(hp)
     hp.SEC = _get_SEC(hp)
     hp.VHC = _get_VHC(hp)

@@ -18,6 +18,7 @@ class HeatPump():
     operations: list
 
     feasible: bool
+    args: dict
     cycle_type: str = None
     converged: bool = False
     COP: np.float32 = -np.inf

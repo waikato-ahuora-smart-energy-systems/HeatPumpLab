@@ -51,6 +51,7 @@ class TRHP(HeatPump):
     comp_discharge: MassStream
 
     def __init__(self, **d_args):
+        self.args = d_args
         for key, value in d_args.items():
             setattr(self, key, value)
    
@@ -79,7 +80,7 @@ class TRHP(HeatPump):
             'VHC' : self.VHC,
             'eDTL' : self.eDTL,
             'SLE' : self.SLE,
-            'dQ/dQ' : self.dQdW,
+            'dQ/dW' : self.dQdW,
             'LMTD_gcs' : self.LMTD_gcs,
             'Pmax' : self.comp_discharge.pressure * 1000,
             'converged' : self.converged,
