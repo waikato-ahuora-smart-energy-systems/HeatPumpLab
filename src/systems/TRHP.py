@@ -87,6 +87,11 @@ class TRHP(BaseHeatPump):
             'comp_PR_uniform' : self.comp_PR_uniform,
             'Tref_evap_inlet' : self.Tref_evap_inlet,
             'dTmin_phx' : self.dTmin_phx,
+            'ihx_on': self.ihx_on,
+            'comp_model_index': self.comp_model_index,
+            'motor_eff': self.motor_eff,
+            'sink': self.sink,
+            'source': self.source,
             #Optmisation variables
             'dT_phx1_cold' : self.dT_phx1_cold,
             'dT_phx2_cold' : self.dT_phx2_cold,
@@ -115,8 +120,7 @@ class TRHP(BaseHeatPump):
             'n_is_3' : self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,
             'n_vol_1': self.comp1.isentropic_eff,
             'n_vol_2': self.comp2.isentropic_eff if self.n_comp > 1 else 1.0,
-            'n_vol_3': self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,                       
-            'n_motor': self.motor_eff,
+            'n_vol_3': self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,
             'Solve time' : dt,
             }
         return self.output

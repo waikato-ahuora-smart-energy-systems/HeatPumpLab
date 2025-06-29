@@ -159,7 +159,7 @@ def _find_current_gc_dtmin_offset(P_comp_out: float, hp: TRHP) -> float:
     if dtmin_ls[-1][1] < 1e-3:  # Ignore the mid exchanger dtmin of the inlet air to the gas cooler if it is the cold-side
         dtmin_ls.pop(-1)
 
-    return min(dtmin_ls)[0] - hp.dT_GC_min_tar   
+    return min(dtmin_ls)[0] - hp.dT_GC_min_tar
 
 def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: TRHP) -> list[list[float,float]]:
     dtmin_ls: list[float]
@@ -168,9 +168,11 @@ def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: TRHP) -> list[list[flo
     hp = _do_sequential_iterative_cycle_analysis(P_comp_out, hp)
     dtmin_ls = []
     for gc in hp.gas_coolers:
-        dtmin_ls.append([gc.source_in.temperature - gc.sink_out.temperature, 1.0])  # Pinch on the hot side of the gc
+        dt_hot = gc.source_in.temperature - gc.sink_out.temperature
+        dt_cold = gc.source_out.temperature - gc.sink_in.temperature
+        dtmin_ls.append([dt_hot, 1.0, True])  # Pinch on the hot side of the gc
         dtmin_ls.append(_find_gc_dt_approaches(gc))                       # Pinch in the middle of the gc
-        dtmin_ls.append([gc.source_out.temperature - gc.sink_in.temperature, 0.0])  # Pinch on the cold side of the gc
+        dtmin_ls.append([dt_cold, 0.0, True])  # Pinch on the cold side of the gc
 
     if hp.debug:
         plot_driving_force(hp.gas_coolers, dtmin=hp.dT_GC_min_tar)
@@ -234,8 +236,8 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
     gc.source_pinch.pressure = gc.source_out.pressure
     gc.sink_pinch.pressure = gc.sink_in.pressure
 
-    r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='TNC', x0=[gc.duty / 2], bounds=[(0.0, gc.duty)], jac=True) # TNC L-BFGS-B
-    return [r['fun'], r['x'] / gc.duty]
+    r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[gc.duty / 2], bounds=[(0.0, gc.duty)], jac=True) # TNC L-BFGS-B
+    return [r['fun'], r['x'] / gc.duty, r['success']]
 
     # gc.pinch_length = r['x'] / gc.duty    
 
@@ -301,4 +303,5 @@ def _calc_jac_at_given_point(source: MassStream, sink: MassStream) -> float:
 def _print_failed_to_solve_report(hp: TRHP, filename: str ='results/Cases-Unsolved') -> None:
     print('Heat pump model failed to solve.')
     hp.get_summary()
+    # hp.get_cycle_plot()
     print_result_to_csv(hp.output, file_name=filename)

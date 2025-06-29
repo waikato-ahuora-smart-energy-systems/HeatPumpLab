@@ -33,7 +33,7 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
         'Isopentane',
         'Neopentane',
         'Cyclopentane',        
-        # 'Carbon dioxide', 
+        'Carbon dioxide', 
         'R1233zd(E)', 
         'R1336mzz(E)', 
         'R1336mzz(Z)', 

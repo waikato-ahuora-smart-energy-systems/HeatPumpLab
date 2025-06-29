@@ -96,20 +96,29 @@ def analyse_unsolved_cases(debug: bool =True):
                     'T_air_inlet': float(case['T_air_inlet']), 
                     'T_source_in': float(case['T_source_in']), 
                     'n_comp': int(case['n_comp']), 
+                    'ihx_on': int(case['ihx_on']),
+                    'dTmin_phx': float(case['dTmin_phx']),
                     'dT_phx1_cold': float(case['dT_phx1_cold']),
                     'dT_phx2_cold': float(case['dT_phx2_cold']),
                     'dT_phx3_cold': float(case['dT_phx3_cold']), 
                     'comp2_power_frac': float(case['comp2_power_frac']), 
                     'comp3_power_frac': float(case['comp3_power_frac']),
                     'comp_PR_uniform': bool(case['comp_PR_uniform']),
+                    'comp_model_index': int(case['comp_model_index']),
+                    'motor_eff': float(case['motor_eff']),
+                    'sink': str(case['sink']),
+                    'source': str(case['source']),
+                    'Tref_evap_inlet' : float(case['Tref_evap_inlet']),                
                     'debug': bool(debug),
                     }
-            hp, _ = solve_single_case(args)
+            
+            hp, _ = _analyse_case(args)
             if hp.converged:
                 hp.get_summary()
                 fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
                 _print_results(hp.output, fsuffix)
         
+                hp.get_cycle_plot(x_axis='h', y_axis='T')
                 hp.get_cycle_plot(x_axis='s', y_axis='T')
                 hp.get_cycle_plot(x_axis='h', y_axis='P')
                 hp.get_cycle_plot(x_axis='v', y_axis='P')
@@ -121,7 +130,7 @@ def analyse_cases():
         f_cases=get_analysis_cases_to_solve,
         f_solve=_analyse_case,
         file_name='results/TRHP_results',
-        n_cpu=1,
+        # n_cpu=1,
     )
 
 def solve_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
@@ -160,6 +169,9 @@ def _analyse_case(case: dict) -> None:
             dt=dt, 
             print_to_terminal=False,
             )
+        return hp, dt
+    else:
+        return None, dt
     
 def _get_initial_val(vars_input: dict) -> list:
     return [vars_input[key]['xi'] for key in vars_input]
