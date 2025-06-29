@@ -1,3 +1,0 @@
-[2024-11-20 11:38:53,574][so_hpo][INFO][color_logger.py:203] Logfile: /Users/timothyw/Github Local/Transcritical-Recuperative-Heat-Pump/logs/so_hpo_2024-11-20-11-38-53-573678.log
-[2024-11-20 11:38:53,580][so_hpo][INFO][generic_advisor.py:227] [BO auto selection]  acq_type: ei. acq_optimizer_type: random_scipy.
-[2024-11-20 11:38:53,583][so_hpo][WARNING][base.py:64] [Build Surrogate] Use probabilistic random forest based on scikit-learn. For better performance, please install pyrfr: https://open-box.readthedocs.io/en/latest/installation/install_pyrfr.html

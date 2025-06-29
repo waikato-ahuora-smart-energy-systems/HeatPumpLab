@@ -1,9 +1,0 @@
-[2024-11-20 11:35:46,574][so_hpo][INFO][color_logger.py:203] Logfile: /Users/timothyw/Github Local/Transcritical-Recuperative-Heat-Pump/logs/so_hpo_2024-11-20-11-35-46-572991.log
-[2024-11-20 11:35:46,580][so_hpo][INFO][generic_advisor.py:227] [BO auto selection]  acq_type: ei. acq_optimizer_type: random_scipy.
-[2024-11-20 11:35:46,582][so_hpo][WARNING][base.py:64] [Build Surrogate] Use probabilistic random forest based on scikit-learn. For better performance, please install pyrfr: https://open-box.readthedocs.io/en/latest/installation/install_pyrfr.html
-[2024-11-20 11:35:46,587][so_hpo][INFO][html_visualizer.py:462] Please open the html file to view visualization result: file:///Users/timothyw/Github Local/Transcritical-Recuperative-Heat-Pump/logs/history/so_hpo/so_hpo_2024-11-20-11-35-46-582748.html
-[2024-11-20 11:35:46,963][so_hpo][INFO][generic_smbo.py:310] Iter 1, objectives: [-1.090282778290991].
-[2024-11-20 11:35:47,157][so_hpo][INFO][generic_smbo.py:310] Iter 2, objectives: [-1.0761040286319492].
-[2024-11-20 11:35:47,328][so_hpo][INFO][generic_smbo.py:310] Iter 3, objectives: [-1.1332885362437413].
-[2024-11-20 11:35:47,699][so_hpo][INFO][generic_smbo.py:310] Iter 4, objectives: [-1.0998858282915558].
-[2024-11-20 11:35:48,098][so_hpo][INFO][generic_smbo.py:310] Iter 5, objectives: [-1.067791267660048].
