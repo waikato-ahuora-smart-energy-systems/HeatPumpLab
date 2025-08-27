@@ -33,7 +33,7 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
         'Isopentane',
         'Neopentane',
         'Cyclopentane',        
-        'Carbon dioxide', 
+        # 'Carbon dioxide', 
         'R1233zd(E)', 
         'R1336mzz(E)', 
         'R1336mzz(Z)', 
@@ -52,18 +52,13 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
         # 'propane;Pentane|.5;.5|mol',
         # 'propane;Isopentane|.5;.5|mol',
         # 'propane;Neopentane|.5;.5|mol',
-        # 'propane;Cyclopentane|.5;.5|mol',
-
         # 'Isobutane;butane|.5;.5|mol',
         # 'Isobutane;Pentane|.5;.5|mol',
         # 'Isobutane;Isopentane|.5;.5|mol',
         # 'Isobutane;Neopentane|.5;.5|mol',
-        # 'Isobutane;Cyclopentane|.5;.5|mol',
-
         # 'butane;Pentane|.5;.5|mol',
         # 'butane;Isopentane|.5;.5|mol',
         # 'butane;Neopentane|.5;.5|mol',
-        # 'butane;Cyclopentane|.5;.5|mol',
         ]
     
     # Enumerate all the cases to be analysed
@@ -76,20 +71,20 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
                 'n_comp': 2,
                 'ihx_on': 1,
                 'dTmin_phx': 5.0,
-                'dT_phx1_cold': float(dt1),
-                'dT_phx2_cold': float(dt2),
+                'dT_phx1_cold': float(dt1) / 2,
+                'dT_phx2_cold': float(dt2) / 2,
                 'dT_phx3_cold': 0.0, 
                 'comp2_power_frac': float(cpf2) / 100, 
                 'comp3_power_frac': 0.0,
                 'comp_PR_uniform': False,
-                'comp_model_index': 3,
+                'comp_model_index': 1,
                 'motor_eff': 1.0,
                 'sink': 'Air',
                 'source': 'water',
                 'Tref_evap_inlet' : 10.0,
              }
-                for dt1 in range(0, 51, 5)
-                for dt2 in range(0, 81, 5)
+                for dt1 in range(0, 201, 5)
+                for dt2 in range(0, 201, 5)
                 for cpf2 in range(30, 71, 5)
                 for r in refrigerant_ls
             ]

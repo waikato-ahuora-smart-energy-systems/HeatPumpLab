@@ -42,8 +42,11 @@ class Compressor:
         elif self.model_coeffs[0] == 'Polynomial':
             shaft_eff = (0.65 + 0.015 * self.pressure_ratio + -0.0015 * pow( self.pressure_ratio, 2.0 )) 
         elif self.model_coeffs[0] == 'Brendel et al':
-            shaft_eff = (0.66981 - 0.6 / pow( self.pressure_ratio - 0.01466, 8.38 * self.flow_in.pressure ) - 0.00102 * pow( self.pressure_ratio, 1.8 ))
-        return min(max(shaft_eff, 0.0), 1.0) / self.motor_eff
+            if self.pressure_ratio > 1:
+                shaft_eff = (0.66981 - 0.6 / pow( self.pressure_ratio - 0.01466, 8.38 * self.flow_in.pressure ) - 0.00102 * pow( self.pressure_ratio, 1.8 ))
+            else:
+                shaft_eff = 0.4
+        return min(max(shaft_eff, 0.4), 1.0) / self.motor_eff
         
     def get_compressor_power(self) -> float:
         self.flow_out_isen.pp_instance = self.flow_out.pp_instance

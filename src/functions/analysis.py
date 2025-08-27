@@ -33,7 +33,7 @@ def analyse_single_case():
         'Ammonia',
         ]
     
-    args = {'refrigerant': 'Ammonia',
+    args = {'refrigerant': 'Propane',
             'dT_GC_min_tar': 20.0, 
             'T_air_tar': 200.0, 
             'T_air_inlet': 15.0,
@@ -42,14 +42,14 @@ def analyse_single_case():
             'n_comp': 2,
             'ihx_on': 1,
             'dTmin_phx': 5.0,
-            'dT_phx1_cold': 10.0,
-            'dT_phx2_cold': 30.0,
+            'dT_phx1_cold': 0.0,
+            'dT_phx2_cold': 70.0,
             'dT_phx3_cold': 0.0,
-            'comp2_power_frac': 0.5,
+            'comp2_power_frac': 0.6,
             'comp3_power_frac': 0.0,
-            'comp_PR_uniform': True,
+            'comp_PR_uniform': False,
             # 'motor_eff': 1.00,
-            'comp_model_index': 3,
+            'comp_model_index': 1,
             'debug': False,
             'sink': 'Air',
             'source': 'water',
@@ -130,7 +130,7 @@ def analyse_cases():
         f_cases=get_analysis_cases_to_solve,
         f_solve=_analyse_case,
         file_name='results/TRHP_results',
-        # n_cpu=1,
+        n_cpu=7,
     )
 
 def solve_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
@@ -144,19 +144,33 @@ def solve_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results',
     transfer_temp_files_to_results(file_name)
 
 def _analyse_case(case: dict) -> None:
+    hp: TRHP
+    dt_ls = []
     vars_input = { 'dT_gc_out_min_offset' : { 'xi' : 0.0, 'bnds' : (0.0, 40.0) } }
     case['additional_data'] = {'vars_input' : vars_input}
 
+    # if case['comp_model_index'] == 3:
+    #     try:
+    #         case['comp_model_index'] = 1
+    #         dt_ls.append(dt)
+    #         hp, dt = solve_single_case(case)
+    #         dt_ls.append(dt)
+    #         case['comp_model_index'] = 3
+    #         case['P_H_est'] = hp.P_H_est
+    #     except:
+    #         pass
+        
     result, dt = _get_local_optimum(
         param=case,
         vars_input=vars_input,
         tol=1e-4,
         f_obj=_compute_SEC_obj,
         )
+    dt_ls.append(dt)
     
     if result.success:
-        hp: TRHP
-        hp, _ = solve_single_case(case | _get_var_kwargs(result.x, case))
+        hp, dt = solve_single_case(case | _get_var_kwargs(result.x, case))
+        dt_ls.append(dt)
         obj = _compute_SEC_obj(hp, case)
 
         hp.dQdW = _get_dQdW(hp)    
@@ -166,7 +180,7 @@ def _analyse_case(case: dict) -> None:
             param=case, 
             result=result, 
             obj=obj, 
-            dt=dt, 
+            dt=sum(dt_ls), 
             print_to_terminal=False,
             )
         return hp, dt

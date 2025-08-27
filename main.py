@@ -12,9 +12,9 @@ from src.functions import analyse_cases, transfer_temp_files_to_results, optimis
 
 def main():
     # transfer_temp_files_to_results()
-    # analyse_single_case()
+    analyse_single_case()
     # analyse_unsolved_cases(debug=False)
-    analyse_cases()
+    # analyse_cases()
     # optimise_cases()
     
  

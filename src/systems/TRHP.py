@@ -96,6 +96,7 @@ class TRHP(BaseHeatPump):
             'dT_phx1_cold' : self.dT_phx1_cold,
             'dT_phx2_cold' : self.dT_phx2_cold,
             'dT_phx3_cold' : self.dT_phx3_cold,
+            'dT_phx_cold_sum' : self.dT_phx1_cold + self.dT_phx2_cold + self.dT_phx3_cold,
             'comp1_power_frac' : self.comp1_power_frac, 
             'comp2_power_frac' : self.comp2_power_frac, 
             'comp3_power_frac' : self.comp3_power_frac,  
