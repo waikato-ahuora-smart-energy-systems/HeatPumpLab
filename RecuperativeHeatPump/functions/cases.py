@@ -16,16 +16,17 @@ def get_analysis_case_comparison(res, case):
         abs(float(case['T_air_tar']) - float(res['T_air_tar'])) < 0.01 and 
         abs(float(case['T_source_in']) - float(res['T_source_in'])) < 0.01 and 
         abs(float(case['Tref_evap_inlet']) - float(res['Tref_evap_inlet'])) < 0.01 and
-        abs(float(case['dTmin_phx']) - float(res['dTmin_phx'])) < 0.01 and
-        abs(float(case['dT_phx1_cold']) - float(res['dT_phx1_cold'])) < 0.01 and
-        abs(float(case['dT_phx2_cold']) - float(res['dT_phx2_cold'])) < 0.01 and
-        abs(float(case['dT_phx3_cold']) - float(res['dT_phx3_cold'])) < 0.01 and
+        abs(float(case['dTmin_rhx']) - float(res['dTmin_rhx'])) < 0.01 and
+        abs(float(case['dT_rhx1_cold']) - float(res['dT_rhx1_cold'])) < 0.01 and
+        abs(float(case['dT_rhx2_cold']) - float(res['dT_rhx2_cold'])) < 0.01 and
+        abs(float(case['dT_rhx3_cold']) - float(res['dT_rhx3_cold'])) < 0.01 and
         abs(float(case['comp2_power_frac']) - float(res['comp2_power_frac'])) < 0.01 and
         abs(float(case['comp3_power_frac']) - float(res['comp3_power_frac'])) < 0.01
         )
 
 def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
     refrigerant_ls: list[str] = [
+        'Ammonia',
         'Propane', 
         'Butane', 
         'Isobutane',
@@ -45,7 +46,7 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
         'PROPYLEN',
         'DME',
         'Methanol',
-        'Ammonia',
+
 
         # 'propane;butane|.5;.5|mol',
         # 'propane;Isobutane|.5;.5|mol',
@@ -70,10 +71,10 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
                 'T_source_in': 40.0,
                 'n_comp': 2,
                 'ihx_on': 1,
-                'dTmin_phx': 5.0,
-                'dT_phx1_cold': float(dt1) / 2,
-                'dT_phx2_cold': float(dt2) / 2,
-                'dT_phx3_cold': 0.0, 
+                'dTmin_rhx': 5.0,
+                'dT_rhx1_cold': float(dt1) / 2,
+                'dT_rhx2_cold': float(dt2) / 2,
+                'dT_rhx3_cold': 0.0, 
                 'comp2_power_frac': float(cpf2) / 100, 
                 'comp3_power_frac': 0.0,
                 'comp_PR_uniform': False,

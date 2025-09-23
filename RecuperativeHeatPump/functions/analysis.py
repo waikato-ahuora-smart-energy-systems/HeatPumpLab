@@ -1,7 +1,7 @@
 from concurrent.futures import ProcessPoolExecutor as pool
 from scipy.optimize import minimize as loc_min
 import numpy as np, os, copy
-from ..systems import TRHP, set_trhp_model
+from ..systems import RHP, set_RHP_model
 from ..streams.propertiesPackage import PropertyPackage
 from .solver import solve_heat_pump_model
 from .cases import get_analysis_cases_to_solve
@@ -11,7 +11,7 @@ from .cases import get_analysis_case_comparison
 
 def analyse_single_case():
     args: list[float | str | bool]
-    hp: TRHP
+    hp: RHP
 
     refrigerant_ls = [
         # 'propane;butane|.5;.5|mol',
@@ -41,10 +41,10 @@ def analyse_single_case():
             'dT_gc_out_min_offset': 0.0,
             'n_comp': 2,
             'ihx_on': 1,
-            'dTmin_phx': 5.0,
-            'dT_phx1_cold': 0.0,
-            'dT_phx2_cold': 70.0,
-            'dT_phx3_cold': 0.0,
+            'dTmin_rhx': 5.0,
+            'dT_rhx1_cold': 0.0,
+            'dT_rhx2_cold': 70.0,
+            'dT_rhx3_cold': 0.0,
             'comp2_power_frac': 0.6,
             'comp3_power_frac': 0.0,
             'comp_PR_uniform': False,
@@ -76,7 +76,7 @@ def analyse_single_case():
     return True
 
 def analyse_unsolved_cases(debug: bool =True):
-    hp: TRHP
+    hp: RHP
     transfer_temp_files_to_results('results/Cases-Resolved')
     unsolved_cases = read_csv_to_results(file_name='results/Cases-Unsolved')
     resolved_cases = read_csv_to_results(file_name='results/Cases-Resolved')
@@ -97,10 +97,10 @@ def analyse_unsolved_cases(debug: bool =True):
                     'T_source_in': float(case['T_source_in']), 
                     'n_comp': int(case['n_comp']), 
                     'ihx_on': int(case['ihx_on']),
-                    'dTmin_phx': float(case['dTmin_phx']),
-                    'dT_phx1_cold': float(case['dT_phx1_cold']),
-                    'dT_phx2_cold': float(case['dT_phx2_cold']),
-                    'dT_phx3_cold': float(case['dT_phx3_cold']), 
+                    'dTmin_rhx': float(case['dTmin_rhx']),
+                    'dT_rhx1_cold': float(case['dT_rhx1_cold']),
+                    'dT_rhx2_cold': float(case['dT_rhx2_cold']),
+                    'dT_rhx3_cold': float(case['dT_rhx3_cold']), 
                     'comp2_power_frac': float(case['comp2_power_frac']), 
                     'comp3_power_frac': float(case['comp3_power_frac']),
                     'comp_PR_uniform': bool(case['comp_PR_uniform']),
@@ -129,11 +129,11 @@ def analyse_cases():
     solve_in_parallel(
         f_cases=get_analysis_cases_to_solve,
         f_solve=_analyse_case,
-        file_name='results/TRHP_results',
+        file_name='results/RHP_results',
         n_cpu=7,
     )
 
-def solve_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
+def solve_in_parallel(f_cases, f_solve, file_name: str = 'results/RHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
     # Use parallel processing distributed over all cores to speed up the analysis
     cases: list        = f_cases(file_name)
     print(len(cases))
@@ -144,7 +144,7 @@ def solve_in_parallel(f_cases, f_solve, file_name: str = 'results/TRHP_results',
     transfer_temp_files_to_results(file_name)
 
 def _analyse_case(case: dict) -> None:
-    hp: TRHP
+    hp: RHP
     dt_ls = []
     vars_input = { 'dT_gc_out_min_offset' : { 'xi' : 0.0, 'bnds' : (0.0, 40.0) } }
     case['additional_data'] = {'vars_input' : vars_input}
@@ -203,12 +203,12 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict
                     )
 
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
-    hp: TRHP
+    hp: RHP
     hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
     obj = f_obj(hp, param)
     return obj * 1000
 
-def _compute_SEC_obj(hp: TRHP, param: dict) -> float:
+def _compute_SEC_obj(hp: RHP, param: dict) -> float:
     return hp.SEC
 
 def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
@@ -220,14 +220,14 @@ def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
     return d_var
 
 @time_func
-def solve_single_case(args) -> TRHP:
-    hp = TRHP(**args)
-    hp = set_trhp_model(hp)
+def solve_single_case(args) -> RHP:
+    hp = RHP(**args)
+    hp = set_RHP_model(hp)
     if hp.feasible:
         hp = solve_heat_pump_model(hp)
     return hp
 
-def get_results_report(hp: TRHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
+def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
     res = _get_results_summary(hp, result, param, obj, dt)
     fsuffix = _get_unique_f_suffix(param)
     _print_results(res, fsuffix, print_to_terminal)
@@ -237,8 +237,8 @@ def _print_results(results: dict, fsuffix: str, print_to_terminal: bool =True) -
         print_result_to_terminal(results)
     print_result_to_csv(output=results, suffix=fsuffix)    
 
-def _get_dQdW(hp0: TRHP) -> float:
-    hp1: TRHP
+def _get_dQdW(hp0: RHP) -> float:
+    hp1: RHP
     dtemp = 0.001
     args = copy.deepcopy(hp0.args)
     args['T_air_tar'] = hp0.T_air_tar + dtemp
@@ -252,7 +252,7 @@ def _get_dQdW(hp0: TRHP) -> float:
         dqdw = 0.0
     return dqdw
 
-def _get_results_summary(hp: TRHP, result, param, obj, dt: float =None) -> dict:
+def _get_results_summary(hp: RHP, result, param, obj, dt: float =None) -> dict:
     hp.get_summary()
 
     if 'weight' in param['additional_data']:

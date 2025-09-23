@@ -1,13 +1,13 @@
 import numpy as np
 from scipy.optimize import root_scalar, minimize
 from math import log, exp
-from ..systems import TRHP
+from ..systems import RHP
 from ..components import GasCooler
 from ..streams import MassStream
 from .readWriteOutput import print_result_to_csv
 from .graph import plot_driving_force
 
-def solve_heat_pump_model(hp: TRHP) -> TRHP:
+def solve_heat_pump_model(hp: RHP) -> RHP:
     #Solve heat pump cycle
     try:
         hp = _solve_case(hp)
@@ -20,7 +20,7 @@ def solve_heat_pump_model(hp: TRHP) -> TRHP:
         hp.converged = False    
     return hp
 
-def _solve_case(hp: TRHP) -> TRHP:
+def _solve_case(hp: RHP) -> RHP:
     hp = _find_hp_with_min_discharge_pressure(hp)
     if hp.debug:
         hp.get_cycle_plot()
@@ -37,32 +37,32 @@ def _solve_case(hp: TRHP) -> TRHP:
     hp = _get_metrics(hp)
     return hp
 
-def _check_hp_model_convergance(hp: TRHP) -> bool:
+def _check_hp_model_convergance(hp: RHP) -> bool:
     return True if ( sum([c.power for c in hp.compressors]) > 0.0 and hp.converged == True and hp.feasible == True ) else False
 
-def _get_metrics(hp: TRHP) -> TRHP:
+def _get_metrics(hp: RHP) -> RHP:
 
-    def _get_COP(hp: TRHP) -> float:
+    def _get_COP(hp: RHP) -> float:
         return sum([g.duty for g in hp.gas_coolers]) / sum([c.power for c in hp.compressors]) if hp.converged else 0.0   
 
-    def _get_SEC(hp: TRHP) -> float:
+    def _get_SEC(hp: RHP) -> float:
         return sum([c.power for c in hp.compressors]) / (sum([g.duty for g in hp.gas_coolers]) - sum([c.power for c in hp.compressors])) if hp.converged else np.inf    
 
-    def _get_VHC(hp: TRHP) -> float:
+    def _get_VHC(hp: RHP) -> float:
         return sum([g.duty for g in hp.gas_coolers]) / hp.comp1.flow_in.vol_flow if hp.converged else 0.0   
 
-    def _get_eDTL(hp: TRHP) -> float:
+    def _get_eDTL(hp: RHP) -> float:
         eT_h_ave = sum([g.duty for g in hp.gas_coolers]) / sum([g.delta_entropy_src for g in hp.gas_coolers])
         eT_c_ave = sum([e.duty for e in hp.evaporators]) / sum([e.delta_entropy_snk for e in hp.evaporators])
         return eT_h_ave - eT_c_ave if hp.converged else 0.0  
 
-    def _get_SLE(hp: TRHP) -> float:
+    def _get_SLE(hp: RHP) -> float:
         return hp.SEC / hp.eDTL * 1000 if hp.converged else 0.0
     
-    def _get_LMTD_gcs(hp: TRHP):
+    def _get_LMTD_gcs(hp: RHP):
         return sum([g.duty * g.get_LMTD_ave() for g in hp.gas_coolers]) / sum([g.duty for g in hp.gas_coolers])
 
-    def _get_hp_cycle_type(hp: TRHP) -> str:
+    def _get_hp_cycle_type(hp: RHP) -> str:
         return 'Transcritical' if hp.comp_discharge.pressure > hp.comp_discharge.P_crit else 'Subcritical'
 
     hp.converged = _check_hp_model_convergance(hp)
@@ -75,12 +75,12 @@ def _get_metrics(hp: TRHP) -> TRHP:
     hp.cycle_type = _get_hp_cycle_type(hp)
     return hp
 
-def _find_evap_inlet_temperature_offset(Tref_evap_outlet: float, hp: TRHP) -> float:
+def _find_evap_inlet_temperature_offset(Tref_evap_outlet: float, hp: RHP) -> float:
     hp.evaporator.sink_out.props_in_ab('TQ', Tref_evap_outlet, 1.0)
     hp = _find_hp_with_min_discharge_pressure(hp)
     return hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
 
-def _find_hp_with_min_discharge_pressure(hp: TRHP) -> TRHP:
+def _find_hp_with_min_discharge_pressure(hp: RHP) -> RHP:
     bnds, x0, hp.feasible, bnd_val = _get_discharge_pressure_bounds(hp)
     hp.comp_discharge.pressure_bnds = bnds
     if hp.feasible == True:
@@ -99,7 +99,7 @@ def _find_hp_with_min_discharge_pressure(hp: TRHP) -> TRHP:
         raise Exception("Infeasible pressure bounds. The failed case has been recorded.")
     return hp
 
-def _get_discharge_pressure_bounds(hp: TRHP) -> list[tuple[float, float], float, bool, tuple[float, float]]:
+def _get_discharge_pressure_bounds(hp: RHP) -> list[tuple[float, float], float, bool, tuple[float, float]]:
     feasible: bool = False
     P_lb: float
     P_ub: float
@@ -150,7 +150,7 @@ def _get_discharge_pressure_bounds(hp: TRHP) -> list[tuple[float, float], float,
 
     return (P_lb, P_ub), P_i, feasible, (dt_plus, dt_neg)
 
-def _find_current_gc_dtmin_offset(P_comp_out: float, hp: TRHP) -> float:
+def _find_current_gc_dtmin_offset(P_comp_out: float, hp: RHP) -> float:
     dtmin_ls: list[list[float,float]]
 
     dtmin_ls = _get_all_possible_gc_dtmin_pos(P_comp_out, hp)
@@ -161,7 +161,7 @@ def _find_current_gc_dtmin_offset(P_comp_out: float, hp: TRHP) -> float:
 
     return min(dtmin_ls)[0] - hp.dT_GC_min_tar
 
-def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: TRHP) -> list[list[float,float]]:
+def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: RHP) -> list[list[float,float]]:
     dtmin_ls: list[float]
     gc: GasCooler
 
@@ -179,7 +179,7 @@ def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: TRHP) -> list[list[flo
         
     return dtmin_ls
 
-def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: TRHP) -> TRHP:
+def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: RHP) -> RHP:
     hp.comp_discharge.pressure = P_comp_out
     i: int = 0
     h: float 
@@ -214,7 +214,7 @@ def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: TRHP) -> TRHP
 
     return hp
 
-def _set_gas_coolers_sink_temperatures(hp: TRHP) -> TRHP:
+def _set_gas_coolers_sink_temperatures(hp: RHP) -> RHP:
     gc: GasCooler
 
     hp.gas_coolers[0].sink_out.temperature = hp.T_air_tar
@@ -279,7 +279,7 @@ def _calc_pinch_dtmin_and_jac(Q: float, gc: GasCooler):
             _calc_jac_at_given_point(gc.source_pinch, gc.sink_pinch) #Jacobian
             )
 
-def _update_pinch_props_for_gcs(P_comp_out: float, hp: TRHP) -> TRHP:
+def _update_pinch_props_for_gcs(P_comp_out: float, hp: RHP) -> RHP:
     dtmin_ls = _get_all_possible_gc_dtmin_pos(P_comp_out, hp)
     i = 1
     for gc in hp.gas_coolers:
@@ -300,7 +300,7 @@ def _calc_dtmin_at_given_point(source: MassStream, sink: MassStream) -> float:
 def _calc_jac_at_given_point(source: MassStream, sink: MassStream) -> float:
     return 1 / (source.heat_capacity * source.mass_flow) - 1 / (sink.heat_capacity * sink.mass_flow)
 
-def _print_failed_to_solve_report(hp: TRHP, filename: str ='results/Cases-Unsolved') -> None:
+def _print_failed_to_solve_report(hp: RHP, filename: str ='results/Cases-Unsolved') -> None:
     print('Heat pump model failed to solve.')
     hp.get_summary()
     # hp.get_cycle_plot()

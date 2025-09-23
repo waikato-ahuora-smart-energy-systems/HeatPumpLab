@@ -38,7 +38,7 @@ class BaseHeatPump():
     motor_eff: float =1.0 
     ihx_on: int = 1
     P_H_est: float =0.0
-    dTmin_phx : float = 5.0
+    dTmin_rhx : float = 5.0
     comp_model_index: int =1     
 
     compute_jac: bool =False

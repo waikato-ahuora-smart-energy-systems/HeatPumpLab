@@ -1,9 +1,9 @@
-name: HTHP_311_env
+name: RHP_env
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.12
   - numpy
   - scipy
   - pandas
@@ -12,4 +12,3 @@ dependencies:
   - pip
   - pip:
     - ctREFPROP
-    - type-enforced

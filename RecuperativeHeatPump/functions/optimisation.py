@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import dual_annealing as glb_min, LinearConstraint, minimize as loc_min, approx_fprime
-from ..systems import TRHP
+from ..systems import RHP
 from .solver import solve_heat_pump_model
 from .decorator_functions import time_func
 from .analysis import solve_single_case, get_results_report, solve_in_parallel
@@ -34,19 +34,19 @@ def _get_variable_input_data(param: dict, x: list =None) -> dict:
     if param['n_comp'] > 3:
         raise ValueError("Number of compressors must be 1, 2 or 3.")     
     
-    # vars_input['dT_phx1_cold'] = {
+    # vars_input['dT_rhx1_cold'] = {
     #     'xi' : 0.0 if x is None else x[i],
     #     'bnds' : (0.0, dT_upper),
     #     }
     # i += 1
     if param['n_comp'] >= 2:
-        vars_input['dT_phx2_cold'] = {
+        vars_input['dT_rhx2_cold'] = {
             'xi' : 0.0 if x is None else x[i],
             'bnds' : (0.0, dT_upper),
             }
         i += 1
     if param['n_comp'] == 3:
-        vars_input['dT_phx3_cold'] = {
+        vars_input['dT_rhx3_cold'] = {
             'xi' : 0.0 if x is None else x[i],
             'bnds' : (0.0, dT_upper),
             }
@@ -90,7 +90,7 @@ def _get_bounds(vars_input: dict) -> list:
     return [vars_input[key]['bnds'] for key in vars_input]
 
 def _get_constraints(param: dict, vars_input: dict):
-    m = np.array([1.0 if ('dT_phx' in key and '_cold' in key) else 0.0 for key in vars_input])
+    m = np.array([1.0 if ('dT_rhx' in key and '_cold' in key) else 0.0 for key in vars_input])
     return LinearConstraint(A=m, lb=0.0, ub=(param['T_air_tar'] - param['T_air_inlet']) * 2/3)   
 
 @time_func
@@ -121,15 +121,15 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict
                     )
 
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
-    hp: TRHP
+    hp: RHP
     hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
     obj = f_obj(hp, param)
     return obj * 1000
 
-def _compute_SEC_obj(hp: TRHP, param: dict) -> float:
+def _compute_SEC_obj(hp: RHP, param: dict) -> float:
     return hp.SEC
 
-def _compute_multi_obj(hp: TRHP, param: dict) -> float:
+def _compute_multi_obj(hp: RHP, param: dict) -> float:
     SEC_0 = param['additional_data']['SEC_0']
     P_0   = param['additional_data']['P_0']
     k     = param['additional_data']['weight']
@@ -137,7 +137,7 @@ def _compute_multi_obj(hp: TRHP, param: dict) -> float:
     return (SEC / SEC_0) * k + (P / P_0) * (1 - k)
 
 def _get_jac(vars: list[float], param: dict, f_obj):
-    hp: TRHP
+    hp: RHP
     hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
     _ = f_obj(hp, param)
     if hp.converged:
