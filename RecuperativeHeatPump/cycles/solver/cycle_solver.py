@@ -315,7 +315,7 @@ def _calc_dtmin_at_given_point(source: MassStream, sink: MassStream) -> float:
 def _calc_jac_at_given_point(source: MassStream, sink: MassStream) -> float:
     return 1 / (source.heat_capacity * source.mass_flow) - 1 / (sink.heat_capacity * sink.mass_flow)
 
-def _print_failed_to_solve_report(hp: RHP, filename: str ='results/Cases-Unsolved') -> None:
+def _print_failed_to_solve_report(hp: RHP, filename: str ='Cases-Unsolved') -> None:
     print('Heat pump model failed to solve.')
     hp.get_report()
     # hp.get_cycle_plot()

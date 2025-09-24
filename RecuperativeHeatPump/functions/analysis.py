@@ -22,7 +22,7 @@ def analyse_cases_in_parallel(
         comp2_power_frac_ls: list = None,
         n_cpu: int = os.cpu_count() - 1,
         ):
-    file_name = 'results/' + filename
+    file_name = filename
     transfer_temp_files_to_results(file_name)
     cases = get_case_list_to_solve(
         file_name, 
@@ -170,7 +170,7 @@ def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
 def _print_results(results: dict, fsuffix: str, print_to_terminal: bool =True) -> None:
     if print_to_terminal:
         print_result_to_terminal(results)
-    print_result_to_csv(output=results, suffix=fsuffix)    
+    print_result_to_csv(output=results, suffix=fsuffix, file_name='temp/R')    
 
 def _get_dQdW(hp0: RHP) -> float:
     hp1: RHP

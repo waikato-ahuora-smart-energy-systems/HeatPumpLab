@@ -21,7 +21,7 @@ def print_result_to_terminal(output: dict[str, any]):
 def print_result_to_csv(output: list[any] =[], file_name: str ='R', file_ext: str ='.csv', suffix: str =''):
     try:
         if output != []:
-            file_name = 'results/temp/' + file_name + suffix + file_ext
+            file_name = 'results/' + file_name + suffix + file_ext
             file_exists = os.path.isfile(file_name)
             if file_exists:
                 with open(file_name, 'a', newline='') as csvfile:
@@ -37,7 +37,7 @@ def print_result_to_csv(output: list[any] =[], file_name: str ='R', file_ext: st
     except:
         print('Failed to appended result to CSV file.')
 
-def transfer_temp_files_to_results(file_name: str ='results/untitled') -> None:
+def transfer_temp_files_to_results(file_name: str ='untitled') -> None:
     csv_file_list: glob
     f: str
     fout: list[any]
@@ -45,7 +45,7 @@ def transfer_temp_files_to_results(file_name: str ='results/untitled') -> None:
 
     csv_file_list = glob(os.getcwd() + '/results/temp/*.csv')
     header_saved = False
-    with open(file_name + '.csv','a') as fout:
+    with open('results/' + file_name + '.csv','a') as fout:
         for f in reversed(csv_file_list):
             with open(f) as fin:
                 header = next(fin)
@@ -56,10 +56,10 @@ def transfer_temp_files_to_results(file_name: str ='results/untitled') -> None:
                     fout.write(line)
             os.remove(f)
 
-def read_csv_to_results(file_name: str ='results/untitled', file_ext: str ='.csv') -> list[any]:
+def read_csv_to_results(file_name: str ='untitled', file_ext: str ='.csv') -> list[any]:
     reader: DictReader
     try:
-        with open(file_name + file_ext, 'r') as csvfile:
+        with open('results/' + file_name + file_ext, 'r') as csvfile:
             reader = DictReader(csvfile)
             return list(reader)
     except:

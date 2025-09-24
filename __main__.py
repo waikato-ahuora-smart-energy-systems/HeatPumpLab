@@ -49,7 +49,7 @@ def analyse_single_case():
 
         if type(hp.output) is dict:
             print_result_to_terminal(output=hp.output)
-            print_result_to_csv(output=hp.output)
+            print_result_to_csv(output=hp.output, file_name='single-result')
         
         hp.get_driving_force_plot(hp.gas_coolers, hp.dT_GC_min_tar)
         hp.get_cycle_plot(x_axis='h', y_axis='T')
@@ -64,5 +64,5 @@ def analyse_single_case():
  
 if __name__=='__main__':
     # analyse_single_case()
-    analyse_cases_in_parallel(n_cpu=1)
+    analyse_cases_in_parallel()
     pass
