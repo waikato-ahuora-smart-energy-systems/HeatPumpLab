@@ -2,7 +2,7 @@ from ..components import *
 from ..streams import MassStream
 from .common.heatPump import BaseHeatPump
 from .RHP_constructor import *
-from .solver.model_solver import solve_heat_pump_model
+from .solver.cycle_solver import solve_heat_pump_cycle
 
 
 class RHP(BaseHeatPump):
@@ -54,7 +54,7 @@ class RHP(BaseHeatPump):
 
     def solve(self) -> 'RHP':
         if self.feasible:
-            solve_heat_pump_model(self)
+            solve_heat_pump_cycle(self)
         return self
    
     def get_model_parameters(self) -> dict[str, float | bool]:

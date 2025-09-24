@@ -1,25 +1,25 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.optimize import root_scalar, minimize
+from scipy.optimize import root_scalar, minimize, shgo, dual_annealing, Bounds
 from math import log, exp
 from typing import TYPE_CHECKING
 
-from ...functions.readWriteOutput import print_result_to_csv
-from ...functions.graph import plot_driving_force
+from ...functions.readWriteOutput import *
+from ...functions.graph import *
 
 if TYPE_CHECKING:
     from .. import RHP
     from ...components import GasCooler
     from ...streams import MassStream
 
-__all__ = ['solve_heat_pump_model']
+__all__ = ['solve_heat_pump_cycle']
 
 #######################################################################################################
 # Public API
 #######################################################################################################
 
-def solve_heat_pump_model(hp: RHP) -> RHP:
+def solve_heat_pump_cycle(hp: RHP) -> RHP:
     #Solve heat pump cycle
     try:
         hp = _solve_case(hp)
@@ -187,8 +187,8 @@ def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: RHP) -> list[list[floa
         dt_hot = gc.source_in.temperature - gc.sink_out.temperature
         dt_cold = gc.source_out.temperature - gc.sink_in.temperature
         dtmin_ls.append([dt_hot, 1.0, True])  # Pinch on the hot side of the gc
-        dtmin_ls.append(_find_gc_dt_approaches(gc))                       # Pinch in the middle of the gc
-        dtmin_ls.append([dt_cold, 0.0, True])  # Pinch on the cold side of the gc
+        dtmin_ls.append(_find_gc_dt_approaches(gc))  # Pinch in the middle of the gc
+        dtmin_ls.append([dt_cold, 0.0, True])  # Pinch on the cold side of the gc      
 
     if hp.debug:
         plot_driving_force(hp.gas_coolers, dtmin=hp.dT_GC_min_tar)
@@ -251,42 +251,37 @@ def _set_gas_coolers_sink_temperatures(hp: RHP) -> RHP:
 def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
     gc.source_pinch.pressure = gc.source_out.pressure
     gc.sink_pinch.pressure = gc.sink_in.pressure
-
-    r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[gc.duty / 2], bounds=[(0.0, gc.duty)], jac=True) # TNC L-BFGS-B
-    return [r['fun'], r['x'] / gc.duty, r['success']]
-
-    # gc.pinch_length = r['x'] / gc.duty    
-
-    # i_max = 8 #if gc.pinch_length is None else 1
     
+    bnds = Bounds(lb=0.0, ub=gc.duty)
+
+    r0 = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[gc.duty * 0.25], bounds=bnds, jac=True) # TNC L-BFGS-B
+    r1 = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[gc.duty * 0.50], bounds=bnds, jac=True) # TNC L-BFGS-B
+    r2 = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[gc.duty * 0.75], bounds=bnds, jac=True) # TNC L-BFGS-B
+
+    res = [r0, r1, r2]
+    j = np.argmin([r['fun'] for r in res])
+    if res[j]['x'] < 0.001 * gc.duty or res[j]['x'] > 0.999 * gc.duty:
+        res.pop(j)
+        j = np.argmin([r['fun'] for r in res])
+        if res[j]['x'] < 1e-3 or res[j]['x'] > 1 - 1e-3:
+            res.pop(j)
+            j = np.argmin([r['fun'] for r in res])
+            
+    r = res[j]    
+
+    gc.pinch_length = r['x'] / gc.duty
+
     # dtmin_len = []
     # jac_len = []
-    # for i in range(i_max + 1):
-    #     dt_min, jac = _calc_pinch_dtmin_and_jac(Q=(gc.duty * i / i_max), gc=gc)
+    # q_vals = np.linspace(0, gc.duty, 1001)
+    # for q in q_vals:
+    #     dt_min, jac = _calc_pinch_dtmin_and_jac(Q=q, gc=gc)
     #     dtmin_len.append(dt_min)
     #     jac_len.append(jac)
-    
-    # min_pos = np.argmin(np.array(dtmin_len))
-    # i_lb = max(min_pos - 1, 0)
-    # Q_lb = (gc.duty * i_lb / i_max)
-    # jac_lb = jac_len[i_lb]
 
-    # i_ub = min(min_pos + 1, i_max)
-    # Q_ub = (gc.duty * i_ub / i_max)
-    # jac_ub = jac_len[i_ub]
-       
-    
-    # if  (jac_ub > 0.0 or jac_lb < 0.0 ) and gc.duty >= 0.0: # jac_ub > 0.0 implies converging temperature profiles from hot-side; jac_lb < 0.0 implies converging temperature profiles from cold-side
-    #     r = minimize(fun=_calc_pinch_dtmin_and_jac, args=(gc), method='L-BFGS-B', x0=[(Q_lb + Q_ub) / 2], bounds=[(Q_lb, Q_ub)], jac=True) # TNC L-BFGS-B
-    #     pinch_point = [r['fun'], r['x'] / gc.duty]
-    #     gc.pinch_length = r['x'] / gc.duty
-    # else:
-    #     pinch_point = min(
-    #         [_calc_dtmin_at_given_point(gc.source_in, gc.sink_out), 1.0], 
-    #         [_calc_dtmin_at_given_point(gc.source_out, gc.sink_in), 0.0]
-    #         )
-    
-    # return pinch_point
+    # plot_simple_xy(q_vals, dtmin_len)
+
+    return [r['fun'], r['x'] / gc.duty, r['success']]
 
 def _calc_pinch_dtmin_and_jac(Q: float, gc: GasCooler):
     gc = _calc_pinch_props_at_Q(Q, gc)
@@ -294,6 +289,10 @@ def _calc_pinch_dtmin_and_jac(Q: float, gc: GasCooler):
             _calc_dtmin_at_given_point(gc.source_pinch, gc.sink_pinch), #objective
             _calc_jac_at_given_point(gc.source_pinch, gc.sink_pinch) #Jacobian
             )
+
+def _calc_pinch_dtmin(Q: float, gc: GasCooler):
+    gc = _calc_pinch_props_at_Q(Q, gc)
+    return _calc_dtmin_at_given_point(gc.source_pinch, gc.sink_pinch) #objective
 
 def _update_pinch_props_for_gcs(P_comp_out: float, hp: RHP) -> RHP:
     dtmin_ls = _get_all_possible_gc_dtmin_pos(P_comp_out, hp)

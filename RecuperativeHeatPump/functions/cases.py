@@ -58,7 +58,7 @@ def preselected_refrigerant_ls():
         'Isopentane',
         'Neopentane',
         'Cyclopentane',        
-        # 'Carbon dioxide', 
+        'Carbon dioxide', 
         'R1233zd(E)', 
         'R1336mzz(E)', 
         'R1336mzz(Z)', 

@@ -1,4 +1,4 @@
 *.pyc
 *.pyc
 __pycache__
-/Users/timothyw/Github Local/Transcritical-Recuperative-Heat-Pump/results/RHP_results.csv
+results/*
