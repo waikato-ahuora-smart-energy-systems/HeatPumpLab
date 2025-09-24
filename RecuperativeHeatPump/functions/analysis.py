@@ -1,5 +1,5 @@
 from scipy.optimize import minimize as loc_min
-import numpy as np, copy
+import numpy as np, copy, os
 from ..systems import *
 from ..streams import *
 from .parallel_solving import *
@@ -7,19 +7,34 @@ from .cases import *
 from .readWriteOutput import *
 from .decorator_functions import *
 
-__all__ = ['analyse_cases', 'analyse_unsolved_cases']
+__all__ = ['analyse_cases_in_parallel', 'analyse_unsolved_cases']
 
 #######################################################################################################
 # Public API
 #######################################################################################################
 
-def analyse_cases():
-    file_name = 'results/RHP_results'
+def analyse_cases_in_parallel(
+        filename: str = 'RHP_results',
+        refrigerant_ls: list = None, 
+        dT_rhx1_cold_ls: list = None,
+        dT_rhx2_cold_ls: list = None, 
+        comp2_power_frac_ls: list = None,
+        n_cpu: int = os.cpu_count() - 1,
+        ):
+    file_name = 'results/' + filename
+    transfer_temp_files_to_results(file_name)
+    cases = get_case_list_to_solve(
+        file_name, 
+        refrigerant_ls, 
+        dT_rhx1_cold_ls, 
+        dT_rhx2_cold_ls, 
+        comp2_power_frac_ls
+    )
     solve_in_parallel(
-        f_cases=get_case_list_to_solve,
+        cases=cases,
         f_solve=_analyse_case,
         file_name=file_name,
-        # n_cpu=7,
+        n_cpu=n_cpu,
     )
     transfer_temp_files_to_results(file_name)
 
@@ -73,17 +88,6 @@ def _analyse_case(case: dict) -> None:
     dt_ls = []
     vars_input = { 'dT_gc_out_min_offset' : { 'xi' : 0.0, 'bnds' : (0.0, 40.0) } }
     case['additional_data'] = {'vars_input' : vars_input}
-
-    # if case['comp_model_index'] == 3:
-    #     try:
-    #         case['comp_model_index'] = 1
-    #         dt_ls.append(dt)
-    #         hp, dt = solve_single_case(case)
-    #         dt_ls.append(dt)
-    #         case['comp_model_index'] = 3
-    #         case['P_H_est'] = hp.P_H_est
-    #     except:
-    #         pass
         
     result, dt = _get_local_optimum(
         param=case,
@@ -94,11 +98,11 @@ def _analyse_case(case: dict) -> None:
     dt_ls.append(dt)
     
     if result.success:
-        hp, dt = solve_single_case(case | _get_var_kwargs(result.x, case))
+        hp, dt = solve_single_case_with_timer(case | _get_var_kwargs(result.x, case))
         dt_ls.append(dt)
         obj = _compute_SEC_obj(hp, case)
 
-        hp.dQdW = _get_dQdW(hp)    
+        # hp.dQdW = _get_dQdW(hp)
         
         result = get_results_report(
             hp=hp,
@@ -129,7 +133,7 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict
 
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
     hp: RHP
-    hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
+    hp, _ = solve_single_case_with_timer(param | _get_var_kwargs(vars, param))
     obj = f_obj(hp, param)
     return obj * 1000
 
@@ -145,7 +149,7 @@ def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
     return d_var
 
 @timer_func
-def solve_single_case(args) -> RHP:
+def solve_single_case_with_timer(args) -> RHP:
     hp = RHP(**args)
     hp.solve()
     return hp
@@ -167,7 +171,7 @@ def _get_dQdW(hp0: RHP) -> float:
     args['T_air_tar'] = hp0.T_air_tar + dtemp
     args['P_H_est'] = hp0.comp_discharge.pressure
     args['T_gc_out'] = hp0.gas_cooler1.source_out.temperature
-    hp1, _ = solve_single_case(args)
+    hp1, _ = solve_single_case_with_timer(args)
     if hp1.feasible:
         tcop = [(p.T_air_tar - p.T_air_inlet) / p.COP if p.COP > 0 else np.inf for p in [hp0, hp1]]
         dqdw = dtemp / (tcop[1] - tcop[0]) if tcop[1] - tcop[0] != 0 and tcop[0] != np.inf and tcop[1] != np.inf else 0.0  

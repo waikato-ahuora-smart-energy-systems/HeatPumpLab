@@ -1,7 +1,7 @@
 import numpy as np
 from .readWriteOutput import *
 
-__all__ = ['get_case_list_to_solve', 'get_unsolved_case_list_to_resolve', 'get_optimisation_cases_to_solve']
+__all__ = ['get_case_list_to_solve', 'get_unsolved_case_list_to_resolve', 'get_optimisation_cases_to_solve', 'preselected_refrigerant_ls']
 
 #######################################################################################################
 # Public API
@@ -14,10 +14,17 @@ def get_case_list_to_solve(
         dT_rhx2_cold_ls: list = None, 
         comp2_power_frac_ls: list = None,
         ) -> list[list[float | str | bool]]:
-    return  _remove_completed_cases_from_list(
-            cases = _get_all_analysis_case_list(refrigerant_ls, dT_rhx1_cold_ls, dT_rhx2_cold_ls, comp2_power_frac_ls),
+    return  (
+        _remove_completed_cases_from_list(
+            cases = _get_all_analysis_case_list(
+                refrigerant_ls, 
+                dT_rhx1_cold_ls, 
+                dT_rhx2_cold_ls, 
+                comp2_power_frac_ls
+            ),
             file_name = file_name,
             f_comparison = _check_if_analysis_cases_are_identical,
+        )
     )
 
 def get_unsolved_case_list_to_resolve(filename_unsolved: str = 'Cases-Unsolved', filename_resolved: str = 'Cases-Resolved'):
@@ -63,8 +70,6 @@ def preselected_refrigerant_ls():
         'PROPYLEN',
         'DME',
         'Methanol',
-
-
         # 'propane;butane|.5;.5|mol',
         # 'propane;Isobutane|.5;.5|mol',
         # 'propane;Pentane|.5;.5|mol',

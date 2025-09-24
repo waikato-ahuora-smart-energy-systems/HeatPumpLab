@@ -3,14 +3,22 @@ from scipy.optimize import dual_annealing as glb_min, LinearConstraint, minimize
 from ..systems import RHP
 from .decorator_functions import timer_func
 from .parallel_solving import solve_in_parallel
-from .analysis import solve_single_case, get_results_report
+from .analysis import solve_single_case_with_timer, get_results_report
 from .cases import get_optimisation_cases_to_solve
 
-def optimise_cases():
+#######################################################################################################
+# Public API --- File needs thorough review, probably broken
+#######################################################################################################
+
+def optimise_cases_in_parallel():
     return solve_in_parallel(
         f_cases_to_solve=get_optimisation_cases_to_solve,
         f_solve=_optimise_case,
     )
+
+#######################################################################################################
+# Helper functions
+#######################################################################################################
 
 def _optimise_case(case: dict) -> None:
     tol = 1e-5
@@ -18,7 +26,7 @@ def _optimise_case(case: dict) -> None:
     # print_result_to_terminal(case)
     vars_input = _get_variable_input_data(case)
     case['additional_data']['vars_input'] = vars_input
-    hp, _ = solve_single_case( case | _get_var_kwargs(_get_initial_val(vars_input), case) )
+    hp, _ = solve_single_case_with_timer( case | _get_var_kwargs(_get_initial_val(vars_input), case) )
     case['additional_data']['SEC_0'] = hp.SEC
     case['additional_data']['P_0'] = hp.comp_discharge.pressure
     result, dt = _get_global_optimum(case, vars_input, tol)
@@ -121,7 +129,7 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict
 
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
     hp: RHP
-    hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
+    hp, _ = solve_single_case_with_timer(param | _get_var_kwargs(vars, param))
     obj = f_obj(hp, param)
     return obj * 1000
 
@@ -137,7 +145,7 @@ def _compute_multi_obj(hp: RHP, param: dict) -> float:
 
 def _get_jac(vars: list[float], param: dict, f_obj):
     hp: RHP
-    hp, _ = solve_single_case(param | _get_var_kwargs(vars, param))
+    hp, _ = solve_single_case_with_timer(param | _get_var_kwargs(vars, param))
     _ = f_obj(hp, param)
     if hp.converged:
         hp.compute_jac = True

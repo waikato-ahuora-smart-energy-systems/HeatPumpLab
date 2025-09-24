@@ -18,10 +18,10 @@ def print_result_to_terminal(output: dict[str, any]):
     else:
         print('Failed to print due to wrong output format.')
 
-def print_result_to_csv(output: list[any] =[], file_name: str ='results/temp/R', file_ext: str ='.csv', suffix: str =''):
+def print_result_to_csv(output: list[any] =[], file_name: str ='R', file_ext: str ='.csv', suffix: str =''):
     try:
         if output != []:
-            file_name = file_name + suffix + file_ext
+            file_name = 'results/temp/' + file_name + suffix + file_ext
             file_exists = os.path.isfile(file_name)
             if file_exists:
                 with open(file_name, 'a', newline='') as csvfile:

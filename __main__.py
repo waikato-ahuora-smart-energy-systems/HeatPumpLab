@@ -63,8 +63,6 @@ def analyse_single_case():
 
  
 if __name__=='__main__':
-    get_fluid_prop_overview_table()
-    # transfer_temp_files_to_results()
     # analyse_single_case()
-    # analyse_cases()
+    analyse_cases_in_parallel()
     pass
