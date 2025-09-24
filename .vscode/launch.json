@@ -5,7 +5,7 @@
             "name": "Python: Debugger",
             "type": "debugpy",
             "request": "launch",
-            "program": "main.py",
+            "program": "__main__.py",
             "justMyCode": true
         }
     ]

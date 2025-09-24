@@ -17,8 +17,7 @@ refrigerant_ls = [
     'Pentane',
     'Isopentane',
     'Neopentane',
-    'Cyclopentane',        
-    # 'Carbon dioxide', 
+    'Cyclopentane',
     'R1233zd(E)', 
     'R1336mzz(E)', 
     'R1336mzz(Z)', 
@@ -30,8 +29,6 @@ refrigerant_ls = [
     'PROPYLEN',
     'DME',
     'Methanol',
-
-
     # 'propane;butane|.5;.5|mol',
     # 'propane;Isobutane|.5;.5|mol',
     # 'propane;Pentane|.5;.5|mol',
@@ -45,7 +42,6 @@ refrigerant_ls = [
     # 'butane;Isopentane|.5;.5|mol',
     # 'butane;Neopentane|.5;.5|mol',
 ]
-
 
 table = {}
 
@@ -65,4 +61,4 @@ for r in refrigerant_ls:
 df = pd.DataFrame(table).T 
 print(df)
 
-df.to_csv("Refrigerant props.csv")
+df.to_csv("aux/Refrigerant props.csv")

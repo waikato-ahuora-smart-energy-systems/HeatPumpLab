@@ -1,79 +1,12 @@
 from concurrent.futures import ProcessPoolExecutor as pool
 from scipy.optimize import minimize as loc_min
 import numpy as np, os, copy
-from ..systems import RHP, set_RHP_model
+from ..systems import RHP
 from ..streams.propertiesPackage import PropertyPackage
-from .solver import solve_heat_pump_model
 from .cases import get_analysis_cases_to_solve
 from .readWriteOutput import print_result_to_terminal, print_result_to_csv, transfer_temp_files_to_results, read_csv_to_results
 from .decorator_functions import time_func
 from .cases import get_analysis_case_comparison
-
-def analyse_single_case():
-    args: list[float | str | bool]
-    hp: RHP
-
-    refrigerant_ls = [
-        # 'propane;butane|.5;.5|mol',
-        'Butane', 
-        'Carbon dioxide', 
-        'Propane', 
-        'Isobutane', 
-        'R1233zd(E)', 
-        'R1336mzz(E)', 
-        'R1336mzz(Z)', 
-        'R1234ze(E)', 
-        'R1234ze(Z)', 
-        'R1234yf', 
-        'R1243zf', 
-        'R1224yd(Z)', 
-        'PROPYLEN',
-        'DME',
-        'Methanol'
-        'Ammonia',
-        ]
-    
-    args = {'refrigerant': 'Propane',
-            'dT_GC_min_tar': 20.0, 
-            'T_air_tar': 200.0, 
-            'T_air_inlet': 15.0,
-            'T_source_in': 40.0,
-            'dT_gc_out_min_offset': 0.0,
-            'n_comp': 2,
-            'ihx_on': 1,
-            'dTmin_rhx': 5.0,
-            'dT_rhx1_cold': 0.0,
-            'dT_rhx2_cold': 70.0,
-            'dT_rhx3_cold': 0.0,
-            'comp2_power_frac': 0.6,
-            'comp3_power_frac': 0.0,
-            'comp_PR_uniform': False,
-            # 'motor_eff': 1.00,
-            'comp_model_index': 1,
-            'debug': False,
-            'sink': 'Air',
-            'source': 'water',
-            'Tref_evap_inlet' : 10,
-            }
-    
-    hp, dt = solve_single_case(args)
-    print('Time to solve case:', dt)
-    if hp.converged:
-        hp.get_summary()
-
-        if type(hp.output) is dict:
-            print_result_to_terminal(output=hp.output)
-            print_result_to_csv(output=hp.output)
-        
-        hp.get_driving_force_plot(hp.gas_coolers, hp.dT_GC_min_tar)
-        hp.get_cycle_plot(x_axis='h', y_axis='T')
-        hp.get_cycle_plot(x_axis='s', y_axis='T')
-        hp.get_cycle_plot(x_axis='h', y_axis='P')
-        hp.get_cycle_plot(x_axis='v', y_axis='P')
-    else:
-        print('Heat model failed to solve.')
-
-    return True
 
 def analyse_unsolved_cases(debug: bool =True):
     hp: RHP
@@ -114,7 +47,7 @@ def analyse_unsolved_cases(debug: bool =True):
             
             hp, _ = _analyse_case(args)
             if hp.converged:
-                hp.get_summary()
+                hp.get_report()
                 fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
                 _print_results(hp.output, fsuffix)
         
@@ -222,9 +155,7 @@ def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
 @time_func
 def solve_single_case(args) -> RHP:
     hp = RHP(**args)
-    hp = set_RHP_model(hp)
-    if hp.feasible:
-        hp = solve_heat_pump_model(hp)
+    hp.solve()
     return hp
 
 def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
@@ -253,7 +184,7 @@ def _get_dQdW(hp0: RHP) -> float:
     return dqdw
 
 def _get_results_summary(hp: RHP, result, param, obj, dt: float =None) -> dict:
-    hp.get_summary()
+    hp.get_report()
 
     if 'weight' in param['additional_data']:
         hp.output.update({

@@ -1,4 +1,5 @@
 from .readWriteOutput import transfer_temp_files_to_results, read_csv_to_results
+import numpy as np
 
 def get_analysis_cases_to_solve(file_name: str ='results/untitled') -> list[list[float | str | bool]]:
     return  remove_completed_cases(
@@ -72,10 +73,10 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
                 'n_comp': 2,
                 'ihx_on': 1,
                 'dTmin_rhx': 5.0,
-                'dT_rhx1_cold': float(dt1) / 2,
-                'dT_rhx2_cold': float(dt2) / 2,
+                'dT_rhx1_cold': float(dt1),
+                'dT_rhx2_cold': float(dt2),
                 'dT_rhx3_cold': 0.0, 
-                'comp2_power_frac': float(cpf2) / 100, 
+                'comp2_power_frac': float(cpf2), 
                 'comp3_power_frac': 0.0,
                 'comp_PR_uniform': False,
                 'comp_model_index': 1,
@@ -84,9 +85,9 @@ def _get_all_analysis_case_list() -> list[list[float | str | bool]]:
                 'source': 'water',
                 'Tref_evap_inlet' : 10.0,
              }
-                for dt1 in range(0, 201, 5)
-                for dt2 in range(0, 201, 5)
-                for cpf2 in range(30, 71, 5)
+                for dt1 in np.linspace(0, 100, num=21)
+                for dt2 in np.linspace(0, 100, num=21)
+                for cpf2 in np.linspace(0.3, 0.7, num=9)
                 for r in refrigerant_ls
             ]
 

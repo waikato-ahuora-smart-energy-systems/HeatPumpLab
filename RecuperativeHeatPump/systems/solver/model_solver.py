@@ -1,11 +1,23 @@
+from __future__ import annotations
+
 import numpy as np
 from scipy.optimize import root_scalar, minimize
 from math import log, exp
-from ..systems import RHP
-from ..components import GasCooler
-from ..streams import MassStream
-from .readWriteOutput import print_result_to_csv
-from .graph import plot_driving_force
+from typing import TYPE_CHECKING
+
+from ...functions.readWriteOutput import print_result_to_csv
+from ...functions.graph import plot_driving_force
+
+if TYPE_CHECKING:
+    from .. import RHP
+    from ...components import GasCooler
+    from ...streams import MassStream
+
+__all__ = ["solve_heat_pump_model"]
+
+#######################################################################################################
+# Public API
+#######################################################################################################
 
 def solve_heat_pump_model(hp: RHP) -> RHP:
     #Solve heat pump cycle
@@ -19,6 +31,10 @@ def solve_heat_pump_model(hp: RHP) -> RHP:
         print('Heat pump solver failed with an exception. The failed case has been recorded.')
         hp.converged = False    
     return hp
+
+#######################################################################################################
+# Helper functions
+#######################################################################################################
 
 def _solve_case(hp: RHP) -> RHP:
     hp = _find_hp_with_min_discharge_pressure(hp)
@@ -302,6 +318,6 @@ def _calc_jac_at_given_point(source: MassStream, sink: MassStream) -> float:
 
 def _print_failed_to_solve_report(hp: RHP, filename: str ='results/Cases-Unsolved') -> None:
     print('Heat pump model failed to solve.')
-    hp.get_summary()
+    hp.get_report()
     # hp.get_cycle_plot()
     print_result_to_csv(hp.output, file_name=filename)

@@ -49,7 +49,7 @@ class BaseHeatPump():
    
     def print_currrent_case(self):
         print_result_to_terminal(
-            self.get_summary()
+            self.get_report()
             )
 
     def get_cycle_plot(self, x_axis: str ='h', y_axis: str ='T') -> any:

@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.optimize import dual_annealing as glb_min, LinearConstraint, minimize as loc_min, approx_fprime
 from ..systems import RHP
-from .solver import solve_heat_pump_model
 from .decorator_functions import time_func
 from .analysis import solve_single_case, get_results_report, solve_in_parallel
 from .optimisation_cases import get_optimisation_cases_to_solve
@@ -147,11 +146,11 @@ def _get_jac(vars: list[float], param: dict, f_obj):
     else:
         return np.inf(len(vars))
 
-def _compute_jac(vars, hp, param, f_obj):
+def _compute_jac(vars, hp: RHP, param, f_obj):
     kwargs = _get_var_kwargs(vars, param)
     for key in kwargs:
         setattr(hp, key, kwargs[key])
-    return f_obj(solve_heat_pump_model(hp), param)
+    return f_obj(hp.solve(), param)
 
 def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
     i: int = 0
