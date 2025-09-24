@@ -1,3 +1,3 @@
 from .streams import *
 from .functions import *
-from .systems import RHP
+from .cycles import RHP

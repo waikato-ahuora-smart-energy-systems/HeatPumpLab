@@ -4,7 +4,7 @@ from ...components import *
 from ...streams import MassStream
 
 if TYPE_CHECKING:
-    from ...systems import RHP
+    from ...cycles import RHP
 
 __all__ = ['set_RHP_model']
 

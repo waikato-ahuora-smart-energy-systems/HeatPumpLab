@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import dual_annealing as glb_min, LinearConstraint, minimize as loc_min, approx_fprime
-from ..systems import RHP
+from ..cycles import RHP
 from .decorator_functions import timer_func
 from .parallel_solving import solve_in_parallel
 from .analysis import solve_single_case_with_timer, get_results_report

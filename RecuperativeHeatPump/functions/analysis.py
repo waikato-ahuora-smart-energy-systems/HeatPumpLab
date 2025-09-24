@@ -1,6 +1,7 @@
+from typing import Tuple
 from scipy.optimize import minimize as loc_min
 import numpy as np, copy, os
-from ..systems import *
+from ..cycles import *
 from ..streams import *
 from .parallel_solving import *
 from .cases import *
@@ -79,29 +80,47 @@ def analyse_unsolved_cases(debug: bool =True):
             None
         transfer_temp_files_to_results('results/Cases-Resolved')
 
+@timer_func
+def solve_single_case_with_timer(args) -> RHP:
+    hp = RHP(**args)
+    hp.solve()
+    return hp
+
+def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
+    res = _get_results_summary(hp, result, param, obj, dt)
+    fsuffix = _get_unique_f_suffix(param)
+    _print_results(res, fsuffix, print_to_terminal)
+
 #######################################################################################################
 # Helper functions
 #######################################################################################################
 
-def _analyse_case(case: dict) -> None:
+def _analyse_case(case: dict) -> Tuple[RHP, float]:
     hp: RHP
     dt_ls = []
-    vars_input = { 'dT_gc_out_min_offset' : { 'xi' : 0.0, 'bnds' : (0.0, 40.0) } }
-    case['additional_data'] = {'vars_input' : vars_input}
+    vars_input = { 
+        'dT_gc_out_min_offset' : 
+            { 
+                'xi' : 0.0, 
+                'bnds' : (0.0, 40.0) 
+            } 
+        }
+    case['additional_data'] = {
+        'vars_input' : vars_input
+        }
         
     result, dt = _get_local_optimum(
         param=case,
         vars_input=vars_input,
         tol=1e-4,
         f_obj=_compute_SEC_obj,
-        )
+    )
     dt_ls.append(dt)
     
     if result.success:
         hp, dt = solve_single_case_with_timer(case | _get_var_kwargs(result.x, case))
         dt_ls.append(dt)
         obj = _compute_SEC_obj(hp, case)
-
         # hp.dQdW = _get_dQdW(hp)
         
         result = get_results_report(
@@ -111,7 +130,7 @@ def _analyse_case(case: dict) -> None:
             obj=obj, 
             dt=sum(dt_ls), 
             print_to_terminal=False,
-            )
+        )
         return hp, dt
     else:
         return None, dt
@@ -147,17 +166,6 @@ def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
         d_var[key] = var[i]
         i += 1
     return d_var
-
-@timer_func
-def solve_single_case_with_timer(args) -> RHP:
-    hp = RHP(**args)
-    hp.solve()
-    return hp
-
-def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
-    res = _get_results_summary(hp, result, param, obj, dt)
-    fsuffix = _get_unique_f_suffix(param)
-    _print_results(res, fsuffix, print_to_terminal)
 
 def _print_results(results: dict, fsuffix: str, print_to_terminal: bool =True) -> None:
     if print_to_terminal:
