@@ -6,7 +6,7 @@ from ...streams import MassStream
 if TYPE_CHECKING:
     from ...systems import RHP
 
-__all__ = ["set_RHP_model"]
+__all__ = ['set_RHP_model']
 
 #######################################################################################################
 # Public API

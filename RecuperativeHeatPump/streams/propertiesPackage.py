@@ -8,7 +8,7 @@ class PropertyPackage:
     RP_ref: REFPROPFunctionLibrary
     RP_src: REFPROPFunctionLibrary
     RP_snk: REFPROPFunctionLibrary
-    if platform == "darwin":
+    if platform == 'darwin':
         RP_ref = REFPROPFunctionLibrary(r'/Library/REFPROP/librefprop.dylib')
         RP_src = REFPROPFunctionLibrary(r'/Library/REFPROP/librefprop-source.dylib')
         RP_snk = REFPROPFunctionLibrary(r'/Library/REFPROP/librefprop-sink.dylib')
@@ -84,7 +84,7 @@ class PropertyPackage:
         elif propsIn_str == 'ST':
             molar_props = prop1 * self.molar_mass, prop2 + self.TC_to_K   
         else:
-            raise Exception("Unrecognised fluid property input combination.")
+            raise Exception('Unrecognised fluid property input combination.')
         return molar_props
 
     def _set_RP_lib(self, pp_instance):

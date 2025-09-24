@@ -1,15 +1,15 @@
 import numpy as np
 from scipy.optimize import dual_annealing as glb_min, LinearConstraint, minimize as loc_min, approx_fprime
 from ..systems import RHP
-from .decorator_functions import time_func
-from .analysis import solve_single_case, get_results_report, solve_in_parallel
-from .optimisation_cases import get_optimisation_cases_to_solve
+from .decorator_functions import timer_func
+from .parallel_solving import solve_in_parallel
+from .analysis import solve_single_case, get_results_report
+from .cases import get_optimisation_cases_to_solve
 
 def optimise_cases():
-    solve_in_parallel(
+    return solve_in_parallel(
         f_cases_to_solve=get_optimisation_cases_to_solve,
         f_solve=_optimise_case,
-        # n_cpu=1,
     )
 
 def _optimise_case(case: dict) -> None:
@@ -31,7 +31,7 @@ def _get_variable_input_data(param: dict, x: list =None) -> dict:
     i: int = 0
 
     if param['n_comp'] > 3:
-        raise ValueError("Number of compressors must be 1, 2 or 3.")     
+        raise ValueError('Number of compressors must be 1, 2 or 3.')     
     
     # vars_input['dT_rhx1_cold'] = {
     #     'xi' : 0.0 if x is None else x[i],
@@ -92,7 +92,7 @@ def _get_constraints(param: dict, vars_input: dict):
     m = np.array([1.0 if ('dT_rhx' in key and '_cold' in key) else 0.0 for key in vars_input])
     return LinearConstraint(A=m, lb=0.0, ub=(param['T_air_tar'] - param['T_air_inlet']) * 2/3)   
 
-@time_func
+@timer_func
 def _get_global_optimum(param: dict, vars_input: dict, tol: float) -> dict:
     return glb_min(func=lambda x: _get_obj(x, param, _compute_multi_obj), 
                    x0=_get_initial_val(vars_input),
@@ -108,7 +108,7 @@ def _get_global_optimum(param: dict, vars_input: dict, tol: float) -> dict:
                 #    maxiter=30,
                    )
 
-@time_func
+@timer_func
 def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict:
     return loc_min(fun=lambda x: _get_obj(x, param, f_obj), 
                     x0=_get_initial_val(vars_input),

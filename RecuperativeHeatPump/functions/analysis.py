@@ -1,25 +1,31 @@
-from concurrent.futures import ProcessPoolExecutor as pool
 from scipy.optimize import minimize as loc_min
-import numpy as np, os, copy
-from ..systems import RHP
-from ..streams.propertiesPackage import PropertyPackage
-from .cases import get_analysis_cases_to_solve
-from .readWriteOutput import print_result_to_terminal, print_result_to_csv, transfer_temp_files_to_results, read_csv_to_results
-from .decorator_functions import time_func
-from .cases import get_analysis_case_comparison
+import numpy as np, copy
+from ..systems import *
+from ..streams import *
+from .parallel_solving import *
+from .cases import *
+from .readWriteOutput import *
+from .decorator_functions import *
+
+__all__ = ['analyse_cases', 'analyse_unsolved_cases']
+
+#######################################################################################################
+# Public API
+#######################################################################################################
+
+def analyse_cases():
+    file_name = 'results/RHP_results'
+    solve_in_parallel(
+        f_cases=get_case_list_to_solve,
+        f_solve=_analyse_case,
+        file_name=file_name,
+        # n_cpu=7,
+    )
+    transfer_temp_files_to_results(file_name)
 
 def analyse_unsolved_cases(debug: bool =True):
     hp: RHP
-    transfer_temp_files_to_results('results/Cases-Resolved')
-    unsolved_cases = read_csv_to_results(file_name='results/Cases-Unsolved')
-    resolved_cases = read_csv_to_results(file_name='results/Cases-Resolved')
-
-    if resolved_cases != None:
-        for i in reversed(range(len(unsolved_cases))):
-            for sol in resolved_cases:
-                if get_analysis_case_comparison(sol,unsolved_cases[i]):
-                    unsolved_cases.pop(i)
-                    break
+    unsolved_cases = get_unsolved_case_list_to_resolve()
                     
     if unsolved_cases != []:
         for case in unsolved_cases:
@@ -58,23 +64,9 @@ def analyse_unsolved_cases(debug: bool =True):
             None
         transfer_temp_files_to_results('results/Cases-Resolved')
 
-def analyse_cases():
-    solve_in_parallel(
-        f_cases=get_analysis_cases_to_solve,
-        f_solve=_analyse_case,
-        file_name='results/RHP_results',
-        n_cpu=7,
-    )
-
-def solve_in_parallel(f_cases, f_solve, file_name: str = 'results/RHP_results', n_cpu: int = os.cpu_count() - 1) -> None:
-    # Use parallel processing distributed over all cores to speed up the analysis
-    cases: list        = f_cases(file_name)
-    print(len(cases))
-    executor: pool     = pool(max_workers=n_cpu)
-    [executor.submit(f_solve, case) for case in cases]
-    executor.shutdown()
-    print('All cases completed.')
-    transfer_temp_files_to_results(file_name)
+#######################################################################################################
+# Helper functions
+#######################################################################################################
 
 def _analyse_case(case: dict) -> None:
     hp: RHP
@@ -126,7 +118,7 @@ def _get_initial_val(vars_input: dict) -> list:
 def _get_bounds(vars_input: dict) -> list:
     return [vars_input[key]['bnds'] for key in vars_input]
 
-@time_func
+@timer_func
 def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict:
     return loc_min(fun=lambda x: _get_obj(x, param, f_obj), 
                     x0=_get_initial_val(vars_input),
@@ -152,7 +144,7 @@ def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
         i += 1
     return d_var
 
-@time_func
+@timer_func
 def solve_single_case(args) -> RHP:
     hp = RHP(**args)
     hp.solve()
@@ -217,5 +209,5 @@ def _get_unique_f_suffix(param, fld_only=False) -> str:
     if fld_only:
         for ele in param:    
             if ele != 'additional_data' and ele != 'refrigerant':
-                suffix = suffix + '-' + "{:.0f}".format(param[ele])
+                suffix = suffix + '-' + '{:.0f}'.format(param[ele])
     return suffix

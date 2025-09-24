@@ -2,6 +2,12 @@ import os
 from glob import glob
 from csv import DictReader, DictWriter
 
+__all__ = ['print_result_to_terminal', 'print_result_to_csv', 'transfer_temp_files_to_results', 'read_csv_to_results']
+
+#######################################################################################################
+# Public API
+#######################################################################################################
+
 def print_result_to_terminal(output: dict[str, any]):
     key: str
     value: any

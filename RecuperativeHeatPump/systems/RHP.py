@@ -52,7 +52,7 @@ class RHP(BaseHeatPump):
 
         set_RHP_model(self)
 
-    def solve(self) -> "RHP":
+    def solve(self) -> 'RHP':
         if self.feasible:
             solve_heat_pump_model(self)
         return self

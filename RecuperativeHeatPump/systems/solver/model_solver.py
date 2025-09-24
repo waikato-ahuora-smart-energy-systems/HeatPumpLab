@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from ...components import GasCooler
     from ...streams import MassStream
 
-__all__ = ["solve_heat_pump_model"]
+__all__ = ['solve_heat_pump_model']
 
 #######################################################################################################
 # Public API
@@ -112,7 +112,7 @@ def _find_hp_with_min_discharge_pressure(hp: RHP) -> RHP:
         hp.converged = r.converged
     else:
         _print_failed_to_solve_report(hp)
-        raise Exception("Infeasible pressure bounds. The failed case has been recorded.")
+        raise Exception('Infeasible pressure bounds. The failed case has been recorded.')
     return hp
 
 def _get_discharge_pressure_bounds(hp: RHP) -> list[tuple[float, float], float, bool, tuple[float, float]]:

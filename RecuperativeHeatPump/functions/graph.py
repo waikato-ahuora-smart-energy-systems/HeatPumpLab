@@ -1,5 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
+
+__all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy']
+
+#######################################################################################################
+# Public API
+#######################################################################################################
     
 def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50):
     cycle_obj = cycle_obj + [cycle_obj[0]]
@@ -99,6 +105,10 @@ def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: st
     filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
     fig.savefig('results/figures/' + filename) 
     return fig, ax
+
+#######################################################################################################
+# Helper functions
+#######################################################################################################
 
 def _rescale(array_to_scale, array_new_scale) -> list[float]:
     m: float

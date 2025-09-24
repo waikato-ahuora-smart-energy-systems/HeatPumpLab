@@ -11,7 +11,8 @@ University of Waikato,
 tim.walmsley@waikato.ac.nz
 """
 
-from RecuperativeHeatPump import *   
+from RecuperativeHeatPump import *
+from aux import *
 
 def analyse_single_case():
     args: list[float | str | bool]
@@ -62,6 +63,8 @@ def analyse_single_case():
 
  
 if __name__=='__main__':
+    get_fluid_prop_overview_table()
     # transfer_temp_files_to_results()
-    analyse_single_case()
+    # analyse_single_case()
     # analyse_cases()
+    pass
