@@ -58,7 +58,7 @@ def preselected_refrigerant_ls():
         'Isopentane',
         'Neopentane',
         'Cyclopentane',        
-        'Carbon dioxide', 
+        # 'Carbon dioxide', 
         'R1233zd(E)', 
         'R1336mzz(E)', 
         'R1336mzz(Z)', 
@@ -89,50 +89,71 @@ def preselected_refrigerant_ls():
 #######################################################################################################
 
 def _get_all_analysis_case_list(
-        refrigerant_ls: list = None, 
-        dT_rhx1_cold_ls: list = None,
-        dT_rhx2_cold_ls: list = None, 
-        comp2_power_frac_ls: list = None,
-        ) -> list[list[float | str | bool]]:
-    if refrigerant_ls is None:
-        refrigerant_ls: list[str] = preselected_refrigerant_ls()
+        refrigerant_ls: list = ['Butane'], 
+        T_source_in_ls: list = [40.0],
+        Tref_evap_inlet_ls: list = [10.0],
+        T_air_inlet_ls: list = [15.0],
+        T_air_tar_ls: list = [200.0],
+        dT_GC_min_tar_ls: list = [20.0],
+        dTmin_rhx_ls: list = [5.0],
+        dT_rhx1_cold_ls: list = [0.0],
+        dT_rhx2_cold_ls: list = [0.0],
+        dT_rhx3_cold_ls: list = [0.0], 
+        comp2_power_frac_ls: list = [0.5],
+        comp3_power_frac_ls: list = [0.0],
+        n_comp_ls: list = [2],
+        motor_eff_ls: list = [0.96],
+        ihx_on_ls: list = [True],
+        comp_PR_uniform_ls: list = [False],
+        comp_model_index_ls: list = [1]
+    ) -> list[list[float | str | bool]]:
     
-    if dT_rhx1_cold_ls is None:
-        dT_rhx1_cold_ls = np.linspace(0, 100, num=21)
-
-    if dT_rhx2_cold_ls is None:
-        dT_rhx2_cold_ls = np.linspace(0, 100, num=21)
-
-    if comp2_power_frac_ls is None:
-        comp2_power_frac_ls = np.linspace(0.3, 0.7, num=9)
+    refrigerant_ls: list[str] = preselected_refrigerant_ls()
+    dT_rhx1_cold_ls = np.linspace(0, 100, num=21)
+    dT_rhx2_cold_ls = np.linspace(0, 100, num=21)
+    comp2_power_frac_ls = np.linspace(0.3, 0.7, num=9)
     
     # Enumerate all the cases to be analysed
-    return  [{
-                'refrigerant': r,
-                'dT_GC_min_tar': 20.0, 
-                'T_air_tar': 200.0, 
-                'T_air_inlet': 15.0, 
-                'T_source_in': 40.0,
-                'n_comp': 2,
-                'ihx_on': 1,
-                'dTmin_rhx': 5.0,
-                'dT_rhx1_cold': dT_rhx1_cold,
-                'dT_rhx2_cold': dT_rhx2_cold,
-                'dT_rhx3_cold': 0.0, 
-                'comp2_power_frac': comp2_power_frac, 
-                'comp3_power_frac': 0.0,
-                'comp_PR_uniform': False,
-                'comp_model_index': 1,
-                'motor_eff': 1.0,
-                'sink': 'Air',
-                'source': 'water',
-                'Tref_evap_inlet' : 10.0,
-             }
-                for dT_rhx1_cold in dT_rhx1_cold_ls
-                for dT_rhx2_cold in dT_rhx2_cold_ls
-                for comp2_power_frac in comp2_power_frac_ls
-                for r in refrigerant_ls
-            ]
+    return  [
+        {
+            'refrigerant': refrigerant,
+            'T_source_in': T_source_in,
+            'Tref_evap_inlet' : Tref_evap_inlet,
+            'T_air_inlet': T_air_inlet, 
+            'T_air_tar': T_air_tar, 
+            'dT_GC_min_tar': dT_GC_min_tar, 
+            'dTmin_rhx': dTmin_rhx,
+            'dT_rhx1_cold': dT_rhx1_cold,
+            'dT_rhx2_cold': dT_rhx2_cold,
+            'dT_rhx3_cold': dT_rhx3_cold, 
+            'comp2_power_frac': comp2_power_frac, 
+            'comp3_power_frac': comp3_power_frac,
+            'comp_PR_uniform': comp_PR_uniform,
+            'comp_model_index': comp_model_index,
+            'n_comp': n_comp,
+            'ihx_on': ihx_on,
+            'motor_eff': motor_eff,
+            'sink': 'Air',
+            'source': 'water',
+        }
+        for dT_rhx1_cold in dT_rhx1_cold_ls
+        for dT_rhx2_cold in dT_rhx2_cold_ls
+        for dT_rhx3_cold in dT_rhx3_cold_ls
+        for comp2_power_frac in comp2_power_frac_ls
+        for comp3_power_frac in comp3_power_frac_ls
+        for refrigerant in refrigerant_ls
+        for n_comp in n_comp_ls
+        for motor_eff in motor_eff_ls
+        for Tref_evap_inlet in Tref_evap_inlet_ls
+        for T_air_tar in T_air_tar_ls
+        for T_air_inlet in T_air_inlet_ls
+        for dT_GC_min_tar in dT_GC_min_tar_ls
+        for T_source_in in T_source_in_ls
+        for dTmin_rhx in dTmin_rhx_ls
+        for comp_PR_uniform in comp_PR_uniform_ls
+        for ihx_on in ihx_on_ls
+        for comp_model_index in comp_model_index_ls
+    ]
 
 def _get_all_optimisation_case_list() -> list[list[float | str | bool]]:
     refrigerant_ls: list[str] = [
@@ -213,11 +234,6 @@ def _remove_completed_cases_from_list(cases: list, file_name: str, f_comparison)
                     cases.pop(i)
                     break
     return cases
-
-
-
-
-
 
 def _order_cases(cases):
     cases.sort(reverse=True, key=lambda x: x['additional_data']['weight'])  

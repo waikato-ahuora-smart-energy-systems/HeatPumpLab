@@ -271,15 +271,15 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
 
     gc.pinch_length = r['x'] / gc.duty
 
-    # dtmin_len = []
-    # jac_len = []
-    # q_vals = np.linspace(0, gc.duty, 1001)
-    # for q in q_vals:
-    #     dt_min, jac = _calc_pinch_dtmin_and_jac(Q=q, gc=gc)
-    #     dtmin_len.append(dt_min)
-    #     jac_len.append(jac)
+    dtmin_len = []
+    jac_len = []
+    q_vals = np.linspace(0, gc.duty, 1001)
+    for q in q_vals:
+        dt_min, jac = _calc_pinch_dtmin_and_jac(Q=q, gc=gc)
+        dtmin_len.append(dt_min)
+        jac_len.append(jac)
 
-    # plot_simple_xy(q_vals, dtmin_len)
+    plot_simple_xy(q_vals, dtmin_len)
 
     return [r['fun'], r['x'] / gc.duty, r['success']]
 
