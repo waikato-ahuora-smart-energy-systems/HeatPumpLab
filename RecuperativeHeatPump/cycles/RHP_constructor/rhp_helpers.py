@@ -173,7 +173,7 @@ def _get_RHP_streams(hp: RHP) -> RHP:
                         )
                         if r.converged:
                             P_H = stream_pinch.pressure
-                            continue
+                            break
                     except:
                         pass
             except:

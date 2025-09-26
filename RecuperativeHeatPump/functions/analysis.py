@@ -123,7 +123,7 @@ def _analyse_case(case: dict) -> Tuple[RHP, float]:
         obj = _compute_SEC_obj(hp, case)
         # hp.dQdW = _get_dQdW(hp)
         
-        result = get_results_report(
+        get_results_report(
             hp=hp,
             param=case, 
             result=result, 
@@ -143,12 +143,13 @@ def _get_bounds(vars_input: dict) -> list:
 
 @timer_func
 def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict:
-    return loc_min(fun=lambda x: _get_obj(x, param, f_obj), 
-                    x0=_get_initial_val(vars_input),
-                    bounds=_get_bounds(vars_input),
-                    method='L-BFGS-B', #'SLSQP'
-                    tol=tol,
-                    )
+    return loc_min(
+        fun=lambda x: _get_obj(x, param, f_obj), 
+        x0=_get_initial_val(vars_input),
+        bounds=_get_bounds(vars_input),
+        method='COBYLA', #'trust-constr' 'L-BFGS-B', 'SLSQP', 'COBYLA'
+        tol=tol,
+    )
 
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
     hp: RHP

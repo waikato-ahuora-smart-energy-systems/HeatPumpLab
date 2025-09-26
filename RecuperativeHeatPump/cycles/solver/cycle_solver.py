@@ -164,7 +164,7 @@ def _get_discharge_pressure_bounds(hp: RHP) -> list[tuple[float, float], float, 
 
     return (P_lb, P_ub), P_i, feasible, (dt_plus, dt_neg)
 
-def _find_current_gc_dtmin_offset(P_comp_out: float, hp: RHP) -> float:
+def _find_current_gc_dtmin_offset(P_comp_out: float, hp: RHP, return_abs: bool =False) -> float:
     dtmin_ls: list[list[float,float]]
 
     dtmin_ls = _get_all_possible_gc_dtmin_pos(P_comp_out, hp)
@@ -173,7 +173,10 @@ def _find_current_gc_dtmin_offset(P_comp_out: float, hp: RHP) -> float:
     if dtmin_ls[-1][1] < 1e-3:  # Ignore the mid exchanger dtmin of the inlet air to the gas cooler if it is the cold-side
         dtmin_ls.pop(-1)
     # hp.get_cycle_plot()
-    return min(dtmin_ls)[0] - hp.dT_GC_min_tar
+    if not return_abs:
+        return min(dtmin_ls)[0] - hp.dT_GC_min_tar
+    else:
+        return abs(min(dtmin_ls)[0] - hp.dT_GC_min_tar)
 
 def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: RHP) -> list[list[float,float]]:
     dtmin_ls: list[float]
