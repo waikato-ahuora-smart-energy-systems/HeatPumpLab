@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+import numpy as np
+from scipy.optimize import root_scalar, Bounds
 from ...components import *
 from ...streams import MassStream
 
@@ -129,18 +131,84 @@ def _get_RHP_streams(hp: RHP) -> RHP:
         hp.rhx1.sink_out.props_in_ab(input_str='PT', prop1=P_L, prop2=(hp.rhx1.sink_in.temperature + hp.dT_rhx1_cold), name='rhx1 sink outlet')
         temp_ref_out = hp.rhx1.sink_out
 
-    def _get_discharge_pressure_ratio_estimate(P_H_est: float, P_L: float, n_comp: int, T_tar: float, dT_min: float, s_out: float, fld: str) -> float:
+    def _get_discharge_pressure_ratio_estimate(P_H_est: float, P_L: float, T_eff: float, n_comp: int, T_tar: float, dT_min: float, fld: str) -> float:
         #Final discharge pressure
         if P_H_est > 0.0:
             P_H = P_H_est
         else:
-            P_H = MassStream(fluid=fld, temperature=T_tar + dT_min, entropy=s_out).pressure
-            if P_H < P_L:
-                P_H = P_L * 16
+            stream_in = MassStream(fluid=fld, temperature=T_eff, pressure=P_L)
+            stream_out = MassStream(fluid=fld)
+            stream_out_ideal = MassStream(fluid=fld)
+            T_out_min = hp.T_air_tar + hp.dT_GC_min_tar
+            T_crit = temp_ref_out.T_crit
+
+            try:
+                # For critical point fluids, the cycle must be subcritical
+                stream_pinch = MassStream(fluid=fld)
+                stream_cooled = MassStream(fluid=fld)
+
+                def _get_discharge_pressure_for_pinch_estimate(T):
+                    if T > T_crit - 1:
+                        stream_pinch.props_in_ab('TQ', T_crit - 10, 1)
+                        D = stream_pinch.density
+                        stream_pinch.props_in_ab('TD', T, D)
+                    else:
+                        stream_pinch.props_in_ab('TQ', T, 1)
+
+                    stream_out_ideal.props_in_ab('PS', stream_pinch.pressure, stream_in.entropy)
+                    h_out = stream_in.enthalpy + (stream_out_ideal.enthalpy - stream_in.enthalpy) / 0.7
+                    stream_out.props_in_ab('PH', stream_pinch.pressure, h_out)
+                    stream_cooled.props_in_ab('PT', stream_pinch.pressure, hp.T_gc_out)
+                    err = (T - hp.dT_GC_min_tar - hp.T_gc_out) * (stream_out.enthalpy - stream_cooled.enthalpy) - (stream_pinch.enthalpy - stream_cooled.enthalpy) * (hp.T_air_tar - hp.T_gc_out)
+                    return err
+
+                for multiplier in np.linspace(0, 10, 11):
+                    try:
+                        r = root_scalar(
+                            f=_get_discharge_pressure_for_pinch_estimate, #find the gas discharge pressure resulting in the target dtmin
+                            method='brentq', 
+                            bracket=(hp.T_gc_out, max(temp_ref_out.T_crit - 1, hp.T_air_tar + hp.dT_GC_min_tar * multiplier)), 
+                            x0=T_tar, 
+                            xtol=1e-3,
+                        )
+                        if r.converged:
+                            P_H = stream_pinch.pressure
+                            continue
+                    except:
+                        pass
+            except:
+                # Assume the high pressure = critical pressure
+                # Determine the minimum discharge temperature
+                P_H = temp_ref_out.P_crit
+                stream_out.props_in_ab('PS', P_H, stream_in.entropy)
+                
+                if stream_out.temperature < T_out_min:
+                    # For low critical point fluids, the end temperature is too low
+                    # Find a pressure with sufficient temperature in the discharge
+                    def _get_compressor_outlet_temperature(P_out):
+                        stream_out.props_in_ab('PT', P_out, T_out_min)
+                        stream_out_ideal.props_in_ab('PS', P_out, stream_in.entropy)
+                        return (stream_out_ideal.enthalpy - stream_in.enthalpy) / 0.7 - (stream_out.enthalpy - stream_in.enthalpy)
+
+                    r = root_scalar(
+                        f=_get_compressor_outlet_temperature, #find the gas discharge pressure resulting in the target dtmin
+                        method='brentq', 
+                        bracket=(P_L * 1.1, 20), 
+                        x0=P_H, 
+                        xtol=1e-3,
+                    )
+                    if r.converged:
+                        P_H = r.root
+                        pass
+
+                if P_H < P_L:
+                    P_H = P_L * 16
+                    pass
             
         return (P_H / P_L) ** (1 / n_comp)
 
-    PR = _get_discharge_pressure_ratio_estimate(P_H_est=hp.P_H_est, P_L=P_L, n_comp=hp.n_comp, T_tar=hp.T_air_tar, dT_min=hp.dT_GC_min_tar, s_out=temp_ref_out.entropy, fld=hp.refrigerant)
+    T_eff = temp_ref_out.temperature + sum([hp.dT_rhx1_cold, hp.dT_rhx2_cold, hp.dT_rhx3_cold])
+    PR = _get_discharge_pressure_ratio_estimate(P_H_est=hp.P_H_est, P_L=P_L, T_eff=T_eff, n_comp=hp.n_comp, T_tar=hp.T_air_tar, dT_min=hp.dT_GC_min_tar, fld=hp.refrigerant)
     
     #Compressor 1, always present
     hp.comp1.flow_in = temp_ref_out

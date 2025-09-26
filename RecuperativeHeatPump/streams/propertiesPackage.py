@@ -82,7 +82,15 @@ class PropertyPackage:
         elif propsIn_str == 'TS':
             molar_props = prop1 + self.TC_to_K, prop2 * self.molar_mass
         elif propsIn_str == 'ST':
-            molar_props = prop1 * self.molar_mass, prop2 + self.TC_to_K   
+            molar_props = prop1 * self.molar_mass, prop2 + self.TC_to_K
+        elif propsIn_str == 'TD':
+            molar_props = prop1 + self.TC_to_K, prop2 / self.molar_mass   
+        elif propsIn_str == 'DT':
+            molar_props = prop1 / self.molar_mass, prop2 + self.TC_to_K     
+        elif propsIn_str == 'PD':
+            molar_props = prop1 * 1000, prop2 / self.molar_mass   
+        elif propsIn_str == 'DP':
+            molar_props = prop1 / self.molar_mass, prop2 * 1000              
         else:
             raise Exception('Unrecognised fluid property input combination.')
         return molar_props

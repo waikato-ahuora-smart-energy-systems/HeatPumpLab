@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.optimize import root_scalar, minimize, shgo, dual_annealing, Bounds
+from scipy.optimize import root_scalar, minimize, Bounds
 from math import log, exp
 from typing import TYPE_CHECKING
 
@@ -97,16 +97,17 @@ def _find_evap_inlet_temperature_offset(Tref_evap_outlet: float, hp: RHP) -> flo
     return hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
 
 def _find_hp_with_min_discharge_pressure(hp: RHP) -> RHP:
-    bnds, x0, hp.feasible, bnd_val = _get_discharge_pressure_bounds(hp)
+    bnds, x0, hp.feasible, _ = _get_discharge_pressure_bounds(hp)
     hp.comp_discharge.pressure_bnds = bnds
     if hp.feasible == True:
-        r = root_scalar(f=_find_current_gc_dtmin_offset, #find the gas discharge pressure resulting in the target dtmin
-                        method='brentq', 
-                        bracket=bnds, 
-                        x0=x0, 
-                        xtol=hp.tol,
-                        args=(hp),
-                        )
+        r = root_scalar(
+            f=_find_current_gc_dtmin_offset, #find the gas discharge pressure resulting in the target dtmin
+            method='brentq', 
+            bracket=bnds, 
+            x0=x0, 
+            xtol=hp.tol,
+            args=(hp),
+        )
         hp = _do_sequential_iterative_cycle_analysis(r.root, hp)
         hp = _update_pinch_props_for_gcs(P_comp_out=r.root, hp=hp)    
         hp.converged = r.converged
@@ -122,39 +123,36 @@ def _get_discharge_pressure_bounds(hp: RHP) -> list[tuple[float, float], float, 
     dt_neg: float
     dt_plus: float
     P_i: float
+
+    def _recursive_find_bnds(P_suction: float, P_ub: float, dt_plus: float, P_lb: float, dt_neg: float, step: float, i: int):
+        if dt_plus < 0.0 and dt_neg < 0.0 and i < 1000:
+            dt_neg = dt_plus
+            P = P_lb = P_ub
+            P_ub = max(P_suction + (P - P_suction) * step, P_suction)
+            dt_plus = _find_current_gc_dtmin_offset(P_ub, hp)
+            return _recursive_find_bnds(P_suction, P_ub, dt_plus, P_lb, dt_neg, step, i+1)
+        elif dt_plus > 0.0 and dt_neg > 0.0 and i < 1000:
+            dt_plus = dt_neg
+            P = P_ub = P_lb
+            P_lb = max(P_suction + (P - P_suction) / step, P_suction)
+            dt_neg = _find_current_gc_dtmin_offset(P_lb, hp)
+            return _recursive_find_bnds(P_suction, P_ub, dt_plus, P_lb, dt_neg, step, i+1)
+        else:
+            return P_ub, dt_plus, P_lb, dt_neg
+
     # Positive dtmin is P_ub and negative dtmin is P_lb
     if hp.comp_discharge.pressure_bnds is not None:
         if hp.compute_jac == False:
             P_lb, P_ub = hp.comp_discharge.pressure_bnds
         else:
             P_lb, P_ub = hp.comp_discharge.pressure * 0.995, hp.comp_discharge.pressure * 1.005
+        dt_neg, dt_plus = [_find_current_gc_dtmin_offset(P, hp) for P in (P_lb, P_ub)]
+        pass
     else:
-        P_ub, P_lb = [hp.comp_discharge.pressure * i for i in (2.0, 0.5)]
-    dt_neg, dt_plus = [_find_current_gc_dtmin_offset(P, hp) for P in (P_lb, P_ub)]
-
-    def _recursive_find_bnds(P_suction: float, P_ub: float, dt_plus: float, P_lb: float, dt_neg: float, step: float, i: int):
-        if dt_plus < 0.0:
-            dt_neg = dt_plus
-            P_lb = P_ub
-        P_ub = max(P_suction + (P_ub - P_suction) * step, P_suction)
-        dt_plus = _find_current_gc_dtmin_offset(P_ub, hp)
-        if (dt_plus < 0.0 and i < 100):
-            return _recursive_find_bnds(P_suction, P_ub, dt_plus, P_lb, dt_neg, step, i+1)
-        else: 
-            return P_ub, dt_plus, P_lb, dt_neg
-            
-    if dt_plus < 0.0:
-        P_ub, dt_plus, P_lb, dt_neg = _recursive_find_bnds(hp.comp1.flow_in.pressure, P_ub, dt_plus, P_lb, dt_neg, 1.5, 0)
-    
-    if dt_neg > 0.0:
-        hp = _do_sequential_iterative_cycle_analysis(P_ub, hp)
-        hp.compressors[-1].flow_out.props_in_ab(
-            input_str='TS', 
-            prop1=(hp.T_air_tar + hp.dT_GC_min_tar / 2), 
-            prop2=hp.compressors[-1].flow_out.entropy
-            )
-        P_lb = hp.compressors[-1].flow_out.pressure
-        dt_neg = _find_current_gc_dtmin_offset(P_lb, hp)
+        dt_plus = dt_neg = _find_current_gc_dtmin_offset(hp.comp_discharge.pressure, hp)
+        P_ub = P_lb = hp.comp_discharge.pressure
+        P_ub, dt_plus, P_lb, dt_neg = _recursive_find_bnds(hp.comp1.flow_in.pressure, P_ub, dt_plus, P_lb, dt_neg, 1.1, 0)
+        pass
 
     if hp.comp_discharge.pressure < P_lb or hp.comp_discharge.pressure > P_ub:
         P_i = exp( log(P_lb) - dt_neg / (dt_plus - dt_neg) * (log(P_ub) - log(P_lb)) )
@@ -174,7 +172,7 @@ def _find_current_gc_dtmin_offset(P_comp_out: float, hp: RHP) -> float:
     dtmin_ls.pop(-1)            # Ignore the cold-side dtmin of the inlet air to the gas cooler
     if dtmin_ls[-1][1] < 1e-3:  # Ignore the mid exchanger dtmin of the inlet air to the gas cooler if it is the cold-side
         dtmin_ls.pop(-1)
-
+    # hp.get_cycle_plot()
     return min(dtmin_ls)[0] - hp.dT_GC_min_tar
 
 def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: RHP) -> list[list[float,float]]:
@@ -192,7 +190,6 @@ def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: RHP) -> list[list[floa
 
     if hp.debug:
         plot_driving_force(hp.gas_coolers, dtmin=hp.dT_GC_min_tar)
-        
     return dtmin_ls
 
 def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: RHP) -> RHP:
@@ -263,23 +260,21 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
     if res[j]['x'] < 0.001 * gc.duty or res[j]['x'] > 0.999 * gc.duty:
         res.pop(j)
         j = np.argmin([r['fun'] for r in res])
-        if res[j]['x'] < 1e-3 or res[j]['x'] > 1 - 1e-3:
+        if res[j]['x'] < 0.001 * gc.duty or res[j]['x'] > 0.999 * gc.duty:
             res.pop(j)
             j = np.argmin([r['fun'] for r in res])
             
-    r = res[j]    
+    r = res[j]
 
-    gc.pinch_length = r['x'] / gc.duty
+    # dtmin_len = []
+    # jac_len = []
+    # q_vals = np.linspace(0, gc.duty, 1001)
+    # for q in q_vals:
+    #     dt_min, jac = _calc_pinch_dtmin_and_jac(Q=q, gc=gc)
+    #     dtmin_len.append(dt_min)
+    #     jac_len.append(jac)
 
-    dtmin_len = []
-    jac_len = []
-    q_vals = np.linspace(0, gc.duty, 1001)
-    for q in q_vals:
-        dt_min, jac = _calc_pinch_dtmin_and_jac(Q=q, gc=gc)
-        dtmin_len.append(dt_min)
-        jac_len.append(jac)
-
-    plot_simple_xy(q_vals, dtmin_len)
+    # plot_simple_xy(q_vals, dtmin_len)
 
     return [r['fun'], r['x'] / gc.duty, r['success']]
 

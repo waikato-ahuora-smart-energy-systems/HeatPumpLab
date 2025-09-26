@@ -15,6 +15,5 @@ def solve_in_parallel(cases: list, f_solve, file_name: str = 'RHP_results', n_cp
     [executor.submit(f_solve, case) for case in cases]
     executor.shutdown()
     print('All cases completed.')
-    transfer_temp_files_to_results('results/' + file_name)
     return True
  

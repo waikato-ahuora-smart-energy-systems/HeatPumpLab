@@ -17,10 +17,10 @@ def get_case_list_to_solve(
     return  (
         _remove_completed_cases_from_list(
             cases = _get_all_analysis_case_list(
-                refrigerant_ls, 
-                dT_rhx1_cold_ls, 
-                dT_rhx2_cold_ls, 
-                comp2_power_frac_ls
+                refrigerant_ls=refrigerant_ls, 
+                dT_rhx1_cold_ls=dT_rhx1_cold_ls, 
+                dT_rhx2_cold_ls=dT_rhx2_cold_ls, 
+                comp2_power_frac_ls=comp2_power_frac_ls,
             ),
             file_name = file_name,
             f_comparison = _check_if_analysis_cases_are_identical,
@@ -28,9 +28,9 @@ def get_case_list_to_solve(
     )
 
 def get_unsolved_case_list_to_resolve(filename_unsolved: str = 'Cases-Unsolved', filename_resolved: str = 'Cases-Resolved'):
-    transfer_temp_files_to_results(f'results/{filename_resolved}')
-    unsolved_cases = read_csv_to_results(file_name=f'results/{filename_unsolved}')
-    resolved_cases = read_csv_to_results(file_name=f'results/{filename_resolved}')
+    # transfer_temp_files_to_results(f'{filename_resolved}')
+    unsolved_cases = read_csv_to_results(file_name=f'{filename_unsolved}')
+    resolved_cases = read_csv_to_results(file_name=f'{filename_resolved}')
     if resolved_cases != None:
         for i in reversed(range(len(unsolved_cases))):
             for sol in resolved_cases:
@@ -39,7 +39,7 @@ def get_unsolved_case_list_to_resolve(filename_unsolved: str = 'Cases-Unsolved',
                     break
     return unsolved_cases
 
-def get_optimisation_cases_to_solve(file_name: str ='results/untitled') -> list[list[float | str | bool]]:
+def get_optimisation_cases_to_solve(file_name: str ='untitled') -> list[list[float | str | bool]]:
     return  _order_cases(
                 _remove_completed_cases_from_list(
                     _get_all_optimisation_case_list(), 
@@ -50,26 +50,26 @@ def get_optimisation_cases_to_solve(file_name: str ='results/untitled') -> list[
 
 def preselected_refrigerant_ls():
     return [
-        'Ammonia',
-        'Propane', 
-        'Butane', 
-        'Isobutane',
-        'Pentane',
-        'Isopentane',
-        'Neopentane',
-        'Cyclopentane',        
-        # 'Carbon dioxide', 
-        'R1233zd(E)', 
-        'R1336mzz(E)', 
-        'R1336mzz(Z)', 
-        'R1234ze(E)', 
-        'R1234ze(Z)', 
-        'R1234yf', 
-        'R1243zf', 
-        'R1224yd(Z)', 
-        'PROPYLEN',
-        'DME',
-        'Methanol',
+        # 'Ammonia',
+        # 'Propane', 
+        # 'Butane', 
+        # 'Isobutane',
+        # 'Pentane',
+        # 'Isopentane',
+        # 'Neopentane',
+        # 'Cyclopentane',        
+        'Carbon dioxide', 
+        # 'R1233zd(E)', 
+        # 'R1336mzz(E)', 
+        # 'R1336mzz(Z)', 
+        # 'R1234ze(E)', 
+        # 'R1234ze(Z)', 
+        # 'R1234yf', 
+        # 'R1243zf', 
+        # 'R1224yd(Z)', 
+        # 'PROPYLEN',
+        # 'DME',
+        # 'Methanol',
         # 'propane;butane|.5;.5|mol',
         # 'propane;Isobutane|.5;.5|mol',
         # 'propane;Pentane|.5;.5|mol',

@@ -43,7 +43,7 @@ def analyse_unsolved_cases(debug: bool =True):
     hp: RHP
     unsolved_cases = get_unsolved_case_list_to_resolve()
                     
-    if unsolved_cases != []:
+    if unsolved_cases is not None and unsolved_cases != []:
         for case in unsolved_cases:
             args = {'refrigerant': str(case['refrigerant']),
                     'dT_GC_min_tar': float(case['dT_GC_min_tar']), 
@@ -68,17 +68,17 @@ def analyse_unsolved_cases(debug: bool =True):
                     }
             
             hp, _ = _analyse_case(args)
-            if hp.converged:
-                hp.get_report()
-                fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
-                _print_results(hp.output, fsuffix)
-        
-                hp.get_cycle_plot(x_axis='h', y_axis='T')
-                hp.get_cycle_plot(x_axis='s', y_axis='T')
-                hp.get_cycle_plot(x_axis='h', y_axis='P')
-                hp.get_cycle_plot(x_axis='v', y_axis='P')
-            None
-        transfer_temp_files_to_results('results/Cases-Resolved')
+            if isinstance(hp, RHP):
+                if hp.converged and debug:
+                    hp.get_report()
+                    fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
+                    _print_results(hp.output, fsuffix)
+            
+                    # hp.get_cycle_plot(x_axis='h', y_axis='T')
+                    # hp.get_cycle_plot(x_axis='s', y_axis='T')
+                    # hp.get_cycle_plot(x_axis='h', y_axis='P')
+                    # hp.get_cycle_plot(x_axis='v', y_axis='P')
+        transfer_temp_files_to_results('Cases-Resolved')
 
 @timer_func
 def solve_single_case_with_timer(args) -> RHP:

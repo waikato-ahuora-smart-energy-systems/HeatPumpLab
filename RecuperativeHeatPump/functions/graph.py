@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-__all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy']
+__all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy', 'plot_heat_exchanger_profiles']
 
 #######################################################################################################
 # Public API
@@ -84,6 +84,38 @@ def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin
     
     fig.show()
     filename = 'Driving_force_plot.png'
+    fig.savefig('results/figures/' + filename)     
+    return fig, ax           
+
+def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', res=50):
+    fig: plt.Figure
+    ax: plt.Axes
+
+    fig, ax = plt.subplots()
+
+    if title != '':
+        ax.set_title(title)
+    
+    xlabel, x_axis = _get_axis_labels(x_axis)
+    ax.set_xlabel(xlabel)
+    ylabel, y_axis = _get_axis_labels(y_axis)
+    ax.set_ylabel(ylabel)
+    
+    for obj in hx_obj:
+        data = obj.get_graph_data(divisions=res)
+        x1 = np.array(_get_raw_data(data['source'], x_axis))
+        x2 = np.array(_get_raw_data(data['sink'], x_axis)) 
+        y1 = np.array(_get_raw_data(data['source'], y_axis))
+        y2 = np.array(_get_raw_data(data['sink'], y_axis))
+
+        # x1 = (x1[:] - x1[0]) * data['source'].mass_flow
+        # x2 = (x2[:] - x2[0]) * data['source'].mass_flow
+        
+        ax.plot(x1, y1, color='red')
+        ax.plot(x2, y2, color='blue')
+    
+    fig.show()
+    filename = 'Heat_exchanger_profiles.png'
     fig.savefig('results/figures/' + filename)     
     return fig, ax           
 

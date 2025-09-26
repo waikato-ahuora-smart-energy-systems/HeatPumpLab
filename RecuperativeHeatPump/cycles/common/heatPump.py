@@ -23,7 +23,7 @@ class BaseHeatPump():
     refrigerant: float
     source: float ='Water'
     sink: float ='Air'
-    tol: float =1e-8
+    tol: float =1e-6
     debug: float =False
     output: dict
 

@@ -18,7 +18,7 @@ def analyse_single_case():
     args: list[float | str | bool]
     hp: RHP
     
-    args = {'refrigerant': 'Propane',
+    args = {'refrigerant': 'CO2',
             'dT_GC_min_tar': 20.0, 
             'T_air_tar': 200.0, 
             'T_air_inlet': 15.0,
@@ -64,6 +64,6 @@ def analyse_single_case():
  
 if __name__=='__main__':
     # analyse_single_case()
-    analyse_cases_in_parallel()
-    # analyse_unsolved_cases()
+    analyse_cases_in_parallel(n_cpu=1)
+    # analyse_unsolved_cases(debug=False)
     pass
