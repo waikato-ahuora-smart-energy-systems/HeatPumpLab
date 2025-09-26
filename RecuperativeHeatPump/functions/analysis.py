@@ -1,5 +1,5 @@
 from typing import Tuple
-from scipy.optimize import minimize as loc_min
+from scipy.optimize import minimize as loc_min, approx_fprime
 import numpy as np, copy, os
 from ..cycles import *
 from ..streams import *
@@ -98,31 +98,47 @@ def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt:
 def _analyse_case(case: dict) -> Tuple[RHP, float]:
     hp: RHP
     dt_ls = []
+    dT_gc_out_min_offset = 0.0
     vars_input = { 
         'dT_gc_out_min_offset' : 
             { 
-                'xi' : 0.0, 
+                'xi' : dT_gc_out_min_offset, 
                 'bnds' : (0.0, 40.0) 
             } 
         }
     case['additional_data'] = {
         'vars_input' : vars_input
         }
-        
-    result, dt = _get_local_optimum(
-        param=case,
-        vars_input=vars_input,
-        tol=1e-4,
+    
+    fprime, dt = _get_fprime(
+        param=case, 
         f_obj=_compute_SEC_obj,
     )
     dt_ls.append(dt)
-    
-    if result.success:
-        hp, dt = solve_single_case_with_timer(case | _get_var_kwargs(result.x, case))
+
+    if fprime > 0.0:
+        result, dt = _get_local_optimum(
+            param=case,
+            vars_input=vars_input,
+            tol=1e-4,
+            f_obj=_compute_SEC_obj,
+            method='COBYQA', #'trust-constr' 'L-BFGS-B', 'SLSQP', 'COBYLA'
+        )
         dt_ls.append(dt)
+        dT_gc_out_min_offset = result.x
+        is_solved = result.success
+    elif fprime <= 0.0:
+        dT_gc_out_min_offset = 0.0
+        is_solved = True
+    else:
+        is_solved = False
+    
+    if is_solved:
+        hp, dt = solve_single_case_with_timer(case | _get_var_kwargs(dT_gc_out_min_offset, case))
+        dt_ls.append(dt)        
         obj = _compute_SEC_obj(hp, case)
+
         # hp.dQdW = _get_dQdW(hp)
-        
         get_results_report(
             hp=hp,
             param=case, 
@@ -142,17 +158,27 @@ def _get_bounds(vars_input: dict) -> list:
     return [vars_input[key]['bnds'] for key in vars_input]
 
 @timer_func
-def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict:
+def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj, method: str) -> dict:
     return loc_min(
         fun=lambda x: _get_obj(x, param, f_obj), 
         x0=_get_initial_val(vars_input),
         bounds=_get_bounds(vars_input),
-        method='COBYLA', #'trust-constr' 'L-BFGS-B', 'SLSQP', 'COBYLA'
+        method=method,
         tol=tol,
     )
 
+@timer_func
+def _get_fprime(param: dict, f_obj) -> dict:
+    return approx_fprime(
+        xk=0.0,
+        f=lambda x: _get_obj(x, param, f_obj),
+        epsilon=0.1
+    ) * -1
+
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
     hp: RHP
+    if not isinstance(vars, list):
+        vars = [vars]
     hp, _ = solve_single_case_with_timer(param | _get_var_kwargs(vars, param))
     obj = f_obj(hp, param)
     return obj * 1000
@@ -160,12 +186,12 @@ def _get_obj(vars: list[float], param: dict, f_obj) -> float:
 def _compute_SEC_obj(hp: RHP, param: dict) -> float:
     return hp.SEC
 
-def _get_var_kwargs(var: list[float], param: dict) -> dict[str, float]:
-    i: int = 0
+def _get_var_kwargs(vars: list[float], param: dict) -> dict[str, float]:
     d_var = dict()
-    for key in param['additional_data']['vars_input']:
-        d_var[key] = var[i]
-        i += 1
+    if not isinstance(vars, list):
+        vars = [vars]    
+    for i, key in enumerate(param['additional_data']['vars_input']):
+        d_var[key] = vars[i]
     return d_var
 
 def _print_results(results: dict, fsuffix: str, print_to_terminal: bool =True) -> None:

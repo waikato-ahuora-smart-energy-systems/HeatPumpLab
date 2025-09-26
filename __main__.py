@@ -64,6 +64,6 @@ def analyse_single_case():
  
 if __name__=='__main__':
     # analyse_single_case()
-    # analyse_cases_in_parallel(n_cpu=10)
-    analyse_unsolved_cases(debug=False)
+    analyse_cases_in_parallel(n_cpu=12)
+    # analyse_unsolved_cases(debug=False)
     pass

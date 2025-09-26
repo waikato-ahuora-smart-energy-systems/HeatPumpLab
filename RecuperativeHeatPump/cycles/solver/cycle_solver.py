@@ -288,10 +288,6 @@ def _calc_pinch_dtmin_and_jac(Q: float, gc: GasCooler):
             _calc_jac_at_given_point(gc.source_pinch, gc.sink_pinch) #Jacobian
             )
 
-def _calc_pinch_dtmin(Q: float, gc: GasCooler):
-    gc = _calc_pinch_props_at_Q(Q, gc)
-    return _calc_dtmin_at_given_point(gc.source_pinch, gc.sink_pinch) #objective
-
 def _update_pinch_props_for_gcs(P_comp_out: float, hp: RHP) -> RHP:
     dtmin_ls = _get_all_possible_gc_dtmin_pos(P_comp_out, hp)
     i = 1

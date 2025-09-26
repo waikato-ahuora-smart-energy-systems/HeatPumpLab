@@ -133,9 +133,10 @@ def _get_RHP_streams(hp: RHP) -> RHP:
 
     def _get_discharge_pressure_ratio_estimate(P_H_est: float, P_L: float, T_eff: float, n_comp: int, T_tar: float, dT_min: float, fld: str) -> float:
         #Final discharge pressure
-        if P_H_est > 0.0:
+        if P_H_est > P_L:
             P_H = P_H_est
         else:
+            P_H = P_L
             stream_in = MassStream(fluid=fld, temperature=T_eff, pressure=P_L)
             stream_out = MassStream(fluid=fld)
             stream_out_ideal = MassStream(fluid=fld)
@@ -176,34 +177,37 @@ def _get_RHP_streams(hp: RHP) -> RHP:
                             break
                     except:
                         pass
+                if P_H <= P_L:
+                    P_H = min(20, P_L * 36)
             except:
-                # Assume the high pressure = critical pressure
-                # Determine the minimum discharge temperature
-                P_H = temp_ref_out.P_crit
-                stream_out.props_in_ab('PS', P_H, stream_in.entropy)
-                
-                if stream_out.temperature < T_out_min:
-                    # For low critical point fluids, the end temperature is too low
-                    # Find a pressure with sufficient temperature in the discharge
-                    def _get_compressor_outlet_temperature(P_out):
-                        stream_out.props_in_ab('PT', P_out, T_out_min)
-                        stream_out_ideal.props_in_ab('PS', P_out, stream_in.entropy)
-                        return (stream_out_ideal.enthalpy - stream_in.enthalpy) / 0.7 - (stream_out.enthalpy - stream_in.enthalpy)
+                try:
+                    # Assume the high pressure = critical pressure
+                    # Determine the minimum discharge temperature
+                    P_H = temp_ref_out.P_crit
+                    stream_out.props_in_ab('PS', P_H, stream_in.entropy)
+                    
+                    if stream_out.temperature < T_out_min:
+                        # For low critical point fluids, the end temperature is too low
+                        # Find a pressure with sufficient temperature in the discharge
+                        def _get_compressor_outlet_temperature(P_out):
+                            stream_out.props_in_ab('PT', P_out, T_out_min)
+                            stream_out_ideal.props_in_ab('PS', P_out, stream_in.entropy)
+                            return (stream_out_ideal.enthalpy - stream_in.enthalpy) / 0.7 - (stream_out.enthalpy - stream_in.enthalpy)
 
-                    r = root_scalar(
-                        f=_get_compressor_outlet_temperature, #find the gas discharge pressure resulting in the target dtmin
-                        method='brentq', 
-                        bracket=(P_L * 1.1, 20), 
-                        x0=P_H, 
-                        xtol=1e-3,
-                    )
-                    if r.converged:
-                        P_H = r.root
-                        pass
-
-                if P_H < P_L:
-                    P_H = P_L * 16
-                    pass
+                        r = root_scalar(
+                            f=_get_compressor_outlet_temperature, #find the gas discharge pressure resulting in the target dtmin
+                            method='brentq', 
+                            bracket=(P_L * 1.1, 20), 
+                            x0=P_H, 
+                            xtol=1e-3,
+                        )
+                        if r.converged:
+                            P_H = r.root
+                            pass
+                        else: 
+                            P_H = 20
+                except:
+                    P_H = 20
             
         return (P_H / P_L) ** (1 / n_comp)
 
