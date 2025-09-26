@@ -109,8 +109,8 @@ def _get_all_analysis_case_list(
     ) -> list[list[float | str | bool]]:
     
     refrigerant_ls: list[str] = preselected_refrigerant_ls()
-    dT_rhx1_cold_ls = np.linspace(0, 100, num=21)
-    dT_rhx2_cold_ls = np.linspace(0, 100, num=21)
+    dT_rhx1_cold_ls = np.linspace(0, 100, num=41)
+    dT_rhx2_cold_ls = np.linspace(0, 100, num=41)
     comp2_power_frac_ls = np.linspace(0.3, 0.7, num=9)
     
     # Enumerate all the cases to be analysed

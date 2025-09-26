@@ -122,13 +122,18 @@ def _analyse_case(case: dict) -> Tuple[RHP, float]:
             vars_input=vars_input,
             tol=1e-4,
             f_obj=_compute_SEC_obj,
-            method='COBYQA', #'trust-constr' 'L-BFGS-B', 'SLSQP', 'COBYLA'
+            method='COBYQA',
         )
         dt_ls.append(dt)
         dT_gc_out_min_offset = result.x
         is_solved = result.success
     elif fprime <= 0.0:
         dT_gc_out_min_offset = 0.0
+        result = {
+            'nfev': 2,
+            'message': 'Success',
+            'success': True,
+        }
         is_solved = True
     else:
         is_solved = False
@@ -138,7 +143,7 @@ def _analyse_case(case: dict) -> Tuple[RHP, float]:
         dt_ls.append(dt)        
         obj = _compute_SEC_obj(hp, case)
 
-        # hp.dQdW = _get_dQdW(hp)
+        hp.dQdW = _get_dQdW(hp)
         get_results_report(
             hp=hp,
             param=case, 
@@ -223,12 +228,12 @@ def _get_results_summary(hp: RHP, result, param, obj, dt: float =None) -> dict:
             'SEC_0' : param['additional_data']['SEC_0'],
             'P_0' : param['additional_data']['P_0'],
         })
-        
+
     hp.output.update({
         'Obj_function' : obj,
-        'Function evaluations' : result.nfev,
-        'Message' : result.message,
-        'Success' : result.success,
+        'Function evaluations' : result["nfev"],
+        'Message' : result["message"],
+        'Success' : result["success"],
         'Time_to_optimise' : dt,
     })
     return hp.output
