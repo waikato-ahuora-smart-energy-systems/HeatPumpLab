@@ -34,7 +34,6 @@ def analyse_cases_in_parallel(
     solve_in_parallel(
         cases=cases,
         f_solve=_analyse_case,
-        file_name=file_name,
         n_cpu=n_cpu,
     )
     transfer_temp_files_to_results(file_name)
@@ -110,11 +109,16 @@ def _analyse_case(case: dict) -> Tuple[RHP, float]:
         'vars_input' : vars_input
         }
     
-    fprime, dt = _get_fprime(
-        param=case, 
-        f_obj=_compute_SEC_obj,
-    )
-    dt_ls.append(dt)
+    try:
+        # Attempt to calculate the gradient at the boundary, if it fails, 
+        # assume that further optimisation could be possible
+        fprime, dt = _get_fprime(
+            param=case, 
+            f_obj=_compute_SEC_obj,
+        )
+        dt_ls.append(dt)
+    except:
+        fprime = 1
 
     if fprime > 0.0:
         result, dt = _get_local_optimum(

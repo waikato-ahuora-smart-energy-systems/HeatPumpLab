@@ -8,7 +8,7 @@ __all__ = ['solve_in_parallel']
 # Public API
 #######################################################################################################
 
-def solve_in_parallel(cases: list, f_solve, file_name: str = 'RHP_results', n_cpu: int = os.cpu_count() - 1) -> bool:
+def solve_in_parallel(cases: list, f_solve, n_cpu: int = os.cpu_count() - 1) -> bool:
     # Use parallel processing distributed over all cores to speed up the analysis
     print(len(cases))
     executor: pool = pool(max_workers=n_cpu)
