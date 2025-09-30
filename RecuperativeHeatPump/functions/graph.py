@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import plotly.express as px
+import pandas as pd
 
 __all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy', 'plot_heat_exchanger_profiles']
 
@@ -138,6 +140,17 @@ def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: st
     fig.savefig('results/figures/' + filename) 
     return fig, ax
 
+def plot_heat_map(title, x_val, x_label, y_val, y_label, z_val, z_label):
+    df = pd.DataFrame({"x": x_val, "y": y_val, "z": z_val})
+    fig = px.density_heatmap(df, x="x", y="y", z="z", nbinsx=20, nbinsy=20, color_continuous_scale="Viridis")
+    fig.update_layout(
+        title=title,
+        xaxis_title="X-axis",
+        yaxis_title="Y-axis"
+    )
+    fig.show()
+
+
 #######################################################################################################
 # Helper functions
 #######################################################################################################
@@ -178,6 +191,9 @@ def _get_axis_labels(axis_var: str) -> list[str]: # type: ignore
     elif axis == 'dT*':
         label = axis + ' [°C]'
         axis = 'temperature'
+    elif axis == 'heat flow':
+        label = axis + ' [kW]'
+        axis = 'heat_flow'        
     else:
         label = 'Temperature [°C]'
         axis = 'temperature'            

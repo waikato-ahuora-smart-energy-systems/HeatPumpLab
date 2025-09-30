@@ -12,7 +12,6 @@ tim.walmsley@waikato.ac.nz
 """
 
 from RecuperativeHeatPump import *
-from aux import *
 
 def analyse_single_case():
     args: list[float | str | bool]
