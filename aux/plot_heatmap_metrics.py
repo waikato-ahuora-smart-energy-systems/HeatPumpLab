@@ -18,7 +18,7 @@ DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
     ("VHC", "max"),
     ("eDTL", "min"),
     ("SLE", "max"),
-    ("dQ/dW", "max"),
+    ("dQ_per_dW", "max"),
     ("LMTD_gcs", "max"),
     ("Pmax", "min"),
     ("COP_pct_increase_vs_base", "max"),
@@ -47,6 +47,23 @@ DEFAULT_REFRIGERANTS: Sequence[str] = (
     "DME",
     "Methanol",
 )
+
+
+AXIS_LABELS: dict[str, str] = {
+    "dT_rhx1_cold": r"$\Delta T_{\mathrm{RHX1,cold}}$ [K]",
+    "dT_rhx2_cold": r"$\Delta T_{\mathrm{RHX2,cold}}$ [K]",
+    "COP": "COP",
+    "SEC": "SEC",
+    "VHC": r"VHC [MJ/m$^3$]",
+    "eDTL": r"Effective Temperature Lift [K]",
+    "SLE": r"SLE [kJ$_e$/(kJ$_h$K)]",
+    "dQ/dW": r"$\Delta Q/\Delta W$",
+    "LMTD_gcs": r"LMTD$_{\mathrm{GC}}$ [K]",
+    "Pmax": r"$P_{\max}$ [kPa]",
+    "COP_pct_increase_vs_base": r"COP Increase vs Base [%]",
+    "Pmax_reduction_vs_base": r"$P_{\max}$ Reduction vs Base [%]",
+}
+
 
 
 DEFAULT_COMP_FRAC_2: Sequence[float] = (0.3, 0.4, 0.5, 0.6, 0.7)
@@ -180,6 +197,11 @@ def parse_metric_specs(metric_specs: Sequence[str]) -> List[Tuple[str, str]]:
             )
         parsed.append((name, mode))
     return parsed
+
+
+def format_axis_label(name: str) -> str:
+    """Return a descriptive axis label for the given column name."""
+    return AXIS_LABELS.get(name, name)
 
 
 def add_basecase_metrics(df: pd.DataFrame) -> pd.DataFrame:
@@ -353,8 +375,8 @@ def plot_metric_heatmaps(
                 ax.set_title(
                     f"{metric_name}\n{refrigerant} | comp2_power_frac = {comp2_value:.3f}"
                 )
-                ax.set_xlabel("dT_rhx1_cold")
-                ax.set_ylabel("dT_rhx2_cold")
+                ax.set_xlabel(format_axis_label("dT_rhx1_cold"))
+                ax.set_ylabel(format_axis_label("dT_rhx2_cold"))
 
                 grid_filled = grid.filled(np.nan)
                 if np.isfinite(grid_filled).any():
@@ -367,9 +389,11 @@ def plot_metric_heatmaps(
                             marker_color = "darkcyan"
                     best_y_idx, best_x_idx = np.unravel_index(best_index, grid.shape)
 
+                    x_star = x_vals[best_x_idx]
+                    y_star = y_vals[best_y_idx]
                     ax.scatter(
-                        x_vals[best_x_idx],
-                        y_vals[best_y_idx],
+                        x_star,
+                        y_star,
                         marker="*",
                         s=140,
                         color=marker_color,
@@ -377,9 +401,26 @@ def plot_metric_heatmaps(
                         linewidths=0.6,
                         zorder=5,
                     )
+                    z_value = grid_filled[best_y_idx, best_x_idx]
+                    ax.annotate(
+                        f"{z_value:.2f}",
+                        xy=(x_star, y_star),
+                        xytext=(6, 6),
+                        textcoords="offset points",
+                        color="black",
+                        fontsize=9,
+                        fontweight="bold",
+                        bbox=dict(
+                            boxstyle="round,pad=0.2",
+                            facecolor="white",
+                            edgecolor="black",
+                            linewidth=0.4,
+                            alpha=0.85,
+                        ),
+                    )
 
                 cbar = fig.colorbar(quad_mesh, ax=ax, shrink=0.9)
-                cbar.set_label(metric_name)
+                cbar.set_label(format_axis_label(metric_name))
                 fig.tight_layout()
 
                 metric_dir = output_dir / sanitize_metric_name(metric_name)

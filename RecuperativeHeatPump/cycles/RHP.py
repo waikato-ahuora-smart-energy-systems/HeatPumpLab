@@ -82,7 +82,7 @@ class RHP(BaseHeatPump):
             'VHC' : self.VHC,
             'eDTL' : self.eDTL,
             'SLE' : self.SLE,
-            'dQ/dW': self.dQdW,
+            'dQ_per_dW': self.dQdW,
             'LMTD_gcs' : self.LMTD_gcs,
             'Pmax' : self.comp_discharge.pressure * 1000,
             'converged' : self.converged,
