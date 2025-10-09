@@ -50,8 +50,8 @@ DEFAULT_REFRIGERANTS: Sequence[str] = (
 
 
 AXIS_LABELS: dict[str, str] = {
-    "dT_rhx1_cold": r"$\Delta T_{\mathrm{RHX1,cold}}$ [K]",
-    "dT_rhx2_cold": r"$\Delta T_{\mathrm{RHX2,cold}}$ [K]",
+    "dT_rhx1_cold": r"$\Delta T_{\mathrm{RHX1,sink}}$ [K]",
+    "dT_rhx2_cold": r"$\Delta T_{\mathrm{RHX2,sink}}$ [K]",
     "COP": "COP",
     "SEC": "SEC",
     "VHC": r"VHC [MJ/m$^3$]",
@@ -60,8 +60,8 @@ AXIS_LABELS: dict[str, str] = {
     "dQ/dW": r"$\Delta Q/\Delta W$",
     "LMTD_gcs": r"LMTD$_{\mathrm{GC}}$ [K]",
     "Pmax": r"$P_{\max}$ [kPa]",
-    "COP_pct_increase_vs_base": r"COP Increase vs Base [%]",
-    "Pmax_reduction_vs_base": r"$P_{\max}$ Reduction vs Base [%]",
+    "COP_pct_increase_vs_base": r"COP Increase [%]",
+    "Pmax_reduction_vs_base": r"$P_{\max}$ Reduction [%]",
 }
 
 
@@ -362,7 +362,7 @@ def plot_metric_heatmaps(
                     continue
 
                 X, Y = np.meshgrid(x_vals, y_vals)
-                fig, ax = plt.subplots(figsize=(4.5, 4))
+                fig, ax = plt.subplots(figsize=(4.5, 3.75))
                 quad_mesh = ax.pcolormesh(
                     X,
                     Y,
@@ -373,7 +373,7 @@ def plot_metric_heatmaps(
                     vmax=vmax,
                 )
                 ax.set_title(
-                    f"{metric_name}\n{refrigerant} | comp2_power_frac = {comp2_value:.3f}"
+                    f"{format_axis_label(metric_name)}: {refrigerant} | $\omega_2$ = {comp2_value:.1f}"
                 )
                 ax.set_xlabel(format_axis_label("dT_rhx1_cold"))
                 ax.set_ylabel(format_axis_label("dT_rhx2_cold"))
@@ -386,7 +386,7 @@ def plot_metric_heatmaps(
                             marker_color = "gold"
                         else:
                             best_index = np.nanargmin(grid_filled)
-                            marker_color = "darkcyan"
+                            marker_color = "gold"
                     best_y_idx, best_x_idx = np.unravel_index(best_index, grid.shape)
 
                     x_star = x_vals[best_x_idx]
@@ -408,13 +408,13 @@ def plot_metric_heatmaps(
                         xytext=(6, 6),
                         textcoords="offset points",
                         color="black",
-                        fontsize=9,
+                        fontsize=10,
                         fontweight="bold",
                         bbox=dict(
                             boxstyle="round,pad=0.2",
                             facecolor="white",
                             edgecolor="black",
-                            linewidth=0.4,
+                            linewidth=0.75,
                             alpha=0.85,
                         ),
                     )
