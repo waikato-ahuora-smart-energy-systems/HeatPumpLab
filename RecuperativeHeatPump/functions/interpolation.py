@@ -137,6 +137,14 @@ def _prepare_training_data(
     return features.to_numpy(dtype=float), targets.to_numpy(dtype=float)
 
 
+def _as_scalar(value: object) -> float:
+    """Convert interpolator outputs to a scalar float, handling array-like responses."""
+    array = np.asarray(value).squeeze()
+    if array.size == 0:
+        return np.nan
+    return float(array)
+
+
 def estimate_operating_targets_from_results(
     results: pd.DataFrame | Path | str,
     inputs: Mapping[str, object],
@@ -227,12 +235,11 @@ def estimate_operating_targets_from_results(
         if feature_array.shape[0] > ndim:
             try:
                 lin_interp = LinearNDInterpolator(feature_array, values, fill_value=np.nan)
-                estimates[idx] = float(lin_interp(query_point))
+                estimates[idx] = _as_scalar(lin_interp(query_point))
             except qhull.QhullError:
                 estimates[idx] = np.nan
         if not np.isfinite(estimates[idx]):
             nearest_interp = NearestNDInterpolator(feature_array, values)
-            estimates[idx] = float(nearest_interp(query_point))
+            estimates[idx] = _as_scalar(nearest_interp(query_point))
 
     return {col: float(estimates[i]) for i, col in enumerate(target_columns)}
-

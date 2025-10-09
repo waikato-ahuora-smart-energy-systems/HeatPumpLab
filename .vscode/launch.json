@@ -7,6 +7,17 @@
             "request": "launch",
             "program": "__main__.py",
             "justMyCode": true
-        }
+        },
+        {
+            "name": "Run tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "cwd": "${workspaceFolder}/tests/", 
+            "args": [
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },             
     ]
 }
