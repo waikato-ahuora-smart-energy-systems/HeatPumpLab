@@ -238,7 +238,7 @@ def _remove_completed_cases_from_list(
         elif prev_results not in (None, []):
             if any(f_comparison(res, case) for res in prev_results):
                 continue
-        _apply_interpolation_if_possible(case, results_df)
+        # _apply_interpolation_if_possible(case, results_df)
         if f_signature is not None and case_signature is not None:
             signature_lookup.add(case_signature)
         remaining_cases.append(case)

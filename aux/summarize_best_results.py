@@ -13,15 +13,15 @@ import pandas as pd
 
 DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
     ("COP", "max"),
-    ("SEC", "min"),
+    # ("SEC", "min"),
     ("VHC", "max"),
     ("eDTL", "min"),
-    ("SLE", "max"),
-    ("dQ/dW", "max"),
+    ("SLE", "min"),
+    # ("dQ_per_dW", "max"),
     ("LMTD_gcs", "max"),
     ("Pmax", "min"),
-    ("COP_pct_increase_vs_base", "max"),
-    ("Pmax_reduction_vs_base", "max"),
+    # ("COP_pct_increase_vs_base", "max"),
+    # ("Pmax_reduction_vs_base", "max"),
 )
 
 DEFAULT_INCLUDE_COLUMNS: Sequence[str] = (
@@ -33,7 +33,7 @@ DEFAULT_INCLUDE_COLUMNS: Sequence[str] = (
     "VHC",
     "eDTL",
     "SLE",
-    "dQ/dW",
+    "dQ_per_dW",
     "LMTD_gcs",
     "Pmax",
     "COP_pct_increase_vs_base",
@@ -60,6 +60,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
+        default=Path(__file__).resolve().parents[1] / "results" / "Summary.csv",
         help="Optional path to write the summary CSV.",
     )
     parser.add_argument(
@@ -73,7 +74,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--include-columns",
         nargs="+",
-        default=list(DEFAULT_INCLUDE_COLUMNS),
+        # default=list(DEFAULT_INCLUDE_COLUMNS),
         help="Additional columns to include in the summary output.",
     )
     parser.add_argument(
@@ -269,9 +270,10 @@ def summarise_best_cases(
                 "refrigerant": refrigerant,
                 "metric_value": best_row[metric],
             }
+            include_columns = include_columns if include_columns is not None else best_row.index
             for column in include_columns:
                 if column in best_row.index:
-                    record[column] = best_row[column]
+                    record[column] = best_row[column]                                       
             records.append(record)
 
     summary_df = pd.DataFrame.from_records(records)
@@ -292,6 +294,7 @@ def main() -> None:
         filter_converged=not args.skip_converged_filter,
     )
     df = add_basecase_metrics(df)
+    args.comp2_values = [0.5]
     df = filter_dataframe(df, args.refrigerants, args.comp2_values)
 
     metric_specs = parse_metric_specs(args.metrics)
