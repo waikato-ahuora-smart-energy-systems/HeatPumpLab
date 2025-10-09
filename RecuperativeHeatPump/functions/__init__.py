@@ -4,3 +4,4 @@ from .graph import *
 from .readWriteOutput import *
 from .decorator_functions import *
 from .optimisation import *
+from .interpolation import *
