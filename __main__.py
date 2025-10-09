@@ -12,6 +12,7 @@ tim.walmsley@waikato.ac.nz
 """
 
 from RecuperativeHeatPump import *
+from aux import *
 
 def analyse_single_case():
     args: list[float | str | bool]
@@ -63,6 +64,7 @@ def analyse_single_case():
  
 if __name__=='__main__':
     # analyse_single_case()
-    analyse_cases_in_parallel()
+    # analyse_cases_in_parallel()
     # analyse_unsolved_cases(debug=False)
+    get_fluid_prop_overview_table()
     pass

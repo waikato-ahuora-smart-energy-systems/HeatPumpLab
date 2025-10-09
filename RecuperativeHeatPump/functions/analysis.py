@@ -99,7 +99,7 @@ def _analyse_case(case: dict) -> Tuple[RHP, float]:
     dt_ls = []
     
     dT_gc_out_min_offset = 0.0 if 'dT_gc_out_min_offset' not in case else case['dT_gc_out_min_offset']
-    
+
     vars_input = { 
         'dT_gc_out_min_offset' : 
             { 
@@ -131,7 +131,7 @@ def _analyse_case(case: dict) -> Tuple[RHP, float]:
             method='COBYQA',
         )
         dt_ls.append(dt)
-        dT_gc_out_min_offset = result.x
+        dT_gc_out_min_offset = result.x[0]
         is_solved = result.success
     elif fprime <= 0.0:
         dT_gc_out_min_offset = 0.0

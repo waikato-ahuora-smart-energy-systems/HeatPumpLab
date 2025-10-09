@@ -8,6 +8,8 @@ def get_fluid_prop_overview_table():
         'TC',
         'ODP',
         'GWP',
+        'ACF',
+        'OFF',
     ]
 
     refrigerant_ls = [
@@ -19,6 +21,7 @@ def get_fluid_prop_overview_table():
         'Isopentane',
         'Neopentane',
         'Cyclopentane',
+        'Carbon dioxide', 
         'R1233zd(E)', 
         'R1336mzz(E)', 
         'R1336mzz(Z)', 
@@ -50,16 +53,40 @@ def get_fluid_prop_overview_table():
         props = {}
         PP = PropertyPackage(r)
         for p in props_ls:
-            props[p] = PP.get_specified_properties(
-                propsOut=p,
-                propsIn='PQ',
-                prop1=0.101325,
-                prop2=0,
-            )[0]
+            if p not in ['OFF']:
+                props[p] = PP.get_specified_properties(
+                    propsOut=p,
+                    propsIn='PQ',
+                    prop1=0.101325,
+                    prop2=0,
+                )[0]
+            else:
+                hc = PP.get_specified_properties(
+                    propsOut='H',
+                    propsIn='PQ',
+                    prop1=props['PC'],
+                    prop2=0,
+                )[0]
+
+                hl = PP.get_specified_properties(
+                    propsOut='H',
+                    propsIn='TQ',
+                    prop1=15,
+                    prop2=0,
+                )[0]
+
+                hv = PP.get_specified_properties(
+                    propsOut='H',
+                    propsIn='TQ',
+                    prop1=15,
+                    prop2=1,
+                )[0]                
+
+                props[p] = (hc - (hv + hl) / 2) / (hv - hl)         
             pass
         table[r] = props
 
     df = pd.DataFrame(table).T 
     print(df)
 
-    df.to_csv('aux/Refrigerant props.csv')
+    df.to_csv('results/Refrigerant props.csv')

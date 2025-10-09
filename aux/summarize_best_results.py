@@ -15,29 +15,17 @@ DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
     ("COP", "max"),
     # ("SEC", "min"),
     ("VHC", "max"),
-    ("eDTL", "min"),
-    ("SLE", "min"),
+    # ("eDTL", "min"),
+    # ("SLE", "min"),
     # ("dQ_per_dW", "max"),
-    ("LMTD_gcs", "max"),
+    # ("LMTD_gcs", "max"),
     ("Pmax", "min"),
     # ("COP_pct_increase_vs_base", "max"),
     # ("Pmax_reduction_vs_base", "max"),
 )
 
 DEFAULT_INCLUDE_COLUMNS: Sequence[str] = (
-    "dT_rhx1_cold",
-    "dT_rhx2_cold",
-    "comp2_power_frac",
-    "COP",
-    "SEC",
-    "VHC",
-    "eDTL",
-    "SLE",
-    "dQ_per_dW",
-    "LMTD_gcs",
-    "Pmax",
-    "COP_pct_increase_vs_base",
-    "Pmax_reduction_vs_base",
+    'cycle_type', 'COP', 'COP_pct_increase_vs_base', 'VHC', 'eDTL', 'SLE', 'LMTD_gcs', 'dT_rhx1_cold', 'dT_rhx2_cold', 'comp2_power_frac', 'Pmax', 'Pmax_reduction_vs_base', 'PR_1', 'PR_2', 'T_comp_discharge'
 )
 
 BASECASE_DTRHX1_COLD = 0.0
@@ -74,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--include-columns",
         nargs="+",
-        # default=list(DEFAULT_INCLUDE_COLUMNS),
+        default=list(DEFAULT_INCLUDE_COLUMNS),
         help="Additional columns to include in the summary output.",
     )
     parser.add_argument(
