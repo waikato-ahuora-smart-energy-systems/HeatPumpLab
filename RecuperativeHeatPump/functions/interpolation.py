@@ -68,6 +68,11 @@ def _ensure_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series, errors="coerce")
 
 
+def _normalize_category_value(value: object) -> str:
+    """Return a lowercase string representation for robust categorical comparisons."""
+    return str(value).strip().lower()
+
+
 def _filter_by_categories(
     df: pd.DataFrame,
     inputs: Mapping[str, object],
@@ -77,7 +82,9 @@ def _filter_by_categories(
     filtered = df
     for column in categorical_columns:
         if column in filtered.columns and column in inputs:
-            filtered = filtered[filtered[column] == inputs[column]]
+            value = _normalize_category_value(inputs[column])
+            mask = filtered[column].map(_normalize_category_value) == value
+            filtered = filtered[mask]
     return filtered
 
 
@@ -152,6 +159,7 @@ def estimate_operating_targets_from_results(
     categorical_match_columns: Sequence[str] = DEFAULT_CATEGORICAL_MATCH_COLUMNS,
     numeric_feature_columns: Sequence[str] = DEFAULT_NUMERIC_FEATURE_COLUMNS,
     target_columns: Sequence[str] = TARGET_COLUMNS,
+    fallback_to_mean: bool = True,
 ) -> MutableMapping[str, float]:
     """
     Estimate ``Pmax`` and ``dT_gc_out_min_offset`` for a given operating point.
@@ -201,6 +209,13 @@ def estimate_operating_targets_from_results(
 
     filtered = _filter_by_categories(df, inputs, categorical_match_columns)
     if filtered.empty:
+        if fallback_to_mean:
+            target_means = df.loc[:, target_columns].apply(_ensure_numeric).mean()
+            if target_means.isnull().any():
+                raise ValueError(
+                    "No historical results match and insufficient data to compute a fallback estimate."
+                )
+            return {col: float(target_means[col]) for col in target_columns}
         raise ValueError(
             "No historical results match the provided categorical inputs; unable to perform interpolation."
         )

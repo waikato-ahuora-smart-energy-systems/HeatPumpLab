@@ -97,7 +97,9 @@ def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt:
 def _analyse_case(case: dict) -> Tuple[RHP, float]:
     hp: RHP
     dt_ls = []
-    dT_gc_out_min_offset = 0.0
+    
+    dT_gc_out_min_offset = 0.0 if 'dT_gc_out_min_offset' not in case else case['dT_gc_out_min_offset']
+    
     vars_input = { 
         'dT_gc_out_min_offset' : 
             { 
