@@ -2,6 +2,75 @@
 from RecuperativeHeatPump import *
 
 DEFAULT_ARGS: list[float | str | bool] = {
+    'refrigerant': 'R1234ze(Z)',
+    'dT_GC_min_tar': 20.0, 
+    'T_air_tar': 200.0, 
+    'T_air_inlet': 15.0,
+    'T_source_in': 40.0,
+    'dT_gc_out_min_offset': 0.0,
+    'n_comp': 2,
+    'ihx_on': 1,
+    'dTmin_rhx': 5.0,
+    'dT_rhx1_cold': 0.0,
+    'dT_rhx2_cold': 42.5,
+    'dT_rhx3_cold': 0.0,
+    'comp2_power_frac': 0.5,
+    'comp3_power_frac': 0.0,
+    'comp_PR_uniform': False,
+    'motor_eff': 0.96,
+    'comp_model_index': 1,
+    'debug': False,
+    'sink': 'Air',
+    'source': 'water',
+    'Tref_evap_inlet' : 10,
+}
+R1234ze_args = {
+    'refrigerant': 'R1234ze(Z)',
+    'dT_GC_min_tar': 20.0, 
+    'T_air_tar': 200.0, 
+    'T_air_inlet': 15.0,
+    'T_source_in': 40.0,
+    'dT_gc_out_min_offset': 0.0,
+    'n_comp': 2,
+    'ihx_on': 1,
+    'dTmin_rhx': 5.0,
+    'dT_rhx1_cold': 0.0,
+    'dT_rhx2_cold': 44.3,
+    'dT_rhx3_cold': 0.0,
+    'comp2_power_frac': 0.5,
+    'comp3_power_frac': 0.0,
+    'comp_PR_uniform': False,
+    'motor_eff': 0.96,
+    'comp_model_index': 1,
+    'debug': False,
+    'sink': 'Air',
+    'source': 'water',
+    'Tref_evap_inlet' : 10,
+}
+dme_args = {
+    'refrigerant': 'DME',
+    'dT_GC_min_tar': 20.0, 
+    'T_air_tar': 200.0, 
+    'T_air_inlet': 15.0,
+    'T_source_in': 40.0,
+    'dT_gc_out_min_offset': 0.0,
+    'n_comp': 2,
+    'ihx_on': 1,
+    'dTmin_rhx': 5.0,
+    'dT_rhx1_cold': 0.0,
+    'dT_rhx2_cold': 26.8,
+    'dT_rhx3_cold': 0.0,
+    'comp2_power_frac': 0.5,
+    'comp3_power_frac': 0.0,
+    'comp_PR_uniform': False,
+    'motor_eff': 0.96,
+    'comp_model_index': 1,
+    'debug': False,
+    'sink': 'Air',
+    'source': 'water',
+    'Tref_evap_inlet' : 10,
+}
+CO2_args = {
     'refrigerant': 'CO2',
     'dT_GC_min_tar': 20.0, 
     'T_air_tar': 200.0, 
@@ -24,13 +93,37 @@ DEFAULT_ARGS: list[float | str | bool] = {
     'source': 'water',
     'Tref_evap_inlet' : 10,
 }
+butane_args = {
+    'refrigerant': 'butane',
+    'dT_GC_min_tar': 20.0, 
+    'T_air_tar': 200.0, 
+    'T_air_inlet': 15.0,
+    'T_source_in': 40.0,
+    'dT_gc_out_min_offset': 0.0,
+    'n_comp': 2,
+    'ihx_on': 1,
+    'dTmin_rhx': 5.0,
+    'dT_rhx1_cold': 0.0,
+    'dT_rhx2_cold': 56.1,
+    'dT_rhx3_cold': 0.0,
+    'comp2_power_frac': 0.5,
+    'comp3_power_frac': 0.0,
+    'comp_PR_uniform': False,
+    'motor_eff': 0.96,
+    'comp_model_index': 1,
+    'debug': False,
+    'sink': 'Air',
+    'source': 'water',
+    'Tref_evap_inlet' : 10,
+}
 
 def analyse_single_case(args: list[float | str | bool] = None):
     
     hp: RHP
     
     if args == None:
-        args = DEFAULT_ARGS
+        args = R1234ze_args
+        # args = DEFAULT_ARGS
 
     hp = RHP(**args)
     hp.solve()

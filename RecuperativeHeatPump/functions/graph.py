@@ -6,6 +6,9 @@ from pathlib import Path
 
 __all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy', 'plot_heat_exchanger_profiles']
 
+DEFAULT_FIGSIZE: tuple[float, float] = (4.5, 3.75)
+DEFAULT_DPI: int = 300
+
 # Allows customization of legend names on a per-component basis.
 LEGEND_NAME_MAP: dict[str, str] = {
     'Gas cooler': 'GC',
@@ -20,6 +23,7 @@ LEGEND_NAME_MAP: dict[str, str] = {
     'Mixer': 'Mixer',
     'Splitter': 'Splitter',
     'Turbine': 'Turbine',
+    'Sink - GC': 'Sink',
 }
 
 #######################################################################################################
@@ -31,7 +35,8 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
     fig: plt.Figure
     ax: plt.Axes
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
+    fig.set_dpi(DEFAULT_DPI)
     plotted_labels: set[str] = set()
     sink_labels: set[str] = set()
 
@@ -68,6 +73,8 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
             color = 'orange'
         elif component_name == 'Evaporator':
             color = 'aqua'
+        elif component_name == 'Expansion valve':
+            color = 'grey'
 
         display_name = _map_legend_name(component_name)
         label = display_name if display_name not in plotted_labels else None
@@ -94,7 +101,7 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
                     sink_component = 'Component'
                 sink_component = str(sink_component)
                 mapped_sink_component = _map_legend_name(sink_component)
-                sink_label = f"Sink - {mapped_sink_component}"
+                sink_label = "AIR*"
                 if sink_label in sink_labels:
                     sink_label = None
                 else:
@@ -103,18 +110,20 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
                 ax.plot(x, y, color=color, label=sink_label)
 
     _add_legend(ax)
+    _apply_layout(fig)
     fig.show()
     filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
-    output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
+    output_dir = Path(__file__).resolve().parents[2] / "results" / "figures" / "cycles" / refrigerant
     output_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_dir / filename)
+    fig.savefig(output_dir / filename, bbox_inches='tight', dpi=DEFAULT_DPI)
     return fig, ax        
 
 def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin=0, refrigerant='default'):
     fig: plt.Figure
     ax: plt.Axes
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
+    fig.set_dpi(DEFAULT_DPI)
     plotted_labels: set[str] = set()
     dtmin_label_added = False
 
@@ -150,18 +159,20 @@ def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin
         ax.plot(x, y2, color='black', label=dtmin_label)
     
     _add_legend(ax)
+    _apply_layout(fig)
     fig.show()
     filename = 'Driving_force_plot.png'
-    output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
+    output_dir = Path(__file__).resolve().parents[2] / "results" / "figures" / "cycles" / refrigerant
     output_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_dir / filename)
+    fig.savefig(output_dir / filename, bbox_inches='tight', dpi=DEFAULT_DPI)
     return fig, ax           
 
 def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', res=50, refrigerant='default'):
     fig: plt.Figure
     ax: plt.Axes
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
+    fig.set_dpi(DEFAULT_DPI)
     source_labels: set[str] = set()
     sink_labels: set[str] = set()
 
@@ -202,18 +213,20 @@ def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', re
         ax.plot(x2, y2, color='blue', label=sink_label)
     
     _add_legend(ax)
+    _apply_layout(fig)
     fig.show()
     filename = 'Heat_exchanger_profiles.png'
-    output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
+    output_dir = Path(__file__).resolve().parents[2] / "results" / "figures" / "cycles" / refrigerant
     output_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_dir / filename)   
+    fig.savefig(output_dir / filename, bbox_inches='tight', dpi=DEFAULT_DPI)   
     return fig, ax           
 
 def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: str ='', refrigerant='default'):
     fig: plt.Figure
     ax: plt.Axes
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
+    fig.set_dpi(DEFAULT_DPI)
 
     if title != '':
         ax.set_title(title)
@@ -226,11 +239,12 @@ def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: st
     ax.plot(x, y, color='black', label=label)
 
     _add_legend(ax)
+    _apply_layout(fig)
     fig.show()
     filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
-    output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
+    output_dir = Path(__file__).resolve().parents[2] / "results" / "figures" / "cycles" / refrigerant
     output_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_dir / filename)
+    fig.savefig(output_dir / filename, bbox_inches='tight', dpi=DEFAULT_DPI)
     return fig, ax
 
 
@@ -259,6 +273,12 @@ def _map_legend_name(name: str | None) -> str:
         return 'Component'
     return LEGEND_NAME_MAP.get(name, name)
 
+def _apply_layout(fig: plt.Figure) -> None:
+    try:
+        fig.tight_layout(pad=1.4)
+    except Exception:
+        pass
+
 def _rescale(array_to_scale, array_new_scale) -> list[float]:
     m: float
     c: float
@@ -278,28 +298,28 @@ def _get_raw_data(ls, prop):
 def _get_axis_labels(axis_var: str) -> list[str]: # type: ignore
     axis = axis_var.lower()
     if axis == 'h' or axis == 'enthalpy':
-        label = 'Enthalpy (kJ/kg)'
+        label = 'Enthalpy [kJ/kg]'
         axis = 'enthalpy'
     elif axis == 's' or axis == 'entropy':
-        label = 'Entropy (kJ/kgK)'
+        label = 'Entropy [kJ/kgK]'
         axis = 'entropy'
     elif axis == 'p' or axis == 'pressure':
-        label = 'Pressure (kPa)'
+        label = 'Pressure [kPa]'
         axis = 'pressure'
     elif axis == 't' or axis == 'temperature':
-        label = 'Temperature (°C)'
+        label = 'Temperature [°C]'
         axis = 'temperature'
     elif axis == 'v' or axis == 'specific volume':
-        label = r'Specific Volume (m$^3$/kg)'
+        label = r'Specific Volume [m$^3$/kg]'
         axis = 'specific_volume'
     elif axis == 'dt*':
-        label = 'LMTD (K)'
+        label = r"$\Delta$T [K]"
         axis = 'temperature'
     elif axis == 'heat flow':
-        label = 'Heat Flow' + ' (kW)'
+        label = 'Heat Flow' + ' [kW]'
         axis = 'heat_flow'        
     else:
-        label = 'Temperature (°C)'
+        label = 'Temperature [°C]'
         axis = 'temperature'            
     return label, axis
             
