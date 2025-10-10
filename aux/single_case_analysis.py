@@ -44,7 +44,7 @@ def analyse_single_case(args: list[float | str | bool] = None):
         
         refrigerant = args['refrigerant']
 
-        hp.get_driving_force_plot(hp.gas_coolers, hp.dT_GC_min_tar, refrigerant)
+        hp.get_driving_force_plot(hp.gas_coolers, hp.dT_GC_min_tar, refrigerant=refrigerant)
         hp.get_cycle_plot(x_axis='h', y_axis='T', refrigerant=refrigerant)
         hp.get_cycle_plot(x_axis='s', y_axis='T', refrigerant=refrigerant)
         hp.get_cycle_plot(x_axis='h', y_axis='P', refrigerant=refrigerant, include_sink=False)

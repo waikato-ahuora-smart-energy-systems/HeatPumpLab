@@ -32,6 +32,8 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
         data = obj[0].get_graph_data(divisions=res)
         x = _get_raw_data(data[obj[1]], x_axis)
         y = _get_raw_data(data[obj[1]], y_axis)
+        if y_axis == 'p' or y_axis == 'pressure':
+            y = [yi * 1000 for yi in y]
 
         if obj[0].name == 'Gas cooler':
             ax.plot(x, y, color='red')
@@ -185,28 +187,28 @@ def _get_raw_data(ls, prop):
 def _get_axis_labels(axis_var: str) -> list[str]: # type: ignore
     axis = axis_var.lower()
     if axis == 'h' or axis == 'enthalpy':
-        label = 'Enthalpy [kJ/kg]'
+        label = 'Enthalpy (kJ/kg)'
         axis = 'enthalpy'
     elif axis == 's' or axis == 'entropy':
-        label = 'Entropy [kJ/kgK]'
+        label = 'Entropy (kJ/kgK)'
         axis = 'entropy'
     elif axis == 'p' or axis == 'pressure':
-        label = 'Pressure [MPa]'
+        label = 'Pressure (kPa)'
         axis = 'pressure'
     elif axis == 't' or axis == 'temperature':
-        label = 'Temperature [°C]'
+        label = 'Temperature (°C)'
         axis = 'temperature'
     elif axis == 'v' or axis == 'specific volume':
-        label = 'Specific Volume [m^3/kg]'
+        label = r'Specific Volume (m$^3$/kg)'
         axis = 'specific_volume'
     elif axis == 'dT*':
-        label = axis + ' [°C]'
+        label = axis + ' (°C)'
         axis = 'temperature'
     elif axis == 'heat flow':
-        label = axis + ' [kW]'
+        label = 'Heat Flow' + ' (kW)'
         axis = 'heat_flow'        
     else:
-        label = 'Temperature [°C]'
+        label = 'Temperature (°C)'
         axis = 'temperature'            
     return label, axis
             
