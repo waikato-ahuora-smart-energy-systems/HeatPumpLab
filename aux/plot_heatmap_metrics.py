@@ -10,42 +10,43 @@ from typing import Iterable, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 
 DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
     ("COP", "max"),
-    ("SEC", "min"),
-    ("VHC", "max"),
-    ("eDTL", "min"),
-    ("SLE", "min"),
-    ("dQ_per_dW", "max"),
-    ("LMTD_gcs", "max"),
-    ("Pmax", "min"),
-    ("COP_pct_increase_vs_base", "max"),
+    # ("SEC", "min"),
+    # ("VHC", "max"),
+    # ("eDTL", "min"),
+    # ("SLE", "min"),
+    # ("dQ_per_dW", "max"),
+    ("LMTD_gcs", "min"),
+    # ("Pmax", "min"),
+    # ("COP_pct_increase_vs_base", "max"),
     ("Pmax_reduction_vs_base", "max"),
 )
 
 DEFAULT_REFRIGERANTS: Sequence[str] = (
-    "Ammonia",
-    "Propane",
+    # "Ammonia",
+    # "Propane",
     "Butane",
-    "Isobutane",
-    "Pentane",
-    "Isopentane",
-    "Neopentane",
-    "Cyclopentane",
+    # "Isobutane",
+    # "Pentane",
+    # "Isopentane",
+    # "Neopentane",
+    # "Cyclopentane",
     "Carbon dioxide",
-    "R1233zd(E)",
-    "R1336mzz(E)",
-    "R1336mzz(Z)",
-    "R1234ze(E)",
+    # "R1233zd(E)",
+    # "R1336mzz(E)",
+    # "R1336mzz(Z)",
+    # "R1234ze(E)",
     "R1234ze(Z)",
-    "R1234yf",
-    "R1243zf",
-    "R1224yd(Z)",
-    "PROPYLEN",
+    # "R1234yf",
+    # "R1243zf",
+    # "R1224yd(Z)",
+    # "PROPYLEN",
     "DME",
-    "Methanol",
+    # "Methanol",
 )
 
 
@@ -55,18 +56,18 @@ AXIS_LABELS: dict[str, str] = {
     "COP": "COP",
     "SEC": "SEC",
     "VHC": r"VHC [MJ/m$^3$]",
-    "eDTL": r"Effective Temperature Lift [K]",
+    "eDTL": r"ETL [K]",
     "SLE": r"SLE [kJ$_e$/(kJ$_h$K)]",
     "dQ/dW": r"$\Delta Q/\Delta W$",
-    "LMTD_gcs": r"LMTD$_{\mathrm{GC}}$ [K]",
+    "LMTD_gcs": r"MTD [K]",
     "Pmax": r"$P_{\max}$ [kPa]",
     "COP_pct_increase_vs_base": r"COP Increase [%]",
     "Pmax_reduction_vs_base": r"$P_{\max}$ Reduction [%]",
 }
 
 
-
-DEFAULT_COMP_FRAC_2: Sequence[float] = (0.3, 0.4, 0.5, 0.6, 0.7)
+DEFAULT_COMP_FRAC_2: Sequence[float] = [0.5]
+# DEFAULT_COMP_FRAC_2: Sequence[float] = (0.3, 0.4, 0.5, 0.6, 0.7)
 
 BASECASE_DTRHX1_COLD = 0.0
 BASECASE_DTRHX2_COLD = 0.0
@@ -140,6 +141,19 @@ def parse_args() -> argparse.Namespace:
         "--cmap",
         default="viridis",
         help="Matplotlib colormap to use for heatmaps.",
+    )
+    parser.add_argument(
+        "--log-pmax",
+        dest="log_pmax",
+        action="store_true",
+        default=False,
+        help="Render Pmax heatmaps with a logarithmic colour scale (default: on).",
+    )
+    parser.add_argument(
+        "--no-log-pmax",
+        dest="log_pmax",
+        action="store_false",
+        help="Disable logarithmic colour scaling for Pmax heatmaps.",
     )
     return parser.parse_args()
 
@@ -300,6 +314,7 @@ def plot_metric_heatmaps(
     refrigerants_filter: Sequence[str],
     cmap: str,
     dpi: int,
+    use_log_pmax: bool,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -363,14 +378,32 @@ def plot_metric_heatmaps(
 
                 X, Y = np.meshgrid(x_vals, y_vals)
                 fig, ax = plt.subplots(figsize=(4.5, 3.75))
+
+                current_norm = None
+                grid_for_plot = grid
+                if metric_name.lower() == "pmax" and use_log_pmax:
+                    positive_values = valid_metric_values[valid_metric_values > 0]
+                    if not positive_values.empty:
+                        log_vmin = float(positive_values.min())
+                        log_vmax = float(positive_values.max())
+                        log_vmin = max(log_vmin, 1e-6)
+                        if log_vmax <= log_vmin:
+                            log_vmax = log_vmin * 1.05
+                        current_norm = LogNorm(vmin=log_vmin, vmax=log_vmax)
+                        grid_for_plot = np.ma.masked_where(grid <= 0, grid)
+                        if np.ma.getmaskarray(grid_for_plot).all():
+                            current_norm = None
+                            grid_for_plot = grid
+
                 quad_mesh = ax.pcolormesh(
                     X,
                     Y,
-                    grid,
+                    grid_for_plot,
                     shading="auto",
                     cmap=cmap,
-                    vmin=vmin,
-                    vmax=vmax,
+                    norm=current_norm,
+                    vmin=None if current_norm else vmin,
+                    vmax=None if current_norm else vmax,
                 )
                 ax.set_title(
                     f"{format_axis_label(metric_name)}: {refrigerant} | $\omega_2$ = {comp2_value:.1f}"
@@ -450,6 +483,7 @@ def main() -> None:
         refrigerants_filter=args.refrigerants,
         cmap=args.cmap,
         dpi=args.dpi,
+        use_log_pmax=args.log_pmax,
     )
 
 
