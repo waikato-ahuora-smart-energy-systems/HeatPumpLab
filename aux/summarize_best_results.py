@@ -25,7 +25,7 @@ DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
 )
 
 DEFAULT_INCLUDE_COLUMNS: Sequence[str] = (
-    'cycle_type', 'COP', 'COP_pct_increase_vs_base', 'VHC', 'eDTL', 'SLE', 'LMTD_gcs', 'dT_rhx1_cold', 'dT_rhx2_cold', 'comp2_power_frac', 'Pmax', 'Pmax_reduction_vs_base', 'PR_1', 'PR_2', 'T_comp_discharge'
+    'cycle_type', 'COP', 'COP_pct_increase_vs_base', 'VHC', 'eDTL', 'SLE', 'LMTD_gcs', 'dT_rhx1_cold', 'dT_rhx2_cold', 'comp2_power_frac', 'T_gc_out', 'Pmax', 'Pmax_reduction_vs_base', 'PR_1', 'PR_2', 'T_comp_discharge'
 )
 
 BASECASE_DTRHX1_COLD = 0.0

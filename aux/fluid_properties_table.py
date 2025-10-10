@@ -10,6 +10,10 @@ def get_fluid_prop_overview_table():
         'GWP',
         'ACF',
         'OFF',
+        'Z',
+        'DSDT_P',
+        'RIEM',
+        'GRUN',
     ]
 
     refrigerant_ls = [
@@ -53,14 +57,21 @@ def get_fluid_prop_overview_table():
         props = {}
         PP = PropertyPackage(r)
         for p in props_ls:
-            if p not in ['OFF']:
+            if p not in ['OFF', 'DSDT_P']:
                 props[p] = PP.get_specified_properties(
                     propsOut=p,
                     propsIn='PQ',
                     prop1=0.101325,
                     prop2=0,
                 )[0]
-            else:
+            elif p in ['DSDT_P']:
+                props[p] = PP.get_specified_properties(
+                    propsOut=p,
+                    propsIn='TQ',
+                    prop1=15,
+                    prop2=1,
+                )[0]
+            elif p in ['OFF']:
                 hc = PP.get_specified_properties(
                     propsOut='H',
                     propsIn='PQ',

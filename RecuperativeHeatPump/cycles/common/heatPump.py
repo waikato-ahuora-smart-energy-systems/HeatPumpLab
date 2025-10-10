@@ -52,14 +52,21 @@ class BaseHeatPump():
             self.get_report()
             )
 
-    def get_cycle_plot(self, x_axis: str ='h', y_axis: str ='T') -> any:
+    def get_cycle_plot(self, x_axis: str ='h', y_axis: str ='T', refrigerant='default', include_sink=True) -> any:
         cycle_obj, sink_obj = self.get_components_sets_to_graph()
-        return plot_cycle(cycle_obj=cycle_obj,
-                sink_obj=sink_obj,
-                x_axis=x_axis,
-                y_axis=y_axis)
+        return plot_cycle(
+            cycle_obj=cycle_obj,
+            sink_obj=sink_obj,
+            x_axis=x_axis,
+            y_axis=y_axis,
+            refrigerant=refrigerant,
+            include_sink=include_sink,
+        )
 
-    def get_driving_force_plot(self, hx_obj_ls: list, dtmin: float =0.0, x_axis: str ='h') -> any:
-        return plot_driving_force(hx_obj=hx_obj_ls,
-                x_axis=x_axis,
-                dtmin=dtmin)
+    def get_driving_force_plot(self, hx_obj_ls: list, dtmin: float =0.0, x_axis: str ='h', refrigerant='default') -> any:
+        return plot_driving_force(
+            hx_obj=hx_obj_ls,
+            x_axis=x_axis,
+            dtmin=dtmin,
+            refrigerant=refrigerant,
+        )

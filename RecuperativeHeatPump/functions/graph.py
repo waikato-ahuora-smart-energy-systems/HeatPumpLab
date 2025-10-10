@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
 import pandas as pd
+from pathlib import Path
 
 __all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy', 'plot_heat_exchanger_profiles']
 
@@ -9,7 +10,7 @@ __all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy', 'plot_heat_exch
 # Public API
 #######################################################################################################
     
-def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50):
+def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, refrigerant='default', include_sink=True):
     cycle_obj = cycle_obj + [cycle_obj[0]]
     fig: plt.Figure
     ax: plt.Axes
@@ -43,7 +44,8 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50):
         else:
             ax.plot(x, y, color='black')
     
-    if x_axis == 'entropy' or x_axis == 'enthalpy':
+    if (x_axis == 'entropy' or x_axis == 'enthalpy') and include_sink:
+
         for obj in reversed(sink_obj):
             if obj[1] == 'sink':
                 data = obj[0].get_graph_data(divisions=res)
@@ -58,10 +60,12 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50):
 
     fig.show()
     filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
-    fig.savefig('results/figures/' + filename) 
+    output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_dir / filename)
     return fig, ax        
 
-def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin=0):
+def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin=0, refrigerant='default'):
     fig: plt.Figure
     ax: plt.Axes
 
@@ -86,10 +90,12 @@ def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin
     
     fig.show()
     filename = 'Driving_force_plot.png'
-    fig.savefig('results/figures/' + filename)     
+    output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_dir / filename)
     return fig, ax           
 
-def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', res=50):
+def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', res=50, refrigerant='default'):
     fig: plt.Figure
     ax: plt.Axes
 
@@ -118,10 +124,12 @@ def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', re
     
     fig.show()
     filename = 'Heat_exchanger_profiles.png'
-    fig.savefig('results/figures/' + filename)     
+    output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_dir / filename)   
     return fig, ax           
 
-def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: str =''):
+def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: str ='', refrigerant='default'):
     fig: plt.Figure
     ax: plt.Axes
 
@@ -137,8 +145,11 @@ def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: st
 
     fig.show()
     filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
-    fig.savefig('results/figures/' + filename) 
+    output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_dir / filename)
     return fig, ax
+
 
 def plot_heat_map(title, x_val, x_label, y_val, y_label, z_val, z_label):
     df = pd.DataFrame({"x": x_val, "y": y_val, "z": z_val})
