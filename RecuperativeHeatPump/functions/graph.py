@@ -6,6 +6,22 @@ from pathlib import Path
 
 __all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy', 'plot_heat_exchanger_profiles']
 
+# Allows customization of legend names on a per-component basis.
+LEGEND_NAME_MAP: dict[str, str] = {
+    'Gas cooler': 'GC',
+    'Recuperator': 'RHX',
+    'Internal heat exchanger': 'IHX',
+    'Evaporator': 'EVAP',
+    'Compressor': 'COMP',
+    'Expansion valve': 'VAL',
+    'Economiser': 'Economiser',
+    'Plate heat exchanger': 'Plate heat exchanger',
+    'Heat exchanger': 'Heat exchanger',
+    'Mixer': 'Mixer',
+    'Splitter': 'Splitter',
+    'Turbine': 'Turbine',
+}
+
 #######################################################################################################
 # Public API
 #######################################################################################################
@@ -16,6 +32,8 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
     ax: plt.Axes
 
     fig, ax = plt.subplots()
+    plotted_labels: set[str] = set()
+    sink_labels: set[str] = set()
 
     if title != '':
         ax.set_title(title)
@@ -28,6 +46,8 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
     if y_axis == 'p' or y_axis == 'pressure':
         ax.set_yscale('log')
 
+    ax.grid(True, which='major', linestyle='--', linewidth=0.5, color='0.85')
+    
     for obj in cycle_obj:
         data = obj[0].get_graph_data(divisions=res)
         x = _get_raw_data(data[obj[1]], x_axis)
@@ -35,16 +55,25 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
         if y_axis == 'p' or y_axis == 'pressure':
             y = [yi * 1000 for yi in y]
 
-        if obj[0].name == 'Gas cooler':
-            ax.plot(x, y, color='red')
-        elif obj[0].name == 'Recuperator':
-            ax.plot(x, y, color='green')
-        elif obj[0].name == 'Internal heat exchanger':
-            ax.plot(x, y, color='orange')
-        elif obj[0].name == 'Evaporator':
-            ax.plot(x, y, color='aqua')
-        else:
-            ax.plot(x, y, color='black')
+        component_name = getattr(obj[0], 'name', 'Component')
+        if component_name is None:
+            component_name = 'Component'
+        component_name = str(component_name)
+        color = 'black'
+        if component_name == 'Gas cooler':
+            color = 'red'
+        elif component_name == 'Recuperator':
+            color = 'green'
+        elif component_name == 'Internal heat exchanger':
+            color = 'orange'
+        elif component_name == 'Evaporator':
+            color = 'aqua'
+
+        display_name = _map_legend_name(component_name)
+        label = display_name if display_name not in plotted_labels else None
+        if label is not None:
+            plotted_labels.add(display_name)
+        ax.plot(x, y, color=color, label=label)
     
     if (x_axis == 'entropy' or x_axis == 'enthalpy') and include_sink:
 
@@ -56,10 +85,24 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
                 y = _get_raw_data(data['sink'], y_axis)
 
                 if obj[0].name == 'Gas cooler':
-                    ax.plot(x, y, color='blue')
+                    color = 'blue'
                 else:
-                    ax.plot(x, y, color='black')    
+                    color = 'black'
 
+                sink_component = getattr(obj[0], 'name', 'Component')
+                if sink_component is None:
+                    sink_component = 'Component'
+                sink_component = str(sink_component)
+                mapped_sink_component = _map_legend_name(sink_component)
+                sink_label = f"Sink - {mapped_sink_component}"
+                if sink_label in sink_labels:
+                    sink_label = None
+                else:
+                    sink_labels.add(sink_label)
+
+                ax.plot(x, y, color=color, label=sink_label)
+
+    _add_legend(ax)
     fig.show()
     filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
     output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
@@ -72,6 +115,8 @@ def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin
     ax: plt.Axes
 
     fig, ax = plt.subplots()
+    plotted_labels: set[str] = set()
+    dtmin_label_added = False
 
     if title != '':
         ax.set_title(title)
@@ -80,6 +125,7 @@ def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin
     ax.set_xlabel(xlabel)
     ylabel, y_axis = _get_axis_labels(y_axis)
     ax.set_ylabel(ylabel)
+    ax.grid(True, which='major', linestyle='--', linewidth=0.5, color='0.85')
     
     for obj in hx_obj:
         data = obj.get_graph_data(divisions=res)
@@ -87,9 +133,23 @@ def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin
         y1 = np.array(_get_raw_data(data['source'], y_axis)) - np.array(_get_raw_data(data['sink'], y_axis))[::-1]
         y2 = np.repeat(dtmin, len(x))
 
-        ax.plot(x, y1, color='red')
-        ax.plot(x, y2, color='black')
+        component_label = getattr(obj, 'name', None)
+        if component_label:
+            component_label = str(component_label)
+        mapped_label = _map_legend_name(component_label) if component_label else None
+        label = mapped_label if mapped_label and mapped_label not in plotted_labels else None
+        if label is not None:
+            plotted_labels.add(mapped_label)
+        ax.plot(x, y1, color='red', label=label)
+
+        dtmin_label = r'$ΔT_{min}$'
+        if dtmin_label_added:
+            dtmin_label = None
+        else:
+            dtmin_label_added = True
+        ax.plot(x, y2, color='black', label=dtmin_label)
     
+    _add_legend(ax)
     fig.show()
     filename = 'Driving_force_plot.png'
     output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
@@ -102,6 +162,8 @@ def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', re
     ax: plt.Axes
 
     fig, ax = plt.subplots()
+    source_labels: set[str] = set()
+    sink_labels: set[str] = set()
 
     if title != '':
         ax.set_title(title)
@@ -110,6 +172,7 @@ def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', re
     ax.set_xlabel(xlabel)
     ylabel, y_axis = _get_axis_labels(y_axis)
     ax.set_ylabel(ylabel)
+    ax.grid(True, which='major', linestyle='--', linewidth=0.5, color='0.85')
     
     for obj in hx_obj:
         data = obj.get_graph_data(divisions=res)
@@ -120,10 +183,25 @@ def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', re
 
         # x1 = (x1[:] - x1[0]) * data['source'].mass_flow
         # x2 = (x2[:] - x2[0]) * data['source'].mass_flow
-        
-        ax.plot(x1, y1, color='red')
-        ax.plot(x2, y2, color='blue')
+
+        component_name = getattr(obj, 'name', None)
+        if component_name:
+            component_name = str(component_name)
+        mapped_component_name = _map_legend_name(component_name) if component_name else None
+        base_source_label = f"Source - {mapped_component_name}" if mapped_component_name else 'Source'
+        source_label = base_source_label if base_source_label not in source_labels else None
+        if source_label is not None:
+            source_labels.add(base_source_label)
+
+        base_sink_label = f"Sink - {mapped_component_name}" if mapped_component_name else 'Sink'
+        sink_label = base_sink_label if base_sink_label not in sink_labels else None
+        if sink_label is not None:
+            sink_labels.add(base_sink_label)
+
+        ax.plot(x1, y1, color='red', label=source_label)
+        ax.plot(x2, y2, color='blue', label=sink_label)
     
+    _add_legend(ax)
     fig.show()
     filename = 'Heat_exchanger_profiles.png'
     output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
@@ -143,8 +221,11 @@ def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: st
         ax.set_xlabel(x_axis)
     if y_axis != '':
         ax.set_ylabel(y_axis)
-    ax.plot(x, y, color='black')
+    ax.grid(True, which='major', linestyle='--', linewidth=0.5, color='0.85')
+    label = title if title else 'Series'
+    ax.plot(x, y, color='black', label=label)
 
+    _add_legend(ax)
     fig.show()
     filename = 'Cycle--' + y_axis + '_vs_' + x_axis + '.png'
     output_dir = Path(__file__).resolve().parents[2] / "results" / "cycles" / refrigerant
@@ -167,6 +248,16 @@ def plot_heat_map(title, x_val, x_label, y_val, y_label, z_val, z_label):
 #######################################################################################################
 # Helper functions
 #######################################################################################################
+
+def _add_legend(ax: plt.Axes) -> None:
+    _, labels = ax.get_legend_handles_labels()
+    if any(label for label in labels):
+        ax.legend()
+
+def _map_legend_name(name: str | None) -> str:
+    if not name:
+        return 'Component'
+    return LEGEND_NAME_MAP.get(name, name)
 
 def _rescale(array_to_scale, array_new_scale) -> list[float]:
     m: float
@@ -201,8 +292,8 @@ def _get_axis_labels(axis_var: str) -> list[str]: # type: ignore
     elif axis == 'v' or axis == 'specific volume':
         label = r'Specific Volume (m$^3$/kg)'
         axis = 'specific_volume'
-    elif axis == 'dT*':
-        label = axis + ' (°C)'
+    elif axis == 'dt*':
+        label = 'LMTD (K)'
         axis = 'temperature'
     elif axis == 'heat flow':
         label = 'Heat Flow' + ' (kW)'
