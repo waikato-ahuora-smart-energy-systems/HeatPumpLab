@@ -1,4 +1,4 @@
-# Transcritical-recuperative-heat-hump-model
+# Recuperative Heat Pump Model
 
 High temperature recuperative heat pump model
 By Tim Walmsley and Keri Adamson, University of Waikato, 2021-2025 (tim.walmsley@waikato.ac.nz)
