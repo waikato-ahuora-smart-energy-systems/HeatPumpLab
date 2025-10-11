@@ -1,7 +1,7 @@
 from ..cycles import *
 from .readWriteOutput import *
 
-__all__ = ['solve_in_parallel']
+__all__ = ['analyse_single_case']
 
 
 DEFAULT_ARGS: list[float | str | bool] = {
