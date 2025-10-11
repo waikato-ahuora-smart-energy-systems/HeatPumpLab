@@ -5,8 +5,8 @@ from scipy.optimize import root_scalar, minimize, Bounds
 from math import log, exp
 from typing import TYPE_CHECKING
 
-from ...functions.readWriteOutput import *
-from ...functions.graph import *
+from ...utils.readWriteOutput import *
+from ...utils.graph import *
 
 if TYPE_CHECKING:
     from .. import RHP

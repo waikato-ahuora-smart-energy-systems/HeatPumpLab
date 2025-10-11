@@ -1,5 +1,8 @@
+from ..cycles import *
+from .readWriteOutput import *
 
-from RecuperativeHeatPump import *
+__all__ = ['solve_in_parallel']
+
 
 DEFAULT_ARGS: list[float | str | bool] = {
     'refrigerant': 'R1234ze(Z)',
@@ -24,6 +27,8 @@ DEFAULT_ARGS: list[float | str | bool] = {
     'source': 'water',
     'Tref_evap_inlet' : 10,
 }
+
+
 R1234ze_args = {
     'refrigerant': 'R1234ze(Z)',
     'dT_GC_min_tar': 20.0, 
@@ -116,6 +121,7 @@ butane_args = {
     'source': 'water',
     'Tref_evap_inlet' : 10,
 }
+
 
 def analyse_single_case(args: list[float | str | bool] = None):
     

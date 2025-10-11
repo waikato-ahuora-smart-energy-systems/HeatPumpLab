@@ -1,2 +1,2 @@
 from .fluid_properties_table import get_fluid_prop_overview_table
-from .single_case_analysis import analyse_single_case
+from ..RecuperativeHeatPump.utils.single_case_analysis import analyse_single_case

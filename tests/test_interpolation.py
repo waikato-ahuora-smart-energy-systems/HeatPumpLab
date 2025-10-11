@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from RecuperativeHeatPump.functions.interpolation import (  # noqa: E402
+from RecuperativeHeatPump.utils.interpolation import (  # noqa: E402
     estimate_operating_targets_from_results,
 )
 

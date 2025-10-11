@@ -1,6 +1,6 @@
 import numpy as np
-from ...functions.graph import plot_cycle, plot_driving_force
-from ...functions.readWriteOutput import print_result_to_terminal
+from ...utils.graph import plot_cycle, plot_driving_force
+from ...utils.readWriteOutput import print_result_to_terminal
 
 class BaseHeatPump():
     gas_coolers: list
