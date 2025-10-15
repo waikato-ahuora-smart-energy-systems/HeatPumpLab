@@ -1,8 +1,11 @@
+"""Wrapper around REFPROP for thermodynamic property evaluation."""
+
 from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
 from sys import platform
 import numpy as np
 
 class PropertyPackage:
+    """Encapsulate REFPROP library access for a configured working fluid."""
 
     RP: REFPROPFunctionLibrary  
     RP_ref: REFPROPFunctionLibrary
@@ -36,6 +39,7 @@ class PropertyPackage:
     DEFAULT_VAL: float = -9999990.0    
     
     def __init__(self, fld_name: str =None, pp_instance: str ='') -> None:
+        """Initialise an instance bound to a particular fluid definition."""
         self.fld_name, self.fld_composition, self.n_components, self.iMass = _get_fluid_info(fld_name)        
         self._set_RP_lib(pp_instance)
         self._set_database_fluid()
@@ -43,15 +47,18 @@ class PropertyPackage:
         self.PP_fld_names =  self._get_database_fluid_name()
 
     def get_specified_properties(self, propsOut:str, propsIn:str, prop1:float, prop2:float):
+        """Return selected properties for a given input pair."""
         return self.RP.REFPROPdll(self.fld_name, propsIn, propsOut, self.UNITS, self.iMass, self.iFlag, float(prop1), float(prop2), self.fld_composition).Output
     
     def get_std_properties(self, propsIn_str: str, prop1: float, prop2: float, comp: list[float]):
+        """Convenience wrapper that converts to/from REFPROP base units."""
         molar_props = self._convert_props_from_SI_with_C(propsIn_str, prop1, prop2)
         return self._convert_props_to_SI_with_C(
             self.RP.ABFLSHdll(propsIn_str, molar_props[0], molar_props[1], comp, 0)
         )
     
     def _convert_props_to_SI_with_C(self, molar_props):
+        """Convert molar REFPROP outputs to SI with Celsius offsets."""
         return {
             'P' : molar_props.P / 1000,
             'h' : molar_props.h / self.molar_mass,
@@ -63,6 +70,7 @@ class PropertyPackage:
             }
     
     def _convert_props_from_SI_with_C(self, propsIn_str: str, prop1: float, prop2: float):
+        """Convert SI-with-Celsius inputs to REFPROP molar units."""
         if propsIn_str == 'PH' or propsIn_str == 'PS':
             molar_props = prop1 * 1000, prop2 * self.molar_mass
         elif propsIn_str == 'HP' or propsIn_str == 'SP':
@@ -96,6 +104,7 @@ class PropertyPackage:
         return molar_props
 
     def _set_RP_lib(self, pp_instance):
+        """Select the REFPROP instance based on source/sink/default context."""
         if pp_instance.lower() == 'src' or pp_instance.lower() == 'source':
             self.RP = self.RP_src
         elif pp_instance.lower() == 'snk' or pp_instance.lower() == 'sink':
@@ -105,18 +114,23 @@ class PropertyPackage:
         self._set_database_fluid()
 
     def _set_database_fluid(self) -> None:
+        """Register the current fluid composition with REFPROP."""
         self.RP.SETFLUIDSdll(self.fld_name)
 
     def _check_correct_fluid(self) -> bool:
+        """Return True if the library is still loaded with the expected fluid."""
         return self.PP_fld_names == self._get_database_fluid_name()
         
-    def _get_database_fluid_name(self) -> list[str]:      
+    def _get_database_fluid_name(self) -> list[str]:
+        """Return the fluid names currently loaded in the REFPROP instance."""
         return [self.RP.NAMEdll(i+1)[0] for i in range(self.n_components)]
 
     def _get_critical_properties(self):
+        """Fetch molar mass and critical properties for the configured fluid."""
         return self.RP.REFPROPdll(self.fld_name, 'PH', 'M;PCRIT;TCRIT;DCRIT', self.UNITS, self.iMass, self.iFlag, 1.0, 500, self.fld_composition).Output[0:4]
 
 def _get_fluid_info(fluid: str) -> list[str, float, list[float]]:
+    """Parse a REFPROP fluid composition string."""
     _fld_full: list[str]
     _composition: np.ndarray[float]
     iMass: int = 1

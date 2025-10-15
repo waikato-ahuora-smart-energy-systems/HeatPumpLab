@@ -1,3 +1,5 @@
+"""High-level Recuperative Heat Pump cycle definition."""
+
 from ..components import *
 from ..streams import MassStream
 from .common.heatPump import BaseHeatPump
@@ -6,6 +8,7 @@ from .solver.cycle_solver import solve_heat_pump_cycle
 
 
 class RHP(BaseHeatPump):
+    """Transcritical recuperative heat pump comprised of cascaded components."""
     
     n_comp: float =2
     comp_PR_uniform: float =False 
@@ -46,6 +49,7 @@ class RHP(BaseHeatPump):
     comp_discharge: MassStream
 
     def __init__(self, **d_args):
+        """Construct the heat pump, applying provided design parameters."""
         self.args = d_args
         for key, value in d_args.items():
             setattr(self, key, value)
@@ -53,11 +57,13 @@ class RHP(BaseHeatPump):
         set_RHP_model(self)
 
     def solve(self) -> 'RHP':
+        """Solve the configured heat pump cycle and return ``self``."""
         if self.feasible:
             solve_heat_pump_cycle(self)
         return self
    
     def get_model_parameters(self) -> dict[str, float | bool]:
+        """Return a snapshot of decision variables defining the configuration."""
         return {
             'refrigerant' : self.refrigerant,
             'dT_GC_min_tar' : self.dT_GC_min_tar,
@@ -74,6 +80,7 @@ class RHP(BaseHeatPump):
             }
     
     def get_report(self, dt=0) -> dict[str, float | bool]:
+        """Collect key performance indicators for reporting and export."""
         self.output = {
             #Headline results
             'cycle_type' : self.cycle_type,
@@ -136,6 +143,7 @@ class RHP(BaseHeatPump):
         return self.output
 
     def get_components_sets_to_graph(self) -> list:
+        """Return component groupings used by the graphing utilities."""
         cycle_ls: list[list[str, str]]
         sink_ls: list[list[str, str]]
         
@@ -172,6 +180,7 @@ class RHP(BaseHeatPump):
             ] 
     
     def _get_component_objs_for_graphing(self, ls: list) -> list:
+        """Resolve the component instances that should be rendered for a graph."""
         obj_ls: list = []
         obj_id: list[str, str]
         obj_name: str

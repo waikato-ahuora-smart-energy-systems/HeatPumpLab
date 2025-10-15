@@ -1,6 +1,10 @@
+"""Compressor component model."""
+
 from ..streams import MassStream
 
+
 class Compressor:
+    """Simple compressor with configurable efficiency correlations."""
     name: str
     flow_in: MassStream = 0.0
     flow_out: MassStream = 0.0
@@ -18,6 +22,7 @@ class Compressor:
     converged: bool = False
 
     def __init__(self, name='Compressor', fluid: str =None, model_index: int =0, motor_eff: float =1.0) -> None:
+        """Initialise the compressor with fluid, model, and motor efficiency."""
         self.name = name
         self.flow_in = MassStream('flow_in', fluid=fluid) 
         self.flow_out = MassStream('flow_out', fluid=fluid)
@@ -26,7 +31,8 @@ class Compressor:
         self.model_index = model_index
         self.model_coeffs = self.set_model_coeff(model_index)
 
-    def set_model_coeff(self, model_index: int) -> list[float]:    
+    def set_model_coeff(self, model_index: int) -> list[float]:
+        """Return coefficient sets for the selected efficiency correlation."""
         available_model_coeffs = [
             ['Proportional', 1.0],  # Ideal compression
             ['Proportional', 0.7],  # Typical isentropic efficiency
@@ -36,6 +42,7 @@ class Compressor:
         return available_model_coeffs[model_index]
 
     def get_isentropic_efficiency(self) -> float:
+        """Calculate the isentropic efficiency based on the chosen model."""
         self.pressure_ratio = self.flow_out.pressure / self.flow_in.pressure
         if self.model_coeffs[0] == 'Proportional':
             shaft_eff = self.model_coeffs[1]
@@ -49,6 +56,7 @@ class Compressor:
         return min(max(shaft_eff, 0.4), 1.0) / self.motor_eff
         
     def get_compressor_power(self) -> float:
+        """Return the mechanical power requirement for the current operating point."""
         self.flow_out_isen.pp_instance = self.flow_out.pp_instance
         self.flow_out_isen.props_in_ab('PS', self.flow_out.pressure, self.flow_in.entropy)
         dh_shaft = (self.flow_out_isen.enthalpy - self.flow_in.enthalpy)  / self.isentropic_eff
@@ -58,10 +66,12 @@ class Compressor:
         return self.shaft_work / self.motor_eff
     
     def get_volumetric_efficiency(self) -> float:
+        """Estimate volumetric efficiency using the default correlation."""
         # Equation from Brendel et al
         return 1 - 0.08244 * pow(self.pressure_ratio - 1, 0.72773)
 
     def solve(self) -> None:
+        """Solve the compressor work and outlet state."""
         self.flow_out.mass_flow = self.flow_in.mass_flow
         self.isentropic_eff = self.get_isentropic_efficiency()
         self.overall_eff = self.isentropic_eff * self.motor_eff
@@ -71,8 +81,10 @@ class Compressor:
         self.converged = True
 
     def get_graph_data(self, divisions: int =50) -> dict:
+        """Generate intermediate states for plotting the compression path."""
         data = {'siso': []}
         def get_inter_data(s_in: MassStream, s_out: MassStream) -> list[MassStream]:
+            """Interpolate states along the compression process."""
             ls = []
             # PV^n = const
             PR_i = (self.flow_out.pressure / self.flow_in.pressure) ** (1 / divisions)

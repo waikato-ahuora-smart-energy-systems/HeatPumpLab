@@ -1,6 +1,10 @@
+"""Binary splitter component."""
+
 from ..streams import MassStream
 
+
 class Splitter:
+    """Splits a stream into two branches based on a fixed ratio."""
     flow_in: MassStream = None
     flow_out_1: MassStream = None
     flow_out_2: MassStream = None
@@ -8,6 +12,7 @@ class Splitter:
     converged: bool = True
 
     def __init__(self, name='Splitter', fluid: str = None, r_ratio: float =0.0, specific_heat_loss: float =0.0, tol: float =1e-6):
+        """Initialise inlet/outlet streams and the flow split ratio."""
         self.name = name
         self.flow_in = MassStream(name='flow_in', fluid=fluid)
         self.flow_out_1 = MassStream(name='flow_out_1', fluid=fluid)
@@ -17,6 +22,7 @@ class Splitter:
         self.tol = tol
     
     def solve(self):
+        """Split the inlet flow and copy thermodynamic properties."""
         self.flow_out_1.copy_fld_props(self.flow_in)
         self.flow_out_2.copy_fld_props(self.flow_in)
         m_1 = self.flow_in.mass_flow * 1 / (1 + self.r_ratio)

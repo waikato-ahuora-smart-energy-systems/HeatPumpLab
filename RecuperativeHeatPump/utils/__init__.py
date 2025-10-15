@@ -1,3 +1,5 @@
+"""Convenience imports for utility modules."""
+
 from .cases import *
 from .analysis import *
 from .graph import *

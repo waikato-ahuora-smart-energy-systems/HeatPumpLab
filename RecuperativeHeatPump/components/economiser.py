@@ -1,7 +1,10 @@
+"""Economiser heat exchanger with pinch-based duty determination."""
+
 from scipy.optimize import root_scalar
 from ..streams import MassStream
 
 class Economiser():
+    """Economiser component acting between two compressor stages."""
     #Set the stream connection points
     name: str = ''
     model: str
@@ -33,6 +36,7 @@ class Economiser():
     def __init__(self, source_fluid: str, sink_fluid: str, name: str='Economiser', 
                  y_econ: float =0.0, dTmin: float =5, dP_h: float =0.0, dP_c: float =0.0, 
                  converged: bool =False, tol: float =1e-6) -> None:
+        """Initialise exchanger geometry and connect stream placeholders."""
         self.name = name
         self.converged = converged
         self.y_econ = y_econ
@@ -43,6 +47,7 @@ class Economiser():
         self.set_port_mass_streams(source_fluid, sink_fluid)
 
     def set_port_mass_streams(self, source_fluid: str, sink_fluid: str) -> None:
+        """Create inlet and outlet streams for both sides of the economiser."""
         self.source_in = MassStream(name='source in', fluid=source_fluid)
         self.source_out = MassStream(name='source out', fluid=source_fluid)
         
@@ -50,15 +55,18 @@ class Economiser():
         self.sink_out = MassStream(name='sink out', fluid=sink_fluid)
 
     def set_add_obj(self, comp1_flow_out: MassStream, comp2_flow_out: MassStream, gc_2_dP_h: float =0.0, T_gc_out: float =0.0):
+        """Attach upstream/downstream compressor states used during solution."""
         self.comp1_flow_out = comp1_flow_out
         self.comp2_flow_out = comp2_flow_out
         self.gc_2_dP_h = gc_2_dP_h
         self.T_gc_out = T_gc_out
 
     def get_duty(self): 
+        """Compute the heat exchange duty respecting the pinch constraint."""
         if self.sink_in.pressure < self.sink_in.P_crit and self.sink_in.mass_flow > 0.0: 
 
             def _calc_pinch_dtmin(Q):
+                """Return pinch delta-T minus target for a trial duty."""
                 self.source_in.enthalpy = self.source_out.enthalpy + Q / self.source_out.mass_flow
                 self.source_in.props_in_mPH()
 
@@ -74,6 +82,7 @@ class Economiser():
             return 0.0
 
     def solve(self):
+        """Solve mass/energy balances for the current duty."""
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c
         self.source_in.pressure = self.source_out.pressure + self.dP_h
         self.source_in.mass_flow = self.source_out.mass_flow
@@ -89,9 +98,11 @@ class Economiser():
         self.converged = True
 
     def get_graph_data(self, divisions=50):
+        """Generate temperature/enthalpy profiles for plotting."""
         data = {'source': [], 'sink': []}
         
         def get_inter_data(s_in: MassStream, s_out: MassStream):
+            """Interpolate intermediate stream states."""
             ls = []
             dP_tot = s_in.pressure - s_out.pressure
             dh_tot = s_in.enthalpy - s_out.enthalpy

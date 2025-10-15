@@ -1,6 +1,10 @@
+"""Isentropic turbine expander model."""
+
 from ..streams import MassStream
 
-class Turbine: 
+
+class Turbine:
+    """Simple turbine with specified isentropic and generator efficiency."""
     name: str
     flow_in: MassStream
     flow_out: MassStream
@@ -13,6 +17,7 @@ class Turbine:
     converged: bool = False
 
     def __init__(self, name: str ='Turbine', fluid: str =None, eff_isen: float =1.0, eff_gen: float =1.0) -> None:
+        """Initialise the turbine streams and efficiency parameters."""
         self.name = name
         self.flow_in = MassStream(name='flow_in', fluid=fluid)
         self.flow_out = MassStream(name='flow_out', fluid=fluid)
@@ -20,6 +25,7 @@ class Turbine:
         self.eff_gen = eff_gen
 
     def solve(self) -> None:
+        """Solve the turbine outlet state using the isentropic relation."""
         self.flow_out.entropy = self.flow_in.entropy 
         self.flow_out.props_in_mPS()
         self.dh_isen = self.flow_in.enthalpy - self.flow_out.enthalpy

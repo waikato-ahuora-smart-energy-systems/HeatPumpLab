@@ -1,19 +1,24 @@
+"""Specialised algebraic relationships used in cycle setup."""
+
 import math
 from scipy.optimize import root_scalar
 from ..streams import MassStream
 from ..components import GasCooler
 
 class CustomRelationship:
+    """Callable constraint that enforces bespoke relationships between components."""
     converged: bool = False
     r: bool = False
 
     def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9):
+        """Wire up source/target objects and relationship identifier."""
         self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
         self.relation = relation
 
     def solve(self):
+        """Execute the configured relationship enforcing logic."""
         if self.relation == 0:
             r = self.Determine_T()
         elif self.relation == 1:
@@ -27,7 +32,8 @@ class CustomRelationship:
         self.converged = True
         return r
     
-    def Determine_T(self): 
+    def Determine_T(self):
+        """Adjust a target temperature relative to a pair of source temperatures."""
         self.target_obj.temperature = max(
             min(self.source_obj[0].temperature, self.source_obj[1].temperature) + self.var, 
             self.source_obj[0].temperature, 
@@ -36,6 +42,7 @@ class CustomRelationship:
         return True
     
     def Determine_Pint(self):
+        """Distribute compressor discharge pressures for multi-stage cycles."""
         #Determines the n-1 intermediate pressures between n compressors
         S0, S3, F2, F3 = self.source_obj
         log_P3_star = math.log(S3.pressure / S0.pressure)
@@ -46,6 +53,7 @@ class CustomRelationship:
         return True
 
     def Air_Mass_Flow(self):
+        """Calculate required air mass flow for cascade of gas coolers."""
         gc: GasCooler
         m_air_list = []
         #Hot side terminal temperature
@@ -64,11 +72,13 @@ class CustomRelationship:
             if dh_air > 0.0 and gc.duty > 0.0:
                 
                 def get_mid_pinch_point_error(h_ref, mcp_air):
+                    """Evaluate pinch heat-capacity mismatch for a candidate enthalpy."""
                     P_ave = (gc.source_in.pressure * (h_ref - gc.source_out.enthalpy) + gc.source_out.pressure * (gc.source_in.enthalpy - h_ref)) / (gc.source_in.enthalpy - gc.source_out.enthalpy)
                     source_in_i = MassStream(fluid=gc.source_in.fluid, pp_instance=gc.source_in.pp_instance, pressure=P_ave, temperature=h_ref)
                     return mcp_air[0] - gc.source_in.mass_flow * source_in_i.heat_capacity
 
                 def get_bounds_for_mid_pinch_point(mcp_air):
+                    """Find search bounds for the pinch enthalpy root solve."""
                     bnds = False
                     if mcp_air - 1e-6 > gc.source_in.mass_flow * gc.source_in.heat_capacity or mcp_air + 1e-6 < gc.source_out.mass_flow * gc.source_out.heat_capacity:
                         if mcp_air - 1e-6 > gc.source_in.mass_flow * gc.source_in.heat_capacity and mcp_air + 1e-6 < gc.source_out.mass_flow * gc.source_out.heat_capacity:
@@ -99,6 +109,7 @@ class CustomRelationship:
                     return bnds
                 
                 def get_mid_pinch_point(mcp_air, method, bnds):
+                    """Solve for the pinch enthalpy using the selected method."""
                     result = root_scalar(f=get_mid_pinch_point_error,
                                          args=[mcp_air],
                                          method=method, 
@@ -112,6 +123,7 @@ class CustomRelationship:
                     return h_ref, e
                 
                 def get_m_air(mcp_air):
+                    """Derive the air mass flow that satisfies the pinch constraint."""
                     m_air = 0
                     bnds = get_bounds_for_mid_pinch_point(mcp_air)
                     if bnds != False:
@@ -160,6 +172,7 @@ class CustomRelationship:
         return m_air_list
 
     def Airsource_Mass_Flow(self):
+        """Estimate air-source mass flow delivering evaporator duty."""
         ev: GasCooler
         m_air_list = []
         #Hot side terminal temperature
@@ -185,6 +198,7 @@ class CustomRelationship:
         return True
 
     def Determine_EV_sm_outlet(self):
+        """Update expansion valve outlet conditions for economiser bleed."""
         EV, SP = self.target_obj
         Comp1, Econ, Comp_discharge, gc_2_dP_h = self.source_obj
 
@@ -202,6 +216,7 @@ class CustomRelationship:
             h_EV = EV.flow_out.enthalpy
 
             def _calc_dt_drop(h, F_in, F_out, dTmin):
+                """Return temperature difference less the target approach."""
                 F_in.enthalpy = h
                 F_in.props_in_mPH()
                 F_out.enthalpy = h

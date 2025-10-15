@@ -1,3 +1,5 @@
+"""Helpers to enumerate, deduplicate, and prioritise heat pump cases."""
+
 import numpy as np
 import pandas as pd
 
@@ -17,6 +19,7 @@ def get_case_list_to_solve(
         dT_rhx2_cold_ls: list = None, 
         comp2_power_frac_ls: list = None,
         ) -> list[list[float | str | bool]]:
+    """Return pending analysis cases after removing already-solved entries."""
     return  (
         _remove_completed_cases_from_list(
             cases = _get_all_analysis_case_list(
@@ -32,6 +35,7 @@ def get_case_list_to_solve(
     )
 
 def get_unsolved_case_list_to_resolve(filename_unsolved: str = 'Cases-Unsolved', filename_resolved: str = 'Cases-Resolved'):
+    """Return unsolved cases after subtracting any newly resolved ones."""
     # transfer_temp_files_to_results(f'{filename_resolved}')
     unsolved_cases = read_csv_to_results(file_name=f'{filename_unsolved}')
     resolved_cases = read_csv_to_results(file_name=f'{filename_resolved}')
@@ -44,6 +48,7 @@ def get_unsolved_case_list_to_resolve(filename_unsolved: str = 'Cases-Unsolved',
     return unsolved_cases
 
 def get_optimisation_cases_to_solve(file_name: str ='untitled') -> list[list[float | str | bool]]:
+    """Return optimisation cases ordered by priority and excluding duplicates."""
     return  _order_cases(
                 _remove_completed_cases_from_list(
                     _get_all_optimisation_case_list(), 
@@ -54,6 +59,7 @@ def get_optimisation_cases_to_solve(file_name: str ='untitled') -> list[list[flo
                 )
 
 def preselected_refrigerant_ls():
+    """Canonical list of refrigerants considered in studies."""
     return [
         'Ammonia',
         'Propane', 
@@ -112,6 +118,7 @@ def _get_all_analysis_case_list(
         comp_PR_uniform_ls: list = [False],
         comp_model_index_ls: list = [1]
     ) -> list[list[float | str | bool]]:
+    """Build the full factorial analysis case list before filtering."""
     
     refrigerant_ls: list[str] = preselected_refrigerant_ls()
     dT_rhx1_cold_ls = np.linspace(0, 100, num=41)
@@ -161,6 +168,7 @@ def _get_all_analysis_case_list(
     ]
 
 def _get_all_optimisation_case_list() -> list[list[float | str | bool]]:
+    """Enumerate baseline optimisation cases prior to pruning."""
     refrigerant_ls: list[str] = [
         'Butane', 
         'Isobutane', 
@@ -199,9 +207,11 @@ def _get_all_optimisation_case_list() -> list[list[float | str | bool]]:
     ]
 
 def _check_if_analysis_cases_are_identical(res: dict, case: dict) -> bool:
+    """Compare two analysis cases using a signature."""
     return _analysis_case_signature(res) == _analysis_case_signature(case)
 
 def _check_if_optimisation_cases_are_identical(res: dict, case: dict) -> bool:
+    """Compare two optimisation cases using a signature."""
     return _optimisation_case_signature(res) == _optimisation_case_signature(case)
 
 def _remove_completed_cases_from_list(
@@ -210,6 +220,7 @@ def _remove_completed_cases_from_list(
     f_comparison,
     f_signature=None,
 ) -> list: 
+    """Filter out cases already present in the results store."""
     # Check if any past results in the temp folder need to be transferred and added to the complete results summary
     transfer_temp_files_to_results(file_name=file_name)
     prev_results = read_csv_to_results(file_name=file_name)
@@ -245,6 +256,7 @@ def _remove_completed_cases_from_list(
     return remaining_cases
 
 def _order_cases(cases):
+    """Sort cases by weight, refrigerant, and configuration heuristics."""
     cases.sort(reverse=True, key=lambda x: x['additional_data']['weight'])  
     cases.sort(reverse=False, key=lambda x: x['refrigerant']) 
     cases.sort(reverse=True, key=lambda x: x['n_comp'])
@@ -280,10 +292,12 @@ def _apply_interpolation_if_possible(case: dict, results_df: pd.DataFrame | None
 
 
 def _normalize_str(value: object) -> str:
+    """Normalise strings for consistent signature generation."""
     return str(value).strip().lower()
 
 
 def _round_float(value: object, ndigits: int = 4) -> float | None:
+    """Safely round a value, returning None on failure."""
     try:
         return round(float(value), ndigits)
     except (TypeError, ValueError):
@@ -306,6 +320,7 @@ _ANALYSIS_FLOAT_FIELDS = [
 
 
 def _analysis_case_signature(data: dict) -> tuple | None:
+    """Signature tuple uniquely identifying an analysis case."""
     try:
         refrigerant = _normalize_str(data['refrigerant'])
         n_comp = int(float(data['n_comp']))
@@ -326,6 +341,7 @@ _OPTIMISATION_FLOAT_FIELDS = [
 
 
 def _optimisation_case_signature(data: dict) -> tuple | None:
+    """Signature tuple uniquely identifying an optimisation case."""
     try:
         refrigerant = _normalize_str(data['refrigerant'])
         n_comp = int(float(data['n_comp']))

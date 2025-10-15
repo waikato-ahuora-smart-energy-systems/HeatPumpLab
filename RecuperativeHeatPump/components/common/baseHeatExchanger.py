@@ -1,7 +1,11 @@
+"""Abstract base support for heat exchanger component models."""
+
 from math import log
 from ...streams import MassStream
 
+
 class BaseHeatExchanger:
+    """Shared heat-exchanger behaviour extended by concrete component models."""
     #Set the stream connection points
     name: str = ''
     model: str
@@ -32,9 +36,11 @@ class BaseHeatExchanger:
     tol: float = 1e-6
 
     def __init__(self) -> None:
+        """Initialise placeholder attributes for subclasses."""
         pass
 
     def set_port_mass_streams(self, source_fluid: str, sink_fluid: str) -> None:
+        """Create inlet, pinch, and outlet streams for both sides."""
         self.source_in = MassStream(name='source in', fluid=source_fluid)
         self.source_pinch = MassStream(name='source pinch', fluid=source_fluid)
         self.source_out = MassStream(name='source out', fluid=source_fluid)
@@ -46,6 +52,7 @@ class BaseHeatExchanger:
         self.sink_out_max = MassStream(name='sink out max', fluid=sink_fluid)        
 
     def solve(self):
+        """Evaluate the exchanger according to the selected performance model."""
         if self.bypassed:
             self.source_out = self.source_in
             self.sink_out = self.sink_in
@@ -63,6 +70,7 @@ class BaseHeatExchanger:
         self.converged = True
 
     def get_performance(self):
+        """Dispatch to the underlying heat exchanger formulation."""
         if self.model == 'dTmin_terminal':
             self.get_dTmin_terminal_model()
 
@@ -100,6 +108,7 @@ class BaseHeatExchanger:
             raise ValueError('No heat exchanger model selected.')
 
     def get_dTmin_terminal_model(self):
+        """Solve for the duty limited by the specified terminal delta T."""
         try:
             self.source_out.pressure = self.source_in.pressure - self.dP_h
             self.source_out_max.props_in_ab('PT', self.source_out.pressure, self.sink_in.temperature + self.dTmin)
@@ -121,6 +130,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False    
 
     def get_effectiveness_model(self):
+        """Apply an effectiveness definition to compute energy transfer."""
         try:
             self.dT_max = abs( self.source_in.temperature - self.sink_in.temperature )
 
@@ -149,6 +159,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False    
 
     def get_fixed_cold_duty_model(self):
+        """Resolve state changes when cold-side duty is fixed."""
         self.duty = self.sink_out.heat_flow - self.sink_in.heat_flow
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c
         self.sink_out.props_in_mPH()
@@ -163,6 +174,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
     def get_fixed_hot_duty_model(self):
+        """Resolve state changes when hot-side duty is fixed."""
         self.duty = self.source_in.heat_flow - self.source_out.heat_flow
         self.source_out.pressure = self.source_in.pressure - self.dP_h
         self.source_out.props_in_mPH()
@@ -173,6 +185,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
     def get_fixed_cold_T_outlet_model(self):
+        """Solve with a fixed cold outlet temperature constraint."""
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c
         self.sink_out.props_in_mPT()
         self.duty = self.sink_out.heat_flow - self.sink_in.heat_flow
@@ -184,6 +197,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
     def get_fixed_hot_T_outlet_model(self):
+        """Solve with a fixed hot outlet temperature constraint."""
         self.source_out.pressure = self.source_in.pressure - self.dP_h
         self.source_out.props_in_mPT()
         self.duty = self.source_in.heat_flow - self.source_out.heat_flow
@@ -195,6 +209,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
     def get_fixed_hot_Q_outlet_model(self):
+        """Solve with a fixed hot outlet vapour quality constraint."""
         self.source_out.pressure = self.source_in.pressure - self.dP_h
         self.source_out.props_in_mPQ()
         self.duty = self.source_in.heat_flow - self.source_out.heat_flow
@@ -206,6 +221,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
     def get_fixed_cold_delta_T_model(self):
+        """Resolve states when enforcing a cold-side temperature rise."""
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c
         self.sink_out.temperature = self.sink_in.temperature + self.dT_c
         self.sink_out.props_in_mPT()
@@ -218,6 +234,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False 
 
     def get_fixed_hot_delta_T_model(self):
+        """Resolve states when enforcing a hot-side temperature drop."""
         self.source_out.pressure = self.source_in.pressure - self.dP_h
         self.source_out.temperature = self.source_in.temperature - self.dT_h
         self.source_out.props_in_mPT()
@@ -230,6 +247,7 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False 
 
     def get_saturated_gas_sink_out_model(self):
+        """Evaluate an evaporator with saturated-vapour outlet constraint."""
         self.sink_out.props_in_mTQ()
         self.sink_in.pressure = self.sink_out.pressure + self.dP_c
         self.sink_in.props_in_mPH()
@@ -245,9 +263,11 @@ class BaseHeatExchanger:
         self.converged = True if self.source_out.temperature > self.sink_in.temperature and self.source_in.temperature > self.sink_out.temperature else False
 
     def get_graph_data(self, divisions=50):
+        """Sample temperature profiles along the exchanger length."""
         data = {'source': [], 'sink': []}
         
         def get_inter_data(s_in: MassStream, s_out: MassStream):
+            """Interpolate intermediate stream states for plotting."""
             ls = []
             dP_tot = s_in.pressure - s_out.pressure
             dh_tot = s_in.enthalpy - s_out.enthalpy
@@ -269,6 +289,7 @@ class BaseHeatExchanger:
         return data
         
     def get_LMTD_ave(self):
+        """Average the segment-wise log-mean temperature difference."""
         data = self.get_graph_data()
         div = len(data['source']) - 1
         LMTD_seg = []
@@ -284,6 +305,7 @@ class BaseHeatExchanger:
         return sum(LMTD_seg) / len(LMTD_seg)
 
 def _get_LMTD(Thin, Thout, Tcin, Tcout):
+    """Compute log mean temperature difference for a segment."""
     if (Thin - Thout) == (Tcout - Tcin):
         return Thin - Thout
     else:

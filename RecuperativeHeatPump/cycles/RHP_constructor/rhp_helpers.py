@@ -1,3 +1,5 @@
+"""Helpers that assemble the Recuperative Heat Pump object graph."""
+
 from __future__ import annotations
 from typing import TYPE_CHECKING
 import numpy as np
@@ -15,6 +17,7 @@ __all__ = ['set_RHP_model']
 #######################################################################################################
 
 def set_RHP_model(hp: RHP) -> RHP:
+    """Populate the heat pump instance with components, streams, and logic."""
     hp = _get_RHP_structure(hp)
     if _check_input_param_feasibility(hp) == True:
         hp.feasible = True
@@ -31,6 +34,7 @@ def set_RHP_model(hp: RHP) -> RHP:
 #######################################################################################################
 
 def _check_input_param_feasibility(hp: RHP):
+    """Return True when the provided design knobs represent a feasible case."""
     return True if (
         (hp.T_air_tar - hp.T_air_inlet) * 2/3 >= hp.dT_rhx1_cold + hp.dT_rhx2_cold + hp.dT_rhx3_cold and
         0.0 <= hp.dT_gc_out_min_offset <= 50.0 and
@@ -38,6 +42,7 @@ def _check_input_param_feasibility(hp: RHP):
         ) else False
 
 def _get_RHP_structure(hp: RHP) -> RHP:
+    """Derive binary on/off flags for compressors and recuperators."""
     #Check the PHE combo
     hp.dT_rhx1_cold = hp.dT_rhx1_cold if hp.dT_rhx1_cold > 0.0 else 0.0
     hp.dT_rhx2_cold = hp.dT_rhx2_cold if hp.n_comp > 1 and hp.dT_rhx2_cold > 0.0 else 0.0
@@ -75,6 +80,7 @@ def _get_RHP_structure(hp: RHP) -> RHP:
     return hp
 
 def _get_RHP_components(hp: RHP) -> RHP:
+    """Instantiate the component objects required for the configured structure."""
     #Initialisation of unit operations
     hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.motor_eff, model_index=hp.comp_model_index)
     if hp.comp2_on == 1:
@@ -102,6 +108,7 @@ def _get_RHP_components(hp: RHP) -> RHP:
     return hp
 
 def _get_RHP_streams(hp: RHP) -> RHP:
+    """Initialise thermodynamic streams that connect the unit operations."""
     temp_ref_out: MassStream
     P_H: float
     P_L: float
@@ -339,6 +346,7 @@ def _get_RHP_streams(hp: RHP) -> RHP:
     return hp
 
 def _get_RHP_logic_blocks(hp: RHP) -> RHP:
+    """Build algebraic relationships that enforce model constraints."""
     #Set special relationships between points in the cycle 
     if hp.rhx3_on == 1:
         hp.set_rhx3_dT_cold = SetRelationship( source_obj=hp.rhx3.sink_in, target_obj=[hp.rhx3.sink_out], c=hp.dT_rhx3_cold, prop='temperature', prop2='pressure' ) 
@@ -360,6 +368,7 @@ def _get_RHP_logic_blocks(hp: RHP) -> RHP:
     return hp
 
 def _get_RHP_solver_pathway(hp: RHP) -> RHP:
+    """Persist an ordered sequence of operations for the cycle solver."""
     #Solution pathway set-up
     hp.operations = [hp.evap_sup]
 

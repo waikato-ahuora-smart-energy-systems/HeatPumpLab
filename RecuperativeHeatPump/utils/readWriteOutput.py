@@ -1,3 +1,5 @@
+"""Helpers for printing and persisting heat pump case results."""
+
 import os
 from glob import glob
 import csv
@@ -11,6 +13,7 @@ __all__ = ['print_result_to_terminal', 'print_result_to_csv', 'transfer_temp_fil
 #######################################################################################################
 
 def print_result_to_terminal(output: dict[str, any]):
+    """Pretty-print a result dictionary to the terminal."""
     key: str
     value: any
 
@@ -21,6 +24,7 @@ def print_result_to_terminal(output: dict[str, any]):
         print('Failed to print due to wrong output format.')
 
 def print_result_to_csv(output: list[any] =[], file_name: str ='R', file_ext: str ='.csv', suffix: str =''):
+    """Append a result dictionary to a CSV file, creating it if needed."""
     try:
         if output != []:
             file_name = 'results/' + file_name + suffix + file_ext
@@ -40,6 +44,7 @@ def print_result_to_csv(output: list[any] =[], file_name: str ='R', file_ext: st
         print('Failed to appended result to CSV file.')
 
 def transfer_temp_files_to_results(file_name: str ='untitled') -> None:
+    """Move temporary CSV files into the main results file."""
     csv_file_list: glob
     f: str
     fout: list[any]
@@ -72,4 +77,3 @@ def read_csv_to_results(file_name: str = 'untitled', file_ext: str = '.csv') -> 
     except (OSError, csv.Error) as e:
         print(f"Failed to read CSV file '{file_path}': {e}")
         return []
-

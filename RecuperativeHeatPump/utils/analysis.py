@@ -1,3 +1,5 @@
+"""Analysis utilities for running and post-processing heat pump cases."""
+
 from typing import Tuple
 from scipy.optimize import minimize as loc_min, approx_fprime
 import numpy as np, copy, os
@@ -22,6 +24,7 @@ def analyse_cases_in_parallel(
         comp2_power_frac_ls: list = None,
         n_cpu: int = os.cpu_count() - 1,
         ):
+    """Solve a batch of cases concurrently and persist intermediate results."""
     file_name = filename
     transfer_temp_files_to_results(file_name)
     cases = get_case_list_to_solve(
@@ -39,6 +42,7 @@ def analyse_cases_in_parallel(
     transfer_temp_files_to_results(file_name)
 
 def analyse_unsolved_cases(debug: bool =True):
+    """Retry previously unsolved cases and optionally emit debug output."""
     hp: RHP
     unsolved_cases = get_unsolved_case_list_to_resolve()
                     
@@ -81,11 +85,13 @@ def analyse_unsolved_cases(debug: bool =True):
 
 @timer_func
 def solve_single_case_with_timer(args) -> RHP:
+    """Instantiate and solve a single RHP case while timing execution."""
     hp = RHP(**args)
     hp.solve()
     return hp
 
 def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
+    """Format, persist, and optionally print a solved case summary."""
     res = _get_results_summary(hp, result, param, obj, dt)
     fsuffix = _get_unique_f_suffix(param)
     _print_results(res, fsuffix, print_to_terminal)
@@ -95,6 +101,7 @@ def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt:
 #######################################################################################################
 
 def _analyse_case(case: dict) -> Tuple[RHP, float]:
+    """Optimise the gas-cooler offset for a single case and solve it."""
     hp: RHP
     dt_ls = []
     
@@ -163,13 +170,16 @@ def _analyse_case(case: dict) -> Tuple[RHP, float]:
         return None, dt
     
 def _get_initial_val(vars_input: dict) -> list:
+    """Return the initial optimisation variables in argument order."""
     return [vars_input[key]['xi'] for key in vars_input]
 
 def _get_bounds(vars_input: dict) -> list:
+    """Return bounds corresponding to the optimisation variables."""
     return [vars_input[key]['bnds'] for key in vars_input]
 
 @timer_func
 def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj, method: str) -> dict:
+    """Run a local optimisation over the specified variable set."""
     return loc_min(
         fun=lambda x: _get_obj(x, param, f_obj), 
         x0=_get_initial_val(vars_input),
@@ -180,6 +190,7 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj, method:
 
 @timer_func
 def _get_fprime(param: dict, f_obj) -> dict:
+    """Estimate the derivative of the objective at the lower bound."""
     return approx_fprime(
         xk=0.0,
         f=lambda x: _get_obj(x, param, f_obj),
@@ -187,6 +198,7 @@ def _get_fprime(param: dict, f_obj) -> dict:
     ) * -1
 
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
+    """Evaluate the objective function for a candidate variable vector."""
     hp: RHP
     if not isinstance(vars, list):
         vars = [vars]
@@ -195,9 +207,11 @@ def _get_obj(vars: list[float], param: dict, f_obj) -> float:
     return obj * 1000
 
 def _compute_SEC_obj(hp: RHP, param: dict) -> float:
+    """Objective function: specific electricity consumption."""
     return hp.SEC
 
 def _get_var_kwargs(vars: list[float], param: dict) -> dict[str, float]:
+    """Map optimisation vector back to keyword arguments."""
     d_var = dict()
     if not isinstance(vars, list):
         vars = [vars]    
@@ -206,11 +220,13 @@ def _get_var_kwargs(vars: list[float], param: dict) -> dict[str, float]:
     return d_var
 
 def _print_results(results: dict, fsuffix: str, print_to_terminal: bool =True) -> None:
+    """Persist results to CSV and optionally print to stdout."""
     if print_to_terminal:
         print_result_to_terminal(results)
     print_result_to_csv(output=results, suffix=fsuffix, file_name='temp/R')    
 
 def _get_dQdW(hp0: RHP) -> float:
+    """Finite-difference estimate of heating capacity to work sensitivity."""
     hp1: RHP
     dtemp = 0.001
     args = copy.deepcopy(hp0.args)
@@ -226,6 +242,7 @@ def _get_dQdW(hp0: RHP) -> float:
     return dqdw
 
 def _get_results_summary(hp: RHP, result, param, obj, dt: float =None) -> dict:
+    """Combine optimisation metadata with the heat pump report."""
     hp.get_report()
 
     if 'weight' in param['additional_data']:
@@ -245,6 +262,7 @@ def _get_results_summary(hp: RHP, result, param, obj, dt: float =None) -> dict:
     return hp.output
 
 def _get_unique_f_suffix(param, fld_only=False) -> str:
+    """Build a unique filename suffix encoding refrigerant and key inputs."""
     suffix: str = '-'
     
     r = PropertyPackage(param['refrigerant'])

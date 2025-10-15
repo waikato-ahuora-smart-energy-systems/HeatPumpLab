@@ -1,11 +1,16 @@
+"""Isenthalpic expansion valve model."""
+
 from ..streams import MassStream
 
+
 class ExpansionValve:
+    """Simple throttling valve with optional specific heat loss."""
     flow_in: MassStream = None
     flow_out: MassStream = None
     converged: bool = True
 
     def __init__(self, name='Expansion valve', fluid: str = None, specific_heat_loss: float =0.0, tol: float =1e-6):
+        """Initialise flow streams and optional loss coefficient."""
         self.name = name
         self.flow_in = MassStream(name='flow_in', fluid=fluid)
         self.flow_out = MassStream(name='flow_out', fluid=fluid)
@@ -14,17 +19,21 @@ class ExpansionValve:
         self.power = 0.0
 
     def get_outlet_enthalpy(self):
+        """Return post-expansion enthalpy including specified losses."""
         return self.flow_in.enthalpy - self.specific_heat_loss
     
     def solve(self):
+        """Apply throttling assumption to compute outlet state."""
         self.flow_out.mass_flow = self.flow_in.mass_flow
         self.flow_out.enthalpy = self.get_outlet_enthalpy()
         self.flow_out.props_in_mPH()
         self.converged = True
 
     def get_graph_data(self, divisions=50):
+        """Produce interpolation states for plotting the throttling path."""
         data = {'siso': []}
         def get_inter_data(s_in, s_out):
+            """Interpolate intermediate throttling states."""
             ls = []
             # PV^n = const
             PR_i = (self.flow_out.pressure / self.flow_in.pressure) ** (1 / divisions)

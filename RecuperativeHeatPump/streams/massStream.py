@@ -1,6 +1,10 @@
+"""Thermodynamic stream wrapper providing property calculations."""
+
 from .propertiesPackage import PropertyPackage
 
+
 class MassStream():
+    """Represents a single-phase or two-phase mass stream with property helpers."""
     name: str
     fluid: str
     pp_instance: str
@@ -30,6 +34,7 @@ class MassStream():
                  quality:float =None,
                  specific_volume:float = None) -> None:
         
+        """Initialise the mass stream and optionally compute properties."""
         self.name = name
         self.fluid = fluid
         self.pp_instance = pp_instance
@@ -45,6 +50,7 @@ class MassStream():
             self.auto_calc_props()
 
     def set_fluid(self, fluid: str, pp_instance: str) -> None:
+        """Attach a property package describing the working fluid."""
         self.PP = PropertyPackage(fluid, pp_instance)
         self.P_crit = self.PP.P_crit
         self.T_crit = self.PP.T_crit
@@ -53,6 +59,7 @@ class MassStream():
         self.fld_composition = self.PP.fld_composition
 
     def auto_calc_props(self) -> None:
+        """Populate missing properties based on whichever state variables are set."""
         if self.pressure != None and self.enthalpy != None:
             self.props_in_mPH()
         elif self.pressure != None and self.temperature != None:
@@ -69,6 +76,7 @@ class MassStream():
             None        
 
     def props_in_ab(self, input_str: str, prop1: float, prop2: float, mass_flow: float =None, name: str =None, pp_instance: str =None) -> None:
+        """Update properties given a generic two-property input."""
         if mass_flow is not None:
             self.mass_flow = mass_flow
         if name is not None:
@@ -81,41 +89,49 @@ class MassStream():
         )
 
     def props_in_mPH(self) -> None:
+        """Update state using pressure and enthalpy."""
         self._update_props(
             self.PP.get_std_properties('PH', self.pressure, self.enthalpy, self.fld_composition)
         )
 
     def props_in_mPQ(self) -> None:
+        """Update state using pressure and vapour quality."""
         self._update_props(
             self.PP.get_std_properties('PQ', self.pressure, self.quality, self.fld_composition)
         )
 
     def props_in_mPT(self) -> None:
+        """Update state using pressure and temperature."""
         self._update_props(
             self.PP.get_std_properties('PT', self.pressure, self.temperature, self.fld_composition)
         )         
 
     def props_in_mPS(self) -> None:
+        """Update state using pressure and entropy."""
         self._update_props(
             self.PP.get_std_properties('PS', self.pressure, self.entropy, self.fld_composition)
         )           
 
     def props_in_mPD(self) -> None:
+        """Update state using pressure and density."""
         self._update_props(
             self.PP.get_std_properties('PD', self.pressure, self.density, self.fld_composition)
         )  
     
     def props_in_mTQ(self) -> None:
+        """Update state using temperature and vapour quality."""
         self._update_props(
             self.PP.get_std_properties('TQ', self.temperature, self.quality, self.fld_composition)
         )        
 
     def props_in_mTS(self) -> None:
+        """Update state using temperature and entropy."""
         self._update_props(
             self.PP.get_std_properties('TQ', self.temperature, self.entropy, self.fld_composition)
         )      
 
     def _update_props(self, props) -> None:
+        """Write thermodynamic properties into the stream object."""
         self.pressure = props['P']
         self.enthalpy = props['h']
         self.quality = props['q']
@@ -128,24 +144,29 @@ class MassStream():
         self.vol_flow = self.specific_volume * self.mass_flow
 
     def props_extend(self):
+        """Calculate additional transport properties."""
         self.prandtl, self.viscosity, self.thermal_conductivity = self.PP.get_specified_properties('PRANDTL;VIS;TCX', 'PH', self.pressure, self.enthalpy)[0:3]
 
     def get_Tsat(self, quality):
+        """Get saturation temperature at current pressure for the given quality."""
         if self.pressure < self.P_crit:
             return self.PP.get_std_properties('PQ', self.pressure, quality, self.fld_composition)['T']
         else:
             return self.PP.get_std_properties('PD', self.pressure, self.D_crit, self.fld_composition)['T']
     
     def get_Psat(self, quality):
+        """Get saturation pressure at current temperature for the given quality."""
         return self.PP.get_std_properties('TQ', self.temperature, quality, self.fld_composition)['P']   
 
     def get_hsat(self, quality):
+        """Get saturation enthalpy for the supplied quality."""
         if self.pressure < self.P_crit:
             return self.PP.get_std_properties('PQ', self.pressure, quality, self.fld_composition)['h']  
         else:
             return self.PP.get_std_properties('PD', self.pressure, self.D_crit, self.fld_composition)['h']         
 
     def copy_fld_props(self, fld):
+        """Copy thermodynamic properties from another stream."""
         self.pressure = fld.pressure
         self.temperature = fld.temperature
         self.enthalpy = fld.enthalpy
@@ -156,6 +177,7 @@ class MassStream():
         self.specific_volume = fld.specific_volume
 
     def set_flows(self, mass_flow):
+        """Update mass, heat, and volumetric flows for the current enthalpy."""
         self.mass_flow = mass_flow
         self.heat_flow = self.enthalpy * self.mass_flow
         self.vol_flow = self.specific_volume * self.mass_flow

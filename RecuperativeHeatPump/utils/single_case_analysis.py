@@ -1,3 +1,5 @@
+"""Entry point for running ad-hoc single case analyses."""
+
 from ..cycles import *
 from .readWriteOutput import *
 
@@ -124,6 +126,7 @@ butane_args = {
 
 
 def analyse_single_case(args: list[float | str | bool] = None):
+    """Solve a single case and emit reports/plots for inspection."""
     
     hp: RHP
     
@@ -152,4 +155,3 @@ def analyse_single_case(args: list[float | str | bool] = None):
         print('Heat pump case is infeasible.')
     else:
         print('Heat pump model failed to solve.')
-

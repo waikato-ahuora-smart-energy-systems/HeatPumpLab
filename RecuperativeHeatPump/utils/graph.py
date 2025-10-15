@@ -1,3 +1,5 @@
+"""Plotting helpers for heat pump cycle outputs."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
@@ -31,6 +33,7 @@ LEGEND_NAME_MAP: dict[str, str] = {
 #######################################################################################################
     
 def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, refrigerant='default', include_sink=True):
+    """Plot a cycle diagram with optional sink curves and save the figure."""
     cycle_obj = cycle_obj + [cycle_obj[0]]
     fig: plt.Figure
     ax: plt.Axes
@@ -119,6 +122,7 @@ def plot_cycle(cycle_obj, sink_obj, title='', x_axis='h', y_axis='T', res=50, re
     return fig, ax        
 
 def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin=0, refrigerant='default'):
+    """Plot driving-force curves for a list of heat exchangers."""
     fig: plt.Figure
     ax: plt.Axes
 
@@ -168,6 +172,7 @@ def plot_driving_force(hx_obj, title='', x_axis='h', y_axis='dT*', res=50, dtmin
     return fig, ax           
 
 def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', res=50, refrigerant='default'):
+    """Plot source and sink temperature profiles for heat exchangers."""
     fig: plt.Figure
     ax: plt.Axes
 
@@ -222,6 +227,7 @@ def plot_heat_exchanger_profiles(hx_obj=[], title='', x_axis='h', y_axis='T', re
     return fig, ax           
 
 def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: str ='', refrigerant='default'):
+    """Plot a simple 2D curve and write it to the figures directory."""
     fig: plt.Figure
     ax: plt.Axes
 
@@ -249,6 +255,7 @@ def plot_simple_xy(x: list, y: list, title: str ='', x_axis: str ='', y_axis: st
 
 
 def plot_heat_map(title, x_val, x_label, y_val, y_label, z_val, z_label):
+    """Render a heat map using Plotly and return the figure."""
     df = pd.DataFrame({"x": x_val, "y": y_val, "z": z_val})
     fig = px.density_heatmap(df, x="x", y="y", z="z", nbinsx=20, nbinsy=20, color_continuous_scale="Viridis")
     fig.update_layout(
@@ -264,22 +271,26 @@ def plot_heat_map(title, x_val, x_label, y_val, y_label, z_val, z_label):
 #######################################################################################################
 
 def _add_legend(ax: plt.Axes) -> None:
+    """Add a legend if the axes currently have labelled artists."""
     _, labels = ax.get_legend_handles_labels()
     if any(label for label in labels):
         ax.legend()
 
 def _map_legend_name(name: str | None) -> str:
+    """Convert component names to shorter legend-friendly labels."""
     if not name:
         return 'Component'
     return LEGEND_NAME_MAP.get(name, name)
 
 def _apply_layout(fig: plt.Figure) -> None:
+    """Apply tight layout for consistent sizing."""
     try:
         fig.tight_layout(pad=1.4)
     except Exception:
         pass
 
 def _rescale(array_to_scale, array_new_scale) -> list[float]:
+    """Rescale an array to match the span of another array."""
     m: float
     c: float
     if abs(array_to_scale[0] - array_to_scale[-1]) > 0.0:
@@ -290,12 +301,14 @@ def _rescale(array_to_scale, array_new_scale) -> list[float]:
     return [(x - array_to_scale[-1]) * m + c for x in array_to_scale]
 
 def _get_raw_data(ls, prop):
+    """Extract a list of property values from stream objects."""
     x = []
     for s in ls:
         x += [getattr(s, prop)]
     return x
 
 def _get_axis_labels(axis_var: str) -> list[str]: # type: ignore
+    """Return axis label text and canonical property key."""
     axis = axis_var.lower()
     if axis == 'h' or axis == 'enthalpy':
         label = 'Enthalpy [kJ/kg]'
