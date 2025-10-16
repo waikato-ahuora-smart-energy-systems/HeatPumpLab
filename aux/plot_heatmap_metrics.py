@@ -14,16 +14,15 @@ from matplotlib.colors import LogNorm
 
 
 DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
-    # ("COP", "max"),
-    # ("SEC", "min"),
-    # ("VHC", "max"),
-    # ("eDTL", "min"),
-    # ("SLE", "min"),
-    ("dQ_per_dW", "max"),
-    # ("LMTD_gcs", "min"),
-    # ("Pmax", "min"),
-    # ("COP_pct_increase_vs_base", "max"),
-    # ("Pmax_reduction_vs_base", "max"),
+    ("COP", "max"),
+    ("SEC", "min"),
+    ("VHC", "max"),
+    ("eDTL", "min"),
+    ("SLE", "min"),
+    ("LMTD_gcs", "min"),
+    ("Pmax", "min"),
+    ("COP_pct_increase_vs_base", "max"),
+    ("Pmax_reduction_vs_base", "max"),
     ("dT_gc_out_min_offset", "max")
 )
 
