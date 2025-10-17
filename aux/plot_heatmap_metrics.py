@@ -85,7 +85,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--csv",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "results" / "RHP_results.csv",
+        default=Path(__file__).resolve().parents[1] / "results" / "RecuperativeHP_results.csv",
         help="Path to the results CSV file.",
     )
     parser.add_argument(

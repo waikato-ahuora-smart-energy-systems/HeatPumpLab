@@ -1,4 +1,4 @@
-"""Utility to remove duplicate Transcritical RHP results.
+"""Utility to remove duplicate Transcritical RecuperativeHP results.
 
 Rules:
     * Within each operating-point signature, retain a single row if all rows are
@@ -69,24 +69,24 @@ def parse_args() -> argparse.Namespace:
     repo_root = Path(__file__).resolve().parents[1]
     results_dir = repo_root / "results"
     parser = argparse.ArgumentParser(
-        description="Remove duplicate rows from RHP_results.csv according to tolerance rules."
+        description="Remove duplicate rows from RecuperativeHP_results.csv according to tolerance rules."
     )
     parser.add_argument(
         "--input",
         type=Path,
-        default=results_dir / "RHP_results.csv",
+        default=results_dir / "RecuperativeHP_results.csv",
         help="Path to the input CSV file containing raw results.",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=results_dir / "RHP_results_cleaned.csv",
+        default=results_dir / "RecuperativeHP_results_cleaned.csv",
         help="Where to write the deduplicated results.",
     )
     parser.add_argument(
         "--conflicts",
         type=Path,
-        default=results_dir / "RHP_results_conflicts.csv",
+        default=results_dir / "RecuperativeHP_results_conflicts.csv",
         help="Where to write rows from groups that disagreed beyond tolerance.",
     )
     parser.add_argument(

@@ -8,23 +8,23 @@ from ...components import *
 from ...streams import MassStream
 
 if TYPE_CHECKING:
-    from ...cycles import RHP
+    from ...cycles import RecuperativeHP
 
-__all__ = ['set_RHP_model']
+__all__ = ['set_rhp_model']
 
 #######################################################################################################
 # Public API
 #######################################################################################################
 
-def set_RHP_model(hp: RHP) -> RHP:
+def set_rhp_model(hp: RecuperativeHP) -> RecuperativeHP:
     """Populate the heat pump instance with components, streams, and logic."""
-    hp = _get_RHP_structure(hp)
+    hp = _get_RecuperativeHP_structure(hp)
     if _check_input_param_feasibility(hp) == True:
         hp.feasible = True
-        hp = _get_RHP_components(hp)
-        hp = _get_RHP_streams(hp)
-        hp = _get_RHP_logic_blocks(hp)
-        hp = _get_RHP_solver_pathway(hp)
+        hp = _get_RecuperativeHP_components(hp)
+        hp = _get_RecuperativeHP_streams(hp)
+        hp = _get_RecuperativeHP_logic_blocks(hp)
+        hp = _get_RecuperativeHP_solver_pathway(hp)
     else:
         hp.feasible = False
     return hp
@@ -33,7 +33,7 @@ def set_RHP_model(hp: RHP) -> RHP:
 # Helper functions
 #######################################################################################################
 
-def _check_input_param_feasibility(hp: RHP):
+def _check_input_param_feasibility(hp: RecuperativeHP):
     """Return True when the provided design knobs represent a feasible case."""
     return True if (
         (hp.T_air_tar - hp.T_air_inlet) * 2/3 >= hp.dT_rhx1_cold + hp.dT_rhx2_cold + hp.dT_rhx3_cold and
@@ -41,7 +41,7 @@ def _check_input_param_feasibility(hp: RHP):
         hp.comp2_power_frac + hp.comp3_power_frac <= 1.0
         ) else False
 
-def _get_RHP_structure(hp: RHP) -> RHP:
+def _get_RecuperativeHP_structure(hp: RecuperativeHP) -> RecuperativeHP:
     """Derive binary on/off flags for compressors and recuperators."""
     #Check the PHE combo
     hp.dT_rhx1_cold = hp.dT_rhx1_cold if hp.dT_rhx1_cold > 0.0 else 0.0
@@ -79,7 +79,7 @@ def _get_RHP_structure(hp: RHP) -> RHP:
 
     return hp
 
-def _get_RHP_components(hp: RHP) -> RHP:
+def _get_RecuperativeHP_components(hp: RecuperativeHP) -> RecuperativeHP:
     """Instantiate the component objects required for the configured structure."""
     #Initialisation of unit operations
     hp.comp1 = Compressor(name='Compressor', fluid=hp.refrigerant, motor_eff=hp.motor_eff, model_index=hp.comp_model_index)
@@ -107,7 +107,7 @@ def _get_RHP_components(hp: RHP) -> RHP:
     
     return hp
 
-def _get_RHP_streams(hp: RHP) -> RHP:
+def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
     """Initialise thermodynamic streams that connect the unit operations."""
     temp_ref_out: MassStream
     P_H: float
@@ -345,7 +345,7 @@ def _get_RHP_streams(hp: RHP) -> RHP:
 
     return hp
 
-def _get_RHP_logic_blocks(hp: RHP) -> RHP:
+def _get_RecuperativeHP_logic_blocks(hp: RecuperativeHP) -> RecuperativeHP:
     """Build algebraic relationships that enforce model constraints."""
     #Set special relationships between points in the cycle 
     if hp.rhx3_on == 1:
@@ -367,7 +367,7 @@ def _get_RHP_logic_blocks(hp: RHP) -> RHP:
 
     return hp
 
-def _get_RHP_solver_pathway(hp: RHP) -> RHP:
+def _get_RecuperativeHP_solver_pathway(hp: RecuperativeHP) -> RecuperativeHP:
     """Persist an ordered sequence of operations for the cycle solver."""
     #Solution pathway set-up
     hp.operations = [hp.evap_sup]

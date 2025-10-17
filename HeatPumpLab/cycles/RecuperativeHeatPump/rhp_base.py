@@ -1,13 +1,13 @@
 """High-level Recuperative Heat Pump cycle definition."""
 
-from ..components import *
-from ..streams import MassStream
-from .common.heatPump import BaseHeatPump
-from .RHP_constructor import *
+from ...components import *
+from ...streams import MassStream
+from ..common.heatPump import BaseHeatPump
+from .rhp_helpers import set_rhp_model
 from .solver.cycle_solver import solve_heat_pump_cycle
 
 
-class RHP(BaseHeatPump):
+class RecuperativeHP(BaseHeatPump):
     """Transcritical recuperative heat pump comprised of cascaded components."""
     
     n_comp: float =2
@@ -54,9 +54,9 @@ class RHP(BaseHeatPump):
         for key, value in d_args.items():
             setattr(self, key, value)
 
-        set_RHP_model(self)
+        set_rhp_model(self)
 
-    def solve(self) -> 'RHP':
+    def solve(self) -> 'RecuperativeHP':
         """Solve the configured heat pump cycle and return ``self``."""
         if self.feasible:
             solve_heat_pump_cycle(self)

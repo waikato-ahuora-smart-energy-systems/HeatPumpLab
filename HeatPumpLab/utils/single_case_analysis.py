@@ -128,13 +128,13 @@ butane_args = {
 def analyse_single_case(args: list[float | str | bool] = None):
     """Solve a single case and emit reports/plots for inspection."""
     
-    hp: RHP
+    hp: RecuperativeHP
     
     if args == None:
         args = R1234ze_args
         # args = DEFAULT_ARGS
 
-    hp = RHP(**args)
+    hp = RecuperativeHP(**args)
     hp.solve()
     
     if hp.converged:

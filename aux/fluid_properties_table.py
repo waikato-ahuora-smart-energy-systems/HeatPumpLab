@@ -1,5 +1,5 @@
 import pandas as pd
-from RecuperativeHeatPump.streams import PropertyPackage
+from HeatPumpLab.streams import PropertyPackage
 
 def get_fluid_prop_overview_table():
     props_ls = [

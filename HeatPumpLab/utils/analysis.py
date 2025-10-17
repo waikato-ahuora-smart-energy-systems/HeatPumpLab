@@ -17,7 +17,7 @@ __all__ = ['analyse_cases_in_parallel', 'analyse_unsolved_cases']
 #######################################################################################################
 
 def analyse_cases_in_parallel(
-        filename: str = 'RHP_results',
+        filename: str = 'RecuperativeHP_results',
         refrigerant_ls: list = None, 
         dT_rhx1_cold_ls: list = None,
         dT_rhx2_cold_ls: list = None, 
@@ -43,7 +43,7 @@ def analyse_cases_in_parallel(
 
 def analyse_unsolved_cases(debug: bool =True):
     """Retry previously unsolved cases and optionally emit debug output."""
-    hp: RHP
+    hp: RecuperativeHP
     unsolved_cases = get_unsolved_case_list_to_resolve()
                     
     if unsolved_cases is not None and unsolved_cases != []:
@@ -71,7 +71,7 @@ def analyse_unsolved_cases(debug: bool =True):
                     }
             
             hp, _ = _analyse_case(args)
-            if isinstance(hp, RHP):
+            if isinstance(hp, RecuperativeHP):
                 if hp.converged and debug:
                     hp.get_report()
                     fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
@@ -84,13 +84,13 @@ def analyse_unsolved_cases(debug: bool =True):
         transfer_temp_files_to_results('Cases-Resolved')
 
 @timer_func
-def solve_single_case_with_timer(args) -> RHP:
-    """Instantiate and solve a single RHP case while timing execution."""
-    hp = RHP(**args)
+def solve_single_case_with_timer(args) -> RecuperativeHP:
+    """Instantiate and solve a single RecuperativeHP case while timing execution."""
+    hp = RecuperativeHP(**args)
     hp.solve()
     return hp
 
-def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
+def get_results_report(hp: RecuperativeHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
     """Format, persist, and optionally print a solved case summary."""
     res = _get_results_summary(hp, result, param, obj, dt)
     fsuffix = _get_unique_f_suffix(param)
@@ -100,9 +100,9 @@ def get_results_report(hp: RHP, param: dict, result: list[dict], obj: float, dt:
 # Helper functions
 #######################################################################################################
 
-def _analyse_case(case: dict) -> Tuple[RHP, float]:
+def _analyse_case(case: dict) -> Tuple[RecuperativeHP, float]:
     """Optimise the gas-cooler offset for a single case and solve it."""
-    hp: RHP
+    hp: RecuperativeHP
     dt_ls = []
     
     dT_gc_out_min_offset = 0.0 if 'dT_gc_out_min_offset' not in case else case['dT_gc_out_min_offset']
@@ -199,14 +199,14 @@ def _get_fprime(param: dict, f_obj) -> dict:
 
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
     """Evaluate the objective function for a candidate variable vector."""
-    hp: RHP
+    hp: RecuperativeHP
     if not isinstance(vars, list):
         vars = [vars]
     hp, _ = solve_single_case_with_timer(param | _get_var_kwargs(vars, param))
     obj = f_obj(hp, param)
     return obj * 1000
 
-def _compute_SEC_obj(hp: RHP, param: dict) -> float:
+def _compute_SEC_obj(hp: RecuperativeHP, param: dict) -> float:
     """Objective function: specific electricity consumption."""
     return hp.SEC
 
@@ -225,9 +225,9 @@ def _print_results(results: dict, fsuffix: str, print_to_terminal: bool =True) -
         print_result_to_terminal(results)
     print_result_to_csv(output=results, suffix=fsuffix, file_name='temp/R')    
 
-def _get_dQdW(hp0: RHP) -> float:
+def _get_dQdW(hp0: RecuperativeHP) -> float:
     """Finite-difference estimate of heating capacity to work sensitivity."""
-    hp1: RHP
+    hp1: RecuperativeHP
     dtemp = 0.001
     args = copy.deepcopy(hp0.args)
     args['T_air_tar'] = hp0.T_air_tar + dtemp
@@ -241,7 +241,7 @@ def _get_dQdW(hp0: RHP) -> float:
         dqdw = 0.0
     return dqdw
 
-def _get_results_summary(hp: RHP, result, param, obj, dt: float =None) -> dict:
+def _get_results_summary(hp: RecuperativeHP, result, param, obj, dt: float =None) -> dict:
     """Combine optimisation metadata with the heat pump report."""
     hp.get_report()
 

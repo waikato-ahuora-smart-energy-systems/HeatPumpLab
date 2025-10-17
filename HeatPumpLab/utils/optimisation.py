@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.optimize import dual_annealing as glb_min, LinearConstraint, minimize as loc_min, approx_fprime
-from ..cycles import RHP
+from ..cycles import RecuperativeHP
 from .decorator_functions import timer_func
 from .parallel_solving import solve_in_parallel
 from .analysis import solve_single_case_with_timer, get_results_report
@@ -140,16 +140,16 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj) -> dict
 
 def _get_obj(vars: list[float], param: dict, f_obj) -> float:
     """Evaluate the objective function for given optimisation variables."""
-    hp: RHP
+    hp: RecuperativeHP
     hp, _ = solve_single_case_with_timer(param | _get_var_kwargs(vars, param))
     obj = f_obj(hp, param)
     return obj * 1000
 
-def _compute_SEC_obj(hp: RHP, param: dict) -> float:
+def _compute_SEC_obj(hp: RecuperativeHP, param: dict) -> float:
     """Objective targeting minimum specific electricity consumption."""
     return hp.SEC
 
-def _compute_multi_obj(hp: RHP, param: dict) -> float:
+def _compute_multi_obj(hp: RecuperativeHP, param: dict) -> float:
     """Combined objective balancing SEC and discharge pressure."""
     SEC_0 = param['additional_data']['SEC_0']
     P_0   = param['additional_data']['P_0']
@@ -159,7 +159,7 @@ def _compute_multi_obj(hp: RHP, param: dict) -> float:
 
 def _get_jac(vars: list[float], param: dict, f_obj):
     """Approximate Jacobian of the objective via finite differences."""
-    hp: RHP
+    hp: RecuperativeHP
     hp, _ = solve_single_case_with_timer(param | _get_var_kwargs(vars, param))
     _ = f_obj(hp, param)
     if hp.converged:
@@ -169,7 +169,7 @@ def _get_jac(vars: list[float], param: dict, f_obj):
     else:
         return np.inf(len(vars))
 
-def _compute_jac(vars, hp: RHP, param, f_obj):
+def _compute_jac(vars, hp: RecuperativeHP, param, f_obj):
     """Helper used during Jacobian estimation to recompute the objective."""
     kwargs = _get_var_kwargs(vars, param)
     for key in kwargs:
