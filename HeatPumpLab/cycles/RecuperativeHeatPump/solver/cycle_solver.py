@@ -11,7 +11,7 @@ from ....utils.readWriteOutput import *
 from ....utils.graph import *
 
 if TYPE_CHECKING:
-    from .. import RecuperativeHP
+    from .. import BaseHeatPump
     from ....components import GasCooler
     from ....streams import MassStream
 
@@ -21,7 +21,7 @@ __all__ = ['solve_heat_pump_cycle']
 # Public API
 #######################################################################################################
 
-def solve_heat_pump_cycle(hp: RecuperativeHP) -> RecuperativeHP:
+def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
     """Solve a configured heat pump, mutating the model and returning it."""
     try:
         hp = _solve_case(hp)
@@ -38,7 +38,7 @@ def solve_heat_pump_cycle(hp: RecuperativeHP) -> RecuperativeHP:
 # Helper functions
 #######################################################################################################
 
-def _solve_case(hp: RecuperativeHP) -> RecuperativeHP:
+def _solve_case(hp: BaseHeatPump) -> BaseHeatPump:
     """Drive the high-level solution loop for a heat pump instance."""
     hp = _find_hp_with_min_discharge_pressure(hp)
     if hp.debug:
@@ -56,40 +56,40 @@ def _solve_case(hp: RecuperativeHP) -> RecuperativeHP:
     hp = _get_metrics(hp)
     return hp
 
-def _check_hp_model_convergance(hp: RecuperativeHP) -> bool:
+def _check_hp_model_convergance(hp: BaseHeatPump) -> bool:
     """Return True when the cycle has converged and yielded positive work."""
     return True if ( sum([c.power for c in hp.compressors]) > 0.0 and hp.converged == True and hp.feasible == True ) else False
 
-def _get_metrics(hp: RecuperativeHP) -> RecuperativeHP:
+def _get_metrics(hp: BaseHeatPump) -> BaseHeatPump:
     """Populate secondary performance metrics on the heat pump object."""
 
-    def _get_COP(hp: RecuperativeHP) -> float:
+    def _get_COP(hp: BaseHeatPump) -> float:
         """Coefficient of performance of the solved case."""
         return sum([g.duty for g in hp.gas_coolers]) / sum([c.power for c in hp.compressors]) if hp.converged else 0.0   
 
-    def _get_SEC(hp: RecuperativeHP) -> float:
+    def _get_SEC(hp: BaseHeatPump) -> float:
         """Specific electricity consumption for the solved cycle."""
         return sum([c.power for c in hp.compressors]) / (sum([g.duty for g in hp.gas_coolers]) - sum([c.power for c in hp.compressors])) if hp.converged else np.inf    
 
-    def _get_VHC(hp: RecuperativeHP) -> float:
+    def _get_VHC(hp: BaseHeatPump) -> float:
         """Volumetric heating capacity delivered at the gas coolers."""
         return sum([g.duty for g in hp.gas_coolers]) / hp.comp1.flow_in.vol_flow if hp.converged else 0.0   
 
-    def _get_eDTL(hp: RecuperativeHP) -> float:
+    def _get_eDTL(hp: BaseHeatPump) -> float:
         """Exergy temperature lift between source and sink."""
         eT_h_ave = sum([g.duty for g in hp.gas_coolers]) / sum([g.delta_entropy_src for g in hp.gas_coolers])
         eT_c_ave = sum([e.duty for e in hp.evaporators]) / sum([e.delta_entropy_snk for e in hp.evaporators])
         return eT_h_ave - eT_c_ave if hp.converged else 0.0  
 
-    def _get_SLE(hp: RecuperativeHP) -> float:
+    def _get_SLE(hp: BaseHeatPump) -> float:
         """Specific lift efficiency derived from SEC and eDTL."""
         return hp.SEC / hp.eDTL * 1000 if hp.converged else 0.0
     
-    def _get_LMTD_gcs(hp: RecuperativeHP):
+    def _get_LMTD_gcs(hp: BaseHeatPump):
         """Overall log mean temperature difference across gas coolers."""
         return sum([g.duty * g.get_LMTD_ave() for g in hp.gas_coolers]) / sum([g.duty for g in hp.gas_coolers])
 
-    def _get_hp_cycle_type(hp: RecuperativeHP) -> str:
+    def _get_hp_cycle_type(hp: BaseHeatPump) -> str:
         """Identify whether the cycle operated transcritically or subcritically."""
         return 'Transcritical' if hp.comp_discharge.pressure > hp.comp_discharge.P_crit else 'Subcritical'
 
@@ -103,13 +103,13 @@ def _get_metrics(hp: RecuperativeHP) -> RecuperativeHP:
     hp.cycle_type = _get_hp_cycle_type(hp)
     return hp
 
-def _find_evap_inlet_temperature_offset(Tref_evap_outlet: float, hp: RecuperativeHP) -> float:
+def _find_evap_inlet_temperature_offset(Tref_evap_outlet: float, hp: BaseHeatPump) -> float:
     """Return the mismatch between target and simulated evaporator inlet temperatures."""
     hp.evaporator.sink_out.props_in_ab('TQ', Tref_evap_outlet, 1.0)
     hp = _find_hp_with_min_discharge_pressure(hp)
     return hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
 
-def _find_hp_with_min_discharge_pressure(hp: RecuperativeHP) -> RecuperativeHP:
+def _find_hp_with_min_discharge_pressure(hp: BaseHeatPump) -> BaseHeatPump:
     """Search for the discharge pressure that meets the gas-cooler pinch target."""
     bnds, x0, hp.feasible, _ = _get_discharge_pressure_bounds(hp)
     hp.comp_discharge.pressure_bnds = bnds
@@ -130,7 +130,7 @@ def _find_hp_with_min_discharge_pressure(hp: RecuperativeHP) -> RecuperativeHP:
         raise Exception('Infeasible pressure bounds. The failed case has been recorded.')
     return hp
 
-def _get_discharge_pressure_bounds(hp: RecuperativeHP) -> list[tuple[float, float], float, bool, tuple[float, float]]:
+def _get_discharge_pressure_bounds(hp: BaseHeatPump) -> list[tuple[float, float], float, bool, tuple[float, float]]:
     """Determine feasible discharge pressure bounds and initial guess."""
     feasible: bool = False
     P_lb: float
@@ -180,7 +180,7 @@ def _get_discharge_pressure_bounds(hp: RecuperativeHP) -> list[tuple[float, floa
 
     return (P_lb, P_ub), P_i, feasible, (dt_plus, dt_neg)
 
-def _find_current_gc_dtmin_offset(P_comp_out: float, hp: RecuperativeHP, return_abs: bool =False) -> float:
+def _find_current_gc_dtmin_offset(P_comp_out: float, hp: BaseHeatPump, return_abs: bool =False) -> float:
     """Compute the deviation between current and target gas-cooler pinch."""
     dtmin_ls: list[list[float,float]]
 
@@ -189,13 +189,13 @@ def _find_current_gc_dtmin_offset(P_comp_out: float, hp: RecuperativeHP, return_
     dtmin_ls.pop(-1)            # Ignore the cold-side dtmin of the inlet air to the gas cooler
     if dtmin_ls[-1][1] < 1e-3:  # Ignore the mid exchanger dtmin of the inlet air to the gas cooler if it is the cold-side
         dtmin_ls.pop(-1)
-    # hp.get_cycle_plot()
+
     if not return_abs:
         return min(dtmin_ls)[0] - hp.dT_GC_min_tar
     else:
         return abs(min(dtmin_ls)[0] - hp.dT_GC_min_tar)
 
-def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: RecuperativeHP) -> list[list[float,float]]:
+def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: BaseHeatPump) -> list[list[float,float]]:
     """Enumerate pinch temperature differences for all gas cooler sections."""
     dtmin_ls: list[float]
     gc: GasCooler
@@ -213,7 +213,7 @@ def _get_all_possible_gc_dtmin_pos(P_comp_out: float, hp: RecuperativeHP) -> lis
         plot_driving_force(hp.gas_coolers, dtmin=hp.dT_GC_min_tar)
     return dtmin_ls
 
-def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: RecuperativeHP) -> RecuperativeHP:
+def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: BaseHeatPump) -> BaseHeatPump:
     """Sequentially solve each component until the coupled cycle converges."""
     hp.comp_discharge.pressure = P_comp_out
     i: int = 0
@@ -249,7 +249,7 @@ def _do_sequential_iterative_cycle_analysis(P_comp_out: float, hp: RecuperativeH
 
     return hp
 
-def _set_gas_coolers_sink_temperatures(hp: RecuperativeHP) -> RecuperativeHP:
+def _set_gas_coolers_sink_temperatures(hp: BaseHeatPump) -> BaseHeatPump:
     """Back-calculate sink stream temperatures and mass flows for gas coolers."""
     gc: GasCooler
 
@@ -290,16 +290,6 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
             
     r = res[j]
 
-    # dtmin_len = []
-    # jac_len = []
-    # q_vals = np.linspace(0, gc.duty, 1001)
-    # for q in q_vals:
-    #     dt_min, jac = _calc_pinch_dtmin_and_jac(Q=q, gc=gc)
-    #     dtmin_len.append(dt_min)
-    #     jac_len.append(jac)
-
-    # plot_simple_xy(q_vals, dtmin_len)
-
     return [r['fun'], r['x'] / gc.duty, r['success']]
 
 def _calc_pinch_dtmin_and_jac(Q: float, gc: GasCooler):
@@ -310,7 +300,7 @@ def _calc_pinch_dtmin_and_jac(Q: float, gc: GasCooler):
             _calc_jac_at_given_point(gc.source_pinch, gc.sink_pinch) #Jacobian
             )
 
-def _update_pinch_props_for_gcs(P_comp_out: float, hp: RecuperativeHP) -> RecuperativeHP:
+def _update_pinch_props_for_gcs(P_comp_out: float, hp: BaseHeatPump) -> BaseHeatPump:
     """Refresh pinch stream properties after the discharge pressure changes."""
     dtmin_ls = _get_all_possible_gc_dtmin_pos(P_comp_out, hp)
     i = 1
@@ -335,9 +325,8 @@ def _calc_jac_at_given_point(source: MassStream, sink: MassStream) -> float:
     """Sensitivity of delta-T to the heat load for the pinch match."""
     return 1 / (source.heat_capacity * source.mass_flow) - 1 / (sink.heat_capacity * sink.mass_flow)
 
-def _print_failed_to_solve_report(hp: RecuperativeHP, filename: str ='Cases-Unsolved') -> None:
+def _print_failed_to_solve_report(hp: BaseHeatPump, filename: str ='Cases-Unsolved') -> None:
     """Persist the failed case to disk and emit a console warning."""
     print('Heat pump model failed to solve.')
     hp.get_report()
-    # hp.get_cycle_plot()
     print_result_to_csv(hp.output, file_name=filename)

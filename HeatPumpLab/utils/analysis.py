@@ -10,14 +10,15 @@ from .cases import *
 from .readWriteOutput import *
 from .decorator_functions import *
 
-__all__ = ['analyse_cases_in_parallel', 'analyse_unsolved_cases']
+__all__ = ['analyse_multiple_cases_in_parallel', 'analyse_unsolved_cases']
 
 #######################################################################################################
 # Public API
 #######################################################################################################
 
-def analyse_cases_in_parallel(
-        filename: str = 'RecuperativeHP_results',
+def analyse_multiple_cases_in_parallel(
+        HP_fn,
+        filename: str = 'HP_results',
         refrigerant_ls: list = None, 
         dT_rhx1_cold_ls: list = None,
         dT_rhx2_cold_ls: list = None, 
@@ -35,15 +36,18 @@ def analyse_cases_in_parallel(
         comp2_power_frac_ls
     )
     solve_in_parallel(
+        HP_fn,
         cases=cases,
         f_solve=_analyse_case,
         n_cpu=n_cpu,
     )
     transfer_temp_files_to_results(file_name)
 
-def analyse_unsolved_cases(debug: bool =True):
+def analyse_unsolved_cases(
+    HP_fn,
+    debug: bool = True,
+):
     """Retry previously unsolved cases and optionally emit debug output."""
-    hp: RecuperativeHP
     unsolved_cases = get_unsolved_case_list_to_resolve()
                     
     if unsolved_cases is not None and unsolved_cases != []:
@@ -71,26 +75,22 @@ def analyse_unsolved_cases(debug: bool =True):
                     }
             
             hp, _ = _analyse_case(args)
-            if isinstance(hp, RecuperativeHP):
+            if isinstance(hp, HP_fn):
                 if hp.converged and debug:
                     hp.get_report()
                     fsuffix = _get_unique_f_suffix(args) + '-RESOLVED'
                     _print_results(hp.output, fsuffix)
             
-                    # hp.get_cycle_plot(x_axis='h', y_axis='T')
-                    # hp.get_cycle_plot(x_axis='s', y_axis='T')
-                    # hp.get_cycle_plot(x_axis='h', y_axis='P')
-                    # hp.get_cycle_plot(x_axis='v', y_axis='P')
         transfer_temp_files_to_results('Cases-Resolved')
 
 @timer_func
-def solve_single_case_with_timer(args) -> RecuperativeHP:
-    """Instantiate and solve a single RecuperativeHP case while timing execution."""
-    hp = RecuperativeHP(**args)
+def solve_single_case_with_timer(HP_fn, args) -> BaseHeatPump:
+    """Instantiate and solve a single HeatPump case while timing execution."""
+    hp = HP_fn(**args)
     hp.solve()
     return hp
 
-def get_results_report(hp: RecuperativeHP, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
+def get_results_report(hp: BaseHeatPump, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
     """Format, persist, and optionally print a solved case summary."""
     res = _get_results_summary(hp, result, param, obj, dt)
     fsuffix = _get_unique_f_suffix(param)
@@ -100,9 +100,9 @@ def get_results_report(hp: RecuperativeHP, param: dict, result: list[dict], obj:
 # Helper functions
 #######################################################################################################
 
-def _analyse_case(case: dict) -> Tuple[RecuperativeHP, float]:
+def _analyse_case(HP_fn, case: dict) -> Tuple[BaseHeatPump, float]:
     """Optimise the gas-cooler offset for a single case and solve it."""
-    hp: RecuperativeHP
+    hp: BaseHeatPump
     dt_ls = []
     
     dT_gc_out_min_offset = 0.0 if 'dT_gc_out_min_offset' not in case else case['dT_gc_out_min_offset']
@@ -122,6 +122,7 @@ def _analyse_case(case: dict) -> Tuple[RecuperativeHP, float]:
         # Attempt to calculate the gradient at the boundary, if it fails, 
         # assume that further optimisation could be possible
         fprime, dt = _get_fprime(
+            HP_fn, 
             param=case, 
             f_obj=_compute_SEC_obj,
         )
@@ -152,7 +153,7 @@ def _analyse_case(case: dict) -> Tuple[RecuperativeHP, float]:
         is_solved = False
     
     if is_solved:
-        hp, dt = solve_single_case_with_timer(case | _get_var_kwargs(dT_gc_out_min_offset, case))
+        hp, dt = solve_single_case_with_timer(HP_fn, case | _get_var_kwargs(dT_gc_out_min_offset, case))
         dt_ls.append(dt)        
         obj = _compute_SEC_obj(hp, case)
 
@@ -189,24 +190,24 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj, method:
     )
 
 @timer_func
-def _get_fprime(param: dict, f_obj) -> dict:
+def _get_fprime(HP_fn, param: dict, f_obj) -> dict:
     """Estimate the derivative of the objective at the lower bound."""
     return approx_fprime(
         xk=0.0,
-        f=lambda x: _get_obj(x, param, f_obj),
+        f=lambda x: _get_obj(HP_fn, x, param, f_obj),
         epsilon=0.1
     ) * -1
 
-def _get_obj(vars: list[float], param: dict, f_obj) -> float:
+def _get_obj(HP_fn, vars: list[float], param: dict, f_obj) -> float:
     """Evaluate the objective function for a candidate variable vector."""
-    hp: RecuperativeHP
+    hp: BaseHeatPump
     if not isinstance(vars, list):
         vars = [vars]
-    hp, _ = solve_single_case_with_timer(param | _get_var_kwargs(vars, param))
+    hp, _ = solve_single_case_with_timer(HP_fn, param | _get_var_kwargs(vars, param))
     obj = f_obj(hp, param)
     return obj * 1000
 
-def _compute_SEC_obj(hp: RecuperativeHP, param: dict) -> float:
+def _compute_SEC_obj(hp: BaseHeatPump, param: dict) -> float:
     """Objective function: specific electricity consumption."""
     return hp.SEC
 
@@ -225,15 +226,16 @@ def _print_results(results: dict, fsuffix: str, print_to_terminal: bool =True) -
         print_result_to_terminal(results)
     print_result_to_csv(output=results, suffix=fsuffix, file_name='temp/R')    
 
-def _get_dQdW(hp0: RecuperativeHP) -> float:
+def _get_dQdW(hp0: BaseHeatPump) -> float:
     """Finite-difference estimate of heating capacity to work sensitivity."""
-    hp1: RecuperativeHP
+    hp1: BaseHeatPump
     dtemp = 0.001
     args = copy.deepcopy(hp0.args)
     args['T_air_tar'] = hp0.T_air_tar + dtemp
     args['P_H_est'] = hp0.comp_discharge.pressure
     args['T_gc_out'] = hp0.gas_cooler1.source_out.temperature
-    hp1, _ = solve_single_case_with_timer(args)
+    HP_fn = hp0.__class__
+    hp1, _ = solve_single_case_with_timer(HP_fn, args)
     if hp1.feasible:
         tcop = [(p.T_air_tar - p.T_air_inlet) / p.COP if p.COP > 0 else np.inf for p in [hp0, hp1]]
         dqdw = dtemp / (tcop[1] - tcop[0]) if tcop[1] - tcop[0] != 0 and tcop[0] != np.inf and tcop[1] != np.inf else 0.0  
@@ -241,7 +243,7 @@ def _get_dQdW(hp0: RecuperativeHP) -> float:
         dqdw = 0.0
     return dqdw
 
-def _get_results_summary(hp: RecuperativeHP, result, param, obj, dt: float =None) -> dict:
+def _get_results_summary(hp: BaseHeatPump, result, param, obj, dt: float =None) -> dict:
     """Combine optimisation metadata with the heat pump report."""
     hp.get_report()
 
