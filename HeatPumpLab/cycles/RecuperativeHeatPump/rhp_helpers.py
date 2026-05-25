@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 import numpy as np
-from scipy.optimize import root_scalar, Bounds
+from scipy.optimize import root_scalar
 from ...components import *
 from ...streams import MassStream
 

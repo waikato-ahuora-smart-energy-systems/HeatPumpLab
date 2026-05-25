@@ -3,7 +3,6 @@
 import os
 from glob import glob
 import csv
-# from csv import DictReader, DictWriter
 from typing import Any
 
 __all__ = ['print_result_to_terminal', 'print_result_to_csv', 'transfer_temp_files_to_results', 'read_csv_to_results']

@@ -1,0 +1,14 @@
+[project]
+name = "heatpumplab"
+version = "0.1.0"
+description = "Digital lab for simulation of heat pumps"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ctrefprop>=0.10.5",
+    "matplotlib>=3.10.9",
+    "numpy>=2.4.6",
+    "pandas>=3.0.3",
+    "plotly>=6.7.0",
+    "scipy>=1.17.1",
+]
