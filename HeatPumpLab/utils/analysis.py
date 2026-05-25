@@ -29,19 +29,20 @@ def analyse_multiple_cases_in_parallel(
     file_name = filename
     transfer_temp_files_to_results(file_name)
     cases = get_case_list_to_solve(
-        file_name, 
-        refrigerant_ls, 
-        dT_rhx1_cold_ls, 
-        dT_rhx2_cold_ls, 
-        comp2_power_frac_ls
+        file_name=file_name, 
+        refrigerant_ls=refrigerant_ls, 
+        dT_rhx1_cold_ls=dT_rhx1_cold_ls, 
+        dT_rhx2_cold_ls=dT_rhx2_cold_ls, 
+        comp2_power_frac_ls=comp2_power_frac_ls
     )
     solve_in_parallel(
-        HP_fn,
+        HP_fn=HP_fn,
         cases=cases,
         f_solve=_analyse_case,
         n_cpu=n_cpu,
     )
     transfer_temp_files_to_results(file_name)
+
 
 def analyse_unsolved_cases(
     HP_fn,
@@ -83,12 +84,14 @@ def analyse_unsolved_cases(
             
         transfer_temp_files_to_results('Cases-Resolved')
 
+
 @timer_func
 def solve_single_case_with_timer(HP_fn, args) -> BaseHeatPump:
     """Instantiate and solve a single HeatPump case while timing execution."""
     hp = HP_fn(**args)
     hp.solve()
     return hp
+
 
 def get_results_report(hp: BaseHeatPump, param: dict, result: list[dict], obj: float, dt: float, print_to_terminal: bool=False) -> list:
     """Format, persist, and optionally print a solved case summary."""
@@ -170,13 +173,16 @@ def _analyse_case(HP_fn, case: dict) -> Tuple[BaseHeatPump, float]:
     else:
         return None, dt
     
+
 def _get_initial_val(vars_input: dict) -> list:
     """Return the initial optimisation variables in argument order."""
     return [vars_input[key]['xi'] for key in vars_input]
 
+
 def _get_bounds(vars_input: dict) -> list:
     """Return bounds corresponding to the optimisation variables."""
     return [vars_input[key]['bnds'] for key in vars_input]
+
 
 @timer_func
 def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj, method: str) -> dict:
@@ -189,6 +195,7 @@ def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj, method:
         tol=tol,
     )
 
+
 @timer_func
 def _get_fprime(HP_fn, param: dict, f_obj) -> dict:
     """Estimate the derivative of the objective at the lower bound."""
@@ -198,33 +205,35 @@ def _get_fprime(HP_fn, param: dict, f_obj) -> dict:
         epsilon=0.1
     ) * -1
 
-def _get_obj(HP_fn, vars: list[float], param: dict, f_obj) -> float:
+
+def _get_obj(HP_fn, vars: np.ndarray, param: dict, f_obj) -> float:
     """Evaluate the objective function for a candidate variable vector."""
-    hp: BaseHeatPump
-    if not isinstance(vars, list):
-        vars = [vars]
-    hp, _ = solve_single_case_with_timer(HP_fn, param | _get_var_kwargs(vars, param))
+    hp, _ = solve_single_case_with_timer(HP_fn, param | _get_var_kwargs(vars.tolist(), param))
     obj = f_obj(hp, param)
     return obj * 1000
+
 
 def _compute_SEC_obj(hp: BaseHeatPump, param: dict) -> float:
     """Objective function: specific electricity consumption."""
     return hp.SEC
 
+
 def _get_var_kwargs(vars: list[float], param: dict) -> dict[str, float]:
     """Map optimisation vector back to keyword arguments."""
     d_var = dict()
-    if not isinstance(vars, list):
+    if not isinstance(vars, list | np.ndarray):
         vars = [vars]    
     for i, key in enumerate(param['additional_data']['vars_input']):
         d_var[key] = vars[i]
     return d_var
+
 
 def _print_results(results: dict, fsuffix: str, print_to_terminal: bool =True) -> None:
     """Persist results to CSV and optionally print to stdout."""
     if print_to_terminal:
         print_result_to_terminal(results)
     print_result_to_csv(output=results, suffix=fsuffix, file_name='temp/R')    
+
 
 def _get_dQdW(hp0: BaseHeatPump) -> float:
     """Finite-difference estimate of heating capacity to work sensitivity."""
@@ -242,6 +251,7 @@ def _get_dQdW(hp0: BaseHeatPump) -> float:
     else:
         dqdw = 0.0
     return dqdw
+
 
 def _get_results_summary(hp: BaseHeatPump, result, param, obj, dt: float =None) -> dict:
     """Combine optimisation metadata with the heat pump report."""
@@ -262,6 +272,7 @@ def _get_results_summary(hp: BaseHeatPump, result, param, obj, dt: float =None) 
         'Time_to_optimise' : dt,
     })
     return hp.output
+
 
 def _get_unique_f_suffix(param, fld_only=False) -> str:
     """Build a unique filename suffix encoding refrigerant and key inputs."""

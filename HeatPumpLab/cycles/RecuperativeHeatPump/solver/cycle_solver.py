@@ -290,11 +290,11 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
             
     r = res[j]
 
-    return [r['fun'], r['x'] / gc.duty, r['success']]
+    return [r['fun'], r['x'][0] / gc.duty, r['success']]
 
-def _calc_pinch_dtmin_and_jac(Q: float, gc: GasCooler):
+def _calc_pinch_dtmin_and_jac(Q_arr: np.ndarray, gc: GasCooler):
     """Return pinch delta-T and Jacobian for a given heat transfer split."""
-    gc = _calc_pinch_props_at_Q(Q, gc)
+    gc = _calc_pinch_props_at_Q(Q_arr[0], gc)
     return (
             _calc_dtmin_at_given_point(gc.source_pinch, gc.sink_pinch), #objective
             _calc_jac_at_given_point(gc.source_pinch, gc.sink_pinch) #Jacobian
