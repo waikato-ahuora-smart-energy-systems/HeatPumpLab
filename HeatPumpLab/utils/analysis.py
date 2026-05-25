@@ -105,7 +105,6 @@ def get_results_report(hp: BaseHeatPump, param: dict, result: list[dict], obj: f
 
 def _analyse_case(HP_fn, case: dict) -> Tuple[BaseHeatPump, float]:
     """Optimise the gas-cooler offset for a single case and solve it."""
-    hp: BaseHeatPump
     dt_ls = []
     
     dT_gc_out_min_offset = 0.0 if 'dT_gc_out_min_offset' not in case else case['dT_gc_out_min_offset']
@@ -135,6 +134,7 @@ def _analyse_case(HP_fn, case: dict) -> Tuple[BaseHeatPump, float]:
 
     if fprime > 0.0:
         result, dt = _get_local_optimum(
+            HP_fn,
             param=case,
             vars_input=vars_input,
             tol=1e-4,
@@ -185,10 +185,10 @@ def _get_bounds(vars_input: dict) -> list:
 
 
 @timer_func
-def _get_local_optimum(param: dict, vars_input: dict, tol: float, f_obj, method: str) -> dict:
+def _get_local_optimum(HP_fn, param: dict, vars_input: dict, tol: float, f_obj, method: str) -> dict:
     """Run a local optimisation over the specified variable set."""
     return loc_min(
-        fun=lambda x: _get_obj(x, param, f_obj), 
+        fun=lambda x: _get_obj(HP_fn, x, param, f_obj), 
         x0=_get_initial_val(vars_input),
         bounds=_get_bounds(vars_input),
         method=method,

@@ -61,7 +61,7 @@ def run_all_cases():
         dT_rhx1_cold_ls=np.linspace(0, 100, num=41),
         dT_rhx2_cold_ls=np.linspace(0, 100, num=41),
         comp2_power_frac_ls=np.linspace(0.3, 0.7, num=9),
-        n_cpu=1,
+        # n_cpu=-1,
     )
 
 if __name__=='__main__':
