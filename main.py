@@ -53,7 +53,7 @@ _REFRIGERANT_LIST = [
         # 'butane;Neopentane|.5;.5|mol',
     ]
 
-def run_all_cases():  
+def run():  
     analyse_multiple_cases_in_parallel(
         HP_fn=RecuperativeHP, 
         filename='RecuperatureHP_results',
@@ -65,4 +65,4 @@ def run_all_cases():
     )
 
 if __name__=='__main__':
-    run_all_cases()
+    run()
