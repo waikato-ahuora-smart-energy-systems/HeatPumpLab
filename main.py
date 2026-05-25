@@ -14,7 +14,7 @@ tim.walmsley@waikato.ac.nz
 import numpy as np
 from HeatPumpLab import (
     RecuperativeHP,
-    analyse_multiple_cases_in_parallel,
+    get_parameter_sweep,
 )
 
 REFRIGERANT_LIST = [
@@ -53,16 +53,16 @@ REFRIGERANT_LIST = [
     ]
 
 def run():
-    vars_kwargs = {
+    param_kwargs = {
         'refrigerant_ls': REFRIGERANT_LIST,
         'dT_rhx1_cold_ls': np.linspace(0, 100, num=41),
         'dT_rhx2_cold_ls': np.linspace(0, 100, num=41),
         'comp2_power_frac_ls': np.linspace(0.3, 0.7, num=9),
     }
-    analyse_multiple_cases_in_parallel(
+    get_parameter_sweep(
         HP_fn=RecuperativeHP,
         filename='RecuperatureHP_results',
-        vars_kwargs=vars_kwargs,
+        param_kwargs=param_kwargs,
     )
 
 if __name__=='__main__':

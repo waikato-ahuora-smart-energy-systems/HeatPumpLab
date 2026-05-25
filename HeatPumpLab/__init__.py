@@ -1,9 +1,9 @@
 """Recuperative Heat Pump public API helpers."""
 
 from .cycles import RecuperativeHP
-from .utils import analyse_multiple_cases_in_parallel
+from .utils import get_parameter_sweep
 
 __all__ = [
     'RecuperativeHP', 
-    'analyse_multiple_cases_in_parallel',
+    'get_parameter_sweep',
 ]

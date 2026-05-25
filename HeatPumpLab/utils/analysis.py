@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING
 from scipy.optimize import minimize as loc_min, approx_fprime
 
 from .properties_package import PropertyPackage
-from .parallel_solving import *
-from .readWriteOutput import *
-from .decorator_functions import *
+from .parallel_solving import solve_in_parallel
+from .readWriteOutput import transfer_temp_files_to_results, print_result_to_csv, print_result_to_terminal
+from .decorator_functions import timer_func
 
 if TYPE_CHECKING:
     from ..cycles.common.heatPump import BaseHeatPump
 
-__all__ = ['analyse_multiple_cases_in_parallel']
+__all__ = ['get_parameter_sweep']
 
 
 #######################################################################################################
@@ -21,10 +21,10 @@ __all__ = ['analyse_multiple_cases_in_parallel']
 #######################################################################################################
 
 
-def analyse_multiple_cases_in_parallel(
+def get_parameter_sweep(
     HP_fn,
     filename: str = 'HP_results',
-    vars_kwargs: dict = None,
+    param_kwargs: dict = None,
     n_cpu: int = os.cpu_count() - 1,
 ) -> None:
     """Solve a batch of cases concurrently and persist intermediate results."""
@@ -32,7 +32,7 @@ def analyse_multiple_cases_in_parallel(
     transfer_temp_files_to_results(file_name)
     cases = HP_fn.CASE_LIST_FN(
         file_name=file_name, 
-        **vars_kwargs,
+        **param_kwargs,
     )
     solve_in_parallel(
         HP_fn=HP_fn,

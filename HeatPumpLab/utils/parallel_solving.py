@@ -2,7 +2,6 @@
 
 from concurrent.futures import ProcessPoolExecutor as pool
 import os
-from .readWriteOutput import *
 
 __all__ = ['solve_in_parallel']
 
