@@ -114,7 +114,7 @@ def parse_args(
     parser.add_argument(
         "--dpi",
         type=int,
-        default=600,
+        default=900,
         help="Output figure resolution.",
     )
     parser.add_argument(
