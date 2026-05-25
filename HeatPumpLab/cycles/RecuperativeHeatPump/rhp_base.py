@@ -1,15 +1,24 @@
 """High-level Recuperative Heat Pump cycle definition."""
 
 from ...components import *
-from ...streams import MassStream
 from ..common.heatPump import BaseHeatPump
+
 from .rhp_helpers import set_rhp_model
 from .solver.cycle_solver import solve_heat_pump_cycle
+from .utils import (
+    analyse_RHP_case,
+    get_RHP_case_list_to_solve, 
+    get_unsolved_RHP_case_list_to_resolve,
+)
 
 
 class RecuperativeHP(BaseHeatPump):
     """Transcritical recuperative heat pump comprised of cascaded components."""
     
+    ANAYLSE_CASE_FN = analyse_RHP_case
+    CASE_LIST_FN = get_RHP_case_list_to_solve
+    UNSOLVED_CASE_LIST_FN = get_unsolved_RHP_case_list_to_resolve
+
     n_comp: float =2
     comp_PR_uniform: float =False 
     comp1_power_frac: float =1.0
@@ -46,7 +55,7 @@ class RecuperativeHP(BaseHeatPump):
     set_rhx3_dT_cold: SetRelationship
     set_gc4_hot_out: SetRelationship
 
-    comp_discharge: MassStream
+    comp_discharge: Stream
 
     def __init__(self, **d_args):
         """Construct the heat pump, applying provided design parameters."""

@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.optimize import root_scalar
 from ...components import *
-from ...streams import MassStream
 
 if TYPE_CHECKING:
     from ...cycles import RecuperativeHP
@@ -109,7 +108,7 @@ def _get_RecuperativeHP_components(hp: RecuperativeHP) -> RecuperativeHP:
 
 def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
     """Initialise thermodynamic streams that connect the unit operations."""
-    temp_ref_out: MassStream
+    temp_ref_out: Stream
     P_H: float
     P_L: float
     hp.gas_coolers = []
@@ -144,16 +143,16 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
             P_H = P_H_est
         else:
             P_H = P_L
-            stream_in = MassStream(fluid=fld, temperature=T_eff, pressure=P_L)
-            stream_out = MassStream(fluid=fld)
-            stream_out_ideal = MassStream(fluid=fld)
+            stream_in = Stream(fluid=fld, temperature=T_eff, pressure=P_L)
+            stream_out = Stream(fluid=fld)
+            stream_out_ideal = Stream(fluid=fld)
             T_out_min = hp.T_air_tar + hp.dT_GC_min_tar
             T_crit = temp_ref_out.T_crit
 
             try:
                 # For critical point fluids, the cycle must be subcritical
-                stream_pinch = MassStream(fluid=fld)
-                stream_cooled = MassStream(fluid=fld)
+                stream_pinch = Stream(fluid=fld)
+                stream_cooled = Stream(fluid=fld)
 
                 def _get_discharge_pressure_for_pinch_estimate(T):
                     if T > T_crit - 1:
@@ -258,7 +257,7 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
     P_H = temp_ref_out.pressure
 
     #Gas cooler 4 and Plate heat exchanger 3 - hot-sides
-    hp.air_out = MassStream( name='Air sink outlet', fluid=hp.sink, pp_instance='snk', pressure=0.101, temperature=hp.T_air_tar )
+    hp.air_out = Stream( name='Air sink outlet', fluid=hp.sink, pp_instance='snk', pressure=0.101, temperature=hp.T_air_tar )
     if hp.rhx3_on == 1:
         hp.gas_cooler4.sink_out = hp.air_out
         hp.gas_cooler4.sink_pinch.props_in_ab(input_str='PT', prop1=0.101, prop2=hp.T_air_tar, name='GC4 sink pinch point', pp_instance='snk') 

@@ -1,9 +1,9 @@
 """Thermodynamic stream wrapper providing property calculations."""
 
-from .propertiesPackage import PropertyPackage
+from ..utils.properties_package import PropertyPackage
 
 
-class MassStream():
+class Stream():
     """Represents a single-phase or two-phase mass stream with property helpers."""
     name: str
     fluid: str

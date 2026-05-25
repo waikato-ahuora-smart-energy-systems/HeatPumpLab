@@ -1,7 +1,7 @@
 """Abstract base support for heat exchanger component models."""
 
 from math import log
-from ...streams import MassStream
+from ..stream import Stream
 
 
 class BaseHeatExchanger:
@@ -10,15 +10,15 @@ class BaseHeatExchanger:
     name: str = ''
     model: str
     source_fluid: str
-    source_in: MassStream
-    source_pinch: MassStream
-    source_out: MassStream
-    source_out_max: MassStream
+    source_in: Stream
+    source_pinch: Stream
+    source_out: Stream
+    source_out_max: Stream
     sink_fluid: str
-    sink_in: MassStream
-    sink_pinch: MassStream 
-    sink_out: MassStream
-    sink_out_max: MassStream
+    sink_in: Stream
+    sink_pinch: Stream 
+    sink_out: Stream
+    sink_out_max: Stream
     pinch_length = None
     bypassed: bool = False
     converged: bool = False
@@ -41,15 +41,15 @@ class BaseHeatExchanger:
 
     def set_port_mass_streams(self, source_fluid: str, sink_fluid: str) -> None:
         """Create inlet, pinch, and outlet streams for both sides."""
-        self.source_in = MassStream(name='source in', fluid=source_fluid)
-        self.source_pinch = MassStream(name='source pinch', fluid=source_fluid)
-        self.source_out = MassStream(name='source out', fluid=source_fluid)
-        self.source_out_max = MassStream(name='source out max', fluid=source_fluid)
+        self.source_in = Stream(name='source in', fluid=source_fluid)
+        self.source_pinch = Stream(name='source pinch', fluid=source_fluid)
+        self.source_out = Stream(name='source out', fluid=source_fluid)
+        self.source_out_max = Stream(name='source out max', fluid=source_fluid)
 
-        self.sink_in = MassStream(name='sink in', fluid=sink_fluid)
-        self.sink_pinch = MassStream(name='sink pinch', fluid=sink_fluid)
-        self.sink_out = MassStream(name='sink out', fluid=sink_fluid)
-        self.sink_out_max = MassStream(name='sink out max', fluid=sink_fluid)        
+        self.sink_in = Stream(name='sink in', fluid=sink_fluid)
+        self.sink_pinch = Stream(name='sink pinch', fluid=sink_fluid)
+        self.sink_out = Stream(name='sink out', fluid=sink_fluid)
+        self.sink_out_max = Stream(name='sink out max', fluid=sink_fluid)        
 
     def solve(self):
         """Evaluate the exchanger according to the selected performance model."""
@@ -266,14 +266,14 @@ class BaseHeatExchanger:
         """Sample temperature profiles along the exchanger length."""
         data = {'source': [], 'sink': []}
         
-        def get_inter_data(s_in: MassStream, s_out: MassStream):
+        def get_inter_data(s_in: Stream, s_out: Stream):
             """Interpolate intermediate stream states for plotting."""
             ls = []
             dP_tot = s_in.pressure - s_out.pressure
             dh_tot = s_in.enthalpy - s_out.enthalpy
 
             for i in range(divisions + 1):
-                m_str = MassStream(name='source i', 
+                m_str = Stream(name='source i', 
                                    fluid=s_in.fluid,
                                    pp_instance=s_in.pp_instance,
                                    pressure=s_in.pressure - dP_tot * i / divisions, 

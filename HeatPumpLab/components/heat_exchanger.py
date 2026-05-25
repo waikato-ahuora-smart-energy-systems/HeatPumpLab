@@ -1,6 +1,6 @@
 """Generic plate heat exchanger component."""
 
-from .common.baseHeatExchanger import BaseHeatExchanger
+from .common.base_heat_exchanger import BaseHeatExchanger
 
 
 class HeatExchanger(BaseHeatExchanger):

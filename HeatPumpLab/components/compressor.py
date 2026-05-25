@@ -1,14 +1,14 @@
 """Compressor component model."""
 
-from ..streams import MassStream
+from .stream import Stream
 
 
 class Compressor:
     """Simple compressor with configurable efficiency correlations."""
     name: str
-    flow_in: MassStream = 0.0
-    flow_out: MassStream = 0.0
-    flow_out_isen: MassStream = 0.0
+    flow_in: Stream = 0.0
+    flow_out: Stream = 0.0
+    flow_out_isen: Stream = 0.0
     isentropic_eff: float = 0.0
     pressure_ratio: float = 1.0
     overall_eff: float = 0.0
@@ -24,9 +24,9 @@ class Compressor:
     def __init__(self, name='Compressor', fluid: str =None, model_index: int =0, motor_eff: float =1.0) -> None:
         """Initialise the compressor with fluid, model, and motor efficiency."""
         self.name = name
-        self.flow_in = MassStream('flow_in', fluid=fluid) 
-        self.flow_out = MassStream('flow_out', fluid=fluid)
-        self.flow_out_isen = MassStream('flow_out_isen', fluid=fluid) 
+        self.flow_in = Stream('flow_in', fluid=fluid) 
+        self.flow_out = Stream('flow_out', fluid=fluid)
+        self.flow_out_isen = Stream('flow_out_isen', fluid=fluid) 
         self.motor_eff = motor_eff
         self.model_index = model_index
         self.model_coeffs = self.set_model_coeff(model_index)
@@ -83,14 +83,14 @@ class Compressor:
     def get_graph_data(self, divisions: int =50) -> dict:
         """Generate intermediate states for plotting the compression path."""
         data = {'siso': []}
-        def get_inter_data(s_in: MassStream, s_out: MassStream) -> list[MassStream]:
+        def get_inter_data(s_in: Stream, s_out: Stream) -> list[Stream]:
             """Interpolate states along the compression process."""
             ls = []
             # PV^n = const
             PR_i = (self.flow_out.pressure / self.flow_in.pressure) ** (1 / divisions)
             dh_tot = s_in.enthalpy - s_out.enthalpy
             for i in range(divisions + 1):
-                m_str = MassStream(name='source i',
+                m_str = Stream(name='source i',
                                    fluid=s_in.fluid, 
                                    pp_instance=s_in.pp_instance,
                                    pressure=s_in.pressure * (PR_i) ** i, 

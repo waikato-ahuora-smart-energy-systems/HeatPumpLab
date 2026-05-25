@@ -1,6 +1,6 @@
 """Simple algebraic relationships used during model setup."""
 
-from ..streams import MassStream
+from .stream import Stream
 
 
 class SetRelationship:
@@ -36,7 +36,7 @@ class SetRelationship:
 
     def set_temperature(self):
         """Propagate a linear temperature relation to the targets."""
-        obj: MassStream
+        obj: Stream
         for obj in self.target_obj: 
             obj.temperature = self.m * self.source_obj.temperature + self.c
             if self.prop2 == 'pressure':
@@ -48,7 +48,7 @@ class SetRelationship:
 
     def set_quality(self):
         """Propagate a quality relation to the targets."""
-        obj: MassStream
+        obj: Stream
         for obj in self.target_obj: 
             obj.quality = self.source_obj[0]
             if self.prop2 == 'pressure':
@@ -60,7 +60,7 @@ class SetRelationship:
 
     def set_mass_flow(self):
         """Scale target mass flows based on the source mass flow."""
-        obj: MassStream
+        obj: Stream
         for obj in self.target_obj: 
             obj.mass_flow = self.m * self.source_obj.mass_flow + self.c
             obj.heat_flow = obj.mass_flow * obj.enthalpy

@@ -1,3 +1,3 @@
 """Expose common component base classes."""
 
-from .baseHeatExchanger import BaseHeatExchanger
+from .base_heat_exchanger import BaseHeatExchanger

@@ -5,15 +5,17 @@ from __future__ import annotations
 import argparse
 import math
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
+__all__ = ['get_heatmap_results_comparison']
 
-DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
+
+DEFAULT_METRICS_AND_OBJ_PAIRS: Tuple[Tuple[str, str], ...] = (
     ("COP", "max"),
     ("SEC", "min"),
     ("VHC", "max"),
@@ -25,31 +27,20 @@ DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
     ("Pmax_reduction_vs_base", "max"),
     ("dT_gc_out_min_offset", "max")
 )
-
-DEFAULT_REFRIGERANTS: Sequence[str] = (
-    # "Ammonia",
-    # "Propane",
+MIN_REQ_METRIC_COLUMNS: set[str] = {
+    "refrigerant",
+    "dT_rhx1_cold",
+    "dT_rhx2_cold",
+    "comp2_power_frac",
+    "COP",
+    "Pmax",
+}
+DEFAULT_REFRIGERANTS: List[str] = (
     "Butane",
-    # "Isobutane",
-    # "Pentane",
-    # "Isopentane",
-    # "Neopentane",
-    # "Cyclopentane",
     "Carbon dioxide",
-    # "R1233zd(E)",
-    # "R1336mzz(E)",
-    # "R1336mzz(Z)",
-    # "R1234ze(E)",
     "R1234ze(Z)",
-    # "R1234yf",
-    # "R1243zf",
-    # "R1224yd(Z)",
-    # "PROPYLEN",
     "DME",
-    # "Methanol",
 )
-
-
 AXIS_LABELS: dict[str, str] = {
     "dT_rhx1_cold": r"$\Delta T_{\mathrm{RHX1,sink}}$ [K]",
     "dT_rhx2_cold": r"$\Delta T_{\mathrm{RHX2,sink}}$ [K]",
@@ -65,17 +56,17 @@ AXIS_LABELS: dict[str, str] = {
     "Pmax_reduction_vs_base": r"$P_{\max}$ Reduction [%]",
     "dT_gc_out_min_offset": r"Subcooling Offset [K]",
 }
-
-
-DEFAULT_COMP_FRAC_2: Sequence[float] = [0.5]
-# DEFAULT_COMP_FRAC_2: Sequence[float] = (0.3, 0.4, 0.5, 0.6, 0.7)
-
+DEFAULT_COMP_FRAC_2: List[float] = [0.5]
 BASECASE_DTRHX1_COLD = 0.0
 BASECASE_DTRHX2_COLD = 0.0
 BASECASE_COMP2_FRAC = 0.5
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(
+    refrigerant_ls: List[str] = DEFAULT_REFRIGERANTS,
+    metrics_ls: List[Tuple[str, str]] = DEFAULT_METRICS_AND_OBJ_PAIRS,
+    comp2_load_frac_ls: List[float] = DEFAULT_COMP_FRAC_2,
+) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Create heatmap figures for metric performance versus "
@@ -83,21 +74,9 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
-        "--csv",
-        type=Path,
-        default=Path(__file__).resolve().parents[1] / "results" / "RecuperativeHP_results.csv",
-        help="Path to the results CSV file.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path(__file__).resolve().parents[1] / "results" / "figures" / "heatmaps",
-        help="Directory where plots will be saved.",
-    )
-    parser.add_argument(
         "--metrics",
         nargs="+",
-        default=[f"{metric}:{mode}" for metric, mode in DEFAULT_METRICS],
+        default=[f"{metric}:{mode}" for metric, mode in metrics_ls],
         help=(
             "Metrics to include in the heatmaps. "
             "Use METRIC or METRIC:max/METRIC:min to set optimisation direction."
@@ -117,7 +96,7 @@ def parse_args() -> argparse.Namespace:
         "--comp2-values",
         nargs="+",
         type=float,
-        default=list(DEFAULT_COMP_FRAC_2),
+        default=comp2_load_frac_ls,
         help=(
             "Specific comp2_power_frac values to include. "
             "Defaults to a predefined set of representative points."
@@ -126,7 +105,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--refrigerants",
         nargs="+",
-        default=list(DEFAULT_REFRIGERANTS),
+        default=refrigerant_ls,
         help=(
             "Specific refrigerants to include. "
             "Defaults to a predefined list of refrigerants."
@@ -135,7 +114,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dpi",
         type=int,
-        default=300,
+        default=600,
         help="Output figure resolution.",
     )
     parser.add_argument(
@@ -196,14 +175,13 @@ def sanitize_metric_name(metric: str) -> str:
 
 def parse_metric_specs(metric_specs: Sequence[str]) -> List[Tuple[str, str]]:
     """Parse metric specifications into (name, mode) pairs."""
-    default_modes = {name: mode for name, mode in DEFAULT_METRICS}
     parsed: List[Tuple[str, str]] = []
     for spec in metric_specs:
         parts = spec.split(":", 1)
         name = parts[0].strip()
         if not name:
             raise ValueError("Metric name cannot be empty.")
-        mode = parts[1].strip() if len(parts) > 1 else default_modes.get(name, "max")
+        mode = parts[1].strip() 
         mode = mode.lower()
         if mode not in {"min", "max"}:
             raise ValueError(
@@ -214,22 +192,14 @@ def parse_metric_specs(metric_specs: Sequence[str]) -> List[Tuple[str, str]]:
     return parsed
 
 
-def format_axis_label(name: str) -> str:
+def format_axis_label(name: str, axis_labels: Dict[str, str] = AXIS_LABELS) -> str:
     """Return a descriptive axis label for the given column name."""
-    return AXIS_LABELS.get(name, name)
+    return axis_labels.get(name, name)
 
 
 def add_basecase_metrics(df: pd.DataFrame) -> pd.DataFrame:
     """Add base-case relative metrics for each refrigerant."""
-    required_columns = {
-        "refrigerant",
-        "COP",
-        "Pmax",
-        "dT_rhx1_cold",
-        "dT_rhx2_cold",
-        "comp2_power_frac",
-    }
-    missing = required_columns.difference(df.columns)
+    missing = MIN_REQ_METRIC_COLUMNS.difference(df.columns)
     if missing:
         raise ValueError(
             f"Cannot compute base-case metrics; missing columns: {sorted(missing)}"
@@ -307,7 +277,7 @@ def build_grid(
     return np.array(x_vals), np.array(y_vals), masked_grid
 
 
-def plot_metric_heatmaps(
+def create_heatmaps(
     df: pd.DataFrame,
     metrics: Sequence[Tuple[str, str]],
     output_dir: Path,
@@ -467,26 +437,32 @@ def plot_metric_heatmaps(
                 plt.close(fig)
 
 
-def main() -> None:
-    args = parse_args()
+def get_heatmap_results_comparison(
+    filepath: Path = Path(__file__).resolve().parents[1] / "results" / "RecuperativeHP_results.csv",
+    output_dir: Path = Path(__file__).resolve().parents[1] / "results" / "figures" / "heatmaps",
+    metrics_ls: List[Tuple[str, str]] = DEFAULT_METRICS_AND_OBJ_PAIRS,
+    refrigerant_ls: List[str] = DEFAULT_REFRIGERANTS,
+    comp2_load_frac_ls: List[float] = DEFAULT_COMP_FRAC_2,
+) -> None:
+    args = parse_args(
+        refrigerant_ls=refrigerant_ls,
+        metrics_ls=metrics_ls,
+        comp2_load_frac_ls=comp2_load_frac_ls,
+    )
     df = load_results(
-        args.csv,
+        csv_path=filepath,
         filter_success=not args.skip_success_filter,
         filter_converged=not args.skip_converged_filter,
     )
     df = add_basecase_metrics(df)
     metric_settings = parse_metric_specs(args.metrics)
-    plot_metric_heatmaps(
+    create_heatmaps(
         df,
         metrics=metric_settings,
-        output_dir=args.output_dir,
+        output_dir=output_dir,
         comp2_values=args.comp2_values,
         refrigerants_filter=args.refrigerants,
         cmap=args.cmap,
         dpi=args.dpi,
         use_log_pmax=args.log_pmax,
     )
-
-
-if __name__ == "__main__":
-    main()

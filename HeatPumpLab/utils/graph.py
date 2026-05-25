@@ -9,7 +9,7 @@ from pathlib import Path
 __all__ = ['plot_cycle', 'plot_driving_force', 'plot_simple_xy', 'plot_heat_exchanger_profiles']
 
 DEFAULT_FIGSIZE: tuple[float, float] = (4.5, 3.75)
-DEFAULT_DPI: int = 300
+DEFAULT_DPI: int = 900
 
 # Allows customization of legend names on a per-component basis.
 LEGEND_NAME_MAP: dict[str, str] = {

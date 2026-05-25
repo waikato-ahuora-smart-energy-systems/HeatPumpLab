@@ -13,7 +13,7 @@ from ....utils.graph import *
 if TYPE_CHECKING:
     from .. import BaseHeatPump
     from ....components import GasCooler
-    from ....streams import MassStream
+    from ....streams import Stream
 
 __all__ = ['solve_heat_pump_cycle']
 
@@ -317,11 +317,11 @@ def _calc_pinch_props_at_Q(Q: float, gc: GasCooler) -> GasCooler:
     gc.sink_pinch.props_in_mPH()
     return gc
 
-def _calc_dtmin_at_given_point(source: MassStream, sink: MassStream) -> float:
+def _calc_dtmin_at_given_point(source: Stream, sink: Stream) -> float:
     """Delta-T between matched source and sink pinch points."""
     return source.temperature - sink.temperature
 
-def _calc_jac_at_given_point(source: MassStream, sink: MassStream) -> float:
+def _calc_jac_at_given_point(source: Stream, sink: Stream) -> float:
     """Sensitivity of delta-T to the heat load for the pinch match."""
     return 1 / (source.heat_capacity * source.mass_flow) - 1 / (sink.heat_capacity * sink.mass_flow)
 

@@ -1,62 +1,31 @@
 import pandas as pd
-from HeatPumpLab.streams import PropertyPackage
+from ....utils.properties_package import PropertyPackage
 
-def get_fluid_prop_overview_table():
-    props_ls = [
-        'T',
-        'PC',
-        'TC',
-        'ODP',
-        'GWP',
-        'ACF',
-        'OFF',
-        'Z',
-        'DSDT_P',
-        'RIEM',
-        'GRUN',
-    ]
+PROPS_LIST = [
+    'T',
+    'PC',
+    'TC',
+    'ODP',
+    'GWP',
+    'ACF',
+    'OFF',
+    'Z',
+    'DSDT_P',
+    'RIEM',
+    'GRUN',
+]
 
-    refrigerant_ls = [
-        'Ammonia',
-        'Propane', 
-        'Butane', 
-        'Isobutane',
-        'Pentane',
-        'Isopentane',
-        'Neopentane',
-        'Cyclopentane',
-        'Carbon dioxide', 
-        'R1233zd(E)', 
-        'R1336mzz(E)', 
-        'R1336mzz(Z)', 
-        'R1234ze(E)', 
-        'R1234ze(Z)', 
-        'R1234yf', 
-        'R1243zf', 
-        'R1224yd(Z)', 
-        'PROPYLEN',
-        'DME',
-        'Methanol',
-        'propane;butane|.5;.5|mol',
-        'propane;Isobutane|.5;.5|mol',
-        'propane;Pentane|.5;.5|mol',
-        'propane;Isopentane|.5;.5|mol',
-        'propane;Neopentane|.5;.5|mol',
-        'Isobutane;butane|.5;.5|mol',
-        'Isobutane;Pentane|.5;.5|mol',
-        'Isobutane;Isopentane|.5;.5|mol',
-        'Isobutane;Neopentane|.5;.5|mol',
-        'butane;Pentane|.5;.5|mol',
-        'butane;Isopentane|.5;.5|mol',
-        'butane;Neopentane|.5;.5|mol',
-    ]
-
+def get_fluid_prop_overview_table(
+    refrigerant_ls: list[str],
+    dest_filename: str = 'results/Refrigerant props.csv',
+    props_list: list[str] = PROPS_LIST,
+):
+    """Generate a table of key properties for a list of refrigerants."""
     table = {}
-
     for r in refrigerant_ls:
         props = {}
         PP = PropertyPackage(r)
-        for p in props_ls:
+        for p in props_list:
             if p not in ['OFF', 'DSDT_P']:
                 props[p] = PP.get_specified_properties(
                     propsOut=p,
@@ -100,4 +69,4 @@ def get_fluid_prop_overview_table():
     df = pd.DataFrame(table).T 
     print(df)
 
-    df.to_csv('results/Refrigerant props.csv')
+    df.to_csv(dest_filename)

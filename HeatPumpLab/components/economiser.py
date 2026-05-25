@@ -1,7 +1,7 @@
 """Economiser heat exchanger with pinch-based duty determination."""
 
 from scipy.optimize import root_scalar
-from ..streams import MassStream
+from .stream import Stream
 
 class Economiser():
     """Economiser component acting between two compressor stages."""
@@ -9,11 +9,11 @@ class Economiser():
     name: str = ''
     model: str
     source_fluid: str
-    source_in: MassStream
-    source_out: MassStream
+    source_in: Stream
+    source_out: Stream
     sink_fluid: str
-    sink_in: MassStream
-    sink_out: MassStream
+    sink_in: Stream
+    sink_out: Stream
     bypassed: bool = False
     converged: bool = False
     y_econ: float = 0.0
@@ -29,8 +29,8 @@ class Economiser():
     variable_dP_model: bool = False
     tol: float = 1e-6    
 
-    comp1_flow_out: MassStream
-    comp2_flow_out: MassStream
+    comp1_flow_out: Stream
+    comp2_flow_out: Stream
     gc_2_dP_h: float
 
     def __init__(self, source_fluid: str, sink_fluid: str, name: str='Economiser', 
@@ -48,13 +48,13 @@ class Economiser():
 
     def set_port_mass_streams(self, source_fluid: str, sink_fluid: str) -> None:
         """Create inlet and outlet streams for both sides of the economiser."""
-        self.source_in = MassStream(name='source in', fluid=source_fluid)
-        self.source_out = MassStream(name='source out', fluid=source_fluid)
+        self.source_in = Stream(name='source in', fluid=source_fluid)
+        self.source_out = Stream(name='source out', fluid=source_fluid)
         
-        self.sink_in = MassStream(name='sink in', fluid=sink_fluid)
-        self.sink_out = MassStream(name='sink out', fluid=sink_fluid)
+        self.sink_in = Stream(name='sink in', fluid=sink_fluid)
+        self.sink_out = Stream(name='sink out', fluid=sink_fluid)
 
-    def set_add_obj(self, comp1_flow_out: MassStream, comp2_flow_out: MassStream, gc_2_dP_h: float =0.0, T_gc_out: float =0.0):
+    def set_add_obj(self, comp1_flow_out: Stream, comp2_flow_out: Stream, gc_2_dP_h: float =0.0, T_gc_out: float =0.0):
         """Attach upstream/downstream compressor states used during solution."""
         self.comp1_flow_out = comp1_flow_out
         self.comp2_flow_out = comp2_flow_out
@@ -101,14 +101,14 @@ class Economiser():
         """Generate temperature/enthalpy profiles for plotting."""
         data = {'source': [], 'sink': []}
         
-        def get_inter_data(s_in: MassStream, s_out: MassStream):
+        def get_inter_data(s_in: Stream, s_out: Stream):
             """Interpolate intermediate stream states."""
             ls = []
             dP_tot = s_in.pressure - s_out.pressure
             dh_tot = s_in.enthalpy - s_out.enthalpy
 
             for i in range(divisions + 1):
-                m_str = MassStream(name='source i', 
+                m_str = Stream(name='source i', 
                                    fluid=s_in.fluid,
                                    pp_instance=s_in.pp_instance,
                                    pressure=s_in.pressure - dP_tot * i / divisions, 

@@ -1,7 +1,7 @@
 """Entry point for running ad-hoc single case analyses."""
 
-from ..cycles import *
-from .readWriteOutput import *
+
+from ....utils.readWriteOutput import print_result_to_csv, print_result_to_terminal
 
 __all__ = ['analyse_single_case']
 
@@ -129,8 +129,7 @@ def analyse_single_case(HP_fn, args: list[float | str | bool] = None):
     """Solve a single case and emit reports/plots for inspection."""
     
     if args == None:
-        args = R1234ze_args
-        # args = DEFAULT_ARGS
+        raise ValueError('No arguments provided for single case analysis.')
 
     hp = HP_fn(**args)
     hp.solve()

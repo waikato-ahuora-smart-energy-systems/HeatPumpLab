@@ -13,12 +13,11 @@ tim.walmsley@waikato.ac.nz
 
 import numpy as np
 from HeatPumpLab import (
-    RecuperativeHP, 
+    RecuperativeHP,
     analyse_multiple_cases_in_parallel,
 )
-from aux import *
 
-_REFRIGERANT_LIST = [
+REFRIGERANT_LIST = [
         'Ammonia',
         'Propane', 
         'Butane', 
@@ -53,15 +52,17 @@ _REFRIGERANT_LIST = [
         # 'butane;Neopentane|.5;.5|mol',
     ]
 
-def run():  
+def run():
+    vars_kwargs = {
+        'refrigerant_ls': REFRIGERANT_LIST,
+        'dT_rhx1_cold_ls': np.linspace(0, 100, num=41),
+        'dT_rhx2_cold_ls': np.linspace(0, 100, num=41),
+        'comp2_power_frac_ls': np.linspace(0.3, 0.7, num=9),
+    }
     analyse_multiple_cases_in_parallel(
-        HP_fn=RecuperativeHP, 
+        HP_fn=RecuperativeHP,
         filename='RecuperatureHP_results',
-        refrigerant_ls=_REFRIGERANT_LIST,
-        dT_rhx1_cold_ls=np.linspace(0, 100, num=41),
-        dT_rhx2_cold_ls=np.linspace(0, 100, num=41),
-        comp2_power_frac_ls=np.linspace(0.3, 0.7, num=9),
-        # n_cpu=-1,
+        vars_kwargs=vars_kwargs,
     )
 
 if __name__=='__main__':

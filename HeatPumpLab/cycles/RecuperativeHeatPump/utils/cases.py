@@ -1,17 +1,17 @@
-"""Helpers to enumerate, deduplicate, and prioritise heat pump cases."""
+"""Helpers to enumerate, deduplicate, and prioritise recuperative heat pump cases."""
 
 import pandas as pd
 
-from .readWriteOutput import *
+from ....utils.readWriteOutput import *
 
-__all__ = ['get_case_list_to_solve', 'get_unsolved_case_list_to_resolve']
+__all__ = ['get_RHP_case_list_to_solve', 'get_unsolved_RHP_case_list_to_resolve']
 
 #######################################################################################################
 # Public API
 #######################################################################################################
 
 
-def get_case_list_to_solve(
+def get_RHP_case_list_to_solve(
         file_name: str ='results/untitled', 
         refrigerant_ls: list = None, 
         dT_rhx1_cold_ls: list = None,
@@ -34,7 +34,7 @@ def get_case_list_to_solve(
     )
 
 
-def get_unsolved_case_list_to_resolve(filename_unsolved: str = 'Cases-Unsolved', filename_resolved: str = 'Cases-Resolved'):
+def get_unsolved_RHP_case_list_to_resolve(filename_unsolved: str = 'Cases-Unsolved', filename_resolved: str = 'Cases-Resolved'):
     """Return unsolved cases after subtracting any newly resolved ones."""
     # transfer_temp_files_to_results(f'{filename_resolved}')
     unsolved_cases = read_csv_to_results(file_name=f'{filename_unsolved}')

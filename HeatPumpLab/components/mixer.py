@@ -1,21 +1,21 @@
 """Two-stream mixing junction."""
 
-from ..streams import MassStream
+from .stream import Stream
 
 
 class Mixer:
     """Adiabatic mixer with optional specific heat loss."""
-    flow_in_1: MassStream = None
-    flow_in_2: MassStream = None
-    flow_out: MassStream = None
+    flow_in_1: Stream = None
+    flow_in_2: Stream = None
+    flow_out: Stream = None
     converged: bool = True
 
     def __init__(self, name='Mixer', fluid: str = None, specific_heat_loss: float =0.0, tol: float =1e-6):
         """Initialise inlet/outlet streams and optional heat loss."""
         self.name = name
-        self.flow_in_1 = MassStream(name='flow_in_1', fluid=fluid)
-        self.flow_in_2 = MassStream(name='flow_in_2', fluid=fluid)
-        self.flow_out = MassStream(name='flow_out', fluid=fluid)
+        self.flow_in_1 = Stream(name='flow_in_1', fluid=fluid)
+        self.flow_in_2 = Stream(name='flow_in_2', fluid=fluid)
+        self.flow_out = Stream(name='flow_out', fluid=fluid)
         self.specific_heat_loss = specific_heat_loss
         self.tol = tol
 
@@ -45,7 +45,7 @@ class Mixer:
     #         PR_i = (self.flow_out.pressure / self.flow_in.pressure) ** (1 / divisions)
     #         dh_tot = s_in.enthalpy - s_out.enthalpy
     #         for i in range(divisions + 1):
-    #             m_str = MassStream(name='source i',
+    #             m_str = Stream(name='source i',
     #                                pp_instance =s_in.pp_instance,
     #                                fluid=s_in.fluid, 
     #                                pressure=s_in.pressure * (PR_i) ** i, 

@@ -1,22 +1,22 @@
 """Binary splitter component."""
 
-from ..streams import MassStream
+from .stream import Stream
 
 
 class Splitter:
     """Splits a stream into two branches based on a fixed ratio."""
-    flow_in: MassStream = None
-    flow_out_1: MassStream = None
-    flow_out_2: MassStream = None
+    flow_in: Stream = None
+    flow_out_1: Stream = None
+    flow_out_2: Stream = None
     r_ratio: float =0.0
     converged: bool = True
 
     def __init__(self, name='Splitter', fluid: str = None, r_ratio: float =0.0, specific_heat_loss: float =0.0, tol: float =1e-6):
         """Initialise inlet/outlet streams and the flow split ratio."""
         self.name = name
-        self.flow_in = MassStream(name='flow_in', fluid=fluid)
-        self.flow_out_1 = MassStream(name='flow_out_1', fluid=fluid)
-        self.flow_out_2 = MassStream(name='flow_out_2', fluid=fluid)
+        self.flow_in = Stream(name='flow_in', fluid=fluid)
+        self.flow_out_1 = Stream(name='flow_out_1', fluid=fluid)
+        self.flow_out_2 = Stream(name='flow_out_2', fluid=fluid)
         self.r_ratio = r_ratio
         self.specific_heat_loss = specific_heat_loss
         self.tol = tol
@@ -39,7 +39,7 @@ class Splitter:
     #         PR_i = (self.flow_out.pressure / self.flow_in.pressure) ** (1 / divisions)
     #         dh_tot = s_in.enthalpy - s_out.enthalpy
     #         for i in range(divisions + 1):
-    #             m_str = MassStream(name='source i',
+    #             m_str = Stream(name='source i',
     #                                pp_instance =s_in.pp_instance,
     #                                fluid=s_in.fluid, 
     #                                pressure=s_in.pressure * (PR_i) ** i, 

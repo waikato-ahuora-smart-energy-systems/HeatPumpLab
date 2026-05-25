@@ -1,6 +1,6 @@
 """Plate heat exchanger specialised settings."""
 
-from .common.baseHeatExchanger import BaseHeatExchanger
+from .common.base_heat_exchanger import BaseHeatExchanger
 
 
 class PlateHeatExchanger(BaseHeatExchanger):

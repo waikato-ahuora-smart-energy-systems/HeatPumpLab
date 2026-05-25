@@ -1,6 +1,6 @@
 """Gas cooler / condenser implementation."""
 
-from .common.baseHeatExchanger import BaseHeatExchanger
+from .common.base_heat_exchanger import BaseHeatExchanger
 
 
 class GasCooler(BaseHeatExchanger):
