@@ -1,6 +1,7 @@
 
 
-import copy, numpy as np
+import copy
+import numpy as np
 from typing import Tuple, TYPE_CHECKING
 
 from ....utils.analysis import (

@@ -1,6 +1,7 @@
 """Analysis utilities for running and post-processing heat pump cases."""
 
-import numpy as np, os
+import numpy as np
+import os
 
 from typing import TYPE_CHECKING
 from scipy.optimize import minimize as loc_min, approx_fprime

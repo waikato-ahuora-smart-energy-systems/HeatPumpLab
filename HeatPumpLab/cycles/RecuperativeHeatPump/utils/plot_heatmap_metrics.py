@@ -62,7 +62,7 @@ BASECASE_DTRHX2_COLD = 0.0
 BASECASE_COMP2_FRAC = 0.5
 
 
-def parse_args(
+def _parse_args(
     refrigerant_ls: List[str] = DEFAULT_REFRIGERANTS,
     metrics_ls: List[Tuple[str, str]] = DEFAULT_METRICS_AND_OBJ_PAIRS,
     comp2_load_frac_ls: List[float] = DEFAULT_COMP_FRAC_2,
@@ -125,10 +125,10 @@ def parse_args(
         action="store_false",
         help="Disable logarithmic colour scaling for Pmax heatmaps.",
     )
-    return parser.parse_args()
+    return parser._parse_args()
 
 
-def load_results(
+def _load_results(
     csv_path: Path,
 ) -> pd.DataFrame:
     from io import StringIO
@@ -158,7 +158,7 @@ def load_results(
     return df
 
 
-def unique_sorted(values: Iterable[float]) -> List[float]:
+def _unique_sorted(values: Iterable[float]) -> List[float]:
     """Return sorted unique floating point values with tolerance handling."""
     rounded = {}
     for value in values:
@@ -175,18 +175,22 @@ def unique_sorted(values: Iterable[float]) -> List[float]:
     return sorted(rounded.values())
 
 
-def sanitize_float(value: float) -> str:
+def _sanitize_float(value: float) -> str:
     """Sanitise a float for filesystem-safe labels."""
     return f"{value:.4f}".rstrip("0").rstrip(".").replace("-", "neg").replace(".", "p")
 
 
-def sanitize_metric_name(metric: str) -> str:
+def _sanitize_metric_name(
+    metric: str,
+) -> str:
     """Sanitise a metric name for filesystem paths."""
     cleaned = metric.strip().replace("/", "_per_").replace(" ", "_")
     return cleaned or "metric"
 
 
-def parse_metric_specs(metric_specs: Sequence[str]) -> List[Tuple[str, str]]:
+def _parse_metric_specs(
+    metric_specs: Sequence[str],
+) -> List[Tuple[str, str]]:
     """Parse metric specifications into (name, mode) pairs."""
     parsed: List[Tuple[str, str]] = []
     for spec in metric_specs:
@@ -204,12 +208,17 @@ def parse_metric_specs(metric_specs: Sequence[str]) -> List[Tuple[str, str]]:
     return parsed
 
 
-def format_axis_label(name: str, axis_labels: Dict[str, str] = AXIS_LABELS) -> str:
+def _format_axis_label(
+    name: str, 
+    axis_labels: Dict[str, str] = AXIS_LABELS,
+) -> str:
     """Return a descriptive axis label for the given column name."""
     return axis_labels.get(name, name)
 
 
-def add_basecase_metrics(df: pd.DataFrame) -> pd.DataFrame:
+def _add_basecase_metrics(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
     """Add base-case relative metrics for each refrigerant."""
     missing = MIN_REQ_METRIC_COLUMNS.difference(df.columns)
     if missing:
@@ -259,14 +268,14 @@ def add_basecase_metrics(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_grid(
+def _build_grid(
     df: pd.DataFrame,
     metric: str,
     x_col: str,
     y_col: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    x_vals = unique_sorted(pd.to_numeric(df[x_col], errors="coerce").dropna().unique())
-    y_vals = unique_sorted(pd.to_numeric(df[y_col], errors="coerce").dropna().unique())
+    x_vals = _unique_sorted(pd.to_numeric(df[x_col], errors="coerce").dropna().unique())
+    y_vals = _unique_sorted(pd.to_numeric(df[y_col], errors="coerce").dropna().unique())
     if not x_vals or not y_vals:
         return np.array([]), np.array([]), np.array([[]])
 
@@ -289,7 +298,7 @@ def build_grid(
     return np.array(x_vals), np.array(y_vals), masked_grid
 
 
-def create_heatmaps(
+def _create_heatmaps(
     df: pd.DataFrame,
     metrics: Sequence[Tuple[str, str]],
     output_dir: Path,
@@ -316,7 +325,7 @@ def create_heatmaps(
     df = df[df["refrigerant"].isin(refrigerants)]
 
     available_comp2 = (
-        unique_sorted(df["comp2_power_frac"].dropna().unique())
+        _unique_sorted(df["comp2_power_frac"].dropna().unique())
         if "comp2_power_frac" in df.columns
         else []
     )
@@ -356,7 +365,7 @@ def create_heatmaps(
                 if refrigerant_slice.empty:
                     continue
 
-                x_vals, y_vals, grid = build_grid(
+                x_vals, y_vals, grid = _build_grid(
                     refrigerant_slice, metric_name, "dT_rhx1_cold", "dT_rhx2_cold"
                 )
 
@@ -393,10 +402,10 @@ def create_heatmaps(
                     vmax=None if current_norm else vmax,
                 )
                 ax.set_title(
-                    rf"{format_axis_label(metric_name)}: {refrigerant} | $\omega_2$ = {comp2_value:.1f}"
+                    rf"{_format_axis_label(metric_name)}: {refrigerant} | $\omega_2$ = {comp2_value:.1f}"
                 )
-                ax.set_xlabel(format_axis_label("dT_rhx1_cold"))
-                ax.set_ylabel(format_axis_label("dT_rhx2_cold"))
+                ax.set_xlabel(_format_axis_label("dT_rhx1_cold"))
+                ax.set_ylabel(_format_axis_label("dT_rhx2_cold"))
 
                 grid_filled = grid.filled(np.nan)
                 if np.isfinite(grid_filled).any():
@@ -440,12 +449,12 @@ def create_heatmaps(
                     )
 
                 cbar = fig.colorbar(quad_mesh, ax=ax, shrink=0.9)
-                cbar.set_label(format_axis_label(metric_name))
+                cbar.set_label(_format_axis_label(metric_name))
                 fig.tight_layout()
 
-                metric_dir = output_dir / sanitize_metric_name(metric_name)
+                metric_dir = output_dir / _sanitize_metric_name(metric_name)
                 refrigerant_dir = metric_dir / refrigerant
-                comp_dir = refrigerant_dir / f"comp2_{sanitize_float(comp2_value)}"
+                comp_dir = refrigerant_dir / f"comp2_{_sanitize_float(comp2_value)}"
                 comp_dir.mkdir(parents=True, exist_ok=True)
 
                 output_path = comp_dir / "heatmap.png"
@@ -460,17 +469,17 @@ def get_heatmap_results_comparison(
     refrigerant_ls: List[str] = DEFAULT_REFRIGERANTS,
     comp2_load_frac_ls: List[float] = DEFAULT_COMP_FRAC_2,
 ) -> None:
-    args = parse_args(
+    args = _parse_args(
         refrigerant_ls=refrigerant_ls,
         metrics_ls=metrics_ls,
         comp2_load_frac_ls=comp2_load_frac_ls,
     )
-    df = load_results(
+    df = _load_results(
         csv_path=filepath,
     )
-    df = add_basecase_metrics(df)
-    metric_settings = parse_metric_specs(args.metrics)
-    create_heatmaps(
+    df = _add_basecase_metrics(df)
+    metric_settings = _parse_metric_specs(args.metrics)
+    _create_heatmaps(
         df,
         metrics=metric_settings,
         output_dir=output_dir,

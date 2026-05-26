@@ -71,16 +71,16 @@ def run():
     )
 
 def results_analysis():
-    # get_fluid_prop_overview_table(
-    #     refrigerant_ls=REFRIGERANT_LIST,
-    #     dest_filename='results/Refrigerant props.csv',
-    # )
+    get_fluid_prop_overview_table(
+        refrigerant_ls=REFRIGERANT_LIST,
+        dest_filename='results/Refrigerant props.csv',
+    )
     get_heatmap_results_comparison(
         filepath='results/RecuperatureHP_results.csv',
         output_dir='results/heatmaps/',
     )
-    # get_best_cases_summary()
-    # get_comp2_power_frac_comparison_analysis()
+    get_best_cases_summary()
+    get_comp2_power_frac_comparison_analysis()
 
 if __name__=='__main__':
     # run()
