@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+__all__ = ["get_comp2_power_frac_comparison_analysis"]
 
 DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
     ("COP_pct_increase_vs_base", "max"),
@@ -347,7 +348,7 @@ def plot_metric_for_refrigerants(
     print(f"Wrote {path}")
 
 
-def main() -> None:
+def get_comp2_power_frac_comparison_analysis() -> None:
     args = parse_args()
     metrics = parse_metric_specs(args.metrics)
     df = load_results(
@@ -395,8 +396,7 @@ def main() -> None:
         )
 
 
-if __name__ == "__main__":
-    main()
+
 METRIC_LABELS: dict[str, str] = {
     "COP_pct_increase_vs_base": "COP increase vs base [%]",
     "VHC": "Volumetric heating capacity",

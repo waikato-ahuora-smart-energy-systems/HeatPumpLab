@@ -287,6 +287,7 @@ def create_heatmaps(
     dpi: int,
     use_log_pmax: bool,
 ) -> None:
+    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     refrigerants = sorted(

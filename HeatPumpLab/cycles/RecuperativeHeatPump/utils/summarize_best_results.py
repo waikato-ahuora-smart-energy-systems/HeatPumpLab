@@ -10,18 +10,19 @@ from typing import Iterable, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+__all__ = ["get_best_cases_summary"]
 
 DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
     ("COP", "max"),
-    # ("SEC", "min"),
+    ("SEC", "min"),
     ("VHC", "max"),
-    # ("eDTL", "min"),
-    # ("SLE", "min"),
-    # ("dQ_per_dW", "max"),
-    # ("LMTD_gcs", "max"),
+    ("eDTL", "min"),
+    ("SLE", "min"),
+    ("dQ_per_dW", "max"),
+    ("LMTD_gcs", "max"),
     ("Pmax", "min"),
-    # ("COP_pct_increase_vs_base", "max"),
-    # ("Pmax_reduction_vs_base", "max"),
+    ("COP_pct_increase_vs_base", "max"),
+    ("Pmax_reduction_vs_base", "max"),
 )
 
 DEFAULT_INCLUDE_COLUMNS: Sequence[str] = (
@@ -38,18 +39,6 @@ def parse_args() -> argparse.Namespace:
         description=(
             "Identify best-performing cases for each refrigerant based on selected metrics."
         )
-    )
-    parser.add_argument(
-        "--csv",
-        type=Path,
-        default=Path(__file__).resolve().parents[1] / "results" / "RecuperativeHP_results.csv",
-        help="Path to the results CSV file.",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path(__file__).resolve().parents[1] / "results" / "Summary.csv",
-        help="Optional path to write the summary CSV.",
     )
     parser.add_argument(
         "--metrics",
@@ -273,11 +262,14 @@ def summarise_best_cases(
     return summary_df
 
 
-def main() -> None:
+def get_best_cases_summary(
+    filepath: Path = Path(__file__).resolve().parents[1] / "results" / "RecuperativeHP_results.csv",
+    output: Path | None = Path(__file__).resolve().parents[1] / "results" / "Summary.csv",
+) -> None:
     args = parse_args()
 
     df = load_results(
-        args.csv,
+        filepath,
         filter_success=not args.skip_success_filter,
         filter_converged=not args.skip_converged_filter,
     )
@@ -292,15 +284,11 @@ def main() -> None:
         print("No summary results generated with the provided filters.")
         return
 
-    if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        summary.to_csv(args.output, index=False)
-        print(f"Summary written to {args.output}")
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        summary.to_csv(output, index=False)
+        print(f"Summary written to {output}")
 
     float_format = f"{{:.{args.float_precision}f}}".format
     with pd.option_context("display.float_format", float_format):
         print(summary.to_string(index=False))
-
-
-if __name__ == "__main__":
-    main()

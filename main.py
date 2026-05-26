@@ -12,9 +12,13 @@ tim.walmsley@waikato.ac.nz
 """
 
 import numpy as np
-from HeatPumpLab import (
+from HeatPumpLab.utils import get_parameter_sweep
+from HeatPumpLab.cycles.RecuperativeHeatPump import (
     RecuperativeHP,
-    get_parameter_sweep,
+    get_fluid_prop_overview_table,
+    get_heatmap_results_comparison,
+    get_best_cases_summary,
+    get_comp2_power_frac_comparison_analysis,
 )
 
 REFRIGERANT_LIST = [
@@ -63,7 +67,22 @@ def run():
         HP_fn=RecuperativeHP,
         filename='RecuperatureHP_results',
         param_kwargs=param_kwargs,
+        n_cpu=1,
     )
 
+def results_analysis():
+    # get_fluid_prop_overview_table(
+    #     refrigerant_ls=REFRIGERANT_LIST,
+    #     dest_filename='results/Refrigerant props.csv',
+    # )
+    get_heatmap_results_comparison(
+        filepath='results/RecuperatureHP_results.csv',
+        output_dir='results/heatmaps/',
+    )
+    # get_best_cases_summary()
+    # get_comp2_power_frac_comparison_analysis()
+
 if __name__=='__main__':
-    run()
+    # run()
+    results_analysis()
+    pass
