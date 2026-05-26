@@ -83,16 +83,6 @@ def parse_args(
         ),
     )
     parser.add_argument(
-        "--skip-success-filter",
-        action="store_true",
-        help="Include non-successful optimisation runs.",
-    )
-    parser.add_argument(
-        "--skip-converged-filter",
-        action="store_true",
-        help="Include non-converged optimisation runs.",
-    )
-    parser.add_argument(
         "--comp2-values",
         nargs="+",
         type=float,
@@ -140,14 +130,31 @@ def parse_args(
 
 def load_results(
     csv_path: Path,
-    filter_success: bool,
-    filter_converged: bool,
 ) -> pd.DataFrame:
-    df = pd.read_csv(csv_path)
-    if filter_success and "Success" in df.columns:
-        df = df[df["Success"] == True]  # noqa: E712
-    if filter_converged and "converged" in df.columns:
-        df = df[df["converged"] == True]  # noqa: E712
+    from io import StringIO
+    
+    # Load with low_memory=False, remove bad rows, then reload as StringIO with low_memory=True
+    df = pd.read_csv(csv_path, low_memory=False)
+    
+    # Remove rows where problematic columns contain their own header strings
+    problematic_cols = [
+        "dT_rhx1_cold",
+        "dT_rhx2_cold",
+        "comp2_power_frac",
+        "COP",
+        "Pmax",
+    ]
+    for col in problematic_cols:
+        if col in df.columns:
+            df = df[df[col].astype(str).str.strip() != col]
+    
+    # Reload from cleaned CSV to let pandas infer types properly
+    csv_str = StringIO(df.to_csv(index=False))
+    df = pd.read_csv(csv_str, low_memory=True)
+    
+    # Apply filters
+    df = df[df["Success"].astype(str).str.lower().isin(["true", "1"])]
+    
     return df
 
 
@@ -155,10 +162,16 @@ def unique_sorted(values: Iterable[float]) -> List[float]:
     """Return sorted unique floating point values with tolerance handling."""
     rounded = {}
     for value in values:
-        if not isinstance(value, (int, float)) or math.isnan(value):
+        if value is None:
             continue
-        key = round(float(value), 8)
-        rounded.setdefault(key, float(value))
+        try:
+            float_value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isnan(float_value):
+            continue
+        key = round(float_value, 8)
+        rounded.setdefault(key, float_value)
     return sorted(rounded.values())
 
 
@@ -181,8 +194,7 @@ def parse_metric_specs(metric_specs: Sequence[str]) -> List[Tuple[str, str]]:
         name = parts[0].strip()
         if not name:
             raise ValueError("Metric name cannot be empty.")
-        mode = parts[1].strip() 
-        mode = mode.lower()
+        mode = parts[1].strip().lower() if len(parts) > 1 and parts[1].strip() else "max"
         if mode not in {"min", "max"}:
             raise ValueError(
                 f"Invalid optimisation mode '{mode}' for metric '{name}'. "
@@ -253,8 +265,8 @@ def build_grid(
     x_col: str,
     y_col: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    x_vals = unique_sorted(df[x_col].dropna().unique())
-    y_vals = unique_sorted(df[y_col].dropna().unique())
+    x_vals = unique_sorted(pd.to_numeric(df[x_col], errors="coerce").dropna().unique())
+    y_vals = unique_sorted(pd.to_numeric(df[y_col], errors="coerce").dropna().unique())
     if not x_vals or not y_vals:
         return np.array([]), np.array([]), np.array([[]])
 
@@ -321,7 +333,7 @@ def create_heatmaps(
             print(f"Skipping metric '{metric_name}' (not found in data).")
             continue
 
-        metric_values = df[metric_name].astype(float)
+        metric_values = pd.to_numeric(df[metric_name], errors="coerce")
         valid_metric_values = metric_values.replace([np.inf, -np.inf], np.nan).dropna()
         if valid_metric_values.empty:
             print(f"Skipping metric '{metric_name}' (no valid data).")
@@ -331,7 +343,10 @@ def create_heatmaps(
         vmax = valid_metric_values.max()
 
         for comp2_value in comp2_values:
-            comp_mask = np.isclose(df["comp2_power_frac"].astype(float), comp2_value)
+            comp_mask = np.isclose(
+                pd.to_numeric(df["comp2_power_frac"], errors="coerce"),
+                comp2_value,
+            )
             subset = df.loc[comp_mask]
             if subset.empty:
                 continue
@@ -378,7 +393,7 @@ def create_heatmaps(
                     vmax=None if current_norm else vmax,
                 )
                 ax.set_title(
-                    f"{format_axis_label(metric_name)}: {refrigerant} | $\omega_2$ = {comp2_value:.1f}"
+                    rf"{format_axis_label(metric_name)}: {refrigerant} | $\omega_2$ = {comp2_value:.1f}"
                 )
                 ax.set_xlabel(format_axis_label("dT_rhx1_cold"))
                 ax.set_ylabel(format_axis_label("dT_rhx2_cold"))
@@ -452,8 +467,6 @@ def get_heatmap_results_comparison(
     )
     df = load_results(
         csv_path=filepath,
-        filter_success=not args.skip_success_filter,
-        filter_converged=not args.skip_converged_filter,
     )
     df = add_basecase_metrics(df)
     metric_settings = parse_metric_specs(args.metrics)
