@@ -67,7 +67,6 @@ def run():
         HP_fn=RecuperativeHP,
         filename='RecuperatureHP_results',
         param_kwargs=param_kwargs,
-        n_cpu=1,
     )
 
 def results_analysis():
