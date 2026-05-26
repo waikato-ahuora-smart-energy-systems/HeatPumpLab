@@ -5,15 +5,22 @@ from .stream import Stream
 
 class ExpansionValve:
     """Simple throttling valve with optional specific heat loss."""
+
     flow_in: Stream = None
     flow_out: Stream = None
     converged: bool = True
 
-    def __init__(self, name='Expansion valve', fluid: str = None, specific_heat_loss: float =0.0, tol: float =1e-6):
+    def __init__(
+        self,
+        name="Expansion valve",
+        fluid: str = None,
+        specific_heat_loss: float = 0.0,
+        tol: float = 1e-6,
+    ):
         """Initialise flow streams and optional loss coefficient."""
         self.name = name
-        self.flow_in = Stream(name='flow_in', fluid=fluid)
-        self.flow_out = Stream(name='flow_out', fluid=fluid)
+        self.flow_in = Stream(name="flow_in", fluid=fluid)
+        self.flow_out = Stream(name="flow_out", fluid=fluid)
         self.specific_heat_loss = specific_heat_loss
         self.tol = tol
         self.power = 0.0
@@ -21,7 +28,7 @@ class ExpansionValve:
     def get_outlet_enthalpy(self):
         """Return post-expansion enthalpy including specified losses."""
         return self.flow_in.enthalpy - self.specific_heat_loss
-    
+
     def solve(self):
         """Apply throttling assumption to compute outlet state."""
         self.flow_out.mass_flow = self.flow_in.mass_flow
@@ -31,7 +38,8 @@ class ExpansionValve:
 
     def get_graph_data(self, divisions=50):
         """Produce interpolation states for plotting the throttling path."""
-        data = {'siso': []}
+        data = {"siso": []}
+
         def get_inter_data(s_in, s_out):
             """Interpolate intermediate throttling states."""
             ls = []
@@ -39,17 +47,18 @@ class ExpansionValve:
             PR_i = (self.flow_out.pressure / self.flow_in.pressure) ** (1 / divisions)
             dh_tot = s_in.enthalpy - s_out.enthalpy
             for i in range(divisions + 1):
-                m_str = Stream(name='source i',
-                                   pp_instance =s_in.pp_instance,
-                                   fluid=s_in.fluid, 
-                                   pressure=s_in.pressure * (PR_i) ** i, 
-                                   enthalpy=s_in.enthalpy - dh_tot * i / divisions, 
-                                   mass_flow=s_in.mass_flow, 
-                                   )
+                m_str = Stream(
+                    name="source i",
+                    pp_instance=s_in.pp_instance,
+                    fluid=s_in.fluid,
+                    pressure=s_in.pressure * (PR_i) ** i,
+                    enthalpy=s_in.enthalpy - dh_tot * i / divisions,
+                    mass_flow=s_in.mass_flow,
+                )
                 ls.append(m_str)
-            
+
             return ls
 
-        data['siso'] = get_inter_data(self.flow_in, self.flow_out)
+        data["siso"] = get_inter_data(self.flow_in, self.flow_out)
 
         return data

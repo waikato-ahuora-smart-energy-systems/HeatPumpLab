@@ -14,16 +14,16 @@ from .mixer import Mixer
 from .splitter import Splitter
 
 __all__ = [
-    'Stream',
-    'Compressor',
-    'Evaporator',
-    'ExpansionValve',
-    'GasCooler',
-    'PlateHeatExchanger',
-    'Turbine',
-    'CustomRelationship',
-    'SetRelationship',
-    'Economiser',
-    'Mixer',
-    'Splitter',
+    "Stream",
+    "Compressor",
+    "Evaporator",
+    "ExpansionValve",
+    "GasCooler",
+    "PlateHeatExchanger",
+    "Turbine",
+    "CustomRelationship",
+    "SetRelationship",
+    "Economiser",
+    "Mixer",
+    "Splitter",
 ]

@@ -6,7 +6,22 @@ from .common.base_heat_exchanger import BaseHeatExchanger
 class PlateHeatExchanger(BaseHeatExchanger):
     """Plate heat exchanger used for recuperators and internal HX."""
 
-    def __init__(self, source_fluid: str, sink_fluid: str, name='Plate heat exchanger', hx_eff=0.0, dTmin=0.0, dT_h=0.0, dT_c=0.0, dP_h=0.0, dP_c=0.0, model='dTmin_terminal', bypassed=False, converged=False, tol=1e-6):
+    def __init__(
+        self,
+        source_fluid: str,
+        sink_fluid: str,
+        name="Plate heat exchanger",
+        hx_eff=0.0,
+        dTmin=0.0,
+        dT_h=0.0,
+        dT_c=0.0,
+        dP_h=0.0,
+        dP_c=0.0,
+        model="dTmin_terminal",
+        bypassed=False,
+        converged=False,
+        tol=1e-6,
+    ):
         """Initialise plate heat exchanger configuration."""
         self.name = name
         self.model = model

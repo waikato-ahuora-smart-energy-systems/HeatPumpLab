@@ -12,7 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
-__all__ = ['get_heatmap_results_comparison']
+__all__ = ["get_heatmap_results_comparison"]
 
 
 DEFAULT_METRICS_AND_OBJ_PAIRS: Tuple[Tuple[str, str], ...] = (
@@ -25,7 +25,7 @@ DEFAULT_METRICS_AND_OBJ_PAIRS: Tuple[Tuple[str, str], ...] = (
     ("Pmax", "min"),
     ("COP_pct_increase_vs_base", "max"),
     ("Pmax_reduction_vs_base", "max"),
-    ("dT_gc_out_min_offset", "max")
+    ("dT_gc_out_min_offset", "max"),
 )
 MIN_REQ_METRIC_COLUMNS: set[str] = {
     "refrigerant",
@@ -132,10 +132,10 @@ def _load_results(
     csv_path: Path,
 ) -> pd.DataFrame:
     from io import StringIO
-    
+
     # Load with low_memory=False, remove bad rows, then reload as StringIO with low_memory=True
     df = pd.read_csv(csv_path, low_memory=False)
-    
+
     # Remove rows where problematic columns contain their own header strings
     problematic_cols = [
         "dT_rhx1_cold",
@@ -147,14 +147,14 @@ def _load_results(
     for col in problematic_cols:
         if col in df.columns:
             df = df[df[col].astype(str).str.strip() != col]
-    
+
     # Reload from cleaned CSV to let pandas infer types properly
     csv_str = StringIO(df.to_csv(index=False))
     df = pd.read_csv(csv_str, low_memory=True)
-    
+
     # Apply filters
     df = df[df["Success"].astype(str).str.lower().isin(["true", "1"])]
-    
+
     return df
 
 
@@ -198,7 +198,9 @@ def _parse_metric_specs(
         name = parts[0].strip()
         if not name:
             raise ValueError("Metric name cannot be empty.")
-        mode = parts[1].strip().lower() if len(parts) > 1 and parts[1].strip() else "max"
+        mode = (
+            parts[1].strip().lower() if len(parts) > 1 and parts[1].strip() else "max"
+        )
         if mode not in {"min", "max"}:
             raise ValueError(
                 f"Invalid optimisation mode '{mode}' for metric '{name}'. "
@@ -209,7 +211,7 @@ def _parse_metric_specs(
 
 
 def _format_axis_label(
-    name: str, 
+    name: str,
     axis_labels: Dict[str, str] = AXIS_LABELS,
 ) -> str:
     """Return a descriptive axis label for the given column name."""
@@ -234,9 +236,7 @@ def _add_basecase_metrics(
     base_rows = df.loc[base_mask, ["refrigerant", "COP", "Pmax"]]
 
     if base_rows.empty:
-        print(
-            "Warning: No base-case rows found; base-relative metrics will be NaN."
-        )
+        print("Warning: No base-case rows found; base-relative metrics will be NaN.")
         df = df.copy()
         df["COP_pct_increase_vs_base"] = np.nan
         df["Pmax_reduction_vs_base"] = np.nan
@@ -279,15 +279,12 @@ def _build_grid(
     if not x_vals or not y_vals:
         return np.array([]), np.array([]), np.array([[]])
 
-    pivot = (
-        df.pivot_table(
-            index=y_col,
-            columns=x_col,
-            values=metric,
-            aggfunc="mean",
-        )
-        .reindex(index=y_vals, columns=x_vals)
-    )
+    pivot = df.pivot_table(
+        index=y_col,
+        columns=x_col,
+        values=metric,
+        aggfunc="mean",
+    ).reindex(index=y_vals, columns=x_vals)
 
     grid = pivot.to_numpy(dtype=float)
     mask = np.isnan(grid)
@@ -332,10 +329,14 @@ def _create_heatmaps(
     if not available_comp2:
         raise ValueError("CSV is missing valid 'comp2_power_frac' values.")
     comp2_values = [
-        value for value in comp2_values if any(math.isclose(value, avail, rel_tol=1e-9) for avail in available_comp2)
+        value
+        for value in comp2_values
+        if any(math.isclose(value, avail, rel_tol=1e-9) for avail in available_comp2)
     ]
     if not comp2_values:
-        raise ValueError("No matching comp2_power_frac values after applying the provided filter.")
+        raise ValueError(
+            "No matching comp2_power_frac values after applying the provided filter."
+        )
 
     for metric_name, mode in metrics:
         if metric_name not in df.columns:
@@ -463,8 +464,13 @@ def _create_heatmaps(
 
 
 def get_heatmap_results_comparison(
-    filepath: Path = Path(__file__).resolve().parents[1] / "results" / "RecuperativeHP_results.csv",
-    output_dir: Path = Path(__file__).resolve().parents[1] / "results" / "figures" / "heatmaps",
+    filepath: Path = Path(__file__).resolve().parents[1]
+    / "results"
+    / "RecuperativeHP_results.csv",
+    output_dir: Path = Path(__file__).resolve().parents[1]
+    / "results"
+    / "figures"
+    / "heatmaps",
     metrics_ls: List[Tuple[str, str]] = DEFAULT_METRICS_AND_OBJ_PAIRS,
     refrigerant_ls: List[str] = DEFAULT_REFRIGERANTS,
     comp2_load_frac_ls: List[float] = DEFAULT_COMP_FRAC_2,

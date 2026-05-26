@@ -4,28 +4,33 @@ from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
 from sys import platform
 import numpy as np
 
+
 class PropertyPackage:
     """Encapsulate REFPROP library access for a configured working fluid."""
 
-    RP: REFPROPFunctionLibrary  
+    RP: REFPROPFunctionLibrary
     RP_ref: REFPROPFunctionLibrary
     RP_src: REFPROPFunctionLibrary
     RP_snk: REFPROPFunctionLibrary
-    if platform == 'darwin':
-        RP_ref = REFPROPFunctionLibrary(r'/Library/REFPROP/librefprop.dylib')
-        RP_src = REFPROPFunctionLibrary(r'/Library/REFPROP/librefprop-source.dylib')
-        RP_snk = REFPROPFunctionLibrary(r'/Library/REFPROP/librefprop-sink.dylib')
+    if platform == "darwin":
+        RP_ref = REFPROPFunctionLibrary(r"/Library/REFPROP/librefprop.dylib")
+        RP_src = REFPROPFunctionLibrary(r"/Library/REFPROP/librefprop-source.dylib")
+        RP_snk = REFPROPFunctionLibrary(r"/Library/REFPROP/librefprop-sink.dylib")
         for RP in RP_ref, RP_snk, RP_src:
-            RP.SETPATHdll(r'/Library/REFPROP/')
+            RP.SETPATHdll(r"/Library/REFPROP/")
     else:
-        RP_ref = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP/REFPROP.DLL')
-        RP_src = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP/REFPROP-source.DLL')
-        RP_snk = REFPROPFunctionLibrary('C:/Program Files (x86)/REFPROP/REFPROP-sink.DLL')
-        for RP in RP_ref, RP_snk, RP_src:       
-            RP.SETPATHdll('C:/Program Files (x86)/REFPROP')
-   
+        RP_ref = REFPROPFunctionLibrary("C:/Program Files (x86)/REFPROP/REFPROP.DLL")
+        RP_src = REFPROPFunctionLibrary(
+            "C:/Program Files (x86)/REFPROP/REFPROP-source.DLL"
+        )
+        RP_snk = REFPROPFunctionLibrary(
+            "C:/Program Files (x86)/REFPROP/REFPROP-sink.DLL"
+        )
+        for RP in RP_ref, RP_snk, RP_src:
+            RP.SETPATHdll("C:/Program Files (x86)/REFPROP")
+
     iFlag: int = 0
-    UNITS: int = RP_ref.GETENUMdll(0, 'SI with C').iEnum
+    UNITS: int = RP_ref.GETENUMdll(0, "SI with C").iEnum
     iMass: int = 1
     P_crit: float
     T_crit: float
@@ -36,78 +41,102 @@ class PropertyPackage:
     PP_fld_names: list[str]
     n_components: int = 1
     TC_to_K: float = 273.15
-    DEFAULT_VAL: float = -9999990.0    
-    
-    def __init__(self, fld_name: str =None, pp_instance: str ='') -> None:
+    DEFAULT_VAL: float = -9999990.0
+
+    def __init__(self, fld_name: str = None, pp_instance: str = "") -> None:
         """Initialise an instance bound to a particular fluid definition."""
-        self.fld_name, self.fld_composition, self.n_components, self.iMass = _get_fluid_info(fld_name)        
+        self.fld_name, self.fld_composition, self.n_components, self.iMass = (
+            _get_fluid_info(fld_name)
+        )
         self._set_RP_lib(pp_instance)
         self._set_database_fluid()
-        self.molar_mass, self.P_crit, self.T_crit, self.D_crit = self._get_critical_properties()
-        self.PP_fld_names =  self._get_database_fluid_name()
+        self.molar_mass, self.P_crit, self.T_crit, self.D_crit = (
+            self._get_critical_properties()
+        )
+        self.PP_fld_names = self._get_database_fluid_name()
 
-    def get_specified_properties(self, propsOut:str, propsIn:str, prop1:float, prop2:float):
+    def get_specified_properties(
+        self, propsOut: str, propsIn: str, prop1: float, prop2: float
+    ):
         """Return selected properties for a given input pair."""
-        return self.RP.REFPROPdll(self.fld_name, propsIn, propsOut, self.UNITS, self.iMass, self.iFlag, float(prop1), float(prop2), self.fld_composition).Output
-    
-    def get_std_properties(self, propsIn_str: str, prop1: float, prop2: float, comp: list[float]):
+        return self.RP.REFPROPdll(
+            self.fld_name,
+            propsIn,
+            propsOut,
+            self.UNITS,
+            self.iMass,
+            self.iFlag,
+            float(prop1),
+            float(prop2),
+            self.fld_composition,
+        ).Output
+
+    def get_std_properties(
+        self, propsIn_str: str, prop1: float, prop2: float, comp: list[float]
+    ):
         """Convenience wrapper that converts to/from REFPROP base units."""
         molar_props = self._convert_props_from_SI_with_C(propsIn_str, prop1, prop2)
         return self._convert_props_to_SI_with_C(
             self.RP.ABFLSHdll(propsIn_str, molar_props[0], molar_props[1], comp, 0)
         )
-    
+
     def _convert_props_to_SI_with_C(self, molar_props):
         """Convert molar REFPROP outputs to SI with Celsius offsets."""
         return {
-            'P' : molar_props.P / 1000,
-            'h' : molar_props.h / self.molar_mass,
-            'q' : molar_props.q if (molar_props.q >= 0.0 and molar_props.q <= 1.0) else self.DEFAULT_VAL,
-            'T' : molar_props.T - self.TC_to_K,
-            's' : molar_props.s / self.molar_mass,
-            'Cp' : molar_props.Cp / self.molar_mass if molar_props.Cp > 0.0 else self.DEFAULT_VAL,
-            'D' : molar_props.D * self.molar_mass,
-            }
-    
-    def _convert_props_from_SI_with_C(self, propsIn_str: str, prop1: float, prop2: float):
+            "P": molar_props.P / 1000,
+            "h": molar_props.h / self.molar_mass,
+            "q": molar_props.q
+            if (molar_props.q >= 0.0 and molar_props.q <= 1.0)
+            else self.DEFAULT_VAL,
+            "T": molar_props.T - self.TC_to_K,
+            "s": molar_props.s / self.molar_mass,
+            "Cp": molar_props.Cp / self.molar_mass
+            if molar_props.Cp > 0.0
+            else self.DEFAULT_VAL,
+            "D": molar_props.D * self.molar_mass,
+        }
+
+    def _convert_props_from_SI_with_C(
+        self, propsIn_str: str, prop1: float, prop2: float
+    ):
         """Convert SI-with-Celsius inputs to REFPROP molar units."""
-        if propsIn_str == 'PH' or propsIn_str == 'PS':
+        if propsIn_str == "PH" or propsIn_str == "PS":
             molar_props = prop1 * 1000, prop2 * self.molar_mass
-        elif propsIn_str == 'HP' or propsIn_str == 'SP':
+        elif propsIn_str == "HP" or propsIn_str == "SP":
             molar_props = prop1 * self.molar_mass, prop2 * 1000
-        elif propsIn_str == 'PT':
+        elif propsIn_str == "PT":
             molar_props = prop1 * 1000, prop2 + self.TC_to_K
-        elif propsIn_str == 'TP':
+        elif propsIn_str == "TP":
             molar_props = prop1 + self.TC_to_K, prop2 * 1000
-        elif propsIn_str == 'PQ':
+        elif propsIn_str == "PQ":
             molar_props = prop1 * 1000, prop2
-        elif propsIn_str == 'QP':
+        elif propsIn_str == "QP":
             molar_props = prop1, prop2 * 1000
-        elif propsIn_str == 'TQ':
+        elif propsIn_str == "TQ":
             molar_props = prop1 + self.TC_to_K, prop2
-        elif propsIn_str == 'QT':
-            molar_props = prop1, prop2 + self.TC_to_K       
-        elif propsIn_str == 'TS':
+        elif propsIn_str == "QT":
+            molar_props = prop1, prop2 + self.TC_to_K
+        elif propsIn_str == "TS":
             molar_props = prop1 + self.TC_to_K, prop2 * self.molar_mass
-        elif propsIn_str == 'ST':
+        elif propsIn_str == "ST":
             molar_props = prop1 * self.molar_mass, prop2 + self.TC_to_K
-        elif propsIn_str == 'TD':
-            molar_props = prop1 + self.TC_to_K, prop2 / self.molar_mass   
-        elif propsIn_str == 'DT':
-            molar_props = prop1 / self.molar_mass, prop2 + self.TC_to_K     
-        elif propsIn_str == 'PD':
-            molar_props = prop1 * 1000, prop2 / self.molar_mass   
-        elif propsIn_str == 'DP':
-            molar_props = prop1 / self.molar_mass, prop2 * 1000              
+        elif propsIn_str == "TD":
+            molar_props = prop1 + self.TC_to_K, prop2 / self.molar_mass
+        elif propsIn_str == "DT":
+            molar_props = prop1 / self.molar_mass, prop2 + self.TC_to_K
+        elif propsIn_str == "PD":
+            molar_props = prop1 * 1000, prop2 / self.molar_mass
+        elif propsIn_str == "DP":
+            molar_props = prop1 / self.molar_mass, prop2 * 1000
         else:
-            raise Exception('Unrecognised fluid property input combination.')
+            raise Exception("Unrecognised fluid property input combination.")
         return molar_props
 
     def _set_RP_lib(self, pp_instance):
         """Select the REFPROP instance based on source/sink/default context."""
-        if pp_instance.lower() == 'src' or pp_instance.lower() == 'source':
+        if pp_instance.lower() == "src" or pp_instance.lower() == "source":
             self.RP = self.RP_src
-        elif pp_instance.lower() == 'snk' or pp_instance.lower() == 'sink':
+        elif pp_instance.lower() == "snk" or pp_instance.lower() == "sink":
             self.RP = self.RP_snk
         else:
             self.RP = self.RP_ref
@@ -120,14 +149,25 @@ class PropertyPackage:
     def _check_correct_fluid(self) -> bool:
         """Return True if the library is still loaded with the expected fluid."""
         return self.PP_fld_names == self._get_database_fluid_name()
-        
+
     def _get_database_fluid_name(self) -> list[str]:
         """Return the fluid names currently loaded in the REFPROP instance."""
-        return [self.RP.NAMEdll(i+1)[0] for i in range(self.n_components)]
+        return [self.RP.NAMEdll(i + 1)[0] for i in range(self.n_components)]
 
     def _get_critical_properties(self):
         """Fetch molar mass and critical properties for the configured fluid."""
-        return self.RP.REFPROPdll(self.fld_name, 'PH', 'M;PCRIT;TCRIT;DCRIT', self.UNITS, self.iMass, self.iFlag, 1.0, 500, self.fld_composition).Output[0:4]
+        return self.RP.REFPROPdll(
+            self.fld_name,
+            "PH",
+            "M;PCRIT;TCRIT;DCRIT",
+            self.UNITS,
+            self.iMass,
+            self.iFlag,
+            1.0,
+            500,
+            self.fld_composition,
+        ).Output[0:4]
+
 
 def _get_fluid_info(fluid: str) -> list[str, float, list[float]]:
     """Parse a REFPROP fluid composition string."""
@@ -135,19 +175,19 @@ def _get_fluid_info(fluid: str) -> list[str, float, list[float]]:
     _composition: np.ndarray[float]
     iMass: int = 1
 
-    _fld_full = fluid.split('|')
+    _fld_full = fluid.split("|")
     fld_name_ls = _fld_full[0]
     if len(_fld_full) == 1:
         fld_name: str = fld_name_ls
         fld_composition: float = [1.0]
         n_components = 1
     elif len(_fld_full) > 1:
-        fld_name = '*'.join([f+'.FLD' for f in fld_name_ls.split(';')])
-        _composition = np.array(_fld_full[1].split(';'), dtype=float)
+        fld_name = "*".join([f + ".FLD" for f in fld_name_ls.split(";")])
+        _composition = np.array(_fld_full[1].split(";"), dtype=float)
         fld_composition = _composition / _composition.sum()
         if len(_fld_full) == 3:
-            iMass = 0 if _fld_full[2] == 'mol' else 1
-        n_components = 1 + fld_name.count('*')
+            iMass = 0 if _fld_full[2] == "mol" else 1
+        n_components = 1 + fld_name.count("*")
     else:
-        ValueError('Invalid fluid string entry')
+        ValueError("Invalid fluid string entry")
     return fld_name, fld_composition, n_components, iMass

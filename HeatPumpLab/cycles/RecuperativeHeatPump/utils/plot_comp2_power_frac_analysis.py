@@ -53,6 +53,7 @@ DEFAULT_REFRIGERANTS: Sequence[str] = (
     # "Methanol",
 )
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -63,7 +64,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--csv",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "results" / "RecuperativeHP_results.csv",
+        default=Path(__file__).resolve().parents[1]
+        / "results"
+        / "RecuperativeHP_results.csv",
         help="Path to the optimisation results CSV file.",
     )
     parser.add_argument(
@@ -295,7 +298,7 @@ def plot_metric_for_refrigerants(
         if aggregated.empty:
             continue
 
-        line, = ax.plot(
+        (line,) = ax.plot(
             aggregated.index,
             aggregated.values,
             marker="o",
@@ -394,7 +397,6 @@ def get_comp2_power_frac_comparison_analysis() -> None:
             dpi=args.dpi,
             output_dir=args.output_dir,
         )
-
 
 
 METRIC_LABELS: dict[str, str] = {

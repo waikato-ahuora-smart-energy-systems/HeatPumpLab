@@ -5,22 +5,30 @@ from .stream import Stream
 
 class Splitter:
     """Splits a stream into two branches based on a fixed ratio."""
+
     flow_in: Stream = None
     flow_out_1: Stream = None
     flow_out_2: Stream = None
-    r_ratio: float =0.0
+    r_ratio: float = 0.0
     converged: bool = True
 
-    def __init__(self, name='Splitter', fluid: str = None, r_ratio: float =0.0, specific_heat_loss: float =0.0, tol: float =1e-6):
+    def __init__(
+        self,
+        name="Splitter",
+        fluid: str = None,
+        r_ratio: float = 0.0,
+        specific_heat_loss: float = 0.0,
+        tol: float = 1e-6,
+    ):
         """Initialise inlet/outlet streams and the flow split ratio."""
         self.name = name
-        self.flow_in = Stream(name='flow_in', fluid=fluid)
-        self.flow_out_1 = Stream(name='flow_out_1', fluid=fluid)
-        self.flow_out_2 = Stream(name='flow_out_2', fluid=fluid)
+        self.flow_in = Stream(name="flow_in", fluid=fluid)
+        self.flow_out_1 = Stream(name="flow_out_1", fluid=fluid)
+        self.flow_out_2 = Stream(name="flow_out_2", fluid=fluid)
         self.r_ratio = r_ratio
         self.specific_heat_loss = specific_heat_loss
         self.tol = tol
-    
+
     def solve(self):
         """Split the inlet flow and copy thermodynamic properties."""
         self.flow_out_1.copy_fld_props(self.flow_in)
@@ -41,14 +49,14 @@ class Splitter:
     #         for i in range(divisions + 1):
     #             m_str = Stream(name='source i',
     #                                pp_instance =s_in.pp_instance,
-    #                                fluid=s_in.fluid, 
-    #                                pressure=s_in.pressure * (PR_i) ** i, 
-    #                                enthalpy=s_in.enthalpy - dh_tot * i / divisions, 
-    #                                mass_flow=s_in.mass_flow, 
+    #                                fluid=s_in.fluid,
+    #                                pressure=s_in.pressure * (PR_i) ** i,
+    #                                enthalpy=s_in.enthalpy - dh_tot * i / divisions,
+    #                                mass_flow=s_in.mass_flow,
     #                                )
     #             # m_str.props_in_mPH()
     #             ls.append(m_str)
-            
+
     #         return ls
 
     #     data['siso'] = get_inter_data(self.flow_in, self.flow_out)

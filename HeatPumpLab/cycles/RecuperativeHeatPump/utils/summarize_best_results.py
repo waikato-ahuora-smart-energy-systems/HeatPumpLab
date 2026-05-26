@@ -26,7 +26,22 @@ DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
 )
 
 DEFAULT_INCLUDE_COLUMNS: Sequence[str] = (
-    'cycle_type', 'COP', 'COP_pct_increase_vs_base', 'VHC', 'eDTL', 'SLE', 'LMTD_gcs', 'dT_rhx1_cold', 'dT_rhx2_cold', 'comp2_power_frac', 'T_gc_out', 'Pmax', 'Pmax_reduction_vs_base', 'PR_1', 'PR_2', 'T_comp_discharge'
+    "cycle_type",
+    "COP",
+    "COP_pct_increase_vs_base",
+    "VHC",
+    "eDTL",
+    "SLE",
+    "LMTD_gcs",
+    "dT_rhx1_cold",
+    "dT_rhx2_cold",
+    "comp2_power_frac",
+    "T_gc_out",
+    "Pmax",
+    "Pmax_reduction_vs_base",
+    "PR_1",
+    "PR_2",
+    "T_comp_discharge",
 )
 
 BASECASE_DTRHX1_COLD = 0.0
@@ -204,15 +219,15 @@ def filter_dataframe(
         filtered_values = [
             value
             for value in comp2_values
-            if any(math.isclose(value, avail, rel_tol=1e-9) for avail in available_comp2)
+            if any(
+                math.isclose(value, avail, rel_tol=1e-9) for avail in available_comp2
+            )
         ]
         if not filtered_values:
             raise ValueError(
                 "No matching comp2_power_frac values found after applying the filter."
             )
-        df = df[
-            df["comp2_power_frac"].astype(float).isin(filtered_values)
-        ]
+        df = df[df["comp2_power_frac"].astype(float).isin(filtered_values)]
     return df
 
 
@@ -247,10 +262,12 @@ def summarise_best_cases(
                 "refrigerant": refrigerant,
                 "metric_value": best_row[metric],
             }
-            include_columns = include_columns if include_columns is not None else best_row.index
+            include_columns = (
+                include_columns if include_columns is not None else best_row.index
+            )
             for column in include_columns:
                 if column in best_row.index:
-                    record[column] = best_row[column]                                       
+                    record[column] = best_row[column]
             records.append(record)
 
     summary_df = pd.DataFrame.from_records(records)
@@ -263,8 +280,12 @@ def summarise_best_cases(
 
 
 def get_best_cases_summary(
-    filepath: Path = Path(__file__).resolve().parents[1] / "results" / "RecuperativeHP_results.csv",
-    output: Path | None = Path(__file__).resolve().parents[1] / "results" / "Summary.csv",
+    filepath: Path = Path(__file__).resolve().parents[1]
+    / "results"
+    / "RecuperativeHP_results.csv",
+    output: Path | None = Path(__file__).resolve().parents[1]
+    / "results"
+    / "Summary.csv",
 ) -> None:
     args = parse_args()
 
