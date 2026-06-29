@@ -62,17 +62,17 @@ class Stream:
 
     def auto_calc_props(self) -> None:
         """Populate missing properties based on whichever state variables are set."""
-        if self.pressure != None and self.enthalpy != None:
+        if self.pressure is not None and self.enthalpy is not None:
             self.props_in_mPH()
-        elif self.pressure != None and self.temperature != None:
+        elif self.pressure is not None and self.temperature is not None:
             self.props_in_mPT()
-        elif self.pressure != None and self.quality != None:
+        elif self.pressure is not None and self.quality is not None:
             self.props_in_mPQ()
-        elif self.temperature != None and self.quality != None:
+        elif self.temperature is not None and self.quality is not None:
             self.props_in_mTQ()
-        elif self.pressure != None and self.entropy != None:
+        elif self.pressure is not None and self.entropy is not None:
             self.props_in_mPS()
-        elif self.temperature != None and self.entropy != None:
+        elif self.temperature is not None and self.entropy is not None:
             self.props_in_mTS()
         else:
             None
@@ -150,7 +150,7 @@ class Stream:
         """Update state using temperature and entropy."""
         self._update_props(
             self.PP.get_std_properties(
-                "TQ", self.temperature, self.entropy, self.fld_composition
+                "TS", self.temperature, self.entropy, self.fld_composition
             )
         )
 

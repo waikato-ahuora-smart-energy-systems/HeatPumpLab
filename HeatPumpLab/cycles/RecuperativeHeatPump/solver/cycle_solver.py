@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.optimize import root_scalar, minimize, Bounds
+from scipy.optimize import root_scalar, minimize_scalar
 from math import log, exp
 from typing import TYPE_CHECKING
 
-from ....utils.readWriteOutput import *
-from ....utils.graph import *
+from ....utils.readWriteOutput import print_result_to_csv
+from ....utils.graph import plot_driving_force
 
 if TYPE_CHECKING:
     from .. import BaseHeatPump
@@ -27,14 +27,17 @@ def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
     try:
         hp = _solve_case(hp)
 
-    except:
+    except Exception as exc:
+        hp.converged = False
+        hp.feasible = False
+        hp.solve_error = str(exc)
         if hp.debug:
             hp.get_cycle_plot()
         _print_failed_to_solve_report(hp)
         print(
-            "Heat pump solver failed with an exception. The failed case has been recorded."
+            "Heat pump solver failed with an exception. "
+            f"The failed case has been recorded. Error: {exc}"
         )
-        hp.converged = False
     return hp
 
 
@@ -49,21 +52,9 @@ def _solve_case(hp: BaseHeatPump) -> BaseHeatPump:
     if hp.debug:
         hp.get_cycle_plot()
 
-    dt_offset = hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
+    dt_offset = _get_evaporator_inlet_temperature_offset(hp)
     if abs(dt_offset) > 0.1 and _check_hp_model_convergance(hp):
-        while (
-            abs(
-                _find_evap_inlet_temperature_offset(
-                    hp.evaporator.sink_out.temperature - dt_offset, hp
-                )
-            )
-            > 1e-6
-        ):
-            dt_offset = hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
-
-        hp.Tref_evap_outlet = hp.Tref_evap_inlet + dt_offset
-        hp.evaporator.sink_out.props_in_ab("TQ", hp.Tref_evap_outlet, 1.0)
-        hp = _find_hp_with_min_discharge_pressure(hp)
+        hp = _align_evaporator_inlet_temperature(hp)
 
     hp = _get_metrics(hp)
     return hp
@@ -72,13 +63,9 @@ def _solve_case(hp: BaseHeatPump) -> BaseHeatPump:
 def _check_hp_model_convergance(hp: BaseHeatPump) -> bool:
     """Return True when the cycle has converged and yielded positive work."""
     return (
-        True
-        if (
-            sum([c.power for c in hp.compressors]) > 0.0
-            and hp.converged == True
-            and hp.feasible == True
-        )
-        else False
+        sum([c.power for c in hp.compressors]) > 0.0
+        and hp.converged
+        and hp.feasible
     )
 
 
@@ -153,20 +140,38 @@ def _get_metrics(hp: BaseHeatPump) -> BaseHeatPump:
     return hp
 
 
-def _find_evap_inlet_temperature_offset(
-    Tref_evap_outlet: float, hp: BaseHeatPump
-) -> float:
-    """Return the mismatch between target and simulated evaporator inlet temperatures."""
-    hp.evaporator.sink_out.props_in_ab("TQ", Tref_evap_outlet, 1.0)
-    hp = _find_hp_with_min_discharge_pressure(hp)
+def _get_evaporator_inlet_temperature_offset(hp: BaseHeatPump) -> float:
+    """Return simulated minus target evaporator inlet temperature."""
     return hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
+
+
+def _align_evaporator_inlet_temperature(hp: BaseHeatPump) -> BaseHeatPump:
+    """Adjust dew-point outlet temperature until the evaporator inlet matches target."""
+    for _ in range(25):
+        dt_offset = _get_evaporator_inlet_temperature_offset(hp)
+        if abs(dt_offset) <= hp.tol:
+            hp.Tref_evap_outlet = hp.evaporator.sink_out.temperature
+            return hp
+
+        hp.evaporator.sink_out.props_in_ab(
+            "TQ", hp.evaporator.sink_out.temperature - dt_offset, 1.0
+        )
+        _reset_discharge_pressure_bounds(hp)
+        hp = _find_hp_with_min_discharge_pressure(hp)
+
+    raise Exception("Evaporator inlet temperature correction failed to converge.")
+
+
+def _reset_discharge_pressure_bounds(hp: BaseHeatPump) -> None:
+    """Invalidate cached pressure bounds after thermodynamic state changes."""
+    hp.comp_discharge.pressure_bnds = None
 
 
 def _find_hp_with_min_discharge_pressure(hp: BaseHeatPump) -> BaseHeatPump:
     """Search for the discharge pressure that meets the gas-cooler pinch target."""
     bnds, x0, hp.feasible, _ = _get_discharge_pressure_bounds(hp)
     hp.comp_discharge.pressure_bnds = bnds
-    if hp.feasible == True:
+    if hp.feasible:
         r = root_scalar(
             f=_find_current_gc_dtmin_offset,  # find the gas discharge pressure resulting in the target dtmin
             method="brentq",
@@ -228,7 +233,7 @@ def _get_discharge_pressure_bounds(
 
     # Positive dtmin is P_ub and negative dtmin is P_lb
     if hp.comp_discharge.pressure_bnds is not None:
-        if hp.compute_jac == False:
+        if not hp.compute_jac:
             P_lb, P_ub = hp.comp_discharge.pressure_bnds
         else:
             P_lb, P_ub = (
@@ -364,54 +369,25 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
     gc.source_pinch.pressure = gc.source_out.pressure
     gc.sink_pinch.pressure = gc.sink_in.pressure
 
-    bnds = Bounds(lb=0.0, ub=gc.duty)
+    if gc.duty <= 0.0:
+        return [np.inf, 0.0, False]
 
-    r0 = minimize(
-        fun=_calc_pinch_dtmin_and_jac,
-        args=(gc),
-        method="L-BFGS-B",
-        x0=[gc.duty * 0.25],
-        bounds=bnds,
-        jac=True,
-    )  # TNC L-BFGS-B
-    r1 = minimize(
-        fun=_calc_pinch_dtmin_and_jac,
-        args=(gc),
-        method="L-BFGS-B",
-        x0=[gc.duty * 0.50],
-        bounds=bnds,
-        jac=True,
-    )  # TNC L-BFGS-B
-    r2 = minimize(
-        fun=_calc_pinch_dtmin_and_jac,
-        args=(gc),
-        method="L-BFGS-B",
-        x0=[gc.duty * 0.75],
-        bounds=bnds,
-        jac=True,
-    )  # TNC L-BFGS-B
-
-    res = [r0, r1, r2]
-    j = np.argmin([r["fun"] for r in res])
-    if res[j]["x"] < 0.001 * gc.duty or res[j]["x"] > 0.999 * gc.duty:
-        res.pop(j)
-        j = np.argmin([r["fun"] for r in res])
-        if res[j]["x"] < 0.001 * gc.duty or res[j]["x"] > 0.999 * gc.duty:
-            res.pop(j)
-            j = np.argmin([r["fun"] for r in res])
-
-    r = res[j]
-
-    return [r["fun"], r["x"][0] / gc.duty, r["success"]]
-
-
-def _calc_pinch_dtmin_and_jac(Q_arr: np.ndarray, gc: GasCooler):
-    """Return pinch delta-T and Jacobian for a given heat transfer split."""
-    gc = _calc_pinch_props_at_Q(Q_arr[0], gc)
-    return (
-        _calc_dtmin_at_given_point(gc.source_pinch, gc.sink_pinch),  # objective
-        _calc_jac_at_given_point(gc.source_pinch, gc.sink_pinch),  # Jacobian
+    q_min = 0.001 * gc.duty
+    q_max = 0.999 * gc.duty
+    r = minimize_scalar(
+        fun=lambda Q: _calc_pinch_dtmin(Q, gc),
+        method="bounded",
+        bounds=(q_min, q_max),
+        options={"xatol": max(gc.tol * gc.duty, 1e-9)},
     )
+
+    return [r.fun, r.x / gc.duty, r.success]
+
+
+def _calc_pinch_dtmin(Q: float, gc: GasCooler) -> float:
+    """Return pinch delta-T for a given heat transfer split."""
+    gc = _calc_pinch_props_at_Q(Q, gc)
+    return _calc_dtmin_at_given_point(gc.source_pinch, gc.sink_pinch)
 
 
 def _update_pinch_props_for_gcs(P_comp_out: float, hp: BaseHeatPump) -> BaseHeatPump:
@@ -436,13 +412,6 @@ def _calc_pinch_props_at_Q(Q: float, gc: GasCooler) -> GasCooler:
 def _calc_dtmin_at_given_point(source: Stream, sink: Stream) -> float:
     """Delta-T between matched source and sink pinch points."""
     return source.temperature - sink.temperature
-
-
-def _calc_jac_at_given_point(source: Stream, sink: Stream) -> float:
-    """Sensitivity of delta-T to the heat load for the pinch match."""
-    return 1 / (source.heat_capacity * source.mass_flow) - 1 / (
-        sink.heat_capacity * sink.mass_flow
-    )
 
 
 def _print_failed_to_solve_report(

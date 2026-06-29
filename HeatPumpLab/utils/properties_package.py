@@ -31,13 +31,14 @@ class PropertyPackage:
 
     iFlag: int = 0
     UNITS: int = RP_ref.GETENUMdll(0, "SI with C").iEnum
-    iMass: int = 1
+    iMass: int = 0
     P_crit: float
     T_crit: float
     D_crit: float
     molar_mass: float
     fld_name: str
     fld_composition: list[float]
+    composition_basis: str
     PP_fld_names: list[str]
     n_components: int = 1
     TC_to_K: float = 273.15
@@ -45,11 +46,15 @@ class PropertyPackage:
 
     def __init__(self, fld_name: str = None, pp_instance: str = "") -> None:
         """Initialise an instance bound to a particular fluid definition."""
-        self.fld_name, self.fld_composition, self.n_components, self.iMass = (
-            _get_fluid_info(fld_name)
-        )
+        (
+            self.fld_name,
+            self.fld_composition,
+            self.n_components,
+            self.composition_basis,
+        ) = _get_fluid_info(fld_name)
+        self.iMass = 0
         self._set_RP_lib(pp_instance)
-        self._set_database_fluid()
+        self.fld_composition = self._get_mole_fractions(self.fld_composition)
         self.molar_mass, self.P_crit, self.T_crit, self.D_crit = (
             self._get_critical_properties()
         )
@@ -159,7 +164,7 @@ class PropertyPackage:
         return self.RP.REFPROPdll(
             self.fld_name,
             "PH",
-            "M;PCRIT;TCRIT;DCRIT",
+            "M;PC;TC;DC",
             self.UNITS,
             self.iMass,
             self.iFlag,
@@ -168,26 +173,59 @@ class PropertyPackage:
             self.fld_composition,
         ).Output[0:4]
 
+    def _get_mole_fractions(self, composition):
+        """Return mole fractions for REFPROP low-level flash routines."""
+        composition = np.array(composition, dtype=float)
+        if self.composition_basis != "mass":
+            return composition.tolist()
 
-def _get_fluid_info(fluid: str) -> list[str, float, list[float]]:
+        molar_masses = np.array(
+            [
+                self.RP.WMOLdll(self._get_component_fraction_vector(i))
+                for i in range(self.n_components)
+            ],
+            dtype=float,
+        )
+        mole_amounts = composition / molar_masses
+        return (mole_amounts / mole_amounts.sum()).tolist()
+
+    def _get_component_fraction_vector(self, index: int) -> list[float]:
+        """Return a pure-component composition vector for the loaded fluid."""
+        return [
+            1.0 if component == index else 0.0
+            for component in range(self.n_components)
+        ]
+
+
+def _get_fluid_info(fluid: str) -> tuple[str, list[float], int, str]:
     """Parse a REFPROP fluid composition string."""
     _fld_full: list[str]
     _composition: np.ndarray[float]
-    iMass: int = 1
+    composition_basis: str = "mol"
 
     _fld_full = fluid.split("|")
     fld_name_ls = _fld_full[0]
     if len(_fld_full) == 1:
         fld_name: str = fld_name_ls
-        fld_composition: float = [1.0]
+        fld_composition = [1.0]
         n_components = 1
     elif len(_fld_full) > 1:
         fld_name = "*".join([f + ".FLD" for f in fld_name_ls.split(";")])
         _composition = np.array(_fld_full[1].split(";"), dtype=float)
-        fld_composition = _composition / _composition.sum()
+        if np.any(_composition < 0.0):
+            raise ValueError("Fluid composition cannot contain negative fractions.")
+        if _composition.sum() <= 0.0:
+            raise ValueError("Fluid composition must contain at least one positive fraction.")
+        fld_composition = (_composition / _composition.sum()).tolist()
         if len(_fld_full) == 3:
-            iMass = 0 if _fld_full[2] == "mol" else 1
+            composition_basis = _fld_full[2].strip().lower()
+            if composition_basis not in ("mol", "mass"):
+                raise ValueError("Fluid composition basis must be 'mol' or 'mass'.")
         n_components = 1 + fld_name.count("*")
     else:
-        ValueError("Invalid fluid string entry")
-    return fld_name, fld_composition, n_components, iMass
+        raise ValueError("Invalid fluid string entry.")
+
+    if len(fld_composition) != n_components:
+        raise ValueError("Fluid composition length does not match component count.")
+
+    return fld_name, fld_composition, n_components, composition_basis

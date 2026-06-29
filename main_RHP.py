@@ -4,11 +4,13 @@ __email__ = "tim.walmsley@waikato.ac.nz"
 __date__ = "2021-2025"
 
 """
-Heat pump lab
-By Tim Walmsley, 
+Heat pump lab: Recuperative heat pump cycle - results parameter sweep and results analysis.
+By Tim Walmsley and Keri Adamson, 
 University of Waikato, 
 2021-2025 
 tim.walmsley@waikato.ac.nz
+Cite: Walmsley et al., 2026, Recuperative Heat Pump Cycle Concept for High-Temperature 
+Glide Process Heating Applications, Applied Thermal Engineering, tbc
 """
 
 import numpy as np
@@ -42,23 +44,13 @@ REFRIGERANT_LIST = [
     "PROPYLEN",
     "DME",
     "Methanol",
-    # 'propane;butane|.5;.5|mol',
-    # 'propane;Isobutane|.5;.5|mol',
-    # 'propane;Pentane|.5;.5|mol',
-    # 'propane;Isopentane|.5;.5|mol',
-    # 'propane;Neopentane|.5;.5|mol',
-    # 'Isobutane;butane|.5;.5|mol',
-    # 'Isobutane;Pentane|.5;.5|mol',
-    # 'Isobutane;Isopentane|.5;.5|mol',
-    # 'Isobutane;Neopentane|.5;.5|mol',
-    # 'butane;Pentane|.5;.5|mol',
-    # 'butane;Isopentane|.5;.5|mol',
-    # 'butane;Neopentane|.5;.5|mol',
 ]
 
 
 def run():
-    param_kwargs = {
+    # Note: the sweep typically takes 30 hours to run on a standard computer, 
+    # so adjust the parameter lists as needed to reduce runtime
+    param_kwargs = { 
         "refrigerant_ls": REFRIGERANT_LIST,
         "dT_rhx1_cold_ls": np.linspace(0, 100, num=41),
         "dT_rhx2_cold_ls": np.linspace(0, 100, num=41),
@@ -85,6 +77,6 @@ def results_analysis():
 
 
 if __name__ == "__main__":
-    # run()
+    run()
     results_analysis()
     pass
