@@ -125,7 +125,7 @@ def _parse_args(
         action="store_false",
         help="Disable logarithmic colour scaling for Pmax heatmaps.",
     )
-    return parser._parse_args()
+    return parser.parse_args()
 
 
 def _load_results(
@@ -358,8 +358,6 @@ def _create_heatmaps(
                 comp2_value,
             )
             subset = df.loc[comp_mask]
-            if subset.empty:
-                continue
 
             for refrigerant in refrigerants:
                 refrigerant_slice = subset[subset["refrigerant"] == refrigerant]

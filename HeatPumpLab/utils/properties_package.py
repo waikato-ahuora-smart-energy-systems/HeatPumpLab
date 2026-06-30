@@ -5,6 +5,40 @@ from sys import platform
 import numpy as np
 
 
+def _get_refprop_paths(platform_name: str) -> tuple[str, str, str, str]:
+    """Return REFPROP library paths and root path for the current platform."""
+    if platform_name == "darwin":
+        refprop_root = r"/Library/REFPROP/"
+        return (
+            r"/Library/REFPROP/librefprop.dylib",
+            r"/Library/REFPROP/librefprop-source.dylib",
+            r"/Library/REFPROP/librefprop-sink.dylib",
+            refprop_root,
+        )
+
+    refprop_root = "C:/Program Files (x86)/REFPROP"
+    return (
+        "C:/Program Files (x86)/REFPROP/REFPROP.DLL",
+        "C:/Program Files (x86)/REFPROP/REFPROP-source.DLL",
+        "C:/Program Files (x86)/REFPROP/REFPROP-sink.DLL",
+        refprop_root,
+    )
+
+
+def _load_refprop_libraries(
+    platform_name: str,
+    library_factory=REFPROPFunctionLibrary,
+) -> tuple[REFPROPFunctionLibrary, REFPROPFunctionLibrary, REFPROPFunctionLibrary]:
+    """Load REFPROP libraries for default, source, and sink property contexts."""
+    ref_path, src_path, snk_path, refprop_root = _get_refprop_paths(platform_name)
+    rp_ref = library_factory(ref_path)
+    rp_src = library_factory(src_path)
+    rp_snk = library_factory(snk_path)
+    for rp in rp_ref, rp_snk, rp_src:
+        rp.SETPATHdll(refprop_root)
+    return rp_ref, rp_src, rp_snk
+
+
 class PropertyPackage:
     """Encapsulate REFPROP library access for a configured working fluid."""
 
@@ -12,22 +46,7 @@ class PropertyPackage:
     RP_ref: REFPROPFunctionLibrary
     RP_src: REFPROPFunctionLibrary
     RP_snk: REFPROPFunctionLibrary
-    if platform == "darwin":
-        RP_ref = REFPROPFunctionLibrary(r"/Library/REFPROP/librefprop.dylib")
-        RP_src = REFPROPFunctionLibrary(r"/Library/REFPROP/librefprop-source.dylib")
-        RP_snk = REFPROPFunctionLibrary(r"/Library/REFPROP/librefprop-sink.dylib")
-        for RP in RP_ref, RP_snk, RP_src:
-            RP.SETPATHdll(r"/Library/REFPROP/")
-    else:
-        RP_ref = REFPROPFunctionLibrary("C:/Program Files (x86)/REFPROP/REFPROP.DLL")
-        RP_src = REFPROPFunctionLibrary(
-            "C:/Program Files (x86)/REFPROP/REFPROP-source.DLL"
-        )
-        RP_snk = REFPROPFunctionLibrary(
-            "C:/Program Files (x86)/REFPROP/REFPROP-sink.DLL"
-        )
-        for RP in RP_ref, RP_snk, RP_src:
-            RP.SETPATHdll("C:/Program Files (x86)/REFPROP")
+    RP_ref, RP_src, RP_snk = _load_refprop_libraries(platform)
 
     iFlag: int = 0
     UNITS: int = RP_ref.GETENUMdll(0, "SI with C").iEnum
@@ -209,7 +228,7 @@ def _get_fluid_info(fluid: str) -> tuple[str, list[float], int, str]:
         fld_name: str = fld_name_ls
         fld_composition = [1.0]
         n_components = 1
-    elif len(_fld_full) > 1:
+    else:
         fld_name = "*".join([f + ".FLD" for f in fld_name_ls.split(";")])
         _composition = np.array(_fld_full[1].split(";"), dtype=float)
         if np.any(_composition < 0.0):
@@ -222,8 +241,6 @@ def _get_fluid_info(fluid: str) -> tuple[str, list[float], int, str]:
             if composition_basis not in ("mol", "mass"):
                 raise ValueError("Fluid composition basis must be 'mol' or 'mass'.")
         n_components = 1 + fld_name.count("*")
-    else:
-        raise ValueError("Invalid fluid string entry.")
 
     if len(fld_composition) != n_components:
         raise ValueError("Fluid composition length does not match component count.")

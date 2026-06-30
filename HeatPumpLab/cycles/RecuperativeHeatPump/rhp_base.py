@@ -1,6 +1,15 @@
 """High-level Recuperative Heat Pump cycle definition."""
 
-from ...components import *
+from ...components import (
+    Compressor,
+    CustomRelationship,
+    Evaporator,
+    ExpansionValve,
+    GasCooler,
+    PlateHeatExchanger,
+    SetRelationship,
+    Stream,
+)
 from ..common.heatPump import BaseHeatPump
 
 from .rhp_helpers import set_rhp_model

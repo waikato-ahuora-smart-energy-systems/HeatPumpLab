@@ -1,6 +1,6 @@
 """Helper to submit case evaluations in parallel."""
 
-from concurrent.futures import ProcessPoolExecutor as pool
+from concurrent.futures import ProcessPoolExecutor
 import os
 
 __all__ = ["solve_in_parallel"]
@@ -11,13 +11,26 @@ __all__ = ["solve_in_parallel"]
 
 
 def solve_in_parallel(
-    HP_fn, cases: list, f_solve, n_cpu: int = os.cpu_count() - 1
+    HP_fn,
+    cases: list,
+    f_solve,
+    n_cpu: int = os.cpu_count() - 1,
+    executor_factory=None,
 ) -> bool:
     """Execute the provided solve function across cases using a process pool."""
-    # Use parallel processing distributed over all cores to speed up the analysis
     print(len(cases))
-    executor: pool = pool(max_workers=n_cpu)
-    [executor.submit(f_solve, HP_fn, case) for case in cases]
+    if n_cpu == 1:
+        for case in cases:
+            f_solve(HP_fn, case)
+        print("All cases completed.")
+        return True
+
+    if executor_factory is None:
+        executor_factory = ProcessPoolExecutor
+
+    executor = executor_factory(max_workers=n_cpu)
+    for case in cases:
+        executor.submit(f_solve, HP_fn, case)
     executor.shutdown()
     print("All cases completed.")
     return True

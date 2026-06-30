@@ -1,8 +1,6 @@
 """Helpers to enumerate, deduplicate, and prioritise recuperative heat pump cases."""
 
-import pandas as pd
-
-from ....utils.readWriteOutput import *
+from ....utils.readWriteOutput import read_csv_to_results, transfer_temp_files_to_results
 
 __all__ = ["get_RHP_case_list_to_solve", "get_unsolved_RHP_case_list_to_resolve"]
 
@@ -17,29 +15,37 @@ def get_RHP_case_list_to_solve(
     dT_rhx1_cold_ls: list = None,
     dT_rhx2_cold_ls: list = None,
     comp2_power_frac_ls: list = None,
+    results_dir: str = "results",
 ) -> list[list[float | str | bool]]:
     """Return pending analysis cases after removing already-solved entries."""
     return _remove_completed_cases_from_list(
         cases=_get_all_analysis_case_list(
-            refrigerant_ls=refrigerant_ls,
-            dT_rhx1_cold_ls=dT_rhx1_cold_ls,
-            dT_rhx2_cold_ls=dT_rhx2_cold_ls,
-            comp2_power_frac_ls=comp2_power_frac_ls,
+            refrigerant_ls=_default_list(refrigerant_ls, ["Butane"]),
+            dT_rhx1_cold_ls=_default_list(dT_rhx1_cold_ls, [0.0]),
+            dT_rhx2_cold_ls=_default_list(dT_rhx2_cold_ls, [0.0]),
+            comp2_power_frac_ls=_default_list(comp2_power_frac_ls, [0.5]),
         ),
         file_name=file_name,
+        results_dir=results_dir,
         f_comparison=_check_if_analysis_cases_are_identical,
         f_signature=_analysis_case_signature,
     )
 
 
 def get_unsolved_RHP_case_list_to_resolve(
-    filename_unsolved: str = "Cases-Unsolved", filename_resolved: str = "Cases-Resolved"
+    filename_unsolved: str = "Cases-Unsolved",
+    filename_resolved: str = "Cases-Resolved",
+    results_dir: str = "results",
 ):
     """Return unsolved cases after subtracting any newly resolved ones."""
     # transfer_temp_files_to_results(f'{filename_resolved}')
-    unsolved_cases = read_csv_to_results(file_name=f"{filename_unsolved}")
-    resolved_cases = read_csv_to_results(file_name=f"{filename_resolved}")
-    if resolved_cases != None:
+    unsolved_cases = read_csv_to_results(
+        file_name=f"{filename_unsolved}", results_dir=results_dir
+    )
+    resolved_cases = read_csv_to_results(
+        file_name=f"{filename_resolved}", results_dir=results_dir
+    )
+    if resolved_cases is not None:
         for i in reversed(range(len(unsolved_cases))):
             for sol in resolved_cases:
                 if _check_if_analysis_cases_are_identical(sol, unsolved_cases[i]):
@@ -124,14 +130,14 @@ def _check_if_analysis_cases_are_identical(res: dict, case: dict) -> bool:
 def _remove_completed_cases_from_list(
     cases: list,
     file_name: str,
+    results_dir: str,
     f_comparison,
     f_signature=None,
 ) -> list:
     """Filter out cases already present in the results store."""
     # Check if any past results in the temp folder need to be transferred and added to the complete results summary
-    transfer_temp_files_to_results(file_name=file_name)
-    prev_results = read_csv_to_results(file_name=file_name)
-    results_df = pd.DataFrame(prev_results) if prev_results not in (None, []) else None
+    transfer_temp_files_to_results(file_name=file_name, results_dir=results_dir)
+    prev_results = read_csv_to_results(file_name=file_name, results_dir=results_dir)
 
     signature_lookup: set = set()
     if f_signature is not None and prev_results not in (None, []):
@@ -156,7 +162,6 @@ def _remove_completed_cases_from_list(
         elif prev_results not in (None, []):
             if any(f_comparison(res, case) for res in prev_results):
                 continue
-        # _apply_interpolation_if_possible(case, results_df)
         if f_signature is not None and case_signature is not None:
             signature_lookup.add(case_signature)
         remaining_cases.append(case)
@@ -208,3 +213,8 @@ def _round_float(value: object, ndigits: int = 4) -> float | None:
         return round(float(value), ndigits)
     except (TypeError, ValueError):
         return None
+
+
+def _default_list(value: list | None, default: list) -> list:
+    """Return the caller-supplied list or a default when omitted."""
+    return default if value is None else value

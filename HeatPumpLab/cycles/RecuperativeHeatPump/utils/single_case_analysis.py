@@ -127,7 +127,7 @@ butane_args = {
 def analyse_single_case(HP_fn, args: list[float | str | bool] = None):
     """Solve a single case and emit reports/plots for inspection."""
 
-    if args == None:
+    if args is None:
         raise ValueError("No arguments provided for single case analysis.")
 
     hp = HP_fn(**args)

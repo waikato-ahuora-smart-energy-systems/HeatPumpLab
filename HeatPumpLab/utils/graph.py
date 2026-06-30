@@ -47,6 +47,8 @@ def plot_cycle(
     res=50,
     refrigerant="default",
     include_sink=True,
+    show: bool = True,
+    output_dir: str | Path | None = None,
 ):
     """Plot a cycle diagram with optional sink curves and save the figure."""
     cycle_obj = cycle_obj + [cycle_obj[0]]
@@ -119,7 +121,6 @@ def plot_cycle(
                 if sink_component is None:
                     sink_component = "Component"
                 sink_component = str(sink_component)
-                mapped_sink_component = _map_legend_name(sink_component)
                 sink_label = "AIR*"
                 if sink_label in sink_labels:
                     sink_label = None
@@ -130,22 +131,25 @@ def plot_cycle(
 
     _add_legend(ax)
     _apply_layout(fig)
-    fig.show()
+    if show:
+        fig.show()
     filename = "Cycle--" + y_axis + "_vs_" + x_axis + ".png"
-    output_dir = (
-        Path(__file__).resolve().parents[2]
-        / "results"
-        / "figures"
-        / "cycles"
-        / refrigerant
-    )
+    output_dir = _get_output_dir(refrigerant, output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_dir / filename, bbox_inches="tight", dpi=DEFAULT_DPI)
     return fig, ax
 
 
 def plot_driving_force(
-    hx_obj, title="", x_axis="h", y_axis="dT*", res=50, dtmin=0, refrigerant="default"
+    hx_obj,
+    title="",
+    x_axis="h",
+    y_axis="dT*",
+    res=50,
+    dtmin=0,
+    refrigerant="default",
+    show: bool = True,
+    output_dir: str | Path | None = None,
 ):
     """Plot driving-force curves for a list of heat exchangers."""
     fig: plt.Figure
@@ -196,22 +200,24 @@ def plot_driving_force(
 
     _add_legend(ax)
     _apply_layout(fig)
-    fig.show()
+    if show:
+        fig.show()
     filename = "Driving_force_plot.png"
-    output_dir = (
-        Path(__file__).resolve().parents[2]
-        / "results"
-        / "figures"
-        / "cycles"
-        / refrigerant
-    )
+    output_dir = _get_output_dir(refrigerant, output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_dir / filename, bbox_inches="tight", dpi=DEFAULT_DPI)
     return fig, ax
 
 
 def plot_heat_exchanger_profiles(
-    hx_obj=[], title="", x_axis="h", y_axis="T", res=50, refrigerant="default"
+    hx_obj=None,
+    title="",
+    x_axis="h",
+    y_axis="T",
+    res=50,
+    refrigerant="default",
+    show: bool = True,
+    output_dir: str | Path | None = None,
 ):
     """Plot source and sink temperature profiles for heat exchangers."""
     fig: plt.Figure
@@ -221,6 +227,8 @@ def plot_heat_exchanger_profiles(
     fig.set_dpi(DEFAULT_DPI)
     source_labels: set[str] = set()
     sink_labels: set[str] = set()
+    if hx_obj is None:
+        hx_obj = []
 
     if title != "":
         ax.set_title(title)
@@ -268,15 +276,10 @@ def plot_heat_exchanger_profiles(
 
     _add_legend(ax)
     _apply_layout(fig)
-    fig.show()
+    if show:
+        fig.show()
     filename = "Heat_exchanger_profiles.png"
-    output_dir = (
-        Path(__file__).resolve().parents[2]
-        / "results"
-        / "figures"
-        / "cycles"
-        / refrigerant
-    )
+    output_dir = _get_output_dir(refrigerant, output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_dir / filename, bbox_inches="tight", dpi=DEFAULT_DPI)
     return fig, ax
@@ -289,6 +292,8 @@ def plot_simple_xy(
     x_axis: str = "",
     y_axis: str = "",
     refrigerant="default",
+    show: bool = True,
+    output_dir: str | Path | None = None,
 ):
     """Plot a simple 2D curve and write it to the figures directory."""
     fig: plt.Figure
@@ -309,28 +314,26 @@ def plot_simple_xy(
 
     _add_legend(ax)
     _apply_layout(fig)
-    fig.show()
+    if show:
+        fig.show()
     filename = "Cycle--" + y_axis + "_vs_" + x_axis + ".png"
-    output_dir = (
-        Path(__file__).resolve().parents[2]
-        / "results"
-        / "figures"
-        / "cycles"
-        / refrigerant
-    )
+    output_dir = _get_output_dir(refrigerant, output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_dir / filename, bbox_inches="tight", dpi=DEFAULT_DPI)
     return fig, ax
 
 
-def plot_heat_map(title, x_val, x_label, y_val, y_label, z_val, z_label):
+def plot_heat_map(title, x_val, x_label, y_val, y_label, z_val, z_label, show=True):
     """Render a heat map using Plotly and return the figure."""
     df = pd.DataFrame({"x": x_val, "y": y_val, "z": z_val})
     fig = px.density_heatmap(
         df, x="x", y="y", z="z", nbinsx=20, nbinsy=20, color_continuous_scale="Viridis"
     )
-    fig.update_layout(title=title, xaxis_title="X-axis", yaxis_title="Y-axis")
-    fig.show()
+    fig.update_layout(title=title, xaxis_title=x_label, yaxis_title=y_label)
+    fig.update_coloraxes(colorbar_title=z_label)
+    if show:
+        fig.show()
+    return fig
 
 
 #######################################################################################################
@@ -358,6 +361,19 @@ def _apply_layout(fig: plt.Figure) -> None:
         fig.tight_layout(pad=1.4)
     except Exception:
         pass
+
+
+def _get_output_dir(refrigerant: str, output_dir: str | Path | None) -> Path:
+    """Return the directory used for figure output."""
+    if output_dir is not None:
+        return Path(output_dir)
+    return (
+        Path(__file__).resolve().parents[2]
+        / "results"
+        / "figures"
+        / "cycles"
+        / refrigerant
+    )
 
 
 def _rescale(array_to_scale, array_new_scale) -> list[float]:

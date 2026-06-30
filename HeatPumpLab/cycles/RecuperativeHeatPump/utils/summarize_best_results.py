@@ -249,8 +249,6 @@ def summarise_best_cases(
             continue
 
         for refrigerant, group in df_metric.groupby("refrigerant"):
-            if group.empty:
-                continue
             if mode == "max":
                 idx = group[metric].idxmax()
             else:

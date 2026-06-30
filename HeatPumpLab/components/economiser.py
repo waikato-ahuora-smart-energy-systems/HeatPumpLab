@@ -141,6 +141,28 @@ class Economiser:
             dh_tot = s_in.enthalpy - s_out.enthalpy
 
             for i in range(divisions + 1):
+                if i == 0:
+                    m_str = Stream(
+                        name="source i",
+                        fluid=s_in.fluid,
+                        pp_instance=s_in.pp_instance,
+                        mass_flow=s_in.mass_flow,
+                    )
+                    m_str.copy_fld_props(s_in)
+                    m_str.set_flows(s_in.mass_flow)
+                    ls.append(m_str)
+                    continue
+                if i == divisions:
+                    m_str = Stream(
+                        name="source i",
+                        fluid=s_out.fluid,
+                        pp_instance=s_out.pp_instance,
+                        mass_flow=s_out.mass_flow,
+                    )
+                    m_str.copy_fld_props(s_out)
+                    m_str.set_flows(s_out.mass_flow)
+                    ls.append(m_str)
+                    continue
                 m_str = Stream(
                     name="source i",
                     fluid=s_in.fluid,

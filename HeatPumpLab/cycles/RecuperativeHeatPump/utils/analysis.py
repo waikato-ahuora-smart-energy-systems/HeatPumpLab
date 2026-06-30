@@ -23,7 +23,9 @@ if TYPE_CHECKING:
 #######################################################################################################
 
 
-def analyse_RHP_case(HP_fn, case: dict) -> Tuple["BaseHeatPump", float]:
+def analyse_RHP_case(
+    HP_fn, case: dict, results_dir: str = "results"
+) -> Tuple["BaseHeatPump", float]:
     """Optimise the gas-cooler offset for a single case and solve it."""
     dt_ls = []
 
@@ -45,7 +47,7 @@ def analyse_RHP_case(HP_fn, case: dict) -> Tuple["BaseHeatPump", float]:
             f_obj=compute_SEC_obj,
         )
         dt_ls.append(dt)
-    except:
+    except Exception:
         fprime = 1
 
     if fprime > 0.0:
@@ -86,6 +88,7 @@ def analyse_RHP_case(HP_fn, case: dict) -> Tuple["BaseHeatPump", float]:
             obj=obj,
             dt=sum(dt_ls),
             print_to_terminal=False,
+            results_dir=results_dir,
         )
         return hp, dt
     else:
@@ -95,9 +98,10 @@ def analyse_RHP_case(HP_fn, case: dict) -> Tuple["BaseHeatPump", float]:
 def analyse_unsolved_RHP_cases(
     HP_fn,
     debug: bool = True,
+    results_dir: str = "results",
 ):
     """Retry previously unsolved cases and optionally emit debug output."""
-    unsolved_cases = HP_fn.GET_UNSOLVED_CASE_LIST_FN()
+    unsolved_cases = HP_fn.UNSOLVED_CASE_LIST_FN(results_dir=results_dir)
 
     if unsolved_cases is not None and unsolved_cases != []:
         for case in unsolved_cases:
@@ -124,14 +128,14 @@ def analyse_unsolved_RHP_cases(
                 "debug": bool(debug),
             }
 
-            hp, _ = analyse_RHP_case(HP_fn, args)
+            hp, _ = analyse_RHP_case(HP_fn, args, results_dir=results_dir)
             if isinstance(hp, HP_fn):
                 if hp.converged and debug:
                     hp.get_report()
                     fsuffix = get_unique_f_suffix(args) + "-RESOLVED"
-                    print_results(hp.output, fsuffix)
+                    print_results(hp.output, fsuffix, results_dir=results_dir)
 
-        transfer_temp_files_to_results("Cases-Resolved")
+        transfer_temp_files_to_results("Cases-Resolved", results_dir=results_dir)
 
 
 #######################################################################################################

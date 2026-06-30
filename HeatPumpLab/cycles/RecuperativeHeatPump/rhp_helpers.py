@@ -4,7 +4,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import numpy as np
 from scipy.optimize import root_scalar
-from ...components import *
+from ...components import (
+    Compressor,
+    CustomRelationship,
+    Evaporator,
+    ExpansionValve,
+    GasCooler,
+    PlateHeatExchanger,
+    SetRelationship,
+    Stream,
+)
 
 if TYPE_CHECKING:
     from ...cycles import RecuperativeHP
@@ -19,7 +28,7 @@ __all__ = ["set_rhp_model"]
 def set_rhp_model(hp: RecuperativeHP) -> RecuperativeHP:
     """Populate the heat pump instance with components, streams, and logic."""
     hp = _get_RecuperativeHP_structure(hp)
-    if _check_input_param_feasibility(hp) == True:
+    if _check_input_param_feasibility(hp):
         hp.feasible = True
         hp = _get_RecuperativeHP_components(hp)
         hp = _get_RecuperativeHP_streams(hp)
@@ -38,14 +47,10 @@ def set_rhp_model(hp: RecuperativeHP) -> RecuperativeHP:
 def _check_input_param_feasibility(hp: RecuperativeHP):
     """Return True when the provided design knobs represent a feasible case."""
     return (
-        True
-        if (
-            (hp.T_air_tar - hp.T_air_inlet) * 2 / 3
-            >= hp.dT_rhx1_cold + hp.dT_rhx2_cold + hp.dT_rhx3_cold
-            and 0.0 <= hp.dT_gc_out_min_offset <= 50.0
-            and hp.comp2_power_frac + hp.comp3_power_frac <= 1.0
-        )
-        else False
+        (hp.T_air_tar - hp.T_air_inlet) * 2 / 3
+        >= hp.dT_rhx1_cold + hp.dT_rhx2_cold + hp.dT_rhx3_cold
+        and 0.0 <= hp.dT_gc_out_min_offset <= 50.0
+        and hp.comp2_power_frac + hp.comp3_power_frac <= 1.0
     )
 
 
@@ -322,11 +327,11 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
                         if r.converged:
                             P_H = stream_pinch.pressure
                             break
-                    except:
+                    except Exception:
                         pass
                 if P_H <= P_L:
                     P_H = min(20, P_L * 36)
-            except:
+            except Exception:
                 try:
                     # Assume the high pressure = critical pressure
                     # Determine the minimum discharge temperature
@@ -355,7 +360,7 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
                             pass
                         else:
                             P_H = 20
-                except:
+                except Exception:
                     P_H = 20
 
         return (P_H / P_L) ** (1 / n_comp)

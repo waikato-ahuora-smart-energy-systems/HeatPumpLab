@@ -31,12 +31,16 @@ def get_parameter_sweep(
     filename: str = "HP_results",
     param_kwargs: dict = None,
     n_cpu: int = os.cpu_count() - 1,
+    results_dir: str = "results",
 ) -> None:
     """Solve a batch of cases concurrently and persist intermediate results."""
     file_name = filename
-    transfer_temp_files_to_results(file_name)
+    if param_kwargs is None:
+        param_kwargs = {}
+    transfer_temp_files_to_results(file_name, results_dir=results_dir)
     cases = HP_fn.CASE_LIST_FN(
         file_name=file_name,
+        results_dir=results_dir,
         **param_kwargs,
     )
     solve_in_parallel(
@@ -45,7 +49,7 @@ def get_parameter_sweep(
         f_solve=HP_fn.ANAYLSE_CASE_FN,
         n_cpu=n_cpu,
     )
-    transfer_temp_files_to_results(file_name)
+    transfer_temp_files_to_results(file_name, results_dir=results_dir)
 
 
 @timer_func
@@ -63,6 +67,7 @@ def get_results_report(
     obj: float,
     dt: float,
     print_to_terminal: bool = False,
+    results_dir: str = "results",
 ) -> list:
     """Format, persist, and optionally print a solved case summary."""
     hp.get_report()
@@ -88,6 +93,7 @@ def get_results_report(
         results=dict(hp.output),
         fsuffix=fsuffix,
         print_to_terminal=print_to_terminal,
+        results_dir=results_dir,
     )
 
 
@@ -158,11 +164,21 @@ def get_var_kwargs(vars: list[float], param: dict) -> dict[str, float]:
     return d_var
 
 
-def print_results(results: dict, fsuffix: str, print_to_terminal: bool = True) -> None:
+def print_results(
+    results: dict,
+    fsuffix: str,
+    print_to_terminal: bool = True,
+    results_dir: str = "results",
+) -> None:
     """Persist results to CSV and optionally print to stdout."""
     if print_to_terminal:
         print_result_to_terminal(results)
-    print_result_to_csv(output=results, suffix=fsuffix, file_name="temp/R")
+    print_result_to_csv(
+        output=results,
+        suffix=fsuffix,
+        file_name="temp/R",
+        results_dir=results_dir,
+    )
 
 
 def get_unique_f_suffix(param, fld_only=False) -> str:

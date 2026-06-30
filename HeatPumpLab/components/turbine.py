@@ -33,10 +33,11 @@ class Turbine:
 
     def solve(self) -> None:
         """Solve the turbine outlet state using the isentropic relation."""
+        self.flow_out.mass_flow = self.flow_in.mass_flow
         self.flow_out.entropy = self.flow_in.entropy
         self.flow_out.props_in_mPS()
         self.dh_isen = self.flow_in.enthalpy - self.flow_out.enthalpy
-        self.dh = self.dh_isen / self.eff_isen
+        self.dh = self.dh_isen * self.eff_isen
         self.flow_out.enthalpy = self.flow_in.enthalpy - self.dh
         self.flow_out.props_in_mPH()
         self.power = self.dh * self.flow_out.mass_flow * self.eff_gen

@@ -42,7 +42,7 @@ class Compressor:
         """Return coefficient sets for the selected efficiency correlation."""
         available_model_coeffs = [
             ["Proportional", 1.0],  # Ideal compression
-            ["Proportional", 0.7],  # Typical isentropic efficiency
+            ["Proportional", 0.7 / 0.96],  # Typical isentropic efficiency
             ["Polynomial"],  # Compressor model constants (Wang & Cleland, 2018)
             ["Brendel et al"],
         ]
@@ -58,7 +58,7 @@ class Compressor:
                 0.65
                 + 0.015 * self.pressure_ratio
                 + -0.0015 * pow(self.pressure_ratio, 2.0)
-            )
+            ) / 0.96
         elif self.model_coeffs[0] == "Brendel et al":
             if self.pressure_ratio > 1:
                 shaft_eff = (
@@ -69,7 +69,7 @@ class Compressor:
                 )
             else:
                 shaft_eff = 0.4
-        return min(max(shaft_eff, 0.4), 1.0) / self.motor_eff
+        return min(max(shaft_eff, 0.4), 1.0)
 
     def get_compressor_power(self) -> float:
         """Return the mechanical power requirement for the current operating point."""
