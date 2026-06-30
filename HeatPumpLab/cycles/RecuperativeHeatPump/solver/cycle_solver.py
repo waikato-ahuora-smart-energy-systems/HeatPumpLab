@@ -145,11 +145,17 @@ def _get_evaporator_inlet_temperature_offset(hp: BaseHeatPump) -> float:
     return hp.evaporator.sink_in.temperature - hp.Tref_evap_inlet
 
 
+def _get_evaporator_alignment_tolerance(hp: BaseHeatPump) -> float:
+    """Return the practical temperature tolerance for evaporator alignment."""
+    return max(hp.tol, 1e-4)
+
+
 def _align_evaporator_inlet_temperature(hp: BaseHeatPump) -> BaseHeatPump:
     """Adjust dew-point outlet temperature until the evaporator inlet matches target."""
+    target_tol = _get_evaporator_alignment_tolerance(hp)
     for _ in range(25):
         dt_offset = _get_evaporator_inlet_temperature_offset(hp)
-        if abs(dt_offset) <= hp.tol:
+        if abs(dt_offset) <= target_tol:
             hp.Tref_evap_outlet = hp.evaporator.sink_out.temperature
             return hp
 
@@ -167,33 +173,171 @@ def _reset_discharge_pressure_bounds(hp: BaseHeatPump) -> None:
     hp.comp_discharge.pressure_bnds = None
 
 
+def _get_pressure_target_tolerance(hp: BaseHeatPump) -> float:
+    """Return the absolute pinch residual tolerated for pressure targeting."""
+    return max(10.0 * hp.tol, 0.05)
+
+
+def _is_multi_component_working_fluid(hp: BaseHeatPump) -> bool:
+    """Return True when the working-fluid string names a mixture."""
+    return ";" in getattr(hp, "refrigerant", "")
+
+
+def _bounds_cross_target(dt_bounds: tuple[float, float]) -> bool:
+    """Return True when the pressure-bound residuals bracket the target."""
+    dt_upper, dt_lower = dt_bounds
+    return dt_upper * dt_lower < 0.0
+
+
+def _select_pressure_bound_within_target(
+    bnds: tuple[float, float], dt_bounds: tuple[float, float], hp: BaseHeatPump
+) -> tuple[float, bool]:
+    """Return the lowest pressure bound that already satisfies the pinch target."""
+    dt_upper, dt_lower = dt_bounds
+    target_tol = _get_pressure_target_tolerance(hp)
+    if abs(dt_lower) <= target_tol:
+        return bnds[0], True
+    if abs(dt_upper) <= target_tol:
+        return bnds[1], True
+    return bnds[0], False
+
+
+def _find_best_pressure_within_target(
+    bnds: tuple[float, float], hp: BaseHeatPump
+) -> tuple[float, bool]:
+    """Minimise the pressure-target residual when a clean root is unavailable."""
+    if bnds[0] == bnds[1]:
+        return bnds[0], False
+
+    r = minimize_scalar(
+        fun=lambda pressure: _find_current_gc_dtmin_offset(
+            pressure, hp, return_abs=True
+        ),
+        method="bounded",
+        bounds=bnds,
+        options={"xatol": hp.tol},
+    )
+    return r.x, r.success and r.fun <= _get_pressure_target_tolerance(hp)
+
+
+def _find_pressure_from_bracket(
+    bnds: tuple[float, float], x0: float, hp: BaseHeatPump
+) -> tuple[float, bool]:
+    """Find the gas-cooler pinch target inside a sign-changing pressure bracket."""
+    r = root_scalar(
+        f=_find_current_gc_dtmin_offset,
+        method="brentq",
+        bracket=bnds,
+        x0=x0,
+        xtol=hp.tol,
+        maxiter=50,
+        args=(hp,),
+    )
+    return r.root, r.converged
+
+
+def _find_lowest_pressure_within_target(
+    bnds: tuple[float, float], dt_bounds: tuple[float, float], hp: BaseHeatPump
+) -> tuple[float, bool]:
+    """Find the lowest bracketed pressure that satisfies the pinch tolerance."""
+    p_low, p_high = bnds
+    dt_high, dt_low = dt_bounds
+    target_tol = _get_pressure_target_tolerance(hp)
+
+    if abs(dt_low) <= target_tol:
+        return p_low, True
+    if not (dt_low < 0.0 < dt_high):
+        return p_low, False
+
+    best_pressure = p_high if abs(dt_high) <= target_tol else None
+    best_dt = dt_high
+    for _ in range(6):
+        p_mid = exp((log(p_low) + log(p_high)) / 2.0)
+        dt_mid = _find_current_gc_dtmin_offset(p_mid, hp)
+        if dt_mid >= -target_tol:
+            p_high = p_mid
+            dt_high = dt_mid
+            best_pressure = p_mid
+            best_dt = dt_mid
+        else:
+            p_low = p_mid
+            dt_low = dt_mid
+
+    if best_pressure is not None and abs(best_dt) <= target_tol:
+        return best_pressure, True
+    return p_low, False
+
+
+def _find_pressure_for_gc_target(
+    bnds: tuple[float, float],
+    x0: float,
+    dt_bounds: tuple[float, float],
+    hp: BaseHeatPump,
+) -> tuple[float, bool]:
+    """Select a discharge pressure that satisfies the gas-cooler pinch target.
+
+    Multi-component fluids can make the pressure residual flat or branch-sensitive
+    near saturation glides. Prefer a true bracketed root, but keep bounded
+    endpoint/minimisation fallbacks for those near-target cases.
+    """
+    endpoint_pressure, endpoint_converged = _select_pressure_bound_within_target(
+        bnds, dt_bounds, hp
+    )
+
+    if _bounds_cross_target(dt_bounds):
+        if _is_multi_component_working_fluid(hp):
+            pressure, converged = _find_lowest_pressure_within_target(
+                bnds, dt_bounds, hp
+            )
+            if converged:
+                return pressure, True
+
+        try:
+            return _find_pressure_from_bracket(bnds, x0, hp)
+        except ValueError:
+            if endpoint_converged:
+                return endpoint_pressure, True
+
+    if endpoint_converged:
+        return endpoint_pressure, True
+
+    return _find_best_pressure_within_target(bnds, hp)
+
+
+def _solve_cycle_at_discharge_pressure(
+    pressure: float, hp: BaseHeatPump
+) -> BaseHeatPump:
+    """Run the cycle analysis at the chosen discharge pressure."""
+    hp = _do_sequential_iterative_cycle_analysis(pressure, hp)
+    hp = _update_pinch_props_for_gcs(P_comp_out=pressure, hp=hp)
+    hp.converged = True
+    return hp
+
+
+def _raise_infeasible_pressure_bounds(hp: BaseHeatPump) -> None:
+    """Record and raise a consistent infeasible-pressure failure."""
+    _print_failed_to_solve_report(hp)
+    raise Exception("Infeasible pressure bounds. The failed case has been recorded.")
+
+
 def _find_hp_with_min_discharge_pressure(hp: BaseHeatPump) -> BaseHeatPump:
     """Search for the discharge pressure that meets the gas-cooler pinch target."""
-    bnds, x0, hp.feasible, _ = _get_discharge_pressure_bounds(hp)
+    bnds, x0, hp.feasible, dt_bounds = _get_discharge_pressure_bounds(hp)
     hp.comp_discharge.pressure_bnds = bnds
-    if hp.feasible:
-        r = root_scalar(
-            f=_find_current_gc_dtmin_offset,  # find the gas discharge pressure resulting in the target dtmin
-            method="brentq",
-            bracket=bnds,
-            x0=x0,
-            xtol=hp.tol,
-            args=(hp),
-        )
-        hp = _do_sequential_iterative_cycle_analysis(r.root, hp)
-        hp = _update_pinch_props_for_gcs(P_comp_out=r.root, hp=hp)
-        hp.converged = r.converged
-    else:
-        _print_failed_to_solve_report(hp)
-        raise Exception(
-            "Infeasible pressure bounds. The failed case has been recorded."
-        )
-    return hp
+
+    if not hp.feasible:
+        _raise_infeasible_pressure_bounds(hp)
+
+    pressure, converged = _find_pressure_for_gc_target(bnds, x0, dt_bounds, hp)
+    if not converged:
+        _raise_infeasible_pressure_bounds(hp)
+
+    return _solve_cycle_at_discharge_pressure(pressure, hp)
 
 
 def _get_discharge_pressure_bounds(
     hp: BaseHeatPump,
-) -> list[tuple[float, float], float, bool, tuple[float, float]]:
+) -> tuple[tuple[float, float], float, bool, tuple[float, float]]:
     """Determine feasible discharge pressure bounds and initial guess."""
     feasible: bool = False
     P_lb: float
@@ -250,12 +394,16 @@ def _get_discharge_pressure_bounds(
         )
         pass
 
-    if hp.comp_discharge.pressure < P_lb or hp.comp_discharge.pressure > P_ub:
+    if P_lb == P_ub or dt_plus == dt_neg:
+        P_i = P_lb
+    elif hp.comp_discharge.pressure < P_lb or hp.comp_discharge.pressure > P_ub:
         P_i = exp(log(P_lb) - dt_neg / (dt_plus - dt_neg) * (log(P_ub) - log(P_lb)))
     else:
         P_i = hp.comp_discharge.pressure
 
-    if abs(dt_plus * dt_neg) == -dt_plus * dt_neg and abs(dt_plus * dt_neg) > 0.0:
+    if _bounds_cross_target((dt_plus, dt_neg)):
+        feasible = True
+    elif _select_pressure_bound_within_target((P_lb, P_ub), (dt_plus, dt_neg), hp)[1]:
         feasible = True
 
     return (P_lb, P_ub), P_i, feasible, (dt_plus, dt_neg)

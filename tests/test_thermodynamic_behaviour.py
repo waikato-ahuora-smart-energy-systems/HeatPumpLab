@@ -215,6 +215,83 @@ def test_mass_basis_binary_case_matches_equivalent_mole_basis_case(
     )
 
 
+def test_high_recuperator_lift_mass_basis_binary_case_converges(
+    solve_recuperative_case, assert_successful_cycle
+):
+    hp = solve_recuperative_case(
+        "Propane;Butane|0.5;0.5|mass",
+        ihx_on=False,
+        dT_rhx1_cold=0.0,
+        dT_rhx2_cold=60.0,
+        dT_rhx3_cold=0.0,
+        comp2_power_frac=0.65,
+        comp3_power_frac=0.0,
+        dT_gc_out_min_offset=0.0,
+    )
+
+    assert_successful_cycle(hp)
+    assert hp.rhx2_on == 1
+    assert hp.ihx_on == 0
+
+
+def test_low_lift_mass_basis_binary_case_from_unsolved_results_converges(
+    solve_recuperative_case, assert_successful_cycle
+):
+    hp = solve_recuperative_case(
+        "Propane;Butane|0.5;0.5|mass",
+        ihx_on=False,
+        dT_rhx1_cold=2.5,
+        dT_rhx2_cold=5.0,
+        dT_rhx3_cold=0.0,
+        comp2_power_frac=0.3,
+        comp3_power_frac=0.0,
+        dT_gc_out_min_offset=0.0,
+    )
+
+    assert_successful_cycle(hp)
+    assert hp.rhx1_on == 1
+    assert hp.rhx2_on == 1
+    assert hp.ihx_on == 0
+
+
+@pytest.mark.parametrize(
+    (
+        "dT_rhx2_cold",
+        "comp2_power_frac",
+        "dT_gc_out_min_offset",
+    ),
+    [
+        (5.0, 0.3, 0.259133195283001),
+        (7.5, 0.3, 0.050046581209243775),
+        (27.5, 0.35, 0.0),
+        (32.5, 0.65, 0.2),
+        (35.0, 0.45, 0.6585786437626905),
+    ],
+)
+def test_mass_basis_binary_cases_from_unsolved_results_converge(
+    solve_recuperative_case,
+    assert_successful_cycle,
+    dT_rhx2_cold,
+    comp2_power_frac,
+    dT_gc_out_min_offset,
+):
+    hp = solve_recuperative_case(
+        "Propane;Butane|0.5;0.5|mass",
+        ihx_on=False,
+        dT_rhx1_cold=2.5,
+        dT_rhx2_cold=dT_rhx2_cold,
+        dT_rhx3_cold=0.0,
+        comp2_power_frac=comp2_power_frac,
+        comp3_power_frac=0.0,
+        dT_gc_out_min_offset=dT_gc_out_min_offset,
+    )
+
+    assert_successful_cycle(hp)
+    assert hp.rhx1_on == 1
+    assert hp.rhx2_on == 1
+    assert hp.ihx_on == 0
+
+
 def test_three_stage_recuperative_model_initialises_optional_heat_recovery_path(
     hpl, base_rhp_args
 ):

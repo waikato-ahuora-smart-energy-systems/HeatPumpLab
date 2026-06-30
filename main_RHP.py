@@ -9,26 +9,7 @@ from HeatPumpLab.cycles.RecuperativeHeatPump import (
 )
 
 REFRIGERANT_LIST = [
-    "Ammonia",
-    "Propane",
-    "Butane",
-    "Isobutane",
-    "Pentane",
-    "Isopentane",
-    "Neopentane",
-    "Cyclopentane",
-    "Carbon dioxide",
-    "R1233zd(E)",
-    "R1336mzz(E)",
-    "R1336mzz(Z)",
-    "R1234ze(E)",
-    "R1234ze(Z)",
-    "R1234yf",
-    "R1243zf",
-    "R1224yd(Z)",
-    "PROPYLEN",
-    "DME",
-    "Methanol",
+    "Propane;Butane|0.5;0.5|mass",
 ]
 
 
