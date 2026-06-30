@@ -1,18 +1,3 @@
-__author__ = "Tim Walmsley"
-__credits__ = ["Keri Adamson", "Alex Geary"]
-__email__ = "tim.walmsley@waikato.ac.nz"
-__date__ = "2021-2025"
-
-"""
-Heat pump lab: Recuperative heat pump cycle - results parameter sweep and results analysis.
-By Tim Walmsley and Keri Adamson, 
-University of Waikato, 
-2021-2025 
-tim.walmsley@waikato.ac.nz
-Cite: Walmsley et al., 2026, Recuperative Heat Pump Cycle Concept for High-Temperature 
-Glide Process Heating Applications, Applied Thermal Engineering, tbc
-"""
-
 import numpy as np
 from HeatPumpLab.utils import get_parameter_sweep
 from HeatPumpLab.cycles.RecuperativeHeatPump import (
