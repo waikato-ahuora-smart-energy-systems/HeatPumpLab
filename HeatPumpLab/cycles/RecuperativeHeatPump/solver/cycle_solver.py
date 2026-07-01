@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from ....utils.readWriteOutput import print_result_to_csv
 from ....utils.graph import plot_driving_force
+from ....utils.property_cache import property_call_cache
+from ....utils.solve_profile import profiled_section, profile_section
 
 if TYPE_CHECKING:
     from .. import BaseHeatPump
@@ -46,18 +48,38 @@ def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
 #######################################################################################################
 
 
+@profiled_section("solve_case")
 def _solve_case(hp: BaseHeatPump) -> BaseHeatPump:
     """Drive the high-level solution loop for a heat pump instance."""
-    hp = _find_hp_with_min_discharge_pressure(hp)
-    if hp.debug:
-        hp.get_cycle_plot()
+    with property_call_cache():
+        fixed_pressure_objective = _uses_fixed_discharge_pressure_objective(hp)
+        if fixed_pressure_objective:
+            hp = _solve_cycle_at_discharge_pressure(hp.P_H_est, hp)
+        else:
+            hp = _find_hp_with_min_discharge_pressure(hp)
 
-    dt_offset = _get_evaporator_inlet_temperature_offset(hp)
-    if abs(dt_offset) > 0.1 and _check_hp_model_convergance(hp):
-        hp = _align_evaporator_inlet_temperature(hp)
+        if hp.debug:
+            hp.get_cycle_plot()
 
-    hp = _get_metrics(hp)
-    return hp
+        if not fixed_pressure_objective:
+            dt_offset = _get_evaporator_inlet_temperature_offset(hp)
+            if abs(dt_offset) > 0.1 and _check_hp_model_convergance(hp):
+                hp = _align_evaporator_inlet_temperature(hp)
+
+        hp = (
+            _get_objective_metrics(hp)
+            if fixed_pressure_objective
+            else _get_metrics(hp)
+        )
+        return hp
+
+
+def _uses_fixed_discharge_pressure_objective(hp: BaseHeatPump) -> bool:
+    """Return True when this solve should evaluate at the seeded pressure only."""
+    return (
+        bool(getattr(hp, "fixed_discharge_pressure_objective", False))
+        and getattr(hp, "P_H_est", 0.0) > 0.0
+    )
 
 
 def _check_hp_model_convergance(hp: BaseHeatPump) -> bool:
@@ -71,27 +93,40 @@ def _check_hp_model_convergance(hp: BaseHeatPump) -> bool:
 
 def _get_metrics(hp: BaseHeatPump) -> BaseHeatPump:
     """Populate secondary performance metrics on the heat pump object."""
+    with profile_section("metrics"):
+        return _get_metrics_impl(hp)
 
-    def _get_COP(hp: BaseHeatPump) -> float:
-        """Coefficient of performance of the solved case."""
-        return (
-            sum([g.duty for g in hp.gas_coolers])
-            / sum([c.power for c in hp.compressors])
-            if hp.converged
-            else 0.0
-        )
 
-    def _get_SEC(hp: BaseHeatPump) -> float:
-        """Specific electricity consumption for the solved cycle."""
-        return (
-            sum([c.power for c in hp.compressors])
-            / (
-                sum([g.duty for g in hp.gas_coolers])
-                - sum([c.power for c in hp.compressors])
-            )
-            if hp.converged
-            else np.inf
-        )
+def _get_objective_metrics(hp: BaseHeatPump) -> BaseHeatPump:
+    """Populate only the metrics needed by objective evaluations."""
+    with profile_section("objective_metrics"):
+        hp.converged = _check_hp_model_convergance(hp)
+        hp.COP = _get_COP(hp)
+        hp.SEC = _get_SEC(hp)
+        return hp
+
+
+def _get_COP(hp: BaseHeatPump) -> float:
+    """Coefficient of performance of the solved case."""
+    return (
+        sum([g.duty for g in hp.gas_coolers]) / sum([c.power for c in hp.compressors])
+        if hp.converged
+        else 0.0
+    )
+
+
+def _get_SEC(hp: BaseHeatPump) -> float:
+    """Specific electricity consumption for the solved cycle."""
+    return (
+        sum([c.power for c in hp.compressors])
+        / (sum([g.duty for g in hp.gas_coolers]) - sum([c.power for c in hp.compressors]))
+        if hp.converged
+        else np.inf
+    )
+
+
+def _get_metrics_impl(hp: BaseHeatPump) -> BaseHeatPump:
+    """Populate secondary performance metrics on the heat pump object."""
 
     def _get_VHC(hp: BaseHeatPump) -> float:
         """Volumetric heating capacity delivered at the gas coolers."""
@@ -320,6 +355,7 @@ def _raise_infeasible_pressure_bounds(hp: BaseHeatPump) -> None:
     raise Exception("Infeasible pressure bounds. The failed case has been recorded.")
 
 
+@profiled_section("pressure_search")
 def _find_hp_with_min_discharge_pressure(hp: BaseHeatPump) -> BaseHeatPump:
     """Search for the discharge pressure that meets the gas-cooler pinch target."""
     bnds, x0, hp.feasible, dt_bounds = _get_discharge_pressure_bounds(hp)
@@ -335,6 +371,7 @@ def _find_hp_with_min_discharge_pressure(hp: BaseHeatPump) -> BaseHeatPump:
     return _solve_cycle_at_discharge_pressure(pressure, hp)
 
 
+@profiled_section("pressure_bounds")
 def _get_discharge_pressure_bounds(
     hp: BaseHeatPump,
 ) -> tuple[tuple[float, float], float, bool, tuple[float, float]]:
@@ -409,6 +446,7 @@ def _get_discharge_pressure_bounds(
     return (P_lb, P_ub), P_i, feasible, (dt_plus, dt_neg)
 
 
+@profiled_section("gc_dtmin_eval")
 def _find_current_gc_dtmin_offset(
     P_comp_out: float, hp: BaseHeatPump, return_abs: bool = False
 ) -> float:

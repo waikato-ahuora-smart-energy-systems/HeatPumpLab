@@ -71,6 +71,56 @@ def test_solver_debug_mode_renders_cycle_plot_before_metrics(monkeypatch):
     assert calls == ["pressure", "plot", "metrics"]
 
 
+def test_fixed_pressure_objective_solves_at_seed_pressure_without_pressure_search(
+    monkeypatch,
+):
+    calls = []
+    hp = SimpleNamespace(
+        debug=True,
+        P_H_est=4.2,
+        fixed_discharge_pressure_objective=True,
+        get_cycle_plot=lambda: calls.append("plot"),
+    )
+
+    monkeypatch.setattr(
+        cycle_solver,
+        "_find_hp_with_min_discharge_pressure",
+        lambda solved_hp: pytest.fail("fixed-pressure objective should not search"),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_cycle_at_discharge_pressure",
+        lambda pressure, solved_hp: calls.append(("fixed", pressure)) or solved_hp,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_get_evaporator_inlet_temperature_offset",
+        lambda solved_hp: pytest.fail("fixed-pressure objective should not align"),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_get_objective_metrics",
+        lambda solved_hp: calls.append("objective_metrics") or solved_hp,
+    )
+
+    assert cycle_solver._solve_case(hp) is hp
+    assert calls == [("fixed", 4.2), "plot", "objective_metrics"]
+
+
+def test_fixed_pressure_objective_metrics_only_require_sec_inputs():
+    hp = SimpleNamespace(
+        converged=True,
+        feasible=True,
+        gas_coolers=[SimpleNamespace(duty=10.0)],
+        compressors=[SimpleNamespace(power=2.0)],
+    )
+
+    cycle_solver._get_objective_metrics(hp)
+
+    assert hp.COP == pytest.approx(5.0)
+    assert hp.SEC == pytest.approx(0.25)
+
+
 @pytest.mark.parametrize("compute_jac", [False, True])
 def test_discharge_pressure_bounds_reuse_cached_bounds(monkeypatch, compute_jac):
     observed_pressures = []

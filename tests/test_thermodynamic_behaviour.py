@@ -199,6 +199,23 @@ def test_binary_working_fluid_case_solves_process_targets_with_glide(
     assert hp.Tref_evap_outlet > hp.Tref_evap_inlet + 5.0
 
 
+def test_recuperative_model_respects_evaporator_outlet_initial_guess(
+    hpl, base_rhp_args
+):
+    hp = hpl.RecuperativeHP(
+        **(
+            base_rhp_args
+            | {
+                "refrigerant": "Propane;Butane|0.5;0.5|mass",
+                "Tref_evap_outlet": 21.5,
+            }
+        )
+    )
+
+    assert hp.Tref_evap_outlet == pytest.approx(21.5)
+    assert hp.evap_sup.sink_in.temperature == pytest.approx(21.5)
+
+
 def test_mass_basis_binary_case_matches_equivalent_mole_basis_case(
     solve_recuperative_case, assert_successful_cycle
 ):

@@ -220,7 +220,7 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
         name="Source out",
         pp_instance="src",
     )
-    hp.Tref_evap_outlet = hp.Tref_evap_inlet
+    hp.Tref_evap_outlet = getattr(hp, "Tref_evap_outlet", hp.Tref_evap_inlet)
     hp.evap_sup.sink_in.props_in_ab(
         input_str="TQ",
         prop1=hp.Tref_evap_outlet,

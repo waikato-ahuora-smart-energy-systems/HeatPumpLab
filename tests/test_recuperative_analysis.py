@@ -11,6 +11,7 @@ class FakeHeatPump:
         self.args = {"T_air_tar": 200.0}
         self.T_air_tar = 200.0
         self.T_air_inlet = 15.0
+        self.Tref_evap_outlet = 10.0
         self.COP = 2.0
         self.feasible = True
         self.converged = True
@@ -19,6 +20,7 @@ class FakeHeatPump:
         self.gas_cooler1 = SimpleNamespace(
             source_out=SimpleNamespace(temperature=80.0)
         )
+        self.dT_gc_out_min_offset = 0.0
 
     def get_report(self):
         self.output = {"SEC": self.SEC}
@@ -55,6 +57,7 @@ def test_analyse_rhp_case_optimises_when_boundary_gradient_is_positive(monkeypat
         FakeHeatPump,
         {"refrigerant": "Butane"},
         results_dir="custom-results",
+        use_fast_objective=False,
     )
 
     assert solved_hp is hp
@@ -95,6 +98,7 @@ def test_analyse_rhp_case_skips_optimisation_when_boundary_gradient_is_not_posit
     solved_hp, _ = rhp_analysis.analyse_RHP_case(
         FakeHeatPump,
         {"refrigerant": "Butane", "dT_gc_out_min_offset": 12.0},
+        use_fast_objective=False,
     )
 
     assert solved_hp is hp
@@ -118,7 +122,7 @@ def test_analyse_rhp_case_returns_unsolved_when_local_optimisation_fails(monkeyp
     )
 
     solved_hp, solve_time = rhp_analysis.analyse_RHP_case(
-        FakeHeatPump, {"refrigerant": "Butane"}
+        FakeHeatPump, {"refrigerant": "Butane"}, use_fast_objective=False
     )
 
     assert solved_hp is None
@@ -141,7 +145,7 @@ def test_analyse_rhp_case_returns_unsolved_when_boundary_gradient_is_nan(monkeyp
     )
 
     solved_hp, solve_time = rhp_analysis.analyse_RHP_case(
-        FakeHeatPump, {"refrigerant": "Butane"}
+        FakeHeatPump, {"refrigerant": "Butane"}, use_fast_objective=False
     )
 
     assert solved_hp is None
@@ -170,17 +174,110 @@ def test_analyse_rhp_case_still_optimises_when_gradient_estimate_fails(monkeypat
     )
 
     solved_hp, _ = rhp_analysis.analyse_RHP_case(
-        FakeHeatPump, {"refrigerant": "Butane"}
+        FakeHeatPump, {"refrigerant": "Butane"}, use_fast_objective=False
     )
 
     assert solved_hp is hp
     assert optimised == ["COBYQA"]
 
 
-def test_dqdw_uses_followup_case_to_estimate_heating_sensitivity(monkeypatch):
-    hp0 = FakeHeatPump()
+def test_analyse_rhp_case_uses_fixed_pressure_objective_then_exact_final_solve(
+    monkeypatch,
+):
+    seed_hp = FakeHeatPump(sec=9.0)
+    seed_hp.comp_discharge.pressure = 4.2
+    final_hp = FakeHeatPump(sec=1.2)
+    solved_args = []
+    objective_params = []
+    reports = []
+
+    monkeypatch.setattr(rhp_analysis, "_get_dQdW", lambda solved_hp: 0.0)
+    monkeypatch.setattr(rhp_analysis, "get_results_report", lambda **kwargs: reports.append(kwargs))
 
     def solve_single_case(hp_cls, args):
+        solved_args.append(args)
+        if len(solved_args) == 1:
+            return seed_hp, 0.11
+        return final_hp, 0.44
+
+    def get_fprime(hp_cls, param, f_obj):
+        objective_params.append(("fprime", param))
+        return 1.0, 0.2
+
+    def get_local_optimum(hp_cls, param, vars_input, tol, f_obj, method):
+        objective_params.append(("optimise", param))
+        return SimpleNamespace(x=[6.5], success=True, nfev=5, message="ok"), 0.3
+
+    monkeypatch.setattr(rhp_analysis, "solve_single_case_with_timer", solve_single_case)
+    monkeypatch.setattr(rhp_analysis, "get_fprime", get_fprime)
+    monkeypatch.setattr(rhp_analysis, "get_local_optimum", get_local_optimum)
+
+    solved_hp, solve_time = rhp_analysis.analyse_RHP_case(
+        FakeHeatPump,
+        {"refrigerant": "Butane"},
+        results_dir="custom-results",
+    )
+
+    assert solved_hp is final_hp
+    assert solve_time == pytest.approx(0.44)
+    assert solved_args[0]["dT_gc_out_min_offset"] == pytest.approx(0.0)
+    assert "fixed_discharge_pressure_objective" not in solved_args[0]
+    assert solved_args[1]["dT_gc_out_min_offset"] == pytest.approx(6.5)
+    assert "fixed_discharge_pressure_objective" not in solved_args[1]
+    assert objective_params[0][1]["P_H_est"] == pytest.approx(4.2)
+    assert objective_params[1][1]["P_H_est"] == pytest.approx(4.2)
+    assert objective_params[0][1]["fixed_discharge_pressure_objective"] is True
+    assert objective_params[1][1]["fixed_discharge_pressure_objective"] is True
+    assert reports[0]["obj"] == pytest.approx(1.2)
+    assert reports[0]["dt"] == pytest.approx(0.11 + 0.2 + 0.3 + 0.44)
+    assert reports[0]["results_dir"] == "custom-results"
+
+
+def test_analyse_rhp_case_reuses_exact_seed_when_selected_offset_is_unchanged(
+    monkeypatch,
+):
+    seed_hp = FakeHeatPump(sec=1.3)
+    seed_hp.comp_discharge.pressure = 4.2
+    solved_args = []
+    reports = []
+
+    monkeypatch.setattr(rhp_analysis, "_get_dQdW", lambda solved_hp: 0.0)
+    monkeypatch.setattr(
+        rhp_analysis, "get_results_report", lambda **kwargs: reports.append(kwargs)
+    )
+    monkeypatch.setattr(rhp_analysis, "get_fprime", lambda *args, **kwargs: (-0.1, 0.2))
+    monkeypatch.setattr(
+        rhp_analysis,
+        "get_local_optimum",
+        lambda *args, **kwargs: pytest.fail("optimisation should not run"),
+    )
+
+    def solve_single_case(hp_cls, args):
+        solved_args.append(args)
+        return seed_hp, 0.11
+
+    monkeypatch.setattr(rhp_analysis, "solve_single_case_with_timer", solve_single_case)
+
+    solved_hp, solve_time = rhp_analysis.analyse_RHP_case(
+        FakeHeatPump,
+        {"refrigerant": "Butane"},
+        results_dir="custom-results",
+    )
+
+    assert solved_hp is seed_hp
+    assert solve_time == pytest.approx(0.11)
+    assert len(solved_args) == 1
+    assert reports[0]["obj"] == pytest.approx(1.3)
+    assert reports[0]["dt"] == pytest.approx(0.11 + 0.2)
+
+
+def test_dqdw_uses_followup_case_to_estimate_heating_sensitivity(monkeypatch):
+    hp0 = FakeHeatPump()
+    hp0.Tref_evap_outlet = 21.5
+    solved_args = []
+
+    def solve_single_case(hp_cls, args):
+        solved_args.append(args)
         hp1 = FakeHeatPump()
         hp1.T_air_tar = args["T_air_tar"]
         hp1.T_air_inlet = hp0.T_air_inlet
@@ -195,6 +292,9 @@ def test_dqdw_uses_followup_case_to_estimate_heating_sensitivity(monkeypatch):
     base = (hp0.T_air_tar - hp0.T_air_inlet) / hp0.COP
     followup = (hp0.T_air_tar + 0.001 - hp0.T_air_inlet) / 1.9
     assert dqdw == pytest.approx(0.001 / (followup - base))
+    assert solved_args[0]["P_H_est"] == pytest.approx(1.2)
+    assert solved_args[0]["T_gc_out"] == pytest.approx(80.0)
+    assert solved_args[0]["Tref_evap_outlet"] == pytest.approx(21.5)
 
 
 def test_dqdw_is_zero_when_followup_case_is_infeasible(monkeypatch):

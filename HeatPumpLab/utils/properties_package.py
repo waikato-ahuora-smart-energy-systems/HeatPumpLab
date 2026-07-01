@@ -1,8 +1,12 @@
 """Wrapper around REFPROP for thermodynamic property evaluation."""
 
 from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
+from collections.abc import Callable
+from numbers import Real
 from sys import platform
 import numpy as np
+from .property_cache import PropertyCacheKey, active_property_call_cache
+from .solve_profile import profile_section
 
 
 def _get_refprop_paths(platform_name: str) -> tuple[str, str, str, str]:
@@ -37,6 +41,43 @@ def _load_refprop_libraries(
     for rp in rp_ref, rp_snk, rp_src:
         rp.SETPATHdll(refprop_root)
     return rp_ref, rp_src, rp_snk
+
+
+def _normalise_cache_value(value):
+    """Return a stable, hashable representation for property cache keys."""
+    if isinstance(value, Real):
+        return float(value)
+    if isinstance(value, np.ndarray):
+        return tuple(_normalise_cache_value(item) for item in value.tolist())
+    if isinstance(value, list | tuple):
+        return tuple(_normalise_cache_value(item) for item in value)
+    return value
+
+
+def _copy_property_result(result):
+    """Return a caller-owned copy of a cached property result."""
+    if isinstance(result, dict):
+        return dict(result)
+    if isinstance(result, list):
+        return list(result)
+    if isinstance(result, tuple):
+        return tuple(result)
+    return result
+
+
+def _get_cached_property_result(key: PropertyCacheKey, get_result: Callable):
+    """Return a cached property result or calculate and cache a miss."""
+    cache = active_property_call_cache()
+    if cache is None:
+        return get_result()
+
+    hit, result = cache.lookup(key)
+    if hit:
+        return _copy_property_result(result)
+
+    result = get_result()
+    cache.store(key, _copy_property_result(result))
+    return _copy_property_result(result)
 
 
 class PropertyPackage:
@@ -83,26 +124,77 @@ class PropertyPackage:
         self, propsOut: str, propsIn: str, prop1: float, prop2: float
     ):
         """Return selected properties for a given input pair."""
-        return self.RP.REFPROPdll(
-            self.fld_name,
-            propsIn,
-            propsOut,
-            self.UNITS,
-            self.iMass,
-            self.iFlag,
-            float(prop1),
-            float(prop2),
-            self.fld_composition,
-        ).Output
+        key = self._get_cache_key(
+            "specified", propsOut, propsIn, float(prop1), float(prop2)
+        )
+        return _get_cached_property_result(
+            key,
+            lambda: self._get_specified_properties_uncached(
+                propsOut, propsIn, prop1, prop2
+            ),
+        )
 
     def get_std_properties(
         self, propsIn_str: str, prop1: float, prop2: float, comp: list[float]
     ):
         """Convenience wrapper that converts to/from REFPROP base units."""
-        molar_props = self._convert_props_from_SI_with_C(propsIn_str, prop1, prop2)
-        return self._convert_props_to_SI_with_C(
-            self.RP.ABFLSHdll(propsIn_str, molar_props[0], molar_props[1], comp, 0)
+        key = self._get_cache_key(
+            "std",
+            propsIn_str,
+            float(prop1),
+            float(prop2),
+            tuple(float(value) for value in comp),
         )
+        return _get_cached_property_result(
+            key,
+            lambda: self._get_std_properties_uncached(
+                propsIn_str, prop1, prop2, comp
+            ),
+        )
+
+    def _get_cache_key(self, kind: str, *values) -> PropertyCacheKey:
+        """Return a cache key for a configured REFPROP property request."""
+        return (
+            kind,
+            id(self.RP),
+            self.fld_name,
+            tuple(float(value) for value in self.fld_composition),
+            self.UNITS,
+            self.iMass,
+            self.iFlag,
+            float(self.molar_mass),
+            float(self.TC_to_K),
+            float(self.DEFAULT_VAL),
+            *[_normalise_cache_value(value) for value in values],
+        )
+
+    def _get_specified_properties_uncached(
+        self, propsOut: str, propsIn: str, prop1: float, prop2: float
+    ):
+        """Return selected properties without consulting the active cache."""
+        with profile_section("refprop_specified"):
+            return self.RP.REFPROPdll(
+                self.fld_name,
+                propsIn,
+                propsOut,
+                self.UNITS,
+                self.iMass,
+                self.iFlag,
+                float(prop1),
+                float(prop2),
+                self.fld_composition,
+            ).Output
+
+    def _get_std_properties_uncached(
+        self, propsIn_str: str, prop1: float, prop2: float, comp: list[float]
+    ):
+        """Convenience wrapper without consulting the active cache."""
+        molar_props = self._convert_props_from_SI_with_C(propsIn_str, prop1, prop2)
+        with profile_section("refprop_std"):
+            refprop_result = self.RP.ABFLSHdll(
+                propsIn_str, molar_props[0], molar_props[1], comp, 0
+            )
+        return self._convert_props_to_SI_with_C(refprop_result)
 
     def _convert_props_to_SI_with_C(self, molar_props):
         """Convert molar REFPROP outputs to SI with Celsius offsets."""

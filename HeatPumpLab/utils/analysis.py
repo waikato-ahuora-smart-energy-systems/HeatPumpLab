@@ -14,6 +14,7 @@ from .readWriteOutput import (
     print_result_to_terminal,
 )
 from .decorator_functions import timer_func
+from .solve_profile import profile_section
 
 if TYPE_CHECKING:
     from ..cycles.common.heatPump import BaseHeatPump
@@ -70,31 +71,32 @@ def get_results_report(
     results_dir: str = "results",
 ) -> list:
     """Format, persist, and optionally print a solved case summary."""
-    hp.get_report()
-    if "weight" in param["additional_data"]:
+    with profile_section("reporting"):
+        hp.get_report()
+        if "weight" in param["additional_data"]:
+            hp.output.update(
+                {
+                    "Weight": param["additional_data"]["weight"],
+                    "SEC_0": param["additional_data"]["SEC_0"],
+                    "P_0": param["additional_data"]["P_0"],
+                }
+            )
         hp.output.update(
             {
-                "Weight": param["additional_data"]["weight"],
-                "SEC_0": param["additional_data"]["SEC_0"],
-                "P_0": param["additional_data"]["P_0"],
+                "Obj_function": obj,
+                "Function evaluations": result["nfev"],
+                "Message": result["message"],
+                "Success": result["success"],
+                "Time_to_optimise": dt,
             }
         )
-    hp.output.update(
-        {
-            "Obj_function": obj,
-            "Function evaluations": result["nfev"],
-            "Message": result["message"],
-            "Success": result["success"],
-            "Time_to_optimise": dt,
-        }
-    )
-    fsuffix = get_unique_f_suffix(param)
-    print_results(
-        results=dict(hp.output),
-        fsuffix=fsuffix,
-        print_to_terminal=print_to_terminal,
-        results_dir=results_dir,
-    )
+        fsuffix = get_unique_f_suffix(param)
+        print_results(
+            results=dict(hp.output),
+            fsuffix=fsuffix,
+            print_to_terminal=print_to_terminal,
+            results_dir=results_dir,
+        )
 
 
 #######################################################################################################
@@ -114,11 +116,12 @@ def _get_bounds(vars_input: dict) -> list:
 
 def _get_obj(HP_fn, vars: np.ndarray, param: dict, f_obj) -> float:
     """Evaluate the objective function for a candidate variable vector."""
-    hp, _ = solve_single_case_with_timer(
-        HP_fn, param | get_var_kwargs(vars.tolist(), param)
-    )
-    obj = f_obj(hp, param)
-    return obj * 1000
+    with profile_section("objective_eval"):
+        hp, _ = solve_single_case_with_timer(
+            HP_fn, param | get_var_kwargs(vars.tolist(), param)
+        )
+        obj = f_obj(hp, param)
+        return obj * 1000
 
 
 #######################################################################################################
