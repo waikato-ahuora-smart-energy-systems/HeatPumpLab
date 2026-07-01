@@ -14,8 +14,7 @@ from ....utils.solve_profile import profiled_section, profile_section
 
 if TYPE_CHECKING:
     from .. import BaseHeatPump
-    from ....components import GasCooler
-    from ....streams import Stream
+    from ....components import GasCooler, Stream
 
 __all__ = ["solve_heat_pump_cycle"]
 
