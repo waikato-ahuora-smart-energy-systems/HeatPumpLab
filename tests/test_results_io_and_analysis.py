@@ -409,8 +409,8 @@ def test_parameter_sweep_generates_cases_and_solves_them_in_configured_results_d
         )
         return [{"case": "A"}, {"case": "B"}]
 
-    def solve_fn(hp_cls, case):
-        solved.append((hp_cls, case))
+    def solve_fn(hp_cls, case, results_dir):
+        solved.append((hp_cls, case, results_dir))
 
     fake_hp = SimpleNamespace(
         CASE_LIST_FN=case_list_fn,
@@ -432,7 +432,10 @@ def test_parameter_sweep_generates_cases_and_solves_them_in_configured_results_d
             "refrigerant_ls": ["Butane"],
         }
     ]
-    assert solved == [(fake_hp, {"case": "A"}), (fake_hp, {"case": "B"})]
+    assert solved == [
+        (fake_hp, {"case": "A"}, tmp_path),
+        (fake_hp, {"case": "B"}, tmp_path),
+    ]
     assert (tmp_path / "sweep.csv").exists()
 
 
@@ -445,7 +448,7 @@ def test_parameter_sweep_accepts_omitted_parameter_kwargs(tmp_path):
 
     fake_hp = SimpleNamespace(
         CASE_LIST_FN=case_list_fn,
-        ANAYLSE_CASE_FN=lambda hp_cls, case: None,
+        ANAYLSE_CASE_FN=lambda hp_cls, case, results_dir: None,
     )
 
     get_parameter_sweep(

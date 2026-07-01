@@ -457,7 +457,7 @@ def test_all_possible_gas_cooler_pinch_positions_include_debug_plot(monkeypatch)
     monkeypatch.setattr(
         cycle_solver,
         "_find_gc_dt_approaches",
-        lambda gc: [20.0, 0.4, True],
+        lambda gc: (20.0, 0.4, True),
     )
     monkeypatch.setattr(
         cycle_solver,
@@ -467,7 +467,7 @@ def test_all_possible_gas_cooler_pinch_positions_include_debug_plot(monkeypatch)
 
     positions = cycle_solver._get_all_possible_gc_dtmin_pos(10.0, hp)
 
-    assert positions == [[30.0, 1.0, True], [20.0, 0.4, True], [30.0, 0.0, True]]
+    assert positions == [(30.0, 1.0, True), (20.0, 0.4, True), (30.0, 0.0, True)]
     assert plotted == [([gas_cooler], 15.0)]
 
 

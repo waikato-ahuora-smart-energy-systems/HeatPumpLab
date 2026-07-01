@@ -1,3 +1,5 @@
+"""Run the default recuperative heat-pump binary-mixture sweep and reports."""
+
 import numpy as np
 from HeatPumpLab.utils import get_parameter_sweep
 from HeatPumpLab.cycles.RecuperativeHeatPump import (
@@ -14,9 +16,9 @@ REFRIGERANT_LIST = [
 
 
 def run():
-    # Note: the sweep typically takes 30 hours to run on a standard computer, 
+    # Note: the sweep typically takes 30 hours to run on a standard computer,
     # so adjust the parameter lists as needed to reduce runtime
-    param_kwargs = { 
+    param_kwargs = {
         "refrigerant_ls": REFRIGERANT_LIST,
         "dT_rhx1_cold_ls": np.linspace(0, 100, num=41),
         "dT_rhx2_cold_ls": np.linspace(0, 100, num=41),
@@ -45,4 +47,3 @@ def results_analysis():
 if __name__ == "__main__":
     run()
     results_analysis()
-    pass

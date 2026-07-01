@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.optimize import root_scalar, minimize_scalar
 from math import log, exp
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias
 
 from ....utils.readWriteOutput import print_result_to_csv
 from ....utils.graph import plot_driving_force
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from ....streams import Stream
 
 __all__ = ["solve_heat_pump_cycle"]
+
+PinchCandidate: TypeAlias = tuple[float, float, bool]
 
 #######################################################################################################
 # Public API
@@ -371,6 +373,41 @@ def _find_hp_with_min_discharge_pressure(hp: BaseHeatPump) -> BaseHeatPump:
     return _solve_cycle_at_discharge_pressure(pressure, hp)
 
 
+def _expand_discharge_pressure_bounds(
+    hp: BaseHeatPump,
+    pressure_suction: float,
+    pressure_start: float,
+    dt_start: float,
+    step: float = 1.1,
+    max_iter: int = 1000,
+) -> tuple[float, float, float, float]:
+    """Expand pressure bounds until the pinch residual crosses or reaches target."""
+    p_lower = p_upper = pressure_start
+    dt_lower = dt_upper = dt_start
+
+    for _ in range(max_iter):
+        if dt_upper < 0.0 and dt_lower < 0.0:
+            dt_lower = dt_upper
+            p_lower = p_upper
+            p_upper = max(
+                pressure_suction + (p_lower - pressure_suction) * step,
+                pressure_suction,
+            )
+            dt_upper = _find_current_gc_dtmin_offset(p_upper, hp)
+        elif dt_upper > 0.0 and dt_lower > 0.0:
+            dt_upper = dt_lower
+            p_upper = p_lower
+            p_lower = max(
+                pressure_suction + (p_upper - pressure_suction) / step,
+                pressure_suction,
+            )
+            dt_lower = _find_current_gc_dtmin_offset(p_lower, hp)
+        else:
+            break
+
+    return p_upper, dt_upper, p_lower, dt_lower
+
+
 @profiled_section("pressure_bounds")
 def _get_discharge_pressure_bounds(
     hp: BaseHeatPump,
@@ -383,35 +420,6 @@ def _get_discharge_pressure_bounds(
     dt_plus: float
     P_i: float
 
-    def _recursive_find_bnds(
-        P_suction: float,
-        P_ub: float,
-        dt_plus: float,
-        P_lb: float,
-        dt_neg: float,
-        step: float,
-        i: int,
-    ):
-        """Expand bounds until the pinch temperature difference changes sign."""
-        if dt_plus < 0.0 and dt_neg < 0.0 and i < 1000:
-            dt_neg = dt_plus
-            P = P_lb = P_ub
-            P_ub = max(P_suction + (P - P_suction) * step, P_suction)
-            dt_plus = _find_current_gc_dtmin_offset(P_ub, hp)
-            return _recursive_find_bnds(
-                P_suction, P_ub, dt_plus, P_lb, dt_neg, step, i + 1
-            )
-        elif dt_plus > 0.0 and dt_neg > 0.0 and i < 1000:
-            dt_plus = dt_neg
-            P = P_ub = P_lb
-            P_lb = max(P_suction + (P - P_suction) / step, P_suction)
-            dt_neg = _find_current_gc_dtmin_offset(P_lb, hp)
-            return _recursive_find_bnds(
-                P_suction, P_ub, dt_plus, P_lb, dt_neg, step, i + 1
-            )
-        else:
-            return P_ub, dt_plus, P_lb, dt_neg
-
     # Positive dtmin is P_ub and negative dtmin is P_lb
     if hp.comp_discharge.pressure_bnds is not None:
         if not hp.compute_jac:
@@ -422,14 +430,15 @@ def _get_discharge_pressure_bounds(
                 hp.comp_discharge.pressure * 1.005,
             )
         dt_neg, dt_plus = [_find_current_gc_dtmin_offset(P, hp) for P in (P_lb, P_ub)]
-        pass
     else:
         dt_plus = dt_neg = _find_current_gc_dtmin_offset(hp.comp_discharge.pressure, hp)
         P_ub = P_lb = hp.comp_discharge.pressure
-        P_ub, dt_plus, P_lb, dt_neg = _recursive_find_bnds(
-            hp.comp1.flow_in.pressure, P_ub, dt_plus, P_lb, dt_neg, 1.1, 0
+        P_ub, dt_plus, P_lb, dt_neg = _expand_discharge_pressure_bounds(
+            hp,
+            hp.comp1.flow_in.pressure,
+            hp.comp_discharge.pressure,
+            dt_plus,
         )
-        pass
 
     if P_lb == P_ub or dt_plus == dt_neg:
         P_i = P_lb
@@ -451,7 +460,7 @@ def _find_current_gc_dtmin_offset(
     P_comp_out: float, hp: BaseHeatPump, return_abs: bool = False
 ) -> float:
     """Compute the deviation between current and target gas-cooler pinch."""
-    dtmin_ls: list[list[float, float]]
+    dtmin_ls: list[PinchCandidate]
 
     dtmin_ls = _get_all_possible_gc_dtmin_pos(P_comp_out, hp)
 
@@ -469,9 +478,9 @@ def _find_current_gc_dtmin_offset(
 
 def _get_all_possible_gc_dtmin_pos(
     P_comp_out: float, hp: BaseHeatPump
-) -> list[list[float, float]]:
+) -> list[PinchCandidate]:
     """Enumerate pinch temperature differences for all gas cooler sections."""
-    dtmin_ls: list[float]
+    dtmin_ls: list[PinchCandidate]
     gc: GasCooler
 
     hp = _do_sequential_iterative_cycle_analysis(P_comp_out, hp)
@@ -479,9 +488,9 @@ def _get_all_possible_gc_dtmin_pos(
     for gc in hp.gas_coolers:
         dt_hot = gc.source_in.temperature - gc.sink_out.temperature
         dt_cold = gc.source_out.temperature - gc.sink_in.temperature
-        dtmin_ls.append([dt_hot, 1.0, True])  # Pinch on the hot side of the gc
+        dtmin_ls.append((dt_hot, 1.0, True))  # Pinch on the hot side of the gc
         dtmin_ls.append(_find_gc_dt_approaches(gc))  # Pinch in the middle of the gc
-        dtmin_ls.append([dt_cold, 0.0, True])  # Pinch on the cold side of the gc
+        dtmin_ls.append((dt_cold, 0.0, True))  # Pinch on the cold side of the gc
 
     if hp.debug:
         plot_driving_force(hp.gas_coolers, dtmin=hp.dT_GC_min_tar)
@@ -523,7 +532,6 @@ def _do_sequential_iterative_cycle_analysis(
         hp.get_cycle_plot(x_axis="s", y_axis="T")
         hp.get_cycle_plot(x_axis="h", y_axis="P")
         hp.get_cycle_plot(x_axis="h", y_axis="T")
-        pass
 
     return hp
 
@@ -550,13 +558,13 @@ def _set_gas_coolers_sink_temperatures(hp: BaseHeatPump) -> BaseHeatPump:
     return hp
 
 
-def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
+def _find_gc_dt_approaches(gc: GasCooler) -> PinchCandidate:
     """Optimise for the minimum pinch temperature difference inside a gas cooler."""
     gc.source_pinch.pressure = gc.source_out.pressure
     gc.sink_pinch.pressure = gc.sink_in.pressure
 
     if gc.duty <= 0.0:
-        return [np.inf, 0.0, False]
+        return (np.inf, 0.0, False)
 
     q_min = 0.001 * gc.duty
     q_max = 0.999 * gc.duty
@@ -567,7 +575,7 @@ def _find_gc_dt_approaches(gc: GasCooler) -> list[float, float]:
         options={"xatol": max(gc.tol * gc.duty, 1e-9)},
     )
 
-    return [r.fun, r.x / gc.duty, r.success]
+    return (r.fun, r.x / gc.duty, r.success)
 
 
 def _calc_pinch_dtmin(Q: float, gc: GasCooler) -> float:

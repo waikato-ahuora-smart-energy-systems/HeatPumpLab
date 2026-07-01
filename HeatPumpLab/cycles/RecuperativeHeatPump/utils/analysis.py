@@ -1,4 +1,5 @@
 import copy
+import math
 import numpy as np
 from typing import Tuple, TYPE_CHECKING
 
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     from ...common import BaseHeatPump
 
 _FIXED_PRESSURE_OBJECTIVE_FLAG = "fixed_discharge_pressure_objective"
+_PRESSURE_SEED_FIELD = "P_H_est"
+_EVAP_OUTLET_SEED_FIELD = "Tref_evap_outlet"
 
 
 #######################################################################################################
@@ -104,7 +107,7 @@ def analyse_RHP_case(
             dt = seed_dt
         else:
             hp, dt = solve_single_case_with_timer(
-                HP_fn, _get_exact_solve_args(case, dT_gc_out_min_offset)
+                HP_fn, _get_exact_solve_args(case, dT_gc_out_min_offset, seed_hp)
             )
             dt_ls.append(dt)
         obj = compute_SEC_obj(hp, case)
@@ -183,16 +186,14 @@ def _get_fast_objective_case(
     except Exception:
         return case, None, False, None
 
-    pressure = getattr(getattr(hp, "comp_discharge", None), "pressure", 0.0)
-    if not _is_successfully_solved(hp) or pressure <= 0.0:
+    seed = _get_exact_state_seed_from_hp(hp)
+    if seed is None:
         return case, dt, False, hp
 
     return (
         case
-        | {
-            "P_H_est": pressure,
-            _FIXED_PRESSURE_OBJECTIVE_FLAG: True,
-        },
+        | seed
+        | {_FIXED_PRESSURE_OBJECTIVE_FLAG: True},
         dt,
         True,
         hp,
@@ -242,18 +243,61 @@ def _get_local_optimum_with_exact_fallback(
     return result, dt
 
 
-def _get_exact_solve_args(case: dict, dT_gc_out_min_offset: float) -> dict:
+def _get_exact_solve_args(
+    case: dict,
+    dT_gc_out_min_offset: float,
+    seed_hp: "BaseHeatPump | None" = None,
+) -> dict:
     """Return final-solve arguments with any objective-only flags removed."""
     args = case | get_var_kwargs(dT_gc_out_min_offset, case)
     args.pop(_FIXED_PRESSURE_OBJECTIVE_FLAG, None)
-    return args
+    seed = (
+        _get_exact_state_seed_from_hp(seed_hp)
+        if _can_reuse_exact_seed(seed_hp, dT_gc_out_min_offset)
+        else None
+    )
+    return _apply_exact_state_seed(args, seed)
+
+
+def _get_exact_state_seed_from_hp(hp: "BaseHeatPump | None") -> dict | None:
+    """Return exact pressure and evaporator-outlet seeds from a solved model."""
+    if hp is None or not _is_successfully_solved(hp):
+        return None
+
+    pressure = getattr(getattr(hp, "comp_discharge", None), "pressure", None)
+    evap_outlet = getattr(hp, _EVAP_OUTLET_SEED_FIELD, None)
+    if not _is_finite_positive(pressure) or not _is_finite_number(evap_outlet):
+        return None
+
+    return {
+        _PRESSURE_SEED_FIELD: float(pressure),
+        _EVAP_OUTLET_SEED_FIELD: float(evap_outlet),
+    }
+
+
+def _apply_exact_state_seed(args: dict, seed: dict | None) -> dict:
+    """Return args updated with an exact-state seed, without mutating inputs."""
+    return dict(args) if seed is None else dict(args) | seed
+
+
+def _is_finite_number(value: object) -> bool:
+    """Return True for values that can be represented as a finite float."""
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_finite_positive(value: object) -> bool:
+    """Return True for finite positive values."""
+    return _is_finite_number(value) and float(value) > 0.0
 
 
 def _can_reuse_exact_seed(
     seed_hp: "BaseHeatPump | None", dT_gc_out_min_offset: float
 ) -> bool:
     """Return True when the exact seed already solves the selected offset."""
-    if seed_hp is None:
+    if seed_hp is None or not _is_successfully_solved(seed_hp):
         return False
 
     try:

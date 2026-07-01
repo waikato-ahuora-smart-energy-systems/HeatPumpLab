@@ -16,12 +16,16 @@ def solve_in_parallel(
     f_solve,
     n_cpu: int = os.cpu_count() - 1,
     executor_factory=None,
+    solve_kwargs: dict | None = None,
 ) -> bool:
     """Execute the provided solve function across cases using a process pool."""
     print(len(cases))
+    if solve_kwargs is None:
+        solve_kwargs = {}
+
     if n_cpu == 1:
         for case in cases:
-            f_solve(HP_fn, case)
+            f_solve(HP_fn, case, **solve_kwargs)
         print("All cases completed.")
         return True
 
@@ -30,7 +34,7 @@ def solve_in_parallel(
 
     executor = executor_factory(max_workers=n_cpu)
     for case in cases:
-        executor.submit(f_solve, HP_fn, case)
+        executor.submit(f_solve, HP_fn, case, **solve_kwargs)
     executor.shutdown()
     print("All cases completed.")
     return True

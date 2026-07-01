@@ -49,6 +49,7 @@ def get_parameter_sweep(
         cases=cases,
         f_solve=HP_fn.ANAYLSE_CASE_FN,
         n_cpu=n_cpu,
+        solve_kwargs={"results_dir": results_dir},
     )
     transfer_temp_files_to_results(file_name, results_dir=results_dir)
 
@@ -69,7 +70,7 @@ def get_results_report(
     dt: float,
     print_to_terminal: bool = False,
     results_dir: str = "results",
-) -> list:
+) -> None:
     """Format, persist, and optionally print a solved case summary."""
     with profile_section("reporting"):
         hp.get_report()

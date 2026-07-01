@@ -5,7 +5,7 @@ from ....utils.readWriteOutput import print_result_to_csv, print_result_to_termi
 __all__ = ["analyse_single_case"]
 
 
-DEFAULT_ARGS: list[float | str | bool] = {
+DEFAULT_ARGS: dict[str, float | str | bool] = {
     "refrigerant": "R1234ze(Z)",
     "dT_GC_min_tar": 20.0,
     "T_air_tar": 200.0,
@@ -124,7 +124,7 @@ butane_args = {
 }
 
 
-def analyse_single_case(HP_fn, args: list[float | str | bool] = None):
+def analyse_single_case(HP_fn, args: dict[str, float | str | bool] | None = None):
     """Solve a single case and emit reports/plots for inspection."""
 
     if args is None:
@@ -136,7 +136,7 @@ def analyse_single_case(HP_fn, args: list[float | str | bool] = None):
     if hp.converged:
         hp.get_report()
 
-        if type(hp.output) is dict:
+        if isinstance(hp.output, dict):
             print_result_to_terminal(output=hp.output)
             print_result_to_csv(output=hp.output, file_name="single-result")
 

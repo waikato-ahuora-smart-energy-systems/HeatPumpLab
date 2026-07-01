@@ -27,6 +27,93 @@ class FakeHeatPump:
         return self.output
 
 
+def test_exact_state_seed_is_extracted_from_successful_solved_hp():
+    hp = FakeHeatPump()
+    hp.comp_discharge.pressure = 4.2
+    hp.Tref_evap_outlet = 21.5
+
+    seed = rhp_analysis._get_exact_state_seed_from_hp(hp)
+
+    assert seed == {
+        "P_H_est": pytest.approx(4.2),
+        "Tref_evap_outlet": pytest.approx(21.5),
+    }
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"feasible": False},
+        {"converged": False},
+        {"comp_discharge": SimpleNamespace(pressure=0.0)},
+        {"comp_discharge": SimpleNamespace(pressure=-1.0)},
+        {"comp_discharge": SimpleNamespace(pressure=float("nan"))},
+        {"comp_discharge": None},
+        {"Tref_evap_outlet": float("inf")},
+    ],
+)
+def test_exact_state_seed_refuses_invalid_hp_states(updates):
+    hp = FakeHeatPump()
+    for key, value in updates.items():
+        setattr(hp, key, value)
+
+    assert rhp_analysis._get_exact_state_seed_from_hp(hp) is None
+
+
+def test_exact_state_seed_is_applied_without_mutating_original_args():
+    args = {"refrigerant": "Butane"}
+    seed = {"P_H_est": 4.2, "Tref_evap_outlet": 21.5}
+
+    seeded_args = rhp_analysis._apply_exact_state_seed(args, seed)
+
+    assert seeded_args == {
+        "refrigerant": "Butane",
+        "P_H_est": pytest.approx(4.2),
+        "Tref_evap_outlet": pytest.approx(21.5),
+    }
+    assert args == {"refrigerant": "Butane"}
+
+
+def test_exact_solve_args_apply_matching_exact_state_seed_and_strip_objective_flag():
+    seed_hp = FakeHeatPump()
+    seed_hp.comp_discharge.pressure = 4.2
+    seed_hp.Tref_evap_outlet = 21.5
+    seed_hp.dT_gc_out_min_offset = 6.5
+    case = {
+        "additional_data": {
+            "vars_input": {"dT_gc_out_min_offset": {"xi": 0.0, "bnds": (0.0, 40.0)}}
+        },
+        "fixed_discharge_pressure_objective": True,
+    }
+
+    args = rhp_analysis._get_exact_solve_args(case, 6.5, seed_hp)
+
+    assert args["dT_gc_out_min_offset"] == pytest.approx(6.5)
+    assert args["P_H_est"] == pytest.approx(4.2)
+    assert args["Tref_evap_outlet"] == pytest.approx(21.5)
+    assert "fixed_discharge_pressure_objective" not in args
+
+
+def test_exact_solve_args_do_not_apply_mismatched_exact_state_seed():
+    seed_hp = FakeHeatPump()
+    seed_hp.comp_discharge.pressure = 4.2
+    seed_hp.Tref_evap_outlet = 21.5
+    seed_hp.dT_gc_out_min_offset = 0.0
+    case = {
+        "additional_data": {
+            "vars_input": {"dT_gc_out_min_offset": {"xi": 0.0, "bnds": (0.0, 40.0)}}
+        },
+        "fixed_discharge_pressure_objective": True,
+    }
+
+    args = rhp_analysis._get_exact_solve_args(case, 6.5, seed_hp)
+
+    assert args["dT_gc_out_min_offset"] == pytest.approx(6.5)
+    assert "P_H_est" not in args
+    assert "Tref_evap_outlet" not in args
+    assert "fixed_discharge_pressure_objective" not in args
+
+
 def test_analyse_rhp_case_optimises_when_boundary_gradient_is_positive(monkeypatch):
     hp = FakeHeatPump(sec=1.7)
     solved_args = []
@@ -186,6 +273,7 @@ def test_analyse_rhp_case_uses_fixed_pressure_objective_then_exact_final_solve(
 ):
     seed_hp = FakeHeatPump(sec=9.0)
     seed_hp.comp_discharge.pressure = 4.2
+    seed_hp.Tref_evap_outlet = 21.5
     final_hp = FakeHeatPump(sec=1.2)
     solved_args = []
     objective_params = []
@@ -224,8 +312,12 @@ def test_analyse_rhp_case_uses_fixed_pressure_objective_then_exact_final_solve(
     assert "fixed_discharge_pressure_objective" not in solved_args[0]
     assert solved_args[1]["dT_gc_out_min_offset"] == pytest.approx(6.5)
     assert "fixed_discharge_pressure_objective" not in solved_args[1]
+    assert "P_H_est" not in solved_args[1]
+    assert "Tref_evap_outlet" not in solved_args[1]
     assert objective_params[0][1]["P_H_est"] == pytest.approx(4.2)
     assert objective_params[1][1]["P_H_est"] == pytest.approx(4.2)
+    assert objective_params[0][1]["Tref_evap_outlet"] == pytest.approx(21.5)
+    assert objective_params[1][1]["Tref_evap_outlet"] == pytest.approx(21.5)
     assert objective_params[0][1]["fixed_discharge_pressure_objective"] is True
     assert objective_params[1][1]["fixed_discharge_pressure_objective"] is True
     assert reports[0]["obj"] == pytest.approx(1.2)
@@ -269,6 +361,45 @@ def test_analyse_rhp_case_reuses_exact_seed_when_selected_offset_is_unchanged(
     assert len(solved_args) == 1
     assert reports[0]["obj"] == pytest.approx(1.3)
     assert reports[0]["dt"] == pytest.approx(0.11 + 0.2)
+
+
+def test_analyse_rhp_case_does_not_reuse_failed_seed_solve(monkeypatch):
+    failed_seed = FakeHeatPump(sec=9.9)
+    failed_seed.feasible = False
+    failed_seed.converged = False
+    final_hp = FakeHeatPump(sec=1.1)
+    solved_args = []
+    reports = []
+
+    monkeypatch.setattr(rhp_analysis, "_get_dQdW", lambda solved_hp: 0.0)
+    monkeypatch.setattr(
+        rhp_analysis, "get_results_report", lambda **kwargs: reports.append(kwargs)
+    )
+    monkeypatch.setattr(rhp_analysis, "get_fprime", lambda *args, **kwargs: (-0.1, 0.2))
+    monkeypatch.setattr(
+        rhp_analysis,
+        "get_local_optimum",
+        lambda *args, **kwargs: pytest.fail("optimisation should not run"),
+    )
+
+    def solve_single_case(hp_cls, args):
+        solved_args.append(args)
+        if len(solved_args) == 1:
+            return failed_seed, 0.11
+        return final_hp, 0.44
+
+    monkeypatch.setattr(rhp_analysis, "solve_single_case_with_timer", solve_single_case)
+
+    solved_hp, solve_time = rhp_analysis.analyse_RHP_case(
+        FakeHeatPump,
+        {"refrigerant": "Butane"},
+        results_dir="custom-results",
+    )
+
+    assert solved_hp is final_hp
+    assert solve_time == pytest.approx(0.44)
+    assert len(solved_args) == 2
+    assert reports[0]["obj"] == pytest.approx(1.1)
 
 
 def test_dqdw_uses_followup_case_to_estimate_heating_sensitivity(monkeypatch):
@@ -343,6 +474,8 @@ def test_analyse_unsolved_cases_retries_with_typed_args_and_records_resolved_res
                     "sink": "Air",
                     "source": "water",
                     "Tref_evap_inlet": "10",
+                    "Pmax": "4200",
+                    "Tref_evap_outlet": "21.5",
                 }
             ]
 
@@ -372,6 +505,8 @@ def test_analyse_unsolved_cases_retries_with_typed_args_and_records_resolved_res
     assert analysed[0][0] is RetryHeatPump
     assert analysed[0][1]["n_comp"] == 2
     assert analysed[0][1]["T_air_tar"] == pytest.approx(200.0)
+    assert "P_H_est" not in analysed[0][1]
+    assert "Tref_evap_outlet" not in analysed[0][1]
     assert analysed[0][1]["debug"] is True
     assert analysed[0][2] == tmp_path
     assert printed == [({"SEC": 1.5}, "-case-RESOLVED", tmp_path)]

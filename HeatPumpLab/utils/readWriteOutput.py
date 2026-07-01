@@ -23,7 +23,7 @@ def print_result_to_terminal(output: dict[str, Any]):
     key: str
     value: Any
 
-    if type(output) is dict:
+    if isinstance(output, dict):
         for key, value in output.items():
             print(f"{key} {value}")
     else:
@@ -65,10 +65,6 @@ def transfer_temp_files_to_results(
     file_name: str = "untitled", results_dir: str | Path = "results"
 ) -> None:
     """Move temporary CSV files into the main results file."""
-    csv_file_list: glob
-    f: str
-    fout: list[any]
-
     results_path = Path(results_dir)
     output_path = _get_results_path(file_name, ".csv", "", results_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
