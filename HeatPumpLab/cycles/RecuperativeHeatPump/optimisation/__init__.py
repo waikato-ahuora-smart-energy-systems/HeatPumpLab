@@ -9,6 +9,7 @@ from ._types import (
     OuterDesignOptimisationResult,
     PhaseEvaluation,
 )
+from ._batch import optimise_recuperative_heat_pump_cases
 from .outer_design import optimise_recuperative_heat_pump
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "OuterDesignOptimisationConfig",
     "OuterDesignOptimisationResult",
     "PhaseEvaluation",
+    "optimise_recuperative_heat_pump_cases",
     "optimise_recuperative_heat_pump",
 ]

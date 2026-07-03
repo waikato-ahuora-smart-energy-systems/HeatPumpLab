@@ -132,6 +132,8 @@ class LocalPolishConfig:
     shrink_factor: float = 0.5
     max_failed_shrinks: int = 20
     improvement_tolerance: float = 0.0
+    vary_comp2_power_frac: bool = True
+    vary_first_component_mass_fraction: bool = True
 
 
 @dataclass(frozen=True)
@@ -155,8 +157,14 @@ class OuterDesignOptimisationConfig:
     """Configuration for the edge-first optimiser."""
 
     max_exact_evaluations: int = 100
+    fixed_dT_rhx1_cold: float = 0.0
+    fixed_dT_rhx2_cold: float = 0.0
     fixed_comp2_power_frac: float = 0.5
     fixed_first_component_mass_fraction: float = 0.5
+    vary_dT_rhx1_cold: bool = True
+    vary_dT_rhx2_cold: bool = True
+    vary_comp2_power_frac: bool = True
+    vary_first_component_mass_fraction: bool = True
     line_budget: int = 8
     split_budget: int = 8
     polish_budget: int = 12
@@ -215,3 +223,14 @@ class ResultsCsvCaseDefinition:
     selected_reference: dict[str, Any]
     best_reference: dict[str, Any]
     source_csv: str
+
+
+@dataclass(frozen=True)
+class OptimisationCase:
+    """One batch case for the RHP outer optimiser."""
+
+    base_case: dict[str, Any]
+    fluids: tuple[str, str]
+    config: OuterDesignOptimisationConfig
+    signature: str
+    temp_suffix: str

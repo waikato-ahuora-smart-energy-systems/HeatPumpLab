@@ -40,6 +40,20 @@ def _run_pattern_search_polish(
             failed_evaluations=0,
         )
 
+    if not config.vary_comp2_power_frac and not config.vary_first_component_mass_fraction:
+        return LocalPolishResult(
+            method=method,
+            status="skipped",
+            source_x=source.x,
+            best=source,
+            evaluations=(),
+            success=source.success,
+            message="no local polish variables enabled",
+            elapsed_seconds=time.perf_counter() - start,
+            exact_evaluations=0,
+            failed_evaluations=0,
+        )
+
     evaluator = _LocalPolishEvaluator(
         source=source,
         objective=objective,
@@ -89,9 +103,14 @@ class _LocalPolishEvaluator:
         self.config = config
         self.evaluate_phase = evaluate_phase
         self.phase = "polish_pattern_search"
-        self.bounds = np.asarray(objective.bounds[2:4], dtype=float)
+        self.active_indices = _active_polish_indices(config)
+        self.step_indices = tuple(index - 2 for index in self.active_indices)
+        self.bounds = np.asarray(objective.bounds[list(self.active_indices)], dtype=float)
         self.fixed_dT = np.asarray(source.x[:2], dtype=float)
-        self.start_comp = np.asarray(source.x[2:4], dtype=float)
+        self.start_values = np.asarray(
+            [source.x[index] for index in self.active_indices],
+            dtype=float,
+        )
         self.start_exact = objective.exact_evaluations
         self.evaluations: list[PhaseEvaluation] = []
 
@@ -103,58 +122,69 @@ class _LocalPolishEvaluator:
     def remaining_exact(self) -> int:
         return max(0, int(self.config.budget) - self.exact_used)
 
-    def build_x(self, comp_values: np.ndarray | list[float]) -> np.ndarray:
-        comp = np.clip(
-            np.asarray(comp_values, dtype=float),
+    def build_x(self, polish_values: np.ndarray | list[float]) -> np.ndarray:
+        values = np.clip(
+            np.asarray(polish_values, dtype=float),
             self.bounds[:, 0],
             self.bounds[:, 1],
         )
-        return np.asarray([self.fixed_dT[0], self.fixed_dT[1], comp[0], comp[1]])
+        x = np.asarray(self.source.x, dtype=float)
+        x[:2] = self.fixed_dT
+        for value, index in zip(values, self.active_indices):
+            x[index] = value
+        return x
 
-    def can_evaluate(self, comp_values: np.ndarray | list[float]) -> bool:
-        x = self.objective.repair_vector(self.build_x(comp_values))
+    def can_evaluate(self, polish_values: np.ndarray | list[float]) -> bool:
+        x = self.objective.repair_vector(self.build_x(polish_values))
         cache_key = self.objective._cache_key(x)
         return cache_key in self.objective.cache or self.remaining_exact > 0
 
-    def evaluate(self, comp_values: np.ndarray | list[float]) -> PhaseEvaluation | None:
-        if not self.can_evaluate(comp_values):
+    def evaluate(self, polish_values: np.ndarray | list[float]) -> PhaseEvaluation | None:
+        if not self.can_evaluate(polish_values):
             return None
-        record = self.evaluate_phase(self.phase, self.build_x(comp_values))
+        record = self.evaluate_phase(self.phase, self.build_x(polish_values))
         self.evaluations.append(record)
         return record
 
 
 def _poll_until_converged(evaluator: _LocalPolishEvaluator) -> None:
-    current = evaluator.evaluate(evaluator.start_comp)
+    current = evaluator.evaluate(evaluator.start_values)
     if current is None:
         return
 
-    steps = np.asarray(evaluator.config.initial_steps, dtype=float)
-    min_steps = np.asarray(evaluator.config.min_steps, dtype=float)
+    steps = np.asarray(evaluator.config.initial_steps, dtype=float)[
+        list(evaluator.step_indices)
+    ]
+    min_steps = np.asarray(evaluator.config.min_steps, dtype=float)[
+        list(evaluator.step_indices)
+    ]
     shrink_factor = float(evaluator.config.shrink_factor)
     if not (0.0 < shrink_factor < 1.0):
         raise ValueError("shrink_factor must be between 0 and 1.")
 
     failed_shrinks = 0
-    current_comp = np.asarray(current.x[2:4], dtype=float)
+    current_values = np.asarray(
+        [current.x[index] for index in evaluator.active_indices],
+        dtype=float,
+    )
     while (
         evaluator.remaining_exact > 0
         and failed_shrinks <= evaluator.config.max_failed_shrinks
         and np.any(steps >= min_steps)
     ):
         best_poll = current
-        best_comp = current_comp
-        for idx in range(2):
+        best_values = current_values
+        for idx in range(len(evaluator.active_indices)):
             if steps[idx] < min_steps[idx]:
                 continue
             for sign in (1.0, -1.0):
-                candidate = current_comp.copy()
+                candidate = current_values.copy()
                 candidate[idx] = np.clip(
                     candidate[idx] + sign * steps[idx],
                     evaluator.bounds[idx, 0],
                     evaluator.bounds[idx, 1],
                 )
-                if np.allclose(candidate, current_comp, atol=1e-14, rtol=0.0):
+                if np.allclose(candidate, current_values, atol=1e-14, rtol=0.0):
                     continue
                 record = evaluator.evaluate(candidate)
                 if record is None:
@@ -165,12 +195,24 @@ def _poll_until_converged(evaluator: _LocalPolishEvaluator) -> None:
                     tolerance=evaluator.config.improvement_tolerance,
                 ):
                     best_poll = record
-                    best_comp = np.asarray(record.x[2:4], dtype=float)
+                    best_values = np.asarray(
+                        [record.x[index] for index in evaluator.active_indices],
+                        dtype=float,
+                    )
 
         if best_poll is not current:
             current = best_poll
-            current_comp = best_comp
+            current_values = best_values
             failed_shrinks = 0
         else:
             steps *= shrink_factor
             failed_shrinks += 1
+
+
+def _active_polish_indices(config: LocalPolishConfig) -> tuple[int, ...]:
+    indices: list[int] = []
+    if config.vary_comp2_power_frac:
+        indices.append(2)
+    if config.vary_first_component_mass_fraction:
+        indices.append(3)
+    return tuple(indices)

@@ -10,6 +10,8 @@ from HeatPumpLab.cycles.RecuperativeHeatPump import optimisation as outer_opt
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     _objective as objective_helpers,
 )
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _batch as batch_helpers
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _cases as case_helpers
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import outer_design as outer_design_module
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _polish as polish_helpers
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
@@ -85,9 +87,11 @@ def test_public_api_exposes_only_the_rhp_optimiser_surface():
         "OuterDesignOptimisationConfig",
         "OuterDesignOptimisationResult",
         "PhaseEvaluation",
+        "optimise_recuperative_heat_pump_cases",
         "optimise_recuperative_heat_pump",
     ]
     assert hasattr(outer_opt, "optimise_recuperative_heat_pump")
+    assert hasattr(outer_opt, "optimise_recuperative_heat_pump_cases")
     assert not hasattr(outer_opt, "optimise_recuperative_outer_design")
     assert not hasattr(outer_opt, "OuterDesignObjective")
     assert not hasattr(outer_opt, "run_outer_design_optimisation")
@@ -344,6 +348,73 @@ def test_outer_design_optimisation_skips_split_when_both_edges_select_corner(mon
     assert result.split is None
 
 
+def test_outer_design_optimisation_fixed_dT1_searches_only_dT2(monkeypatch):
+    result = _optimise_synthetic(
+        analyser=SyntheticAnalyser(dT1_target=18.0, dT2_target=42.0),
+        config=outer_opt.OuterDesignOptimisationConfig(
+            fixed_dT_rhx1_cold=18.0,
+            vary_dT_rhx1_cold=False,
+            line_budget=12,
+            split_budget=8,
+            polish_budget=0,
+        ),
+        monkeypatch=monkeypatch,
+    )
+
+    assert result.edge_a.success is True
+    assert result.edge_b.message == "dT_rhx1_cold is fixed"
+    assert result.split is None
+    assert result.edge_a.best is not None
+    assert result.edge_a.best.x[0] == pytest.approx(18.0)
+    assert result.edge_a.best.x[1] == pytest.approx(42.0, abs=2.0)
+    assert all(record.x[0] == pytest.approx(18.0) for record in result.edge_a.evaluations)
+
+
+def test_outer_design_optimisation_fixed_dT2_searches_only_dT1(monkeypatch):
+    result = _optimise_synthetic(
+        analyser=SyntheticAnalyser(dT1_target=27.0, dT2_target=16.0),
+        config=outer_opt.OuterDesignOptimisationConfig(
+            fixed_dT_rhx2_cold=16.0,
+            vary_dT_rhx2_cold=False,
+            line_budget=12,
+            split_budget=8,
+            polish_budget=0,
+        ),
+        monkeypatch=monkeypatch,
+    )
+
+    assert result.edge_a.message == "dT_rhx2_cold is fixed"
+    assert result.edge_b.success is True
+    assert result.split is None
+    assert result.edge_b.best is not None
+    assert result.edge_b.best.x[0] == pytest.approx(27.0, abs=2.0)
+    assert result.edge_b.best.x[1] == pytest.approx(16.0)
+    assert all(record.x[1] == pytest.approx(16.0) for record in result.edge_b.evaluations)
+
+
+def test_outer_design_optimisation_fixed_dT_pair_skips_edge_and_split(monkeypatch):
+    result = _optimise_synthetic(
+        analyser=SyntheticAnalyser(dT1_target=11.0, dT2_target=22.0),
+        config=outer_opt.OuterDesignOptimisationConfig(
+            fixed_dT_rhx1_cold=11.0,
+            fixed_dT_rhx2_cold=22.0,
+            vary_dT_rhx1_cold=False,
+            vary_dT_rhx2_cold=False,
+            line_budget=12,
+            split_budget=8,
+            polish_budget=0,
+        ),
+        monkeypatch=monkeypatch,
+    )
+
+    assert result.corner.x[:2] == pytest.approx((11.0, 22.0))
+    assert result.edge_a.evaluations == ()
+    assert result.edge_b.evaluations == ()
+    assert result.split is None
+    assert result.best is not None
+    assert result.best.x[:2] == pytest.approx((11.0, 22.0))
+
+
 def test_outer_design_optimisation_polish_keeps_dT_values_fixed_and_varies_power_and_composition(
     monkeypatch,
 ):
@@ -489,6 +560,88 @@ def test_pattern_search_keeps_dT_values_fixed():
 
     assert result.evaluations
     assert all(record.x[:2] == pytest.approx((12.0, 44.0)) for record in result.evaluations)
+
+
+def test_pattern_search_respects_fixed_comp2_power_fraction():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=12,
+        analyser=SyntheticAnalyser(comp2_target=0.8, composition_target=0.7),
+    )
+    source = _phase_from_exact_record(
+        objective,
+        [12.0, 44.0, 0.5, 0.5],
+        phase="source",
+    )
+
+    result = polish_helpers._run_pattern_search_polish(
+        source=source,
+        objective=objective,
+        config=opt_types.LocalPolishConfig(
+            budget=8,
+            vary_comp2_power_frac=False,
+            vary_first_component_mass_fraction=True,
+        ),
+        evaluate_phase=_phase_evaluator(objective, []),
+    )
+
+    assert result.evaluations
+    assert all(record.x[2] == pytest.approx(0.5) for record in result.evaluations)
+    assert any(record.x[3] != pytest.approx(0.5) for record in result.evaluations)
+
+
+def test_pattern_search_respects_fixed_first_component_mass_fraction():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=12,
+        analyser=SyntheticAnalyser(comp2_target=0.7, composition_target=0.9),
+    )
+    source = _phase_from_exact_record(
+        objective,
+        [12.0, 44.0, 0.5, 0.5],
+        phase="source",
+    )
+
+    result = polish_helpers._run_pattern_search_polish(
+        source=source,
+        objective=objective,
+        config=opt_types.LocalPolishConfig(
+            budget=8,
+            vary_comp2_power_frac=True,
+            vary_first_component_mass_fraction=False,
+        ),
+        evaluate_phase=_phase_evaluator(objective, []),
+    )
+
+    assert result.evaluations
+    assert any(record.x[2] != pytest.approx(0.5) for record in result.evaluations)
+    assert all(record.x[3] == pytest.approx(0.5) for record in result.evaluations)
+
+
+def test_pattern_search_skips_when_all_polish_variables_are_fixed():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=4,
+        analyser=SyntheticAnalyser(),
+    )
+    source = _phase_from_exact_record(
+        objective,
+        [12.0, 44.0, 0.5, 0.5],
+        phase="source",
+    )
+
+    result = polish_helpers._run_pattern_search_polish(
+        source=source,
+        objective=objective,
+        config=opt_types.LocalPolishConfig(
+            budget=8,
+            vary_comp2_power_frac=False,
+            vary_first_component_mass_fraction=False,
+        ),
+        evaluate_phase=_phase_evaluator(objective, []),
+    )
+
+    assert result.status == "skipped"
+    assert result.best is source
+    assert result.evaluations == ()
+    assert result.exact_evaluations == 0
 
 
 def test_local_polish_is_pattern_search_only():
@@ -640,6 +793,230 @@ def test_write_outer_design_optimisation_results_includes_reference_metadata(
     assert outer_opt.OPTIMISER_VERSION in summary_csv
 
 
+def test_optimisation_case_generation_expands_fixed_variable_lists():
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={
+            "fluids_ls": [("Propane", "Butane")],
+            "T_air_tar_ls": [180.0, 200.0],
+            "dT_rhx1_cold_ls": [0.0, 10.0],
+            "dT_rhx2_cold_ls": [5.0],
+            "comp2_power_frac_ls": [0.4, 0.6],
+            "first_component_mass_fraction_ls": [0.3, 0.7],
+        },
+        config=outer_opt.OuterDesignOptimisationConfig(line_budget=2),
+    )
+
+    assert len(cases) == 16
+    assert {case.base_case["T_air_tar"] for case in cases} == {180.0, 200.0}
+    assert {case.fluids for case in cases} == {("Propane", "Butane")}
+    assert {case.config.fixed_dT_rhx1_cold for case in cases} == {0.0, 10.0}
+    assert {case.config.fixed_dT_rhx2_cold for case in cases} == {5.0}
+    assert {case.config.fixed_comp2_power_frac for case in cases} == {0.4, 0.6}
+    assert {case.config.fixed_first_component_mass_fraction for case in cases} == {
+        0.3,
+        0.7,
+    }
+    assert all(not case.config.vary_dT_rhx1_cold for case in cases)
+    assert all(not case.config.vary_dT_rhx2_cold for case in cases)
+    assert all(not case.config.vary_comp2_power_frac for case in cases)
+    assert all(not case.config.vary_first_component_mass_fraction for case in cases)
+    assert len({case.signature for case in cases}) == len(cases)
+
+
+def test_optimisation_case_generation_omitted_variable_lists_keep_base_config():
+    config = outer_opt.OuterDesignOptimisationConfig(
+        fixed_comp2_power_frac=0.42,
+        fixed_first_component_mass_fraction=0.64,
+        vary_comp2_power_frac=True,
+        vary_first_component_mass_fraction=True,
+    )
+
+    [case] = case_helpers._build_optimisation_cases(
+        param_kwargs={"fluids": ("Propane", "Butane")},
+        config=config,
+    )
+
+    assert case.config.fixed_comp2_power_frac == pytest.approx(0.42)
+    assert case.config.fixed_first_component_mass_fraction == pytest.approx(0.64)
+    assert case.config.vary_comp2_power_frac is True
+    assert case.config.vary_first_component_mass_fraction is True
+
+
+def test_optimisation_case_generation_uses_refrigerant_composition_as_start_only():
+    [case] = case_helpers._build_optimisation_cases(
+        param_kwargs={"refrigerant": "Propane;Butane|0.62;0.38|mass"},
+        config=outer_opt.OuterDesignOptimisationConfig(),
+    )
+
+    assert case.fluids == ("Propane", "Butane")
+    assert case.config.fixed_first_component_mass_fraction == pytest.approx(0.62)
+    assert case.config.vary_first_component_mass_fraction is True
+
+
+def test_optimisation_case_filtering_skips_completed_signatures(tmp_path):
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0, 200.0]},
+        config=outer_opt.OuterDesignOptimisationConfig(),
+    )
+    results_path = tmp_path / "RHPopt_results.csv"
+    results_path.write_text(f"case_signature\n{cases[0].signature}\n")
+
+    remaining = case_helpers._get_optimisation_case_list_to_solve(
+        file_name="RHPopt_results",
+        results_dir=tmp_path,
+        param_kwargs={"T_air_tar_ls": [180.0, 200.0]},
+        config=outer_opt.OuterDesignOptimisationConfig(),
+    )
+
+    assert [case.signature for case in remaining] == [cases[1].signature]
+
+
+def test_batch_runner_executes_cases_serially_and_writes_rows(monkeypatch, tmp_path):
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0, 200.0]},
+        config=outer_opt.OuterDesignOptimisationConfig(),
+    )
+    calls = []
+    written = []
+
+    def fake_optimise_recuperative_heat_pump(**kwargs):
+        calls.append(kwargs)
+        return _fake_batch_result()
+
+    def fake_print_result_to_csv(**kwargs):
+        written.append(kwargs)
+
+    monkeypatch.setattr(
+        batch_helpers,
+        "optimise_recuperative_heat_pump",
+        fake_optimise_recuperative_heat_pump,
+    )
+    monkeypatch.setattr(batch_helpers, "print_result_to_csv", fake_print_result_to_csv)
+
+    rows = batch_helpers._run_optimisation_cases(
+        cases,
+        results_dir=tmp_path,
+        n_cpu=1,
+    )
+
+    assert len(rows) == 2
+    assert [call["base_case"]["T_air_tar"] for call in calls] == [180.0, 200.0]
+    assert [row["case_signature"] for row in rows] == [case.signature for case in cases]
+    assert [write["suffix"] for write in written] == [
+        case.temp_suffix for case in cases
+    ]
+    assert all(write["file_name"] == "temp/R" for write in written)
+
+
+def test_batch_runner_submits_parallel_cases_to_executor(tmp_path):
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0, 200.0]},
+        config=outer_opt.OuterDesignOptimisationConfig(),
+    )
+    executors = []
+
+    class FakeFuture:
+        def __init__(self, case):
+            self.case = case
+
+        def result(self):
+            return {"case_signature": self.case.signature}
+
+    class FakeExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+            self.submitted = []
+            self.shutdown_called = False
+            executors.append(self)
+
+        def submit(self, fn, *args, **kwargs):
+            self.submitted.append((fn, args, kwargs))
+            return FakeFuture(args[0])
+
+        def shutdown(self):
+            self.shutdown_called = True
+
+    rows = batch_helpers._run_optimisation_cases(
+        cases,
+        results_dir=tmp_path,
+        n_cpu=2,
+        executor_factory=FakeExecutor,
+    )
+
+    assert rows == [{"case_signature": case.signature} for case in cases]
+    assert len(executors) == 1
+    assert executors[0].max_workers == 2
+    assert [submission[1][0] for submission in executors[0].submitted] == cases
+    assert executors[0].shutdown_called is True
+
+
+def test_batch_runner_surfaces_parallel_worker_failures(tmp_path):
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0]},
+        config=outer_opt.OuterDesignOptimisationConfig(),
+    )
+
+    class FailingFuture:
+        def result(self):
+            raise RuntimeError("worker failed")
+
+    class FakeExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+
+        def submit(self, fn, *args, **kwargs):
+            return FailingFuture()
+
+        def shutdown(self):
+            pass
+
+    with pytest.raises(RuntimeError, match="worker failed"):
+        batch_helpers._run_optimisation_cases(
+            cases,
+            results_dir=tmp_path,
+            n_cpu=2,
+            executor_factory=FakeExecutor,
+        )
+
+
+def test_public_batch_runner_transfers_temp_files_before_and_after(monkeypatch, tmp_path):
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0]},
+        config=outer_opt.OuterDesignOptimisationConfig(),
+    )
+    transfers = []
+
+    monkeypatch.setattr(
+        batch_helpers,
+        "transfer_temp_files_to_results",
+        lambda filename, results_dir: transfers.append((filename, results_dir)),
+    )
+    monkeypatch.setattr(
+        batch_helpers,
+        "_get_optimisation_case_list_to_solve",
+        lambda **kwargs: cases,
+    )
+    monkeypatch.setattr(
+        batch_helpers,
+        "_run_optimisation_cases",
+        lambda cases, results_dir, n_cpu: [{"case_signature": cases[0].signature}],
+    )
+
+    rows = outer_opt.optimise_recuperative_heat_pump_cases(
+        filename="RHPopt_results",
+        param_kwargs={"T_air_tar_ls": [180.0]},
+        config=outer_opt.OuterDesignOptimisationConfig(),
+        n_cpu=3,
+        results_dir=tmp_path,
+    )
+
+    assert rows == [{"case_signature": cases[0].signature}]
+    assert transfers == [
+        ("RHPopt_results", tmp_path),
+        ("RHPopt_results", tmp_path),
+    ]
+
+
 def test_real_outer_design_optimisation_smoke_when_refprop_is_available(hpl, tmp_path):
     del hpl
     config = outer_opt.OuterDesignOptimisationConfig(
@@ -729,3 +1106,27 @@ def _phase_evaluator(objective, records):
         return phase_record
 
     return evaluate_phase
+
+
+def _fake_batch_result():
+    best = SimpleNamespace(
+        success=True,
+        message="success",
+        sec=0.5,
+        cop=2.0,
+        pmax=1234.0,
+    )
+    return SimpleNamespace(
+        best=best,
+        to_summary_dict=lambda: {
+            "optimiser_version": outer_opt.OPTIMISER_VERSION,
+            "best_objective": 0.5,
+            "best_phase": "corner",
+            "exact_evaluations": 1,
+            "failed_evaluations": 0,
+            "best_dT_rhx1_cold": 0.0,
+            "best_dT_rhx2_cold": 0.0,
+            "best_comp2_power_frac": 0.5,
+            "best_first_component_mass_fraction": 0.5,
+        },
+    )

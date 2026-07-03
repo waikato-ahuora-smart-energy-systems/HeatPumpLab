@@ -54,6 +54,67 @@ def _search_edge_b(
     )
 
 
+def _search_dT2_at_fixed_dT1(
+    *,
+    objective: _OuterDesignObjective,
+    config: OuterDesignOptimisationConfig,
+    fixed_dT1: float,
+    fixed_comp2: float,
+    fixed_composition: float,
+    evaluate_phase: Callable[[str, np.ndarray | list[float]], PhaseEvaluation],
+) -> LineSearchResult:
+    return _line_search(
+        phase="edge_a",
+        variable_name="dT_rhx2_cold",
+        lo=0.0,
+        hi=_remaining_recuperator_high(objective, fixed_dT1, variable_index=1),
+        budget=config.line_budget,
+        build_x=lambda value: [
+            fixed_dT1,
+            value,
+            fixed_comp2,
+            fixed_composition,
+        ],
+        evaluate_phase=evaluate_phase,
+    )
+
+
+def _search_dT1_at_fixed_dT2(
+    *,
+    objective: _OuterDesignObjective,
+    config: OuterDesignOptimisationConfig,
+    fixed_dT2: float,
+    fixed_comp2: float,
+    fixed_composition: float,
+    evaluate_phase: Callable[[str, np.ndarray | list[float]], PhaseEvaluation],
+) -> LineSearchResult:
+    return _line_search(
+        phase="edge_b",
+        variable_name="dT_rhx1_cold",
+        lo=0.0,
+        hi=_remaining_recuperator_high(objective, fixed_dT2, variable_index=0),
+        budget=config.line_budget,
+        build_x=lambda value: [
+            value,
+            fixed_dT2,
+            fixed_comp2,
+            fixed_composition,
+        ],
+        evaluate_phase=evaluate_phase,
+    )
+
+
+def _skipped_line_search(phase: str, variable_name: str, message: str) -> LineSearchResult:
+    return LineSearchResult(
+        phase=phase,
+        variable_name=variable_name,
+        best=None,
+        evaluations=(),
+        success=False,
+        message=message,
+    )
+
+
 def _search_split_line(
     *,
     objective: _OuterDesignObjective,
@@ -208,5 +269,19 @@ def _recuperator_edge_high(objective: _OuterDesignObjective) -> float:
             objective.bounds[0, 1],
             objective.bounds[1, 1],
             objective.max_recuperator_lift,
+        )
+    )
+
+
+def _remaining_recuperator_high(
+    objective: _OuterDesignObjective,
+    fixed_other_dT: float,
+    *,
+    variable_index: int,
+) -> float:
+    return float(
+        min(
+            objective.bounds[variable_index, 1],
+            max(0.0, objective.max_recuperator_lift - float(fixed_other_dT)),
         )
     )
