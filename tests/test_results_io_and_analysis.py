@@ -128,6 +128,24 @@ def test_temporary_result_files_are_merged_into_requested_results_dir(tmp_path):
     assert not list(temp_dir.glob("*.csv"))
 
 
+def test_temporary_result_merge_does_not_repeat_header_on_later_transfer(tmp_path):
+    temp_dir = tmp_path / "temp"
+    temp_dir.mkdir()
+    (temp_dir / "a.csv").write_text("case,COP\nA,3.2\n", encoding="utf-8")
+
+    transfer_temp_files_to_results(file_name="merged", results_dir=tmp_path)
+    (temp_dir / "b.csv").write_text("case,COP\nB,3.4\n", encoding="utf-8")
+
+    transfer_temp_files_to_results(file_name="merged", results_dir=tmp_path)
+
+    output = (tmp_path / "merged.csv").read_text(encoding="utf-8")
+    assert output.count("case,COP") == 1
+    assert read_csv_to_results(file_name="merged", results_dir=tmp_path) == [
+        {"case": "A", "COP": "3.2"},
+        {"case": "B", "COP": "3.4"},
+    ]
+
+
 def test_print_results_writes_to_temp_result_file(tmp_path):
     print_results(
         results={"case": "A", "COP": 3.2},

@@ -69,7 +69,7 @@ def transfer_temp_files_to_results(
     output_path = _get_results_path(file_name, ".csv", "", results_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     csv_file_list = glob(str(results_path / "temp" / "*.csv"))
-    header_saved = False
+    header_saved = output_path.exists() and output_path.stat().st_size > 0
     with open(output_path, "a") as fout:
         for f in reversed(csv_file_list):
             with open(f) as fin:
