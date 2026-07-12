@@ -33,6 +33,7 @@ def analyse_RHP_case(
     case: dict,
     results_dir: str = "results",
     use_fast_objective: bool = True,
+    record_result: bool = True,
 ) -> Tuple["BaseHeatPump", float]:
     """Optimise the gas-cooler offset for a single case and solve it."""
     dt_ls = []
@@ -113,15 +114,16 @@ def analyse_RHP_case(
         obj = compute_SEC_obj(hp, case)
 
         hp.dQdW = _get_dQdW(hp)
-        get_results_report(
-            hp=hp,
-            param=case,
-            result=result,
-            obj=obj,
-            dt=sum(dt_ls),
-            print_to_terminal=False,
-            results_dir=results_dir,
-        )
+        if record_result:
+            get_results_report(
+                hp=hp,
+                param=case,
+                result=result,
+                obj=obj,
+                dt=sum(dt_ls),
+                print_to_terminal=False,
+                results_dir=results_dir,
+            )
         return hp, dt
     else:
         return None, dt

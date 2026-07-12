@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import re
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
@@ -20,6 +21,8 @@ from ._types import (
     OuterDesignOptimisationResult,
     ResultsCsvCaseDefinition,
 )
+
+_LEGACY_OPTIMAL_RESULT = re.compile(r"R-[0-9a-f]{16}\.csv")
 
 
 def _outer_design_config_from_case_definition(
@@ -108,6 +111,119 @@ def _write_outer_design_optimisation_results(
     )
     _write_csv(output_dir / "outer_design_optimisation_evaluations.csv", payload["evaluations"])
     _write_csv(output_dir / "outer_design_optimisation_summary.csv", [summary])
+
+
+def _transfer_optimal_results(
+    filename: str,
+    *,
+    results_dir: str | Path,
+) -> None:
+    """Merge completed optimum rows into the master CSV and remove temp files."""
+    results_path = Path(results_dir)
+    temp_paths = _optimal_result_temp_paths(results_path)
+    if not temp_paths:
+        return
+
+    output_path = _results_csv_path(file_name=filename, results_dir=results_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames, completed_signatures = _master_result_schema(output_path)
+
+    for temp_path in temp_paths:
+        with temp_path.open(newline="") as csv_file:
+            reader = csv.DictReader(csv_file)
+            temp_fields = reader.fieldnames
+            if not temp_fields:
+                temp_path.unlink()
+                continue
+            if fieldnames is None:
+                fieldnames = temp_fields
+            if temp_fields != fieldnames:
+                raise ValueError(
+                    f"Optimal result schema in {temp_path} does not match {output_path}."
+                )
+            rows = [
+                row
+                for row in reader
+                if (signature := row.get("case_signature"))
+                and signature != "case_signature"
+                and signature not in completed_signatures
+            ]
+
+        if rows:
+            write_header = not output_path.exists() or output_path.stat().st_size == 0
+            with output_path.open("a", newline="") as output_file:
+                writer = csv.DictWriter(output_file, fieldnames=fieldnames)
+                if write_header:
+                    writer.writeheader()
+                writer.writerows(rows)
+            completed_signatures.update(
+                row["case_signature"] for row in rows if _result_row_is_complete(row)
+            )
+        temp_path.unlink()
+
+    optimal_temp_dir = results_path / "temp" / "optimisation"
+    if optimal_temp_dir.exists() and not any(optimal_temp_dir.iterdir()):
+        optimal_temp_dir.rmdir()
+
+
+def _completed_result_row(
+    signature: str,
+    *,
+    filename: str,
+    results_dir: str | Path,
+) -> dict[str, Any] | None:
+    path = _results_csv_path(file_name=filename, results_dir=results_dir)
+    if not path.exists():
+        return None
+    with path.open(newline="") as csv_file:
+        return next(
+            (
+                row
+                for row in csv.DictReader(csv_file)
+                if row.get("case_signature") == signature
+                and _result_row_is_complete(row)
+            ),
+            None,
+        )
+
+
+def _results_csv_path(*, file_name: str, results_dir: str | Path) -> Path:
+    relative_path = Path(file_name + ".csv")
+    if relative_path.parts and relative_path.parts[0] == "results":
+        relative_path = Path(*relative_path.parts[1:])
+    return Path(results_dir) / relative_path
+
+
+def _result_row_is_complete(row: dict[str, Any]) -> bool:
+    """Return whether a persisted row contains a usable selected optimum."""
+    status = row.get("batch_success", row.get("best_success"))
+    if status in (None, ""):
+        return True
+    return str(status).strip().lower() in {"1", "true", "yes"}
+
+
+def _optimal_result_temp_paths(results_path: Path) -> list[Path]:
+    dedicated = sorted((results_path / "temp" / "optimisation").glob("*.csv"))
+    legacy = sorted(
+        path
+        for path in (results_path / "temp").glob("*.csv")
+        if _LEGACY_OPTIMAL_RESULT.fullmatch(path.name)
+    )
+    return dedicated + legacy
+
+
+def _master_result_schema(path: Path) -> tuple[list[str] | None, set[str]]:
+    if not path.exists() or path.stat().st_size == 0:
+        return None, set()
+    with path.open(newline="") as csv_file:
+        reader = csv.DictReader(csv_file)
+        return reader.fieldnames, {
+            signature
+            for row in reader
+            if (signature := row.get("case_signature"))
+            and signature != "case_signature"
+            and _result_row_is_complete(row)
+        }
 
 
 def _parse_binary_refrigerant(

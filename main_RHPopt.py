@@ -8,8 +8,7 @@ from typing import Any
 
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     OuterDesignOptimisationConfig,
-    OuterDesignOptimisationResult,
-    optimise_recuperative_heat_pump,
+    optimise_recuperative_heat_pump_case,
     optimise_recuperative_heat_pump_cases,
 )
 
@@ -40,12 +39,14 @@ DEFAULT_PARAM_KWARGS = {
 def run_one(
     base_case: dict[str, Any] | None = None,
     *,
+    filename: str = DEFAULT_FILENAME,
     fluids: tuple[str, str] = DEFAULT_FLUIDS,
     config: OuterDesignOptimisationConfig | None = None,
     results_dir: str | Path = DEFAULT_RESULTS_DIR,
-) -> OuterDesignOptimisationResult:
-    """Optimise one recuperative heat-pump case in the current process."""
-    return optimise_recuperative_heat_pump(
+) -> dict[str, Any]:
+    """Optimise and persist one recuperative heat-pump case."""
+    return optimise_recuperative_heat_pump_case(
+        filename=filename,
         base_case=base_case,
         fluids=fluids,
         config=OuterDesignOptimisationConfig() if config is None else config,

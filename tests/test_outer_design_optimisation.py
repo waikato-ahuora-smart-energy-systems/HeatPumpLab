@@ -87,10 +87,12 @@ def test_public_api_exposes_only_the_rhp_optimiser_surface():
         "OuterDesignOptimisationConfig",
         "OuterDesignOptimisationResult",
         "PhaseEvaluation",
+        "optimise_recuperative_heat_pump_case",
         "optimise_recuperative_heat_pump_cases",
         "optimise_recuperative_heat_pump",
     ]
     assert hasattr(outer_opt, "optimise_recuperative_heat_pump")
+    assert hasattr(outer_opt, "optimise_recuperative_heat_pump_case")
     assert hasattr(outer_opt, "optimise_recuperative_heat_pump_cases")
     assert not hasattr(outer_opt, "optimise_recuperative_outer_design")
     assert not hasattr(outer_opt, "OuterDesignObjective")
@@ -871,6 +873,54 @@ def test_optimisation_case_filtering_skips_completed_signatures(tmp_path):
     assert [case.signature for case in remaining] == [cases[1].signature]
 
 
+def test_optimisation_case_filtering_retries_unsuccessful_result_rows(tmp_path):
+    [case] = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0]},
+    )
+    results_path = tmp_path / "RHPopt_results.csv"
+    results_path.write_text(
+        f"case_signature,batch_success\n{case.signature},False\n"
+    )
+
+    remaining = case_helpers._get_optimisation_case_list_to_solve(
+        file_name="RHPopt_results",
+        results_dir=tmp_path,
+        param_kwargs={"T_air_tar_ls": [180.0]},
+    )
+
+    assert remaining == [case]
+
+
+def test_successful_retry_is_transferred_after_failed_master_row(tmp_path):
+    [case] = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0]},
+    )
+    master_path = tmp_path / "RHPopt_results.csv"
+    master_path.write_text(
+        "case_signature,batch_success,best_objective\n"
+        f"{case.signature},False,1e30\n"
+    )
+    batch_helpers.print_result_to_csv(
+        output={
+            "case_signature": case.signature,
+            "batch_success": True,
+            "best_objective": 0.5,
+        },
+        file_name="temp/optimisation/R",
+        suffix=case.temp_suffix,
+        results_dir=tmp_path,
+    )
+
+    batch_helpers._transfer_optimal_results(
+        "RHPopt_results",
+        results_dir=tmp_path,
+    )
+
+    rows = master_path.read_text().splitlines()
+    assert len(rows) == 3
+    assert rows[-1] == f"{case.signature},True,0.5"
+
+
 def test_batch_runner_executes_cases_serially_and_writes_rows(monkeypatch, tmp_path):
     cases = case_helpers._build_optimisation_cases(
         param_kwargs={"T_air_tar_ls": [180.0, 200.0]},
@@ -905,7 +955,79 @@ def test_batch_runner_executes_cases_serially_and_writes_rows(monkeypatch, tmp_p
     assert [write["suffix"] for write in written] == [
         case.temp_suffix for case in cases
     ]
-    assert all(write["file_name"] == "temp/R" for write in written)
+    assert all(write["file_name"] == "temp/optimisation/R" for write in written)
+
+
+def test_optimal_result_transfer_ignores_inner_candidate_files(tmp_path):
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={
+            "fluids": ("Propane", "Butane"),
+            "T_air_tar_ls": [180.0, 200.0],
+        },
+    )
+    optimal_row = {
+        "case_signature": cases[0].signature,
+        "best_objective": 0.5,
+    }
+    batch_helpers.print_result_to_csv(
+        output=optimal_row,
+        file_name="temp/optimisation/R",
+        suffix=cases[0].temp_suffix,
+        results_dir=tmp_path,
+    )
+    batch_helpers.print_result_to_csv(
+        output={"case_signature": cases[1].signature, "best_objective": 0.6},
+        file_name="temp/R",
+        suffix=cases[1].temp_suffix,
+        results_dir=tmp_path,
+    )
+    candidate_path = tmp_path / "temp" / "R-Propane0_5-Butane0_5.csv"
+    candidate_path.parent.mkdir(parents=True, exist_ok=True)
+    candidate_path.write_text("SEC,refrigerant\n0.6,Propane;Butane\n")
+
+    batch_helpers._transfer_optimal_results(
+        "RHPopt_results",
+        results_dir=tmp_path,
+    )
+
+    master = (tmp_path / "RHPopt_results.csv").read_text()
+    assert cases[0].signature in master
+    assert cases[1].signature in master
+    assert "refrigerant" not in master
+    assert not (tmp_path / "temp" / "optimisation").exists()
+    assert candidate_path.exists()
+
+
+def test_single_case_runner_resumes_optimal_result_before_solving(monkeypatch, tmp_path):
+    config = outer_opt.OuterDesignOptimisationConfig(max_exact_evaluations=3)
+    case = case_helpers._build_optimisation_case(
+        base_case={"T_air_tar": 180.0},
+        fluids=("Propane", "Butane"),
+        config=config,
+    )
+    batch_helpers.print_result_to_csv(
+        output={"case_signature": case.signature, "best_objective": 0.5},
+        file_name="temp/optimisation/R",
+        suffix=case.temp_suffix,
+        results_dir=tmp_path,
+    )
+    monkeypatch.setattr(
+        batch_helpers,
+        "optimise_recuperative_heat_pump",
+        lambda **kwargs: pytest.fail("completed case should not be optimised again"),
+    )
+
+    row = outer_opt.optimise_recuperative_heat_pump_case(
+        filename="RHPopt_results",
+        base_case={"T_air_tar": 180.0},
+        fluids=("Propane", "Butane"),
+        config=config,
+        results_dir=tmp_path,
+    )
+
+    assert row is not None
+    assert row["case_signature"] == case.signature
+    assert (tmp_path / "RHPopt_results.csv").exists()
 
 
 def test_batch_runner_submits_parallel_cases_to_executor(tmp_path):
@@ -979,27 +1101,44 @@ def test_batch_runner_surfaces_parallel_worker_failures(tmp_path):
         )
 
 
-def test_public_batch_runner_transfers_temp_files_before_and_after(monkeypatch, tmp_path):
+def test_public_batch_runner_transfers_optimal_files_before_and_after(
+    monkeypatch,
+    tmp_path,
+):
     cases = case_helpers._build_optimisation_cases(
         param_kwargs={"T_air_tar_ls": [180.0]},
         config=outer_opt.OuterDesignOptimisationConfig(),
     )
     transfers = []
+    events = []
 
     monkeypatch.setattr(
         batch_helpers,
-        "transfer_temp_files_to_results",
-        lambda filename, results_dir: transfers.append((filename, results_dir)),
+        "_transfer_optimal_results",
+        lambda filename, results_dir: (
+            transfers.append((filename, results_dir)),
+            events.append("transfer"),
+        ),
     )
+
+    def get_cases(**kwargs):
+        events.append("filter")
+        return cases
+
     monkeypatch.setattr(
         batch_helpers,
         "_get_optimisation_case_list_to_solve",
-        lambda **kwargs: cases,
+        get_cases,
     )
+
+    def run_cases(cases, results_dir, n_cpu):
+        events.append("optimise")
+        return [{"case_signature": cases[0].signature}]
+
     monkeypatch.setattr(
         batch_helpers,
         "_run_optimisation_cases",
-        lambda cases, results_dir, n_cpu: [{"case_signature": cases[0].signature}],
+        run_cases,
     )
 
     rows = outer_opt.optimise_recuperative_heat_pump_cases(
@@ -1015,6 +1154,7 @@ def test_public_batch_runner_transfers_temp_files_before_and_after(monkeypatch, 
         ("RHPopt_results", tmp_path),
         ("RHPopt_results", tmp_path),
     ]
+    assert events == ["transfer", "filter", "optimise", "transfer"]
 
 
 def test_real_outer_design_optimisation_smoke_when_refprop_is_available(hpl, tmp_path):

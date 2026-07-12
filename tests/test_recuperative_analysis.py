@@ -192,6 +192,33 @@ def test_analyse_rhp_case_skips_optimisation_when_boundary_gradient_is_not_posit
     assert solved_args[0]["dT_gc_out_min_offset"] == pytest.approx(0.0)
 
 
+def test_analyse_rhp_case_can_skip_candidate_result_persistence(monkeypatch):
+    hp = FakeHeatPump(sec=1.3)
+    monkeypatch.setattr(
+        rhp_analysis, "get_fprime", lambda *args, **kwargs: (-0.1, 0.2)
+    )
+    monkeypatch.setattr(rhp_analysis, "_get_dQdW", lambda solved_hp: 0.0)
+    monkeypatch.setattr(
+        rhp_analysis,
+        "solve_single_case_with_timer",
+        lambda hp_cls, args: (hp, 0.4),
+    )
+    monkeypatch.setattr(
+        rhp_analysis,
+        "get_results_report",
+        lambda **kwargs: pytest.fail("candidate result should not be persisted"),
+    )
+
+    solved_hp, _ = rhp_analysis.analyse_RHP_case(
+        FakeHeatPump,
+        {"refrigerant": "Butane"},
+        use_fast_objective=False,
+        record_result=False,
+    )
+
+    assert solved_hp is hp
+
+
 def test_analyse_rhp_case_returns_unsolved_when_local_optimisation_fails(monkeypatch):
     monkeypatch.setattr(rhp_analysis, "get_fprime", lambda *args, **kwargs: (1.0, 0.2))
     monkeypatch.setattr(

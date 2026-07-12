@@ -8,14 +8,43 @@ import os
 from pathlib import Path
 from typing import Any
 
-from HeatPumpLab.utils.readWriteOutput import (
-    print_result_to_csv,
-    transfer_temp_files_to_results,
-)
+from HeatPumpLab.utils.readWriteOutput import print_result_to_csv
 
-from ._cases import _get_optimisation_case_list_to_solve
+from ._cases import (
+    _build_optimisation_case,
+    _get_optimisation_case_list_to_solve,
+)
+from ._results_io import _completed_result_row, _transfer_optimal_results
 from ._types import OptimisationCase, OuterDesignOptimisationConfig
 from .outer_design import optimise_recuperative_heat_pump
+
+
+def optimise_recuperative_heat_pump_case(
+    filename: str = "RHPopt_results",
+    base_case: dict[str, Any] | None = None,
+    *,
+    fluids: tuple[str, str] = ("Propane", "Butane"),
+    config: OuterDesignOptimisationConfig | None = None,
+    results_dir: str | Path = "results/RHPopt",
+) -> dict[str, Any]:
+    """Optimise, persist, and resume one fixed RHP case."""
+    config = OuterDesignOptimisationConfig() if config is None else config
+    case = _build_optimisation_case(
+        base_case=base_case,
+        fluids=fluids,
+        config=config,
+    )
+    _transfer_optimal_results(filename, results_dir=results_dir)
+    if completed := _completed_result_row(
+        case.signature,
+        filename=filename,
+        results_dir=results_dir,
+    ):
+        return completed
+
+    row = _solve_optimisation_case(case, results_dir=str(results_dir))
+    _transfer_optimal_results(filename, results_dir=results_dir)
+    return row
 
 
 def optimise_recuperative_heat_pump_cases(
@@ -27,7 +56,7 @@ def optimise_recuperative_heat_pump_cases(
 ) -> list[dict[str, Any]]:
     """Optimise a batch of fixed RHP cases and persist one row per case."""
     config = OuterDesignOptimisationConfig() if config is None else config
-    transfer_temp_files_to_results(filename, results_dir=results_dir)
+    _transfer_optimal_results(filename, results_dir=results_dir)
     cases = _get_optimisation_case_list_to_solve(
         file_name=filename,
         results_dir=results_dir,
@@ -39,7 +68,7 @@ def optimise_recuperative_heat_pump_cases(
         results_dir=results_dir,
         n_cpu=n_cpu,
     )
-    transfer_temp_files_to_results(filename, results_dir=results_dir)
+    _transfer_optimal_results(filename, results_dir=results_dir)
     return rows
 
 
@@ -85,7 +114,7 @@ def _solve_optimisation_case(
     row = _result_row(case, result)
     print_result_to_csv(
         output=row,
-        file_name="temp/R",
+        file_name="temp/optimisation/R",
         suffix=case.temp_suffix,
         results_dir=results_dir,
     )

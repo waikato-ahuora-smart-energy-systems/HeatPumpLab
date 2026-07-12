@@ -44,16 +44,16 @@ def test_main_rhpopt_run_one_delegates_to_single_case_optimiser(
     tmp_path,
 ):
     calls = []
-    result = object()
+    result = {"case_signature": "abc", "best_objective": 0.42}
 
-    def fake_optimise_recuperative_heat_pump(**kwargs):
+    def fake_optimise_recuperative_heat_pump_case(**kwargs):
         calls.append(kwargs)
         return result
 
     monkeypatch.setattr(
         main_RHPopt,
-        "optimise_recuperative_heat_pump",
-        fake_optimise_recuperative_heat_pump,
+        "optimise_recuperative_heat_pump_case",
+        fake_optimise_recuperative_heat_pump_case,
     )
     base_case = {"T_air_tar": 373.15}
     fluids = ("Propane", "Isobutane")
@@ -69,6 +69,7 @@ def test_main_rhpopt_run_one_delegates_to_single_case_optimiser(
     assert returned is result
     assert calls == [
         {
+            "filename": main_RHPopt.DEFAULT_FILENAME,
             "base_case": base_case,
             "fluids": fluids,
             "config": config,
@@ -80,18 +81,19 @@ def test_main_rhpopt_run_one_delegates_to_single_case_optimiser(
 def test_main_rhpopt_run_one_uses_default_config(monkeypatch):
     calls = []
 
-    def fake_optimise_recuperative_heat_pump(**kwargs):
+    def fake_optimise_recuperative_heat_pump_case(**kwargs):
         calls.append(kwargs)
-        return object()
+        return {"case_signature": "abc"}
 
     monkeypatch.setattr(
         main_RHPopt,
-        "optimise_recuperative_heat_pump",
-        fake_optimise_recuperative_heat_pump,
+        "optimise_recuperative_heat_pump_case",
+        fake_optimise_recuperative_heat_pump_case,
     )
 
     main_RHPopt.run_one()
 
+    assert calls[0]["filename"] == main_RHPopt.DEFAULT_FILENAME
     assert calls[0]["base_case"] is None
     assert calls[0]["fluids"] == main_RHPopt.DEFAULT_FLUIDS
     assert calls[0]["config"] == main_RHPopt.OuterDesignOptimisationConfig()

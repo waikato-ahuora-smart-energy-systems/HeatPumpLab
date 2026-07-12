@@ -132,8 +132,15 @@ class _OuterDesignObjective:
             analyse_RHP_case,
         )
 
-        analyser = analyse_RHP_case if self.analyser is None else self.analyser
-        return analyser(
+        if self.analyser is None:
+            return analyse_RHP_case(
+                RecuperativeHP,
+                dict(case),
+                results_dir=str(self.results_dir),
+                use_fast_objective=self.use_fast_objective,
+                record_result=False,
+            )
+        return self.analyser(
             RecuperativeHP,
             dict(case),
             results_dir=str(self.results_dir),

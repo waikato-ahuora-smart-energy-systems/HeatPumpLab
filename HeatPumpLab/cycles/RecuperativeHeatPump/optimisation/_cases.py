@@ -10,7 +10,11 @@ from itertools import product
 from pathlib import Path
 from typing import Any
 
-from ._results_io import _parse_binary_refrigerant
+from ._results_io import (
+    _parse_binary_refrigerant,
+    _result_row_is_complete,
+    _results_csv_path,
+)
 from ._types import (
     DEFAULT_BASE_CASE,
     OPTIMISER_VERSION,
@@ -109,6 +113,31 @@ def _build_optimisation_cases(
             )
         )
     return cases
+
+
+def _build_optimisation_case(
+    *,
+    base_case: dict[str, Any] | None,
+    fluids: tuple[str, str],
+    config: OuterDesignOptimisationConfig | None = None,
+) -> OptimisationCase:
+    """Build the canonical payload and signature for one fixed case."""
+    case_config = OuterDesignOptimisationConfig() if config is None else config
+    complete_base_case = dict(DEFAULT_BASE_CASE)
+    complete_base_case.update(base_case or {})
+    normalised_fluids = _normalise_fluids(fluids)
+    signature = _case_signature(
+        base_case=complete_base_case,
+        fluids=normalised_fluids,
+        config=case_config,
+    )
+    return OptimisationCase(
+        base_case=complete_base_case,
+        fluids=normalised_fluids,
+        config=case_config,
+        signature=signature,
+        temp_suffix=f"-{signature}",
+    )
 
 
 def _fluid_options(kwargs: dict[str, Any]) -> list[dict[str, Any]]:
@@ -234,14 +263,8 @@ def _completed_case_signatures(
             for row in reader
             if (signature := row.get("case_signature"))
             and signature != "case_signature"
+            and _result_row_is_complete(row)
         }
-
-
-def _results_csv_path(*, file_name: str, results_dir: str | Path) -> Path:
-    relative_path = Path(file_name + ".csv")
-    if relative_path.parts and relative_path.parts[0] == "results":
-        relative_path = Path(*relative_path.parts[1:])
-    return Path(results_dir) / relative_path
 
 
 def _normalise_fluids(fluids: Any) -> tuple[str, str]:
