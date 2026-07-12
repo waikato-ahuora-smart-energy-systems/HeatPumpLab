@@ -434,7 +434,10 @@ class BaseHeatExchanger:
 
 def _get_LMTD(Thin, Thout, Tcin, Tcout):
     """Compute log mean temperature difference for a segment."""
-    if (Thin - Tcout) == (Thout - Tcin):
-        return Thin - Tcout
-    else:
-        return ((Thin - Tcout) - (Thout - Tcin)) / log((Thin - Tcout) / (Thout - Tcin))
+    dt_hot = Thin - Tcout
+    dt_cold = Thout - Tcin
+    if dt_hot <= 0.0 or dt_cold <= 0.0:
+        raise ValueError("LMTD is undefined because a temperature cross occurs.")
+    if dt_hot == dt_cold:
+        return dt_hot
+    return (dt_hot - dt_cold) / log(dt_hot / dt_cold)

@@ -11,6 +11,7 @@ class Stream:
     pp_instance: str
     mass_flow: float
     vol_flow: float
+    P_max: float
     pressure: float
     temperature: float
     enthalpy: float
@@ -55,6 +56,7 @@ class Stream:
         """Attach a property package describing the working fluid."""
         self.PP = PropertyPackage(fluid, pp_instance)
         self.P_crit = self.PP.P_crit
+        self.P_max = self.PP.P_max
         self.T_crit = self.PP.T_crit
         self.D_crit = self.PP.D_crit
         self.molar_mass = self.PP.molar_mass

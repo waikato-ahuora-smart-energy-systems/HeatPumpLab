@@ -732,6 +732,11 @@ def test_lmtd_returns_common_temperature_drop_when_terminal_drops_match():
     )
 
 
+def test_lmtd_reports_temperature_cross_as_infeasible():
+    with pytest.raises(ValueError, match="temperature cross"):
+        _get_LMTD(Thin=100.0, Thout=40.0, Tcin=50.0, Tcout=80.0)
+
+
 def test_plate_heat_exchanger_fixed_cold_delta_temperature_heats_sink(hpl):
     exchanger = hpl.PlateHeatExchanger(
         "water",

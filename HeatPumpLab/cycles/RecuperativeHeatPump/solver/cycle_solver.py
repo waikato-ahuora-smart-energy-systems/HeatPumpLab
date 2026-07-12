@@ -287,7 +287,7 @@ def _find_lowest_pressure_within_target(
 
     best_pressure = p_high if abs(dt_high) <= target_tol else None
     best_dt = dt_high
-    for _ in range(6):
+    for _ in range(50):
         p_mid = exp((log(p_low) + log(p_high)) / 2.0)
         dt_mid = _find_current_gc_dtmin_offset(p_mid, hp)
         if dt_mid >= -target_tol:
@@ -298,6 +298,9 @@ def _find_lowest_pressure_within_target(
         else:
             p_low = p_mid
             dt_low = dt_mid
+
+        if (p_high - p_low) / p_high <= max(hp.tol, 1e-7):
+            break
 
     if best_pressure is not None and abs(best_dt) <= target_tol:
         return best_pressure, True
@@ -350,10 +353,9 @@ def _solve_cycle_at_discharge_pressure(
     return hp
 
 
-def _raise_infeasible_pressure_bounds(hp: BaseHeatPump) -> None:
-    """Record and raise a consistent infeasible-pressure failure."""
-    _print_failed_to_solve_report(hp)
-    raise Exception("Infeasible pressure bounds. The failed case has been recorded.")
+def _raise_infeasible_pressure_bounds() -> None:
+    """Raise a consistent infeasible-pressure failure for the public boundary."""
+    raise Exception("Infeasible pressure bounds within property model limits.")
 
 
 @profiled_section("pressure_search")
@@ -363,11 +365,11 @@ def _find_hp_with_min_discharge_pressure(hp: BaseHeatPump) -> BaseHeatPump:
     hp.comp_discharge.pressure_bnds = bnds
 
     if not hp.feasible:
-        _raise_infeasible_pressure_bounds(hp)
+        _raise_infeasible_pressure_bounds()
 
     pressure, converged = _find_pressure_for_gc_target(bnds, x0, dt_bounds, hp)
     if not converged:
-        _raise_infeasible_pressure_bounds(hp)
+        _raise_infeasible_pressure_bounds()
 
     return _solve_cycle_at_discharge_pressure(pressure, hp)
 
@@ -383,24 +385,41 @@ def _expand_discharge_pressure_bounds(
     """Expand pressure bounds until the pinch residual crosses or reaches target."""
     p_lower = p_upper = pressure_start
     dt_lower = dt_upper = dt_start
+    pressure_limit = max(
+        float(getattr(hp.comp_discharge, "P_max", np.inf)),
+        pressure_start,
+    )
 
     for _ in range(max_iter):
         if dt_upper < 0.0 and dt_lower < 0.0:
+            next_pressure = min(
+                max(
+                    pressure_suction + (p_upper - pressure_suction) * step,
+                    pressure_suction,
+                ),
+                pressure_limit,
+            )
+            if next_pressure <= p_upper:
+                break
             dt_lower = dt_upper
             p_lower = p_upper
-            p_upper = max(
-                pressure_suction + (p_lower - pressure_suction) * step,
+            p_upper = next_pressure
+            dt_upper = _find_current_gc_dtmin_offset(p_upper, hp)
+            if abs(dt_upper) <= _get_pressure_target_tolerance(hp):
+                break
+        elif dt_upper > 0.0 and dt_lower > 0.0:
+            next_pressure = max(
+                pressure_suction + (p_lower - pressure_suction) / step,
                 pressure_suction,
             )
-            dt_upper = _find_current_gc_dtmin_offset(p_upper, hp)
-        elif dt_upper > 0.0 and dt_lower > 0.0:
+            if next_pressure >= p_lower:
+                break
             dt_upper = dt_lower
             p_upper = p_lower
-            p_lower = max(
-                pressure_suction + (p_upper - pressure_suction) / step,
-                pressure_suction,
-            )
+            p_lower = next_pressure
             dt_lower = _find_current_gc_dtmin_offset(p_lower, hp)
+            if abs(dt_lower) <= _get_pressure_target_tolerance(hp):
+                break
         else:
             break
 

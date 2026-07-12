@@ -148,6 +148,7 @@ def test_discharge_pressure_bounds_reuse_cached_bounds(monkeypatch, compute_jac)
 def test_discharge_pressure_bounds_contract_until_sign_changes(monkeypatch):
     hp = SimpleNamespace(
         compute_jac=False,
+        tol=1e-6,
         comp1=SimpleNamespace(flow_in=SimpleNamespace(pressure=1.0)),
         comp_discharge=SimpleNamespace(pressure=10.0, pressure_bnds=None),
     )
@@ -166,7 +167,9 @@ def test_discharge_pressure_bounds_contract_until_sign_changes(monkeypatch):
     assert dt_values == pytest.approx((1.0, -1.0))
 
 
-def test_minimum_discharge_pressure_reports_infeasible_bounds(monkeypatch):
+def test_minimum_discharge_pressure_raises_without_recording_infeasible_bounds(
+    monkeypatch,
+):
     recorded = []
     hp = SimpleNamespace(
         comp_discharge=SimpleNamespace(pressure_bnds=None),
@@ -189,7 +192,7 @@ def test_minimum_discharge_pressure_reports_infeasible_bounds(monkeypatch):
         cycle_solver._find_hp_with_min_discharge_pressure(hp)
 
     assert hp.comp_discharge.pressure_bnds == pytest.approx((1.0, 2.0))
-    assert recorded == [({"case": "infeasible"}, "Cases-Unsolved")]
+    assert recorded == []
 
 
 @pytest.mark.parametrize(
@@ -304,6 +307,89 @@ def test_multicomponent_pressure_search_uses_lowest_pressure_within_target(
     assert converged is True
     assert 1.0 < pressure < 2.0
     assert pressure == pytest.approx(sampled_pressures[-1])
+
+
+def test_multicomponent_pressure_search_resolves_lowest_acceptable_pressure(
+    monkeypatch,
+):
+    hp = SimpleNamespace(
+        tol=1e-6,
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+    )
+
+    def offset(pressure, solved_hp):
+        return -0.2 if pressure < 1.2 else 0.01
+
+    monkeypatch.setattr(cycle_solver, "_find_current_gc_dtmin_offset", offset)
+
+    pressure, converged = cycle_solver._find_pressure_for_gc_target(
+        (1.0, 2.0), 1.5, (0.01, -0.2), hp
+    )
+
+    assert converged is True
+    assert pressure == pytest.approx(1.2, rel=1e-5)
+
+
+def test_pressure_bound_expansion_does_not_exceed_property_model_limit(
+    monkeypatch,
+):
+    evaluated_pressures = []
+    hp = SimpleNamespace(
+        tol=1e-6,
+        comp_discharge=SimpleNamespace(P_max=3.0),
+    )
+
+    def offset(pressure, solved_hp):
+        evaluated_pressures.append(pressure)
+        return -1.0
+
+    monkeypatch.setattr(cycle_solver, "_find_current_gc_dtmin_offset", offset)
+
+    p_upper, dt_upper, p_lower, dt_lower = (
+        cycle_solver._expand_discharge_pressure_bounds(
+            hp,
+            pressure_suction=1.0,
+            pressure_start=2.0,
+            dt_start=-1.0,
+        )
+    )
+
+    assert max(evaluated_pressures) == pytest.approx(3.0)
+    assert p_upper == pytest.approx(3.0)
+    assert p_lower < p_upper
+    assert dt_upper == pytest.approx(-1.0)
+    assert dt_lower == pytest.approx(-1.0)
+
+
+def test_pressure_bound_expansion_keeps_near_target_point_without_sign_change(
+    monkeypatch,
+):
+    evaluated_pressures = []
+    hp = SimpleNamespace(
+        tol=1e-6,
+        comp_discharge=SimpleNamespace(P_max=10.0),
+    )
+
+    def offset(pressure, solved_hp):
+        evaluated_pressures.append(pressure)
+        return -0.04 if pressure >= 2.1 else -1.0
+
+    monkeypatch.setattr(cycle_solver, "_find_current_gc_dtmin_offset", offset)
+
+    p_upper, dt_upper, p_lower, dt_lower = (
+        cycle_solver._expand_discharge_pressure_bounds(
+            hp,
+            pressure_suction=1.0,
+            pressure_start=2.0,
+            dt_start=-1.0,
+        )
+    )
+
+    assert evaluated_pressures == pytest.approx([2.1])
+    assert p_lower == pytest.approx(2.0)
+    assert p_upper == pytest.approx(2.1)
+    assert dt_lower == pytest.approx(-1.0)
+    assert dt_upper == pytest.approx(-0.04)
 
 
 def test_minimum_discharge_pressure_falls_back_to_near_target_endpoint(

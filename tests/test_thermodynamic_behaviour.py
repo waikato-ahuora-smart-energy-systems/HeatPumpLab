@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import cycle_solver
 from HeatPumpLab.utils import properties_package
 
 
@@ -308,6 +309,78 @@ def test_mass_basis_binary_cases_from_unsolved_results_converge(
     assert hp.rhx1_on == 1
     assert hp.rhx2_on == 1
     assert hp.ihx_on == 0
+
+
+@pytest.mark.parametrize(
+    ("refrigerant", "dT_rhx1_cold", "dT_rhx2_cold"),
+    [
+        ("Propane;Isopentane|0.5;0.5|mass", 0.0, 0.0),
+        ("Propane;Pentane|0.5;0.5|mass", 0.0, 0.0),
+        ("Butane;Neopentane|0.5;0.5|mass", 0.0, 66.66666666666667),
+        ("Propane;Isopentane|0.5;0.5|mass", 61.80339887498948, 0.0),
+    ],
+)
+def test_solver_resolves_feasible_binary_cases_from_unsolved_csv(
+    solve_recuperative_case,
+    assert_successful_cycle,
+    refrigerant,
+    dT_rhx1_cold,
+    dT_rhx2_cold,
+):
+    hp = solve_recuperative_case(
+        refrigerant,
+        ihx_on=False,
+        dT_rhx1_cold=dT_rhx1_cold,
+        dT_rhx2_cold=dT_rhx2_cold,
+        dT_rhx3_cold=0.0,
+        comp2_power_frac=0.5,
+        comp3_power_frac=0.0,
+        dT_gc_out_min_offset=0.0,
+    )
+
+    assert_successful_cycle(hp)
+
+
+def test_internal_temperature_cross_from_unsolved_csv_is_reported_infeasible(
+    solve_recuperative_case,
+    monkeypatch,
+):
+    monkeypatch.setattr(cycle_solver, "print_result_to_csv", lambda *args, **kwargs: None)
+    hp = solve_recuperative_case(
+        "Isopentane;Neopentane|0.5;0.5|mass",
+        ihx_on=False,
+        dT_rhx1_cold=0.0,
+        dT_rhx2_cold=61.80339887498948,
+        dT_rhx3_cold=0.0,
+        comp2_power_frac=0.5,
+        comp3_power_frac=0.0,
+        dT_gc_out_min_offset=0.0,
+    )
+
+    assert hp.feasible is False
+    assert hp.converged is False
+    assert "temperature cross" in hp.solve_error
+
+
+def test_pressure_target_outside_property_domain_is_reported_infeasible(
+    solve_recuperative_case,
+    monkeypatch,
+):
+    monkeypatch.setattr(cycle_solver, "print_result_to_csv", lambda *args, **kwargs: None)
+    hp = solve_recuperative_case(
+        "Propane;Isopentane|0.5;0.5|mass",
+        ihx_on=False,
+        dT_rhx1_cold=33.333333333333336,
+        dT_rhx2_cold=0.0,
+        dT_rhx3_cold=0.0,
+        comp2_power_frac=0.5,
+        comp3_power_frac=0.0,
+        dT_gc_out_min_offset=0.0,
+    )
+
+    assert hp.feasible is False
+    assert hp.converged is False
+    assert "Infeasible pressure bounds" in hp.solve_error
 
 
 def test_three_stage_recuperative_model_initialises_optional_heat_recovery_path(

@@ -93,6 +93,7 @@ class PropertyPackage:
     UNITS: int = RP_ref.GETENUMdll(0, "SI with C").iEnum
     iMass: int = 0
     P_crit: float
+    P_max: float
     T_crit: float
     D_crit: float
     molar_mass: float
@@ -118,6 +119,8 @@ class PropertyPackage:
         self.molar_mass, self.P_crit, self.T_crit, self.D_crit = (
             self._get_critical_properties()
         )
+        # LIMITSdll reports pressure in kPa; HeatPumpLab stores pressure in MPa.
+        self.P_max = self.RP.LIMITSdll("EOS", self.fld_composition).Pmax / 1000
         self.PP_fld_names = self._get_database_fluid_name()
 
     def get_specified_properties(
