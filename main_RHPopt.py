@@ -8,6 +8,8 @@ from typing import Any
 
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     OuterDesignOptimisationConfig,
+    OuterDesignOptimisationResult,
+    optimise_recuperative_heat_pump,
     optimise_recuperative_heat_pump_cases,
 )
 
@@ -35,12 +37,28 @@ DEFAULT_PARAM_KWARGS = {
 }
 
 
-def run(
+def run_one(
+    base_case: dict[str, Any] | None = None,
+    *,
+    fluids: tuple[str, str] = DEFAULT_FLUIDS,
+    config: OuterDesignOptimisationConfig | None = None,
+    results_dir: str | Path = DEFAULT_RESULTS_DIR,
+) -> OuterDesignOptimisationResult:
+    """Optimise one recuperative heat-pump case in the current process."""
+    return optimise_recuperative_heat_pump(
+        base_case=base_case,
+        fluids=fluids,
+        config=OuterDesignOptimisationConfig() if config is None else config,
+        results_dir=results_dir,
+    )
+
+
+def run_many(
     *,
     filename: str = DEFAULT_FILENAME,
     param_kwargs: dict[str, Any] | None = None,
     config: OuterDesignOptimisationConfig | None = None,
-    n_cpu: int = max((os.cpu_count() or 2) - 1, 1),
+    n_cpu: int = max((os.cpu_count() or 2) - 2, 1),
     results_dir: str | Path = DEFAULT_RESULTS_DIR,
 ) -> list[dict[str, Any]]:
     """Run the default RHP outer-design optimisation batch."""
@@ -54,4 +72,5 @@ def run(
 
 
 if __name__ == "__main__":
-    run()
+    # run_many()
+    run_one()
