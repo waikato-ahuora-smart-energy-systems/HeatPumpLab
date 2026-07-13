@@ -13,7 +13,7 @@ from ...components import (
 from ..common.heatPump import BaseHeatPump
 
 from .rhp_helpers import set_rhp_model
-from .solver.cycle_solver import solve_heat_pump_cycle
+from .solver import solve_heat_pump_cycle
 from .utils import (
     analyse_RHP_case,
     get_RHP_case_list_to_solve,

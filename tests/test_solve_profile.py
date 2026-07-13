@@ -3,7 +3,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from HeatPumpLab.cycles.RecuperativeHeatPump.solver import cycle_solver
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import (
+    _discharge_pressure as discharge_pressure,
+)
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import _metrics as metrics
 from HeatPumpLab.utils import analysis as heat_analysis
 from HeatPumpLab.utils.properties_package import PropertyPackage
 from HeatPumpLab.utils.solve_profile import profile_solve
@@ -51,8 +54,9 @@ def test_profile_context_records_property_package_calls():
 
 def test_profile_context_records_recuperative_metric_timing():
     hp = SimpleNamespace(
-        converged=True,
         feasible=True,
+        iteration_converged=True,
+        operations=[SimpleNamespace(converged=True)],
         gas_coolers=[
             SimpleNamespace(
                 duty=10.0,
@@ -67,7 +71,7 @@ def test_profile_context_records_recuperative_metric_timing():
     )
 
     with profile_solve() as profile:
-        cycle_solver._get_metrics(hp)
+        metrics.populate_full_metrics(hp)
 
     report = profile.as_dict()
     assert report["counts"]["metrics"] == 1
@@ -82,23 +86,23 @@ def test_profile_context_records_pressure_search_timing(monkeypatch):
     )
 
     monkeypatch.setattr(
-        cycle_solver,
-        "_get_discharge_pressure_bounds",
+        discharge_pressure,
+        "get_discharge_pressure_bounds",
         lambda solved_hp: ((1.0, 2.0), 1.5, True, (1.0, -1.0)),
     )
     monkeypatch.setattr(
-        cycle_solver,
-        "_find_pressure_for_gc_target",
+        discharge_pressure,
+        "select_gc_target_pressure",
         lambda bounds, x0, dt_bounds, solved_hp: (1.5, True),
     )
     monkeypatch.setattr(
-        cycle_solver,
-        "_solve_cycle_at_discharge_pressure",
-        lambda pressure, solved_hp: solved_hp,
+        discharge_pressure,
+        "solve_at_discharge_pressure",
+        lambda pressure, solved_hp: None,
     )
 
     with profile_solve() as profile:
-        cycle_solver._find_hp_with_min_discharge_pressure(hp)
+        discharge_pressure.solve_at_minimum_discharge_pressure(hp)
 
     report = profile.as_dict()
     assert report["counts"]["pressure_search"] == 1

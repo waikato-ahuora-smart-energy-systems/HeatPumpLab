@@ -99,11 +99,23 @@ def test_recuperative_solver_uses_one_property_cache_per_solve(monkeypatch):
     def pressure_search(solved_hp):
         package.get_std_properties("PT", 1.0, 20.0, [1.0])
         package.get_std_properties("PT", 1.0, 20.0, [1.0])
-        return solved_hp
+        return None
 
-    monkeypatch.setattr(cycle_solver, "_find_hp_with_min_discharge_pressure", pressure_search)
-    monkeypatch.setattr(cycle_solver, "_get_evaporator_inlet_temperature_offset", lambda solved_hp: 0.0)
-    monkeypatch.setattr(cycle_solver, "_get_metrics", lambda solved_hp: solved_hp)
+    monkeypatch.setattr(
+        cycle_solver,
+        "solve_at_minimum_discharge_pressure",
+        pressure_search,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "evaporator_inlet_temperature_offset",
+        lambda solved_hp: 0.0,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "populate_full_metrics",
+        lambda solved_hp: solved_hp,
+    )
 
-    assert cycle_solver._solve_case(hp) is hp
+    assert cycle_solver.solve_heat_pump_cycle(hp) is hp
     assert refprop.std_calls == 1
