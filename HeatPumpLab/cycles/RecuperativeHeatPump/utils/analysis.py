@@ -36,6 +36,10 @@ def analyse_RHP_case(
     record_result: bool = True,
 ) -> Tuple["BaseHeatPump", float]:
     """Optimise the gas-cooler offset for a single case and solve it."""
+    case = dict(case)
+    case["record_failed_solve"] = bool(
+        record_result and case.get("record_failed_solve", True)
+    )
     dt_ls = []
 
     dT_gc_out_min_offset = (
@@ -113,7 +117,7 @@ def analyse_RHP_case(
             dt_ls.append(dt)
         obj = compute_SEC_obj(hp, case)
 
-        hp.dQdW = _get_dQdW(hp)
+        hp.dQdW = _get_dQdW(hp) if _is_successfully_solved(hp) else 0.0
         if record_result:
             get_results_report(
                 hp=hp,
@@ -126,7 +130,7 @@ def analyse_RHP_case(
             )
         return hp, dt
     else:
-        return None, dt
+        return seed_hp, seed_dt if seed_dt is not None else dt
 
 
 def analyse_unsolved_RHP_cases(

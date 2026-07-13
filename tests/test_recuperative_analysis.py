@@ -194,6 +194,7 @@ def test_analyse_rhp_case_skips_optimisation_when_boundary_gradient_is_not_posit
 
 def test_analyse_rhp_case_can_skip_candidate_result_persistence(monkeypatch):
     hp = FakeHeatPump(sec=1.3)
+    solved_args = []
     monkeypatch.setattr(
         rhp_analysis, "get_fprime", lambda *args, **kwargs: (-0.1, 0.2)
     )
@@ -201,7 +202,7 @@ def test_analyse_rhp_case_can_skip_candidate_result_persistence(monkeypatch):
     monkeypatch.setattr(
         rhp_analysis,
         "solve_single_case_with_timer",
-        lambda hp_cls, args: (hp, 0.4),
+        lambda hp_cls, args: solved_args.append(dict(args)) or (hp, 0.4),
     )
     monkeypatch.setattr(
         rhp_analysis,
@@ -217,6 +218,60 @@ def test_analyse_rhp_case_can_skip_candidate_result_persistence(monkeypatch):
     )
 
     assert solved_hp is hp
+    assert solved_args[0]["record_failed_solve"] is False
+
+
+def test_analyse_rhp_case_keeps_failure_recording_for_standalone_solves(monkeypatch):
+    hp = FakeHeatPump(sec=1.3)
+    solved_args = []
+    monkeypatch.setattr(
+        rhp_analysis, "get_fprime", lambda *args, **kwargs: (-0.1, 0.2)
+    )
+    monkeypatch.setattr(rhp_analysis, "_get_dQdW", lambda solved_hp: 0.0)
+    monkeypatch.setattr(
+        rhp_analysis,
+        "solve_single_case_with_timer",
+        lambda hp_cls, args: solved_args.append(dict(args)) or (hp, 0.4),
+    )
+    monkeypatch.setattr(rhp_analysis, "get_results_report", lambda **kwargs: None)
+
+    rhp_analysis.analyse_RHP_case(
+        FakeHeatPump,
+        {"refrigerant": "Butane"},
+        use_fast_objective=False,
+        record_result=True,
+    )
+
+    assert solved_args[0]["record_failed_solve"] is True
+
+
+def test_analyse_rhp_case_skips_dqdw_follow_up_for_failed_exact_solve(monkeypatch):
+    hp = FakeHeatPump(sec=float("inf"))
+    hp.feasible = False
+    hp.converged = False
+    monkeypatch.setattr(
+        rhp_analysis, "get_fprime", lambda *args, **kwargs: (-0.1, 0.2)
+    )
+    monkeypatch.setattr(
+        rhp_analysis,
+        "solve_single_case_with_timer",
+        lambda hp_cls, args: (hp, 0.4),
+    )
+    monkeypatch.setattr(
+        rhp_analysis,
+        "_get_dQdW",
+        lambda solved_hp: pytest.fail("failed exact solve must not launch dQdW solve"),
+    )
+
+    solved_hp, _ = rhp_analysis.analyse_RHP_case(
+        FakeHeatPump,
+        {"refrigerant": "Butane"},
+        use_fast_objective=False,
+        record_result=False,
+    )
+
+    assert solved_hp is hp
+    assert solved_hp.dQdW == pytest.approx(0.0)
 
 
 def test_analyse_rhp_case_returns_unsolved_when_local_optimisation_fails(monkeypatch):
@@ -241,6 +296,40 @@ def test_analyse_rhp_case_returns_unsolved_when_local_optimisation_fails(monkeyp
 
     assert solved_hp is None
     assert solve_time == pytest.approx(0.3)
+
+
+def test_analyse_rhp_case_returns_failed_exact_seed_for_diagnostics(monkeypatch):
+    failed_hp = FakeHeatPump(sec=float("inf"))
+    failed_hp.feasible = False
+    failed_hp.converged = False
+    failed_hp.constraint_errors = {"superheater_temperature_reversal": 4.0}
+    monkeypatch.setattr(
+        rhp_analysis,
+        "_get_fast_objective_case",
+        lambda hp_cls, case, offset: (case, 0.2, False, failed_hp),
+    )
+    monkeypatch.setattr(rhp_analysis, "get_fprime", lambda *args, **kwargs: (1.0, 0.2))
+    monkeypatch.setattr(
+        rhp_analysis,
+        "get_local_optimum",
+        lambda *args, **kwargs: (
+            SimpleNamespace(x=[0.0], success=False, nfev=3, message="infeasible"),
+            0.3,
+        ),
+    )
+
+    solved_hp, solve_time = rhp_analysis.analyse_RHP_case(
+        FakeHeatPump,
+        {"refrigerant": "Butane"},
+        use_fast_objective=True,
+        record_result=False,
+    )
+
+    assert solved_hp is failed_hp
+    assert solve_time == pytest.approx(0.2)
+    assert solved_hp.constraint_errors == {
+        "superheater_temperature_reversal": pytest.approx(4.0)
+    }
 
 
 def test_analyse_rhp_case_returns_unsolved_when_boundary_gradient_is_nan(monkeypatch):

@@ -106,9 +106,7 @@ def assert_successful_cycle():
         assert sum(gc.duty for gc in hp.gas_coolers) > sum(
             c.power for c in hp.compressors
         )
-        assert hp.evaporator.sink_in.temperature == pytest.approx(
-            hp.Tref_evap_inlet, abs=1e-4
-        )
+        assert hp.evaporator.sink_in.temperature <= hp.Tref_evap_inlet + 1e-4
         assert hp.gas_coolers[0].sink_out.temperature == pytest.approx(
             hp.T_air_tar, abs=1e-6
         )

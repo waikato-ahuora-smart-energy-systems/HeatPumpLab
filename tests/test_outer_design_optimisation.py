@@ -255,9 +255,39 @@ def test_objective_returns_finite_penalty_for_failed_exact_solve():
 
     assert record.success is False
     assert math.isfinite(record.objective)
-    assert record.objective == pytest.approx(opt_types.PENALTY_OBJECTIVE)
+    assert record.objective == pytest.approx(opt_types.PENALTY_OBJECTIVE + 1.0)
+    assert record.constraint_errors == {"solve_failure": pytest.approx(1.0)}
     assert "synthetic solve failed" in record.message
     assert objective.failed_evaluations == 1
+
+
+def test_objective_penalty_uses_squared_physical_constraint_errors():
+    def failed_analyser(error):
+        def analyse(hp_cls, case, results_dir, use_fast_objective=True):
+            del hp_cls, results_dir, use_fast_objective
+            hp = FakeHeatPump(sec=1.0, case=case)
+            hp.feasible = False
+            hp.converged = False
+            hp.constraint_errors = {"superheater_temperature_reversal": error}
+            return hp, 0.01
+
+        return analyse
+
+    near = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        analyser=failed_analyser(2.0),
+    ).evaluate([20.0, 35.0, 0.45, 0.72])
+    far = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        analyser=failed_analyser(3.0),
+    ).evaluate([20.0, 35.0, 0.45, 0.72])
+
+    assert near.objective == pytest.approx(opt_types.PENALTY_OBJECTIVE + 4.0)
+    assert far.objective == pytest.approx(opt_types.PENALTY_OBJECTIVE + 9.0)
+    assert near.objective < far.objective
+    assert near.constraint_errors == {
+        "superheater_temperature_reversal": pytest.approx(2.0)
+    }
 
 
 def test_objective_does_not_exceed_exact_evaluation_budget():

@@ -30,7 +30,9 @@ class BaseHeatPump:
     sink: float = "Air"
     tol: float = 1e-6
     debug: float = False
+    record_failed_solve: bool = True
     output: dict
+    constraint_errors: dict[str, float]
 
     T_air_tar: float = 200.0
     T_air_inlet: float = 15.0

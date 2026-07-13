@@ -19,6 +19,19 @@ if TYPE_CHECKING:
 __all__ = ["solve_heat_pump_cycle"]
 
 PinchCandidate: TypeAlias = tuple[float, float, bool]
+_PRESSURE_FALLBACK_SAMPLES = 25
+
+
+class _CycleConstraintError(Exception):
+    """Expected cycle infeasibility with physical constraint errors."""
+
+    def __init__(self, message: str, constraint_errors: dict[str, float]) -> None:
+        super().__init__(message)
+        self.constraint_errors = {
+            str(name): max(0.0, float(error))
+            for name, error in constraint_errors.items()
+            if np.isfinite(float(error))
+        }
 
 #######################################################################################################
 # Public API
@@ -27,6 +40,7 @@ PinchCandidate: TypeAlias = tuple[float, float, bool]
 
 def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
     """Solve a configured heat pump, mutating the model and returning it."""
+    hp.constraint_errors = {}
     try:
         hp = _solve_case(hp)
 
@@ -34,13 +48,16 @@ def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
         hp.converged = False
         hp.feasible = False
         hp.solve_error = str(exc)
+        if isinstance(exc, _CycleConstraintError):
+            hp.constraint_errors = dict(exc.constraint_errors)
         if hp.debug:
             hp.get_cycle_plot()
-        _print_failed_to_solve_report(hp)
-        print(
-            "Heat pump solver failed with an exception. "
-            f"The failed case has been recorded. Error: {exc}"
-        )
+        if getattr(hp, "record_failed_solve", True):
+            _print_failed_to_solve_report(hp)
+            disposition = "The failed case has been recorded."
+        else:
+            disposition = "The failed case was not recorded."
+        print(f"Heat pump solver failed with an exception. {disposition} Error: {exc}")
     return hp
 
 
@@ -53,6 +70,8 @@ def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
 def _solve_case(hp: BaseHeatPump) -> BaseHeatPump:
     """Drive the high-level solution loop for a heat pump instance."""
     with property_call_cache():
+        if hasattr(hp, "Tref_evap_outlet"):
+            _validate_superheater_outlet_temperature(hp, hp.Tref_evap_outlet)
         fixed_pressure_objective = _uses_fixed_discharge_pressure_objective(hp)
         if fixed_pressure_objective:
             hp = _solve_cycle_at_discharge_pressure(hp.P_H_est, hp)
@@ -64,7 +83,7 @@ def _solve_case(hp: BaseHeatPump) -> BaseHeatPump:
 
         if not fixed_pressure_objective:
             dt_offset = _get_evaporator_inlet_temperature_offset(hp)
-            if abs(dt_offset) > 0.1 and _check_hp_model_convergance(hp):
+            if abs(dt_offset) > 0.1 and _check_hp_model_convergence(hp):
                 hp = _align_evaporator_inlet_temperature(hp)
 
         hp = (
@@ -83,7 +102,7 @@ def _uses_fixed_discharge_pressure_objective(hp: BaseHeatPump) -> bool:
     )
 
 
-def _check_hp_model_convergance(hp: BaseHeatPump) -> bool:
+def _check_hp_model_convergence(hp: BaseHeatPump) -> bool:
     """Return True when the cycle has converged and yielded positive work."""
     return (
         sum([c.power for c in hp.compressors]) > 0.0
@@ -101,7 +120,7 @@ def _get_metrics(hp: BaseHeatPump) -> BaseHeatPump:
 def _get_objective_metrics(hp: BaseHeatPump) -> BaseHeatPump:
     """Populate only the metrics needed by objective evaluations."""
     with profile_section("objective_metrics"):
-        hp.converged = _check_hp_model_convergance(hp)
+        hp.converged = _check_hp_model_convergence(hp)
         hp.COP = _get_COP(hp)
         hp.SEC = _get_SEC(hp)
         return hp
@@ -165,7 +184,7 @@ def _get_metrics_impl(hp: BaseHeatPump) -> BaseHeatPump:
             else "Subcritical"
         )
 
-    hp.converged = _check_hp_model_convergance(hp)
+    hp.converged = _check_hp_model_convergence(hp)
     hp.COP = _get_COP(hp)
     hp.SEC = _get_SEC(hp)
     hp.VHC = _get_VHC(hp)
@@ -187,21 +206,66 @@ def _get_evaporator_alignment_tolerance(hp: BaseHeatPump) -> float:
 
 
 def _align_evaporator_inlet_temperature(hp: BaseHeatPump) -> BaseHeatPump:
-    """Adjust dew-point outlet temperature until the evaporator inlet matches target."""
+    """Maximise suction pressure without exceeding the evaporator inlet target."""
     target_tol = _get_evaporator_alignment_tolerance(hp)
+    maximum_outlet_temperature = _get_maximum_evaporator_outlet_temperature(hp)
+    maximum_feasible_outlet = (
+        maximum_outlet_temperature - target_tol
+        if maximum_outlet_temperature is not None
+        else None
+    )
     for _ in range(25):
         dt_offset = _get_evaporator_inlet_temperature_offset(hp)
         if abs(dt_offset) <= target_tol:
             hp.Tref_evap_outlet = hp.evaporator.sink_out.temperature
             return hp
 
-        hp.evaporator.sink_out.props_in_ab(
-            "TQ", hp.evaporator.sink_out.temperature - dt_offset, 1.0
-        )
+        if (
+            dt_offset < 0.0
+            and maximum_feasible_outlet is not None
+            and hp.evaporator.sink_out.temperature
+            >= maximum_feasible_outlet - target_tol
+        ):
+            hp.Tref_evap_outlet = hp.evaporator.sink_out.temperature
+            return hp
+
+        proposed_temperature = hp.evaporator.sink_out.temperature - dt_offset
+        if maximum_feasible_outlet is not None:
+            proposed_temperature = min(
+                proposed_temperature,
+                maximum_feasible_outlet,
+            )
+        _validate_superheater_outlet_temperature(hp, proposed_temperature)
+        hp.evaporator.sink_out.props_in_ab("TQ", proposed_temperature, 1.0)
+        hp.Tref_evap_outlet = hp.evaporator.sink_out.temperature
         _reset_discharge_pressure_bounds(hp)
         hp = _find_hp_with_min_discharge_pressure(hp)
 
     raise Exception("Evaporator inlet temperature correction failed to converge.")
+
+
+def _validate_superheater_outlet_temperature(
+    hp: BaseHeatPump, evaporator_outlet_temperature: float
+) -> None:
+    """Reject an evaporator outlet that would reverse superheater duty."""
+    try:
+        maximum_temperature = hp.evap_sup.sink_out.temperature
+    except AttributeError:
+        return
+    violation = max(0.0, evaporator_outlet_temperature - maximum_temperature)
+    if violation > _get_evaporator_alignment_tolerance(hp):
+        raise _CycleConstraintError(
+            "Evaporator outlet temperature would reverse superheater heat transfer.",
+            {"superheater_temperature_reversal": violation},
+        )
+
+
+def _get_maximum_evaporator_outlet_temperature(hp: BaseHeatPump) -> float | None:
+    """Return the superheater-limited evaporator dew-point temperature."""
+    try:
+        return float(hp.evap_sup.sink_out.temperature)
+    except AttributeError:
+        return None
 
 
 def _reset_discharge_pressure_bounds(hp: BaseHeatPump) -> None:
@@ -343,34 +407,207 @@ def _find_pressure_for_gc_target(
     return _find_best_pressure_within_target(bnds, hp)
 
 
+def _find_unbracketed_multicomponent_pressure(
+    hp: BaseHeatPump,
+    *,
+    pressure_start: float,
+) -> tuple[float, bool, float]:
+    """Search a sampled pressure domain when a mixture target is not bracketed."""
+    pressure_suction = float(hp.comp1.flow_in.pressure)
+    pressure_lower = pressure_suction * (1.0 + max(float(hp.tol), 1e-9))
+    pressure_upper = float(getattr(hp.comp_discharge, "P_max", pressure_start))
+    if pressure_upper <= pressure_lower:
+        return pressure_start, False, 1.0
+
+    pressures = np.geomspace(
+        pressure_lower,
+        pressure_upper,
+        num=_PRESSURE_FALLBACK_SAMPLES,
+    )
+    pressures = np.unique(
+        np.append(pressures, np.clip(pressure_start, pressure_lower, pressure_upper))
+    )
+    samples: list[tuple[float, float]] = []
+    for pressure in pressures:
+        try:
+            residual = float(_find_current_gc_dtmin_offset(float(pressure), hp))
+        except Exception:
+            continue
+        if np.isfinite(residual):
+            samples.append((float(pressure), residual))
+
+    if not samples:
+        return pressure_start, False, 1.0
+
+    samples.sort(key=lambda sample: sample[0])
+    target_tol = _get_pressure_target_tolerance(hp)
+    candidates: list[float] = []
+
+    for index, (pressure, residual) in enumerate(samples):
+        if abs(residual) <= target_tol:
+            if index > 0 and abs(samples[index - 1][1]) > target_tol:
+                pressure = _refine_pressure_tolerance_entry(
+                    samples[index - 1][0], pressure, hp
+                )
+            candidates.append(pressure)
+
+    for left, right in zip(samples, samples[1:]):
+        if left[1] * right[1] < 0.0:
+            try:
+                pressure, converged = _find_pressure_from_bracket(
+                    (left[0], right[0]),
+                    (left[0] + right[0]) / 2.0,
+                    hp,
+                )
+            except (ValueError, RuntimeError):
+                continue
+            if converged:
+                candidates.append(pressure)
+
+    for index in range(1, len(samples) - 1):
+        left, centre, right = samples[index - 1 : index + 2]
+        if abs(centre[1]) > min(abs(left[1]), abs(right[1])):
+            continue
+        try:
+            result = minimize_scalar(
+                fun=lambda pressure: abs(_find_current_gc_dtmin_offset(pressure, hp)),
+                method="bounded",
+                bounds=(left[0], right[0]),
+                options={"xatol": hp.tol},
+            )
+        except (ValueError, RuntimeError):
+            continue
+        if result.success and result.fun <= target_tol:
+            pressure = float(result.x)
+            if abs(left[1]) > target_tol:
+                pressure = _refine_pressure_tolerance_entry(left[0], pressure, hp)
+            candidates.append(pressure)
+
+    if candidates:
+        return min(candidates), True, 0.0
+
+    best_residual = min(abs(residual) for _, residual in samples)
+    shortfall = max(0.0, best_residual - target_tol)
+    return pressure_start, False, shortfall
+
+
+def _refine_pressure_tolerance_entry(
+    pressure_outside: float,
+    pressure_inside: float,
+    hp: BaseHeatPump,
+) -> float:
+    """Return the lowest pressure entering the accepted pinch-error band."""
+    target_tol = _get_pressure_target_tolerance(hp)
+    try:
+        result = root_scalar(
+            lambda pressure: abs(_find_current_gc_dtmin_offset(pressure, hp))
+            - target_tol,
+            method="brentq",
+            bracket=(pressure_outside, pressure_inside),
+            xtol=hp.tol,
+            maxiter=50,
+        )
+    except ValueError:
+        return pressure_inside
+    return float(result.root) if result.converged else pressure_inside
+
+
 def _solve_cycle_at_discharge_pressure(
     pressure: float, hp: BaseHeatPump
 ) -> BaseHeatPump:
     """Run the cycle analysis at the chosen discharge pressure."""
     hp = _do_sequential_iterative_cycle_analysis(pressure, hp)
     hp = _update_pinch_props_for_gcs(P_comp_out=pressure, hp=hp)
-    hp.converged = True
+    _validate_cycle_convergence(hp)
     return hp
 
 
-def _raise_infeasible_pressure_bounds() -> None:
+def _validate_cycle_convergence(hp: BaseHeatPump) -> None:
+    """Reject a final state when iteration or an active operation did not converge."""
+    if _check_hp_model_convergence(hp):
+        return
+    raise _CycleConstraintError(
+        "Cycle operations failed to converge to a physically valid state.",
+        _get_cycle_constraint_errors(hp),
+    )
+
+
+def _get_cycle_constraint_errors(hp: BaseHeatPump) -> dict[str, float]:
+    """Return physical errors for the final unconverged cycle state."""
+    errors: dict[str, float] = {}
+    if not getattr(hp, "iteration_converged", False):
+        errors["cycle_iteration"] = 1.0
+
+    unconverged = [
+        operation
+        for operation in getattr(hp, "operations", ())
+        if not getattr(operation, "converged", False)
+    ]
+    temperature_error = max(
+        (_get_heat_exchanger_temperature_error(operation) for operation in unconverged),
+        default=0.0,
+    )
+    if temperature_error > 0.0:
+        errors["heat_exchanger_temperature_reversal"] = temperature_error
+    elif unconverged:
+        errors["component_convergence"] = 1.0
+
+    return errors or {"cycle_convergence": 1.0}
+
+
+def _get_heat_exchanger_temperature_error(operation: object) -> float:
+    """Return the largest temperature-direction violation for an operation."""
+    try:
+        source_in = operation.source_in.temperature
+        source_out = operation.source_out.temperature
+        sink_in = operation.sink_in.temperature
+        sink_out = operation.sink_out.temperature
+    except AttributeError:
+        return 0.0
+    return max(
+        0.0,
+        source_out - source_in,
+        sink_in - sink_out,
+        sink_in - source_out,
+        sink_out - source_in,
+    )
+
+
+def _raise_infeasible_pressure_bounds(shortfall: float = 1.0) -> None:
     """Raise a consistent infeasible-pressure failure for the public boundary."""
-    raise Exception("Infeasible pressure bounds within property model limits.")
+    raise _CycleConstraintError(
+        "Infeasible pressure bounds within property model limits.",
+        {"gas_cooler_pinch_shortfall": max(0.0, float(shortfall))},
+    )
 
 
 @profiled_section("pressure_search")
 def _find_hp_with_min_discharge_pressure(hp: BaseHeatPump) -> BaseHeatPump:
     """Search for the discharge pressure that meets the gas-cooler pinch target."""
+    pressure_start = float(hp.comp_discharge.pressure)
     bnds, x0, hp.feasible, dt_bounds = _get_discharge_pressure_bounds(hp)
     hp.comp_discharge.pressure_bnds = bnds
 
-    if not hp.feasible:
-        _raise_infeasible_pressure_bounds()
+    pressure = pressure_start
+    converged = False
+    if hp.feasible:
+        pressure, converged = _find_pressure_for_gc_target(bnds, x0, dt_bounds, hp)
 
-    pressure, converged = _find_pressure_for_gc_target(bnds, x0, dt_bounds, hp)
+    shortfall = max(
+        0.0,
+        min(abs(residual) for residual in dt_bounds)
+        - _get_pressure_target_tolerance(hp),
+    )
+    if not converged and _is_multi_component_working_fluid(hp):
+        pressure, converged, shortfall = _find_unbracketed_multicomponent_pressure(
+            hp,
+            pressure_start=pressure_start,
+        )
     if not converged:
-        _raise_infeasible_pressure_bounds()
+        hp.feasible = False
+        _raise_infeasible_pressure_bounds(shortfall)
 
+    hp.feasible = True
     return _solve_cycle_at_discharge_pressure(pressure, hp)
 
 
@@ -545,6 +782,10 @@ def _do_sequential_iterative_cycle_analysis(
             hp.tol * W - abs(sum([c.power for c in hp.compressors]) - W),
             hp.tol * Q - abs(sum([g.duty for g in hp.gas_coolers]) - Q),
         )
+    hp.iteration_converged = most_neg_residual >= 0.0
+    hp.converged = hp.iteration_converged and all(
+        getattr(operation, "converged", False) for operation in hp.operations
+    )
     hp = _set_gas_coolers_sink_temperatures(hp)
     if hp.debug:
         hp.get_cycle_plot(x_axis="s", y_axis="T")

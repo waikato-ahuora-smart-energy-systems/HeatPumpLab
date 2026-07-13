@@ -73,5 +73,5 @@ def run_many(
 
 
 if __name__ == "__main__":
-    # run_many()
-    run_one()
+    run_many()
+    # run_one()

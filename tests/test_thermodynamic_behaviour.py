@@ -314,10 +314,7 @@ def test_mass_basis_binary_cases_from_unsolved_results_converge(
 @pytest.mark.parametrize(
     ("refrigerant", "dT_rhx1_cold", "dT_rhx2_cold"),
     [
-        ("Propane;Isopentane|0.5;0.5|mass", 0.0, 0.0),
-        ("Propane;Pentane|0.5;0.5|mass", 0.0, 0.0),
         ("Butane;Neopentane|0.5;0.5|mass", 0.0, 66.66666666666667),
-        ("Propane;Isopentane|0.5;0.5|mass", 61.80339887498948, 0.0),
     ],
 )
 def test_solver_resolves_feasible_binary_cases_from_unsolved_csv(
@@ -341,6 +338,39 @@ def test_solver_resolves_feasible_binary_cases_from_unsolved_csv(
     assert_successful_cycle(hp)
 
 
+@pytest.mark.parametrize(
+    "refrigerant",
+    [
+        "Propane;Isopentane|0.5;0.5|mass",
+        "Propane;Pentane|0.5;0.5|mass",
+    ],
+)
+def test_binary_cases_accept_colder_expansion_outlet_at_superheater_limit(
+    solve_recuperative_case,
+    assert_successful_cycle,
+    refrigerant,
+):
+    hp = solve_recuperative_case(
+        refrigerant,
+        ihx_on=False,
+        dT_rhx1_cold=0.0,
+        dT_rhx2_cold=0.0,
+        dT_rhx3_cold=0.0,
+        comp2_power_frac=0.5,
+        comp3_power_frac=0.0,
+        dT_gc_out_min_offset=0.0,
+        record_failed_solve=False,
+    )
+
+    assert_successful_cycle(hp)
+    assert hp.evaporator.sink_in.temperature < hp.Tref_evap_inlet
+    assert hp.evap_sup.duty >= 0.0
+    assert hp.Tref_evap_outlet == pytest.approx(
+        hp.T_source_in - hp.dTmin_rhx,
+        abs=2e-4,
+    )
+
+
 def test_internal_temperature_cross_from_unsolved_csv_is_reported_infeasible(
     solve_recuperative_case,
     monkeypatch,
@@ -362,8 +392,9 @@ def test_internal_temperature_cross_from_unsolved_csv_is_reported_infeasible(
     assert "temperature cross" in hp.solve_error
 
 
-def test_pressure_target_outside_property_domain_is_reported_infeasible(
+def test_recuperated_binary_case_uses_superheater_limited_suction_pressure(
     solve_recuperative_case,
+    assert_successful_cycle,
     monkeypatch,
 ):
     monkeypatch.setattr(cycle_solver, "print_result_to_csv", lambda *args, **kwargs: None)
@@ -378,9 +409,54 @@ def test_pressure_target_outside_property_domain_is_reported_infeasible(
         dT_gc_out_min_offset=0.0,
     )
 
-    assert hp.feasible is False
-    assert hp.converged is False
-    assert "Infeasible pressure bounds" in hp.solve_error
+    assert_successful_cycle(hp)
+    assert hp.evaporator.sink_in.temperature < hp.Tref_evap_inlet
+    assert hp.evap_sup.duty >= 0.0
+
+
+@pytest.mark.parametrize(
+    ("refrigerant", "dT_rhx1_cold", "dT_rhx2_cold"),
+    [
+        (
+            "Propane;Pentane|0.5;0.5|mass",
+            41.1111111111111,
+            82.22222222222221,
+        ),
+        (
+            "Propane;Pentane|0.5;0.5|mass",
+            47.10914138751296,
+            76.22419194582037,
+        ),
+        (
+            "Propane;Isopentane|0.5;0.5|mass",
+            56.23058987490536,
+            34.75241575014722,
+        ),
+    ],
+)
+def test_outer_design_cases_solve_at_superheater_limited_suction_pressure(
+    solve_recuperative_case,
+    assert_successful_cycle,
+    refrigerant,
+    dT_rhx1_cold,
+    dT_rhx2_cold,
+):
+    hp = solve_recuperative_case(
+        refrigerant,
+        ihx_on=False,
+        dT_rhx1_cold=dT_rhx1_cold,
+        dT_rhx2_cold=dT_rhx2_cold,
+        dT_rhx3_cold=0.0,
+        comp2_power_frac=0.5,
+        comp3_power_frac=0.0,
+        dT_gc_out_min_offset=0.0,
+        record_failed_solve=False,
+    )
+
+    assert_successful_cycle(hp)
+    assert hp.evaporator.sink_in.temperature <= hp.Tref_evap_inlet
+    assert hp.evap_sup.duty >= 0.0
+    assert hp.comp_discharge.pressure < hp.comp_discharge.P_max
 
 
 def test_three_stage_recuperative_model_initialises_optional_heat_recovery_path(

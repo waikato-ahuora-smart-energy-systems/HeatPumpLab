@@ -463,6 +463,44 @@ def test_heat_exchanger_fixed_cold_outlet_delivers_requested_temperature(hpl):
     assert exchanger.sink_out.pressure == pytest.approx(1.98)
 
 
+def test_heat_exchanger_rejects_reversed_heat_transfer(hpl):
+    exchanger = hpl.HeatExchanger(
+        "water",
+        "water",
+        model="fixed cold temperature outlet",
+    )
+    set_state(exchanger.source_in, pressure=2.0, temperature=90.0, mass_flow=2.0)
+    set_state(exchanger.sink_in, pressure=2.0, temperature=50.0, mass_flow=3.0)
+    exchanger.source_out.mass_flow = exchanger.source_in.mass_flow
+    exchanger.sink_out.mass_flow = exchanger.sink_in.mass_flow
+    exchanger.sink_out.temperature = 40.0
+
+    exchanger.solve()
+
+    assert exchanger.duty < 0.0
+    assert exchanger.source_out.temperature > exchanger.source_in.temperature
+    assert exchanger.sink_out.temperature < exchanger.sink_in.temperature
+    assert exchanger.converged is False
+
+
+def test_heat_exchanger_accepts_numerically_zero_duty(hpl):
+    exchanger = hpl.HeatExchanger(
+        "water",
+        "water",
+        model="fixed cold temperature outlet",
+    )
+    set_state(exchanger.source_in, pressure=2.0, temperature=90.0, mass_flow=2.0)
+    set_state(exchanger.sink_in, pressure=2.0, temperature=50.0, mass_flow=3.0)
+    exchanger.source_out.mass_flow = exchanger.source_in.mass_flow
+    exchanger.sink_out.mass_flow = exchanger.sink_in.mass_flow
+    exchanger.sink_out.temperature = exchanger.sink_in.temperature
+
+    exchanger.solve()
+
+    assert exchanger.duty == pytest.approx(0.0, abs=exchanger.tol)
+    assert exchanger.converged is True
+
+
 def test_heat_exchanger_effectiveness_model_moves_both_streams_toward_each_other(hpl):
     exchanger = hpl.HeatExchanger(
         "water",

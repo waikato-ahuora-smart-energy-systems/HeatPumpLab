@@ -183,6 +183,7 @@ class _OuterDesignObjective:
                 message="heat pump was infeasible, unconverged, or missing SEC",
                 elapsed_seconds=elapsed_seconds,
                 report=report,
+                constraint_errors=getattr(hp, "constraint_errors", None),
             )
 
         return DesignEvaluation(
@@ -197,6 +198,7 @@ class _OuterDesignObjective:
             refrigerant=str(case["refrigerant"]),
             case=dict(case),
             report=report,
+            constraint_errors={},
         )
 
     def _failure_record(
@@ -207,10 +209,12 @@ class _OuterDesignObjective:
         message: str,
         elapsed_seconds: float,
         report: dict[str, Any] | None = None,
+        constraint_errors: dict[str, float] | None = None,
     ) -> DesignEvaluation:
+        errors = _validated_constraint_errors(constraint_errors)
         return DesignEvaluation(
             x=tuple(float(v) for v in x),
-            objective=self.penalty,
+            objective=self.penalty + sum(error**2 for error in errors.values()),
             success=False,
             message=message,
             elapsed_seconds=float(elapsed_seconds),
@@ -220,6 +224,7 @@ class _OuterDesignObjective:
             refrigerant=str(case["refrigerant"]),
             case=dict(case),
             report={} if report is None else dict(report),
+            constraint_errors=errors,
         )
 
     def _budget_exhausted_evaluation(self, x: np.ndarray) -> DesignEvaluation:
@@ -229,6 +234,7 @@ class _OuterDesignObjective:
             case=case,
             message="exact evaluation budget exhausted",
             elapsed_seconds=0.0,
+            constraint_errors={"budget_exhausted": 1e6},
         )
 
     def _cache_key(self, x: np.ndarray) -> tuple[float, ...]:
@@ -286,3 +292,15 @@ def _finite_or_none(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return numeric if math.isfinite(numeric) else None
+
+
+def _validated_constraint_errors(
+    constraint_errors: dict[str, float] | None,
+) -> dict[str, float]:
+    """Return finite nonnegative errors, with a fallback for unknown failures."""
+    validated: dict[str, float] = {}
+    for name, value in (constraint_errors or {}).items():
+        numeric = _finite_or_none(value)
+        if numeric is not None:
+            validated[str(name)] = max(0.0, numeric)
+    return validated or {"solve_failure": 1.0}

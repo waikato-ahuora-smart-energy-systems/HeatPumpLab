@@ -107,6 +107,29 @@ def test_fixed_pressure_objective_solves_at_seed_pressure_without_pressure_searc
     assert calls == [("fixed", 4.2), "plot", "objective_metrics"]
 
 
+def test_initial_evaporator_outlet_rejects_superheater_temperature_reversal(
+    monkeypatch,
+):
+    hp = SimpleNamespace(
+        tol=1e-6,
+        debug=False,
+        Tref_evap_outlet=36.0,
+        evap_sup=SimpleNamespace(sink_out=SimpleNamespace(temperature=35.0)),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_find_hp_with_min_discharge_pressure",
+        lambda solved_hp: pytest.fail("invalid initial state must not search pressure"),
+    )
+
+    with pytest.raises(cycle_solver._CycleConstraintError) as exc_info:
+        cycle_solver._solve_case(hp)
+
+    assert exc_info.value.constraint_errors == {
+        "superheater_temperature_reversal": pytest.approx(1.0)
+    }
+
+
 def test_fixed_pressure_objective_metrics_only_require_sec_inputs():
     hp = SimpleNamespace(
         converged=True,
@@ -119,6 +142,79 @@ def test_fixed_pressure_objective_metrics_only_require_sec_inputs():
 
     assert hp.COP == pytest.approx(5.0)
     assert hp.SEC == pytest.approx(0.25)
+
+
+def test_sequential_cycle_analysis_reports_iteration_limit(monkeypatch):
+    compressor = SimpleNamespace(power=1.0)
+    operation = SimpleNamespace(converged=True)
+
+    def solve_operation():
+        compressor.power += 1.0
+
+    operation.solve = solve_operation
+    hp = SimpleNamespace(
+        tol=1e-6,
+        debug=False,
+        comp_discharge=SimpleNamespace(pressure=3.0),
+        comp1=SimpleNamespace(),
+        exp_valve=SimpleNamespace(flow_in=SimpleNamespace(enthalpy=100.0)),
+        gas_cooler1=SimpleNamespace(source_out=SimpleNamespace(pressure=2.0)),
+        compressors=[compressor],
+        gas_coolers=[SimpleNamespace(duty=10.0)],
+        operations=[operation],
+    )
+    monkeypatch.setattr(
+        cycle_solver, "_set_gas_coolers_sink_temperatures", lambda solved_hp: solved_hp
+    )
+
+    result = cycle_solver._do_sequential_iterative_cycle_analysis(3.0, hp)
+
+    assert result.iteration_converged is False
+    assert result.converged is False
+
+
+def test_final_pressure_solution_rejects_unconverged_operation(monkeypatch):
+    hp = SimpleNamespace(
+        feasible=True,
+        iteration_converged=True,
+        converged=False,
+        compressors=[SimpleNamespace(power=1.0)],
+        operations=[SimpleNamespace(name="reversed exchanger", converged=False)],
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_do_sequential_iterative_cycle_analysis",
+        lambda pressure, solved_hp: solved_hp,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_update_pinch_props_for_gcs",
+        lambda P_comp_out, hp: hp,
+    )
+
+    with pytest.raises(cycle_solver._CycleConstraintError) as exc_info:
+        cycle_solver._solve_cycle_at_discharge_pressure(3.0, hp)
+
+    assert exc_info.value.constraint_errors == {"component_convergence": 1.0}
+
+
+def test_solver_exposes_structured_constraint_errors(monkeypatch):
+    hp = SimpleNamespace(debug=False, record_failed_solve=False)
+    failure = cycle_solver._CycleConstraintError(
+        "invalid superheater",
+        {"superheater_temperature_reversal": 2.5},
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: (_ for _ in ()).throw(failure),
+    )
+
+    result = cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert result.feasible is False
+    assert result.converged is False
+    assert result.constraint_errors == {"superheater_temperature_reversal": 2.5}
 
 
 @pytest.mark.parametrize("compute_jac", [False, True])
@@ -172,7 +268,8 @@ def test_minimum_discharge_pressure_raises_without_recording_infeasible_bounds(
 ):
     recorded = []
     hp = SimpleNamespace(
-        comp_discharge=SimpleNamespace(pressure_bnds=None),
+        tol=1e-6,
+        comp_discharge=SimpleNamespace(pressure=1.5, pressure_bnds=None),
         get_report=lambda: setattr(hp, "output", {"case": "infeasible"}),
         output={},
     )
@@ -209,7 +306,11 @@ def test_minimum_discharge_pressure_accepts_endpoint_within_target_tolerance(
     hp = SimpleNamespace(
         tol=1e-6,
         feasible=True,
-        comp_discharge=SimpleNamespace(pressure_bnds=None),
+        iteration_converged=True,
+        converged=True,
+        compressors=[SimpleNamespace(power=1.0)],
+        operations=[SimpleNamespace(converged=True)],
+        comp_discharge=SimpleNamespace(pressure=1.5, pressure_bnds=None),
     )
 
     monkeypatch.setattr(
@@ -248,7 +349,11 @@ def test_minimum_discharge_pressure_prefers_bracketed_root_to_endpoint_tolerance
     hp = SimpleNamespace(
         tol=1e-6,
         feasible=True,
-        comp_discharge=SimpleNamespace(pressure_bnds=None),
+        iteration_converged=True,
+        converged=True,
+        compressors=[SimpleNamespace(power=1.0)],
+        operations=[SimpleNamespace(converged=True)],
+        comp_discharge=SimpleNamespace(pressure=1.5, pressure_bnds=None),
     )
 
     monkeypatch.setattr(
@@ -392,6 +497,91 @@ def test_pressure_bound_expansion_keeps_near_target_point_without_sign_change(
     assert dt_upper == pytest.approx(-0.04)
 
 
+def test_multicomponent_pressure_fallback_finds_hidden_same_sign_target(monkeypatch):
+    hp = SimpleNamespace(
+        tol=1e-6,
+        refrigerant="Propane;Isopentane|0.5;0.5|mass",
+        comp1=SimpleNamespace(flow_in=SimpleNamespace(pressure=1.0)),
+        comp_discharge=SimpleNamespace(pressure=4.0, P_max=10.0),
+    )
+
+    def non_monotonic_offset(pressure, solved_hp):
+        log_distance = np.log(pressure / 3.0)
+        return 0.02 - (log_distance / 0.04) ** 2
+
+    monkeypatch.setattr(
+        cycle_solver, "_find_current_gc_dtmin_offset", non_monotonic_offset
+    )
+
+    pressure, converged, shortfall = (
+        cycle_solver._find_unbracketed_multicomponent_pressure(
+            hp,
+            pressure_start=4.0,
+        )
+    )
+
+    assert converged is True
+    assert 2.8 < pressure < 3.2
+    assert abs(non_monotonic_offset(pressure, hp)) <= 0.05
+    assert shortfall == pytest.approx(0.0)
+
+
+def test_multicomponent_pressure_fallback_reports_best_shortfall(monkeypatch):
+    hp = SimpleNamespace(
+        tol=1e-6,
+        refrigerant="Propane;Isopentane|0.5;0.5|mass",
+        comp1=SimpleNamespace(flow_in=SimpleNamespace(pressure=1.0)),
+        comp_discharge=SimpleNamespace(pressure=4.0, P_max=10.0),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_find_current_gc_dtmin_offset",
+        lambda pressure, solved_hp: -0.75,
+    )
+
+    pressure, converged, shortfall = (
+        cycle_solver._find_unbracketed_multicomponent_pressure(
+            hp,
+            pressure_start=4.0,
+        )
+    )
+
+    assert pressure == pytest.approx(4.0)
+    assert converged is False
+    assert shortfall == pytest.approx(0.70)
+
+
+def test_minimum_pressure_search_uses_multicomponent_fallback(monkeypatch):
+    hp = SimpleNamespace(
+        tol=1e-6,
+        feasible=True,
+        refrigerant="Propane;Isopentane|0.5;0.5|mass",
+        comp_discharge=SimpleNamespace(pressure=4.0, pressure_bnds=None),
+    )
+    solved_pressures = []
+    monkeypatch.setattr(
+        cycle_solver,
+        "_get_discharge_pressure_bounds",
+        lambda solved_hp: ((4.0, 10.0), 4.0, False, (-0.8, -0.8)),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_find_unbracketed_multicomponent_pressure",
+        lambda solved_hp, pressure_start: (3.0, True, 0.0),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_cycle_at_discharge_pressure",
+        lambda pressure, solved_hp: solved_pressures.append(pressure) or solved_hp,
+    )
+
+    result = cycle_solver._find_hp_with_min_discharge_pressure(hp)
+
+    assert result is hp
+    assert hp.feasible is True
+    assert solved_pressures == pytest.approx([3.0])
+
+
 def test_minimum_discharge_pressure_falls_back_to_near_target_endpoint(
     monkeypatch,
 ):
@@ -399,7 +589,11 @@ def test_minimum_discharge_pressure_falls_back_to_near_target_endpoint(
     hp = SimpleNamespace(
         tol=1e-6,
         feasible=True,
-        comp_discharge=SimpleNamespace(pressure_bnds=None),
+        iteration_converged=True,
+        converged=True,
+        compressors=[SimpleNamespace(power=1.0)],
+        operations=[SimpleNamespace(converged=True)],
+        comp_discharge=SimpleNamespace(pressure=1.5, pressure_bnds=None),
     )
 
     monkeypatch.setattr(
@@ -503,6 +697,42 @@ def test_evaporator_alignment_reports_non_convergence(monkeypatch):
         cycle_solver._align_evaporator_inlet_temperature(hp)
 
     assert hp.comp_discharge.pressure_bnds is None
+
+
+def test_evaporator_alignment_stops_at_superheater_limit_for_colder_inlet(
+    monkeypatch,
+):
+    class SinkOutlet:
+        temperature = 20.0
+
+        def props_in_ab(self, *args):
+            self.temperature = args[1]
+
+    hp = SimpleNamespace(
+        tol=1e-6,
+        Tref_evap_outlet=20.0,
+        Tref_evap_inlet=10.0,
+        comp_discharge=SimpleNamespace(pressure_bnds=(1.0, 2.0)),
+        evaporator=SimpleNamespace(
+            sink_in=SimpleNamespace(temperature=0.0),
+            sink_out=SinkOutlet(),
+        ),
+        evap_sup=SimpleNamespace(sink_out=SimpleNamespace(temperature=25.0)),
+    )
+    pressure_searches = []
+    monkeypatch.setattr(
+        cycle_solver,
+        "_find_hp_with_min_discharge_pressure",
+        lambda solved_hp: pressure_searches.append(solved_hp.Tref_evap_outlet)
+        or solved_hp,
+    )
+
+    result = cycle_solver._align_evaporator_inlet_temperature(hp)
+
+    assert result is hp
+    assert hp.Tref_evap_outlet == pytest.approx(24.9999)
+    assert hp.evaporator.sink_out.temperature == pytest.approx(24.9999)
+    assert pressure_searches == pytest.approx([24.9999])
 
 
 def test_gas_cooler_dtmin_offset_ignores_inlet_air_pinch_candidates(monkeypatch):

@@ -73,12 +73,30 @@ class BaseHeatExchanger:
                 self.get_performance()
 
         self.duty = self.sink_out.heat_flow - self.sink_in.heat_flow
+        if self._has_active_heat_transfer():
+            self.converged = self.converged and self._has_valid_heat_transfer_direction()
         self.delta_entropy_src = (
             abs(self.source_in.entropy - self.source_out.entropy)
             * self.source_out.mass_flow
         )
         self.delta_entropy_snk = (
             abs(self.sink_in.entropy - self.sink_out.entropy) * self.sink_out.mass_flow
+        )
+
+    def _has_active_heat_transfer(self) -> bool:
+        """Return whether the exchanger should enforce heat-flow direction."""
+        return (
+            not self.bypassed
+            and self.source_in.mass_flow > self.tol
+            and self.sink_in.mass_flow > self.tol
+        )
+
+    def _has_valid_heat_transfer_direction(self) -> bool:
+        """Return whether heat flows from the source side to the sink side."""
+        return (
+            self.duty >= -self.tol
+            and self.source_out.temperature <= self.source_in.temperature + self.tol
+            and self.sink_out.temperature >= self.sink_in.temperature - self.tol
         )
 
     def get_performance(self):

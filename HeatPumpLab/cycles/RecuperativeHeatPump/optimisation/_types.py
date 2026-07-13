@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-OPTIMISER_VERSION = "edge-first-pattern-search-v1"
+OPTIMISER_VERSION = "edge-first-pattern-search-v2"
 
 VARIABLE_NAMES = (
     "dT_rhx1_cold",
@@ -48,7 +48,7 @@ DEFAULT_BASE_CASE = {
     "debug": False,
 }
 
-PENALTY_OBJECTIVE = 1e30
+PENALTY_OBJECTIVE = 1e6
 
 
 @dataclass(frozen=True)
@@ -66,6 +66,7 @@ class DesignEvaluation:
     refrigerant: str
     case: dict[str, Any]
     report: dict[str, Any]
+    constraint_errors: dict[str, float]
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,7 @@ class PhaseEvaluation:
     pmax: float | None
     elapsed_seconds: float
     cumulative_exact_evaluations: int
+    constraint_errors: dict[str, float]
 
     @classmethod
     def from_record(
@@ -102,6 +104,7 @@ class PhaseEvaluation:
             pmax=record.pmax,
             elapsed_seconds=record.elapsed_seconds,
             cumulative_exact_evaluations=cumulative_exact_evaluations,
+            constraint_errors=dict(record.constraint_errors),
         )
 
     def to_output_dict(self) -> dict[str, Any]:

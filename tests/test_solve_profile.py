@@ -76,7 +76,10 @@ def test_profile_context_records_recuperative_metric_timing():
 
 
 def test_profile_context_records_pressure_search_timing(monkeypatch):
-    hp = SimpleNamespace(comp_discharge=SimpleNamespace(pressure_bnds=None))
+    hp = SimpleNamespace(
+        tol=1e-6,
+        comp_discharge=SimpleNamespace(pressure=1.5, pressure_bnds=None)
+    )
 
     monkeypatch.setattr(
         cycle_solver,
