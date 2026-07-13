@@ -94,6 +94,7 @@ def test_rhp_report_exposes_domain_parameters_and_performance(n_comp):
 
     assert params == {
         "refrigerant": "Butane",
+        "refrigerant_component_count": 1,
         "dT_GC_min_tar": 20.0,
         "T_air_tar": 200.0,
         "T_air_inlet": 15.0,

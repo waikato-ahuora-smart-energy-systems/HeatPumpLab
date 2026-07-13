@@ -6,17 +6,18 @@ import os
 from pathlib import Path
 from typing import Any
 
+from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import RefrigerantInput
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     OuterDesignOptimisationConfig,
     optimise_recuperative_heat_pump_case,
     optimise_recuperative_heat_pump_cases,
 )
 
-DEFAULT_FLUIDS = ("Propane", "Butane")
+DEFAULT_REFRIGERANT = "Propane;Butane|0.5;0.5|mass"
 DEFAULT_RESULTS_DIR = "results/RHPopt"
-DEFAULT_FILENAME = "RHPopt_results"
+DEFAULT_FILENAME = "RHPopt_ncomponent_results"
 DEFAULT_PARAM_KWARGS = {
-    "fluids_ls": [
+    "refrigerant_ls": [
         ("Propane", "Isobutane"),
         ("Propane", "Butane"),
         ("Propane", "Isopentane"),
@@ -40,7 +41,7 @@ def run_one(
     base_case: dict[str, Any] | None = None,
     *,
     filename: str = DEFAULT_FILENAME,
-    fluids: tuple[str, str] = DEFAULT_FLUIDS,
+    refrigerant: RefrigerantInput = DEFAULT_REFRIGERANT,
     config: OuterDesignOptimisationConfig | None = None,
     results_dir: str | Path = DEFAULT_RESULTS_DIR,
 ) -> dict[str, Any]:
@@ -48,7 +49,7 @@ def run_one(
     return optimise_recuperative_heat_pump_case(
         filename=filename,
         base_case=base_case,
-        fluids=fluids,
+        refrigerant=refrigerant,
         config=OuterDesignOptimisationConfig() if config is None else config,
         results_dir=results_dir,
     )

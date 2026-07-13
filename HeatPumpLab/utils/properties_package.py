@@ -310,6 +310,13 @@ class PropertyPackage:
             for component in range(self.n_components)
         ]
 
+    def get_component_molar_masses(self) -> tuple[float, ...]:
+        """Return component molar masses in configured fluid order."""
+        return tuple(
+            float(self.RP.WMOLdll(self._get_component_fraction_vector(index)))
+            for index in range(self.n_components)
+        )
+
 
 def _get_fluid_info(fluid: str) -> tuple[str, list[float], int, str]:
     """Parse a REFPROP fluid composition string."""

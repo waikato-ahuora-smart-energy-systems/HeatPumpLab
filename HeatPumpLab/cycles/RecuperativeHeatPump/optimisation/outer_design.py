@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import RefrigerantInput
+
 from ._objective import _OuterDesignObjective
 from ._polish import _run_pattern_search_polish
 from ._search import (
@@ -34,7 +36,7 @@ __all__ = ["optimise_recuperative_heat_pump"]
 def optimise_recuperative_heat_pump(
     base_case: dict[str, Any] | None = None,
     *,
-    fluids: tuple[str, str] = ("Propane", "Butane"),
+    refrigerant: RefrigerantInput = "Propane;Butane|0.5;0.5|mass",
     config: OuterDesignOptimisationConfig | None = None,
     results_dir: str | Path = "results/outer_design_optimisation",
 ) -> OuterDesignOptimisationResult:
@@ -46,7 +48,7 @@ def optimise_recuperative_heat_pump(
     objective = _OuterDesignObjective(
         max_evals=config.max_exact_evaluations,
         base_case=base_case,
-        fluids=fluids,
+        refrigerant=refrigerant,
         results_dir=results_dir,
         use_fast_objective=config.use_fast_objective,
     )
@@ -62,18 +64,20 @@ def optimise_recuperative_heat_pump(
         return phase_record
 
     fixed_comp2 = float(config.fixed_comp2_power_frac)
-    fixed_composition = float(config.fixed_first_component_mass_fraction)
+    fixed_composition = objective.initial_mass_fractions
     fixed_dT1 = float(config.fixed_dT_rhx1_cold)
     fixed_dT2 = float(config.fixed_dT_rhx2_cold)
 
     corner = evaluate_phase(
         "corner",
-        [
-            fixed_dT1 if not config.vary_dT_rhx1_cold else 0.0,
-            fixed_dT2 if not config.vary_dT_rhx2_cold else 0.0,
-            fixed_comp2,
-            fixed_composition,
-        ],
+        np.asarray(
+            [
+                fixed_dT1 if not config.vary_dT_rhx1_cold else 0.0,
+                fixed_dT2 if not config.vary_dT_rhx2_cold else 0.0,
+                fixed_comp2,
+                *fixed_composition,
+            ]
+        ),
     )
     if config.vary_dT_rhx1_cold and config.vary_dT_rhx2_cold:
         edge_a = _search_edge_a(
@@ -153,9 +157,7 @@ def optimise_recuperative_heat_pump(
             config=LocalPolishConfig(
                 budget=config.polish_budget,
                 vary_comp2_power_frac=config.vary_comp2_power_frac,
-                vary_first_component_mass_fraction=(
-                    config.vary_first_component_mass_fraction
-                ),
+                vary_composition=config.vary_composition,
             ),
             evaluate_phase=evaluate_phase,
         )

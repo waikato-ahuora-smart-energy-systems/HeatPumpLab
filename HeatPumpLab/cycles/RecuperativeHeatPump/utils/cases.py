@@ -1,6 +1,7 @@
 """Helpers to enumerate, deduplicate, and prioritise recuperative heat pump cases."""
 
 from ....utils.readWriteOutput import read_csv_to_results, transfer_temp_files_to_results
+from .._refrigerant import normalise_refrigerant_input
 
 __all__ = ["get_RHP_case_list_to_solve", "get_unsolved_RHP_case_list_to_resolve"]
 
@@ -82,7 +83,7 @@ def _get_all_analysis_case_list(
     # Enumerate all the cases to be analysed
     return [
         {
-            "refrigerant": refrigerant,
+            "refrigerant": normalise_refrigerant_input(refrigerant).format(),
             "T_source_in": T_source_in,
             "Tref_evap_inlet": Tref_evap_inlet,
             "T_air_inlet": T_air_inlet,

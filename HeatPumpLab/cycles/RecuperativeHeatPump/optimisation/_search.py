@@ -7,7 +7,7 @@ from collections.abc import Callable
 import numpy as np
 from scipy import optimize
 
-from ._objective import _OuterDesignObjective
+from ._objective import _OuterDesignObjective, _build_design_vector
 from ._types import (
     PENALTY_OBJECTIVE,
     LineSearchResult,
@@ -21,7 +21,7 @@ def _search_edge_a(
     objective: _OuterDesignObjective,
     config: OuterDesignOptimisationConfig,
     fixed_comp2: float,
-    fixed_composition: float,
+    fixed_composition: tuple[float, ...],
     evaluate_phase: Callable[[str, np.ndarray | list[float]], PhaseEvaluation],
 ) -> LineSearchResult:
     return _line_search(
@@ -30,7 +30,9 @@ def _search_edge_a(
         lo=0.0,
         hi=_recuperator_edge_high(objective),
         budget=config.line_budget,
-        build_x=lambda value: [0.0, value, fixed_comp2, fixed_composition],
+        build_x=lambda value: _build_design_vector(
+            0.0, value, fixed_comp2, fixed_composition
+        ),
         evaluate_phase=evaluate_phase,
     )
 
@@ -40,7 +42,7 @@ def _search_edge_b(
     objective: _OuterDesignObjective,
     config: OuterDesignOptimisationConfig,
     fixed_comp2: float,
-    fixed_composition: float,
+    fixed_composition: tuple[float, ...],
     evaluate_phase: Callable[[str, np.ndarray | list[float]], PhaseEvaluation],
 ) -> LineSearchResult:
     return _line_search(
@@ -49,7 +51,9 @@ def _search_edge_b(
         lo=0.0,
         hi=_recuperator_edge_high(objective),
         budget=config.line_budget,
-        build_x=lambda value: [value, 0.0, fixed_comp2, fixed_composition],
+        build_x=lambda value: _build_design_vector(
+            value, 0.0, fixed_comp2, fixed_composition
+        ),
         evaluate_phase=evaluate_phase,
     )
 
@@ -60,7 +64,7 @@ def _search_dT2_at_fixed_dT1(
     config: OuterDesignOptimisationConfig,
     fixed_dT1: float,
     fixed_comp2: float,
-    fixed_composition: float,
+    fixed_composition: tuple[float, ...],
     evaluate_phase: Callable[[str, np.ndarray | list[float]], PhaseEvaluation],
 ) -> LineSearchResult:
     return _line_search(
@@ -69,12 +73,9 @@ def _search_dT2_at_fixed_dT1(
         lo=0.0,
         hi=_remaining_recuperator_high(objective, fixed_dT1, variable_index=1),
         budget=config.line_budget,
-        build_x=lambda value: [
-            fixed_dT1,
-            value,
-            fixed_comp2,
-            fixed_composition,
-        ],
+        build_x=lambda value: _build_design_vector(
+            fixed_dT1, value, fixed_comp2, fixed_composition
+        ),
         evaluate_phase=evaluate_phase,
     )
 
@@ -85,7 +86,7 @@ def _search_dT1_at_fixed_dT2(
     config: OuterDesignOptimisationConfig,
     fixed_dT2: float,
     fixed_comp2: float,
-    fixed_composition: float,
+    fixed_composition: tuple[float, ...],
     evaluate_phase: Callable[[str, np.ndarray | list[float]], PhaseEvaluation],
 ) -> LineSearchResult:
     return _line_search(
@@ -94,12 +95,9 @@ def _search_dT1_at_fixed_dT2(
         lo=0.0,
         hi=_remaining_recuperator_high(objective, fixed_dT2, variable_index=0),
         budget=config.line_budget,
-        build_x=lambda value: [
-            value,
-            fixed_dT2,
-            fixed_comp2,
-            fixed_composition,
-        ],
+        build_x=lambda value: _build_design_vector(
+            value, fixed_dT2, fixed_comp2, fixed_composition
+        ),
         evaluate_phase=evaluate_phase,
     )
 
@@ -122,7 +120,7 @@ def _search_split_line(
     edge_a: LineSearchResult,
     edge_b: LineSearchResult,
     fixed_comp2: float,
-    fixed_composition: float,
+    fixed_composition: tuple[float, ...],
     evaluate_phase: Callable[[str, np.ndarray | list[float]], PhaseEvaluation],
 ) -> LineSearchResult | None:
     dT2_star = 0.0 if edge_a.best is None else edge_a.best.x[1]
@@ -143,12 +141,12 @@ def _search_split_line(
         lo=0.0,
         hi=1.0,
         budget=config.split_budget,
-        build_x=lambda s: [
+        build_x=lambda s: _build_design_vector(
             split_sum * s,
             split_sum * (1.0 - s),
             fixed_comp2,
             fixed_composition,
-        ],
+        ),
         evaluate_phase=evaluate_phase,
     )
 

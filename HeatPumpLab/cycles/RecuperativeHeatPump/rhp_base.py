@@ -13,6 +13,7 @@ from ...components import (
 from ..common.heatPump import BaseHeatPump
 
 from .rhp_helpers import set_rhp_model
+from ._refrigerant import normalise_refrigerant_input
 from .solver import solve_heat_pump_cycle
 from .utils import (
     analyse_RHP_case,
@@ -68,6 +69,11 @@ class RecuperativeHP(BaseHeatPump):
 
     def __init__(self, **d_args):
         """Construct the heat pump, applying provided design parameters."""
+        d_args = dict(d_args)
+        if "refrigerant" in d_args:
+            d_args["refrigerant"] = normalise_refrigerant_input(
+                d_args["refrigerant"]
+            ).format()
         self.args = d_args
         for key, value in d_args.items():
             setattr(self, key, value)
@@ -84,6 +90,9 @@ class RecuperativeHP(BaseHeatPump):
         """Return a snapshot of decision variables defining the configuration."""
         return {
             "refrigerant": self.refrigerant,
+            "refrigerant_component_count": normalise_refrigerant_input(
+                self.refrigerant
+            ).component_count,
             "dT_GC_min_tar": self.dT_GC_min_tar,
             "T_air_tar": self.T_air_tar,
             "T_air_inlet": self.T_air_inlet,
@@ -113,6 +122,9 @@ class RecuperativeHP(BaseHeatPump):
             "converged": self.converged,
             # Parameters
             "refrigerant": self.refrigerant,
+            "refrigerant_component_count": normalise_refrigerant_input(
+                self.refrigerant
+            ).component_count,
             "n_comp": self.n_comp,
             "T_source_in": self.T_source_in,
             "dT_GC_min_tar": self.dT_GC_min_tar,

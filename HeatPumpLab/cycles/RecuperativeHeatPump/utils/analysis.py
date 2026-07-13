@@ -3,6 +3,8 @@ import math
 import numpy as np
 from typing import Tuple, TYPE_CHECKING
 
+from .._refrigerant import normalise_refrigerant_input
+
 from ....utils.analysis import (
     get_unique_f_suffix,
     print_results,
@@ -37,6 +39,7 @@ def analyse_RHP_case(
 ) -> Tuple["BaseHeatPump", float]:
     """Optimise the gas-cooler offset for a single case and solve it."""
     case = dict(case)
+    case["refrigerant"] = normalise_refrigerant_input(case["refrigerant"]).format()
     case["record_failed_solve"] = bool(
         record_result and case.get("record_failed_solve", True)
     )

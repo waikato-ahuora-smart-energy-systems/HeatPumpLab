@@ -108,6 +108,8 @@ def test_public_entry_point_has_no_test_only_dependency_parameters(
     assert "HP_fn" not in signature.parameters
     assert "analyser" not in signature.parameters
     assert "use_fast_objective" not in signature.parameters
+    assert "fluids" not in signature.parameters
+    assert "refrigerant" in signature.parameters
     assert list(signature.parameters)[0] == "base_case"
 
     analyser = SyntheticAnalyser(dT1_target=0.0, dT2_target=35.0)
@@ -154,20 +156,22 @@ def test_private_objective_always_passes_recuperative_hp_to_analyser():
         analyser=analyser,
     )
 
-    record = objective.evaluate([20.0, 35.0, 0.45, 0.72])
+    record = objective.evaluate([20.0, 35.0, 0.45, 0.72, 0.28])
 
     assert record.success is True
     assert {hp_cls.__name__ for hp_cls in analyser.hp_classes} == {"RecuperativeHP"}
 
 
-def test_binary_refrigerant_string_uses_mass_basis_and_complement():
-    refrigerant = objective_helpers._format_binary_refrigerant(
-        "Propane",
-        "Butane",
-        0.568611,
+def test_objective_formats_all_composition_coordinates_in_mass_basis():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        refrigerant=["Propane", "Butane", "Pentane"],
+        analyser=SyntheticAnalyser(),
     )
 
-    assert refrigerant == "Propane;Butane|0.568611;0.431389|mass"
+    case = objective.vector_to_case([0.0, 0.0, 0.5, 0.2, 0.3, 0.5])
+
+    assert case["refrigerant"] == "Propane;Butane;Pentane|0.2;0.3;0.5|mass"
 
 
 def test_objective_maps_vector_to_domain_case_without_mutating_base_case():
@@ -175,11 +179,11 @@ def test_objective_maps_vector_to_domain_case_without_mutating_base_case():
     objective = objective_helpers._OuterDesignObjective(
         max_evals=5,
         base_case=base_case,
-        fluids=("Propane", "Butane"),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
         analyser=SyntheticAnalyser(),
     )
 
-    case = objective.vector_to_case([12.0, 34.0, 0.42, 0.8])
+    case = objective.vector_to_case([12.0, 34.0, 0.42, 0.8, 0.2])
 
     assert case["T_air_tar"] == pytest.approx(180.0)
     assert case["dT_rhx1_cold"] == pytest.approx(12.0)
@@ -189,15 +193,67 @@ def test_objective_maps_vector_to_domain_case_without_mutating_base_case():
     assert base_case == {"T_air_tar": 180.0, "dT_rhx3_cold": 0.0}
 
 
+def test_objective_projects_ternary_composition_onto_simplex():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        refrigerant=["Propane", "Butane", "Pentane"],
+        analyser=SyntheticAnalyser(),
+    )
+
+    repaired = objective.repair_vector([0.0, 0.0, 0.5, -0.2, 0.4, 1.8])
+
+    assert all(value >= 0.0 for value in repaired[3:])
+    assert sum(repaired[3:]) == pytest.approx(1.0)
+
+
+def test_mole_basis_objective_solves_in_mass_basis_and_reports_in_mole_basis():
+    analyser = SyntheticAnalyser()
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        refrigerant="Propane;Butane|0.4;0.6|mol",
+        analyser=analyser,
+        molar_masses=(44.0, 58.0),
+    )
+    x = [0.0, 0.0, 0.5, *objective.initial_mass_fractions]
+
+    record = objective.evaluate(x)
+
+    assert analyser.calls[0]["refrigerant"].endswith("|mass")
+    assert _composition(analyser.calls[0]["refrigerant"]) == pytest.approx(
+        objective.initial_mass_fractions
+    )
+    assert record.refrigerant.endswith("|mol")
+    assert _composition(record.refrigerant) == pytest.approx((0.4, 0.6))
+
+
+def test_equivalent_mass_and_mole_inputs_share_internal_starting_composition():
+    masses = (44.0, 58.0)
+    mole_objective = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        refrigerant="Propane;Butane|0.4;0.6|mol",
+        analyser=SyntheticAnalyser(),
+        molar_masses=masses,
+    )
+    mass_objective = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        refrigerant="Propane;Butane|0.335877862595;0.664122137405|mass",
+        analyser=SyntheticAnalyser(),
+    )
+
+    assert mass_objective.initial_mass_fractions == pytest.approx(
+        mole_objective.initial_mass_fractions
+    )
+
+
 def test_objective_repairs_recuperator_lift_to_feasible_domain():
     objective = objective_helpers._OuterDesignObjective(
         max_evals=5,
         base_case={"T_air_inlet": 10.0, "T_air_tar": 100.0, "dT_rhx3_cold": 0.0},
-        fluids=("Propane", "Butane"),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
         analyser=SyntheticAnalyser(),
     )
 
-    case = objective.vector_to_case([60.0, 60.0, 0.42, 0.8])
+    case = objective.vector_to_case([60.0, 60.0, 0.42, 0.8, 0.2])
 
     assert case["dT_rhx1_cold"] + case["dT_rhx2_cold"] == pytest.approx(60.0)
     assert case["dT_rhx1_cold"] == pytest.approx(30.0)
@@ -219,11 +275,11 @@ def test_objective_does_not_spend_exact_solve_on_setup_infeasible_lift():
             "T_air_tar": 100.0,
             "dT_rhx3_cold": 0.0,
         },
-        fluids=("Propane", "Butane"),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
         analyser=analyser,
     )
 
-    record = objective.evaluate([80.0, 80.0, 0.42, 0.8])
+    record = objective.evaluate([80.0, 80.0, 0.42, 0.8, 0.2])
 
     assert record.success is True
     assert record.x[0] + record.x[1] == pytest.approx(60.0)
@@ -237,8 +293,8 @@ def test_objective_reuses_cached_exact_solution_for_duplicate_vectors():
         analyser=analyser,
     )
 
-    first = objective.evaluate([20.0, 35.0, 0.45, 0.72])
-    second = objective.evaluate([20.0, 35.0, 0.45, 0.72])
+    first = objective.evaluate([20.0, 35.0, 0.45, 0.72, 0.28])
+    second = objective.evaluate([20.0, 35.0, 0.45, 0.72, 0.28])
 
     assert first.objective == pytest.approx(second.objective)
     assert objective.exact_evaluations == 1
@@ -251,7 +307,7 @@ def test_objective_returns_finite_penalty_for_failed_exact_solve():
         analyser=SyntheticAnalyser(fail=True),
     )
 
-    record = objective.evaluate([20.0, 35.0, 0.45, 0.72])
+    record = objective.evaluate([20.0, 35.0, 0.45, 0.72, 0.28])
 
     assert record.success is False
     assert math.isfinite(record.objective)
@@ -276,11 +332,11 @@ def test_objective_penalty_uses_squared_physical_constraint_errors():
     near = objective_helpers._OuterDesignObjective(
         max_evals=1,
         analyser=failed_analyser(2.0),
-    ).evaluate([20.0, 35.0, 0.45, 0.72])
+    ).evaluate([20.0, 35.0, 0.45, 0.72, 0.28])
     far = objective_helpers._OuterDesignObjective(
         max_evals=1,
         analyser=failed_analyser(3.0),
-    ).evaluate([20.0, 35.0, 0.45, 0.72])
+    ).evaluate([20.0, 35.0, 0.45, 0.72, 0.28])
 
     assert near.objective == pytest.approx(opt_types.PENALTY_OBJECTIVE + 4.0)
     assert far.objective == pytest.approx(opt_types.PENALTY_OBJECTIVE + 9.0)
@@ -296,8 +352,8 @@ def test_objective_does_not_exceed_exact_evaluation_budget():
         analyser=SyntheticAnalyser(),
     )
 
-    first = objective.evaluate([20.0, 35.0, 0.45, 0.72])
-    second = objective.evaluate([30.0, 35.0, 0.45, 0.72])
+    first = objective.evaluate([20.0, 35.0, 0.45, 0.72, 0.28])
+    second = objective.evaluate([30.0, 35.0, 0.45, 0.72, 0.28])
 
     assert first.success is True
     assert second.success is False
@@ -459,7 +515,6 @@ def test_outer_design_optimisation_polish_keeps_dT_values_fixed_and_varies_power
         ),
         config=outer_opt.OuterDesignOptimisationConfig(
             fixed_comp2_power_frac=0.4,
-            fixed_first_component_mass_fraction=0.3,
             line_budget=10,
             split_budget=0,
             polish_budget=16,
@@ -492,7 +547,7 @@ def test_pattern_search_polish_improves_unsmooth_objective_without_leaving_bound
     )
     source = _phase_from_exact_record(
         objective,
-        [0.0, 40.0, 0.5, 0.5],
+        [0.0, 40.0, 0.5, 0.5, 0.5],
         phase="source",
     )
     phase_records = []
@@ -508,7 +563,61 @@ def test_pattern_search_polish_improves_unsmooth_objective_without_leaving_bound
     assert result.best is not None
     assert result.best.objective < source.objective
     assert opt_types.DEFAULT_BOUNDS[2, 0] <= result.best.x[2] <= opt_types.DEFAULT_BOUNDS[2, 1]
-    assert opt_types.DEFAULT_BOUNDS[3, 0] <= result.best.x[3] <= opt_types.DEFAULT_BOUNDS[3, 1]
+    assert all(0.0 <= fraction <= 1.0 for fraction in result.best.x[3:])
+    assert sum(result.best.x[3:]) == pytest.approx(1.0)
+
+
+def test_pattern_search_transfers_mass_across_ternary_simplex():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=16,
+        refrigerant="Propane;Butane;Pentane|0.2;0.3;0.5|mass",
+        analyser=SyntheticAnalyser(composition_target=0.4),
+    )
+    source = _phase_from_exact_record(
+        objective,
+        [20.0, 35.0, 0.45, 0.2, 0.3, 0.5],
+        phase="source",
+    )
+
+    result = polish_helpers._run_pattern_search_polish(
+        source=source,
+        objective=objective,
+        config=opt_types.LocalPolishConfig(
+            budget=12,
+            vary_comp2_power_frac=False,
+        ),
+        evaluate_phase=_phase_evaluator(objective, []),
+    )
+
+    assert result.best is not None
+    assert result.best.objective < source.objective
+    assert all(sum(record.x[3:]) == pytest.approx(1.0) for record in result.evaluations)
+    assert all(value >= 0.0 for record in result.evaluations for value in record.x[3:])
+
+
+def test_binary_composition_poll_retains_positive_first_fraction_direction():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=2,
+        analyser=SyntheticAnalyser(composition_target=0.6),
+    )
+    source = _phase_from_exact_record(
+        objective,
+        [20.0, 35.0, 0.45, 0.5, 0.5],
+        phase="source",
+    )
+
+    result = polish_helpers._run_pattern_search_polish(
+        source=source,
+        objective=objective,
+        config=opt_types.LocalPolishConfig(
+            budget=1,
+            vary_comp2_power_frac=False,
+        ),
+        evaluate_phase=_phase_evaluator(objective, []),
+    )
+
+    assert result.best is not None
+    assert result.best.x[3:] == pytest.approx((0.55, 0.45))
 
 
 def test_pattern_search_uses_cache_for_duplicate_current_point():
@@ -518,7 +627,7 @@ def test_pattern_search_uses_cache_for_duplicate_current_point():
     )
     source = _phase_from_exact_record(
         objective,
-        [20.0, 35.0, 0.45, 0.72],
+        [20.0, 35.0, 0.45, 0.72, 0.28],
         phase="source",
     )
     exact_before = objective.exact_evaluations
@@ -549,7 +658,7 @@ def test_pattern_search_shrinks_steps_when_no_poll_improves():
     )
     source = _phase_from_exact_record(
         objective,
-        [20.0, 35.0, 0.5, 0.5],
+        [20.0, 35.0, 0.5, 0.5, 0.5],
         phase="source",
     )
     phase_records = []
@@ -559,8 +668,10 @@ def test_pattern_search_shrinks_steps_when_no_poll_improves():
         objective=objective,
         config=opt_types.LocalPolishConfig(
             budget=8,
-            initial_steps=(0.05, 0.05),
-            min_steps=(0.01, 0.01),
+            initial_comp2_step=0.05,
+            initial_composition_step=0.05,
+            min_comp2_step=0.01,
+            min_composition_step=0.01,
         ),
         evaluate_phase=_phase_evaluator(objective, phase_records),
     )
@@ -568,7 +679,7 @@ def test_pattern_search_shrinks_steps_when_no_poll_improves():
     comp2_offsets = sorted({round(abs(record.x[2] - 0.5), 3) for record in result.evaluations})
     assert 0.025 in comp2_offsets
     assert result.best is not None
-    assert result.best.x[2:4] == pytest.approx((0.5, 0.5))
+    assert result.best.x[2:] == pytest.approx((0.5, 0.5, 0.5))
 
 
 def test_pattern_search_keeps_dT_values_fixed():
@@ -578,7 +689,7 @@ def test_pattern_search_keeps_dT_values_fixed():
     )
     source = _phase_from_exact_record(
         objective,
-        [12.0, 44.0, 0.5, 0.5],
+        [12.0, 44.0, 0.5, 0.5, 0.5],
         phase="source",
     )
     phase_records = []
@@ -601,7 +712,7 @@ def test_pattern_search_respects_fixed_comp2_power_fraction():
     )
     source = _phase_from_exact_record(
         objective,
-        [12.0, 44.0, 0.5, 0.5],
+        [12.0, 44.0, 0.5, 0.5, 0.5],
         phase="source",
     )
 
@@ -611,7 +722,7 @@ def test_pattern_search_respects_fixed_comp2_power_fraction():
         config=opt_types.LocalPolishConfig(
             budget=8,
             vary_comp2_power_frac=False,
-            vary_first_component_mass_fraction=True,
+            vary_composition=True,
         ),
         evaluate_phase=_phase_evaluator(objective, []),
     )
@@ -621,14 +732,14 @@ def test_pattern_search_respects_fixed_comp2_power_fraction():
     assert any(record.x[3] != pytest.approx(0.5) for record in result.evaluations)
 
 
-def test_pattern_search_respects_fixed_first_component_mass_fraction():
+def test_pattern_search_respects_fixed_composition():
     objective = objective_helpers._OuterDesignObjective(
         max_evals=12,
         analyser=SyntheticAnalyser(comp2_target=0.7, composition_target=0.9),
     )
     source = _phase_from_exact_record(
         objective,
-        [12.0, 44.0, 0.5, 0.5],
+        [12.0, 44.0, 0.5, 0.5, 0.5],
         phase="source",
     )
 
@@ -638,14 +749,14 @@ def test_pattern_search_respects_fixed_first_component_mass_fraction():
         config=opt_types.LocalPolishConfig(
             budget=8,
             vary_comp2_power_frac=True,
-            vary_first_component_mass_fraction=False,
+            vary_composition=False,
         ),
         evaluate_phase=_phase_evaluator(objective, []),
     )
 
     assert result.evaluations
     assert any(record.x[2] != pytest.approx(0.5) for record in result.evaluations)
-    assert all(record.x[3] == pytest.approx(0.5) for record in result.evaluations)
+    assert all(record.x[3:] == pytest.approx((0.5, 0.5)) for record in result.evaluations)
 
 
 def test_pattern_search_skips_when_all_polish_variables_are_fixed():
@@ -655,7 +766,7 @@ def test_pattern_search_skips_when_all_polish_variables_are_fixed():
     )
     source = _phase_from_exact_record(
         objective,
-        [12.0, 44.0, 0.5, 0.5],
+        [12.0, 44.0, 0.5, 0.5, 0.5],
         phase="source",
     )
 
@@ -665,7 +776,7 @@ def test_pattern_search_skips_when_all_polish_variables_are_fixed():
         config=opt_types.LocalPolishConfig(
             budget=8,
             vary_comp2_power_frac=False,
-            vary_first_component_mass_fraction=False,
+            vary_composition=False,
         ),
         evaluate_phase=_phase_evaluator(objective, []),
     )
@@ -683,7 +794,7 @@ def test_local_polish_is_pattern_search_only():
     )
     source = _phase_from_exact_record(
         objective,
-        [20.0, 35.0, 0.5, 0.5],
+        [20.0, 35.0, 0.5, 0.5, 0.5],
         phase="source",
     )
 
@@ -765,7 +876,7 @@ def test_case_definition_loads_fixed_case_and_reference_from_results_csv(tmp_pat
         line_budget=4,
     )
 
-    assert case_definition.fluids == ("Propane", "Butane")
+    assert case_definition.refrigerant == "Propane;Butane|0.6;0.4|mass"
     assert case_definition.base_case["T_source_in"] == pytest.approx(42.0)
     assert case_definition.base_case["Tref_evap_inlet"] == pytest.approx(12.0)
     assert case_definition.base_case["T_air_tar"] == pytest.approx(195.0)
@@ -775,11 +886,8 @@ def test_case_definition_loads_fixed_case_and_reference_from_results_csv(tmp_pat
     assert case_definition.base_case["motor_eff"] == pytest.approx(0.96)
     assert case_definition.best_reference["SEC"] == pytest.approx(0.62)
     assert case_definition.best_reference["dT_rhx2_cold"] == pytest.approx(55.0)
-    assert case_definition.best_reference["first_component_mass_fraction"] == pytest.approx(
-        0.6
-    )
+    assert case_definition.best_reference["composition"] == "0.6;0.4"
     assert config.fixed_comp2_power_frac == pytest.approx(0.65)
-    assert config.fixed_first_component_mass_fraction == pytest.approx(0.6)
     assert config.line_budget == 4
 
 
@@ -789,14 +897,14 @@ def test_write_outer_design_optimisation_results_includes_reference_metadata(
 ):
     case_definition = opt_types.ResultsCsvCaseDefinition(
         base_case={"ihx_on": False},
-        fluids=("Propane", "Butane"),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
         selected_reference={"SEC": 0.7},
         best_reference={
             "SEC": 0.62,
             "dT_rhx1_cold": 2.5,
             "dT_rhx2_cold": 55.0,
             "comp2_power_frac": 0.65,
-            "first_component_mass_fraction": 0.5,
+            "refrigerant": "Propane;Butane|0.5;0.5|mass",
         },
         source_csv="results.csv",
     )
@@ -828,50 +936,49 @@ def test_write_outer_design_optimisation_results_includes_reference_metadata(
 def test_optimisation_case_generation_expands_fixed_variable_lists():
     cases = case_helpers._build_optimisation_cases(
         param_kwargs={
-            "fluids_ls": [("Propane", "Butane")],
+            "refrigerant_ls": [
+                "Propane;Butane|0.3;0.7|mass",
+                "Propane;Butane|0.7;0.3|mass",
+            ],
             "T_air_tar_ls": [180.0, 200.0],
             "dT_rhx1_cold_ls": [0.0, 10.0],
             "dT_rhx2_cold_ls": [5.0],
             "comp2_power_frac_ls": [0.4, 0.6],
-            "first_component_mass_fraction_ls": [0.3, 0.7],
         },
         config=outer_opt.OuterDesignOptimisationConfig(line_budget=2),
     )
 
     assert len(cases) == 16
     assert {case.base_case["T_air_tar"] for case in cases} == {180.0, 200.0}
-    assert {case.fluids for case in cases} == {("Propane", "Butane")}
+    assert {case.refrigerant for case in cases} == {
+        "Propane;Butane|0.3;0.7|mass",
+        "Propane;Butane|0.7;0.3|mass",
+    }
     assert {case.config.fixed_dT_rhx1_cold for case in cases} == {0.0, 10.0}
     assert {case.config.fixed_dT_rhx2_cold for case in cases} == {5.0}
     assert {case.config.fixed_comp2_power_frac for case in cases} == {0.4, 0.6}
-    assert {case.config.fixed_first_component_mass_fraction for case in cases} == {
-        0.3,
-        0.7,
-    }
     assert all(not case.config.vary_dT_rhx1_cold for case in cases)
     assert all(not case.config.vary_dT_rhx2_cold for case in cases)
     assert all(not case.config.vary_comp2_power_frac for case in cases)
-    assert all(not case.config.vary_first_component_mass_fraction for case in cases)
+    assert all(case.config.vary_composition for case in cases)
     assert len({case.signature for case in cases}) == len(cases)
 
 
 def test_optimisation_case_generation_omitted_variable_lists_keep_base_config():
     config = outer_opt.OuterDesignOptimisationConfig(
         fixed_comp2_power_frac=0.42,
-        fixed_first_component_mass_fraction=0.64,
         vary_comp2_power_frac=True,
-        vary_first_component_mass_fraction=True,
+        vary_composition=False,
     )
 
     [case] = case_helpers._build_optimisation_cases(
-        param_kwargs={"fluids": ("Propane", "Butane")},
+        param_kwargs={"refrigerant": "Propane;Butane|0.64;0.36|mass"},
         config=config,
     )
 
     assert case.config.fixed_comp2_power_frac == pytest.approx(0.42)
-    assert case.config.fixed_first_component_mass_fraction == pytest.approx(0.64)
     assert case.config.vary_comp2_power_frac is True
-    assert case.config.vary_first_component_mass_fraction is True
+    assert case.config.vary_composition is False
 
 
 def test_optimisation_case_generation_uses_refrigerant_composition_as_start_only():
@@ -880,9 +987,39 @@ def test_optimisation_case_generation_uses_refrigerant_composition_as_start_only
         config=outer_opt.OuterDesignOptimisationConfig(),
     )
 
-    assert case.fluids == ("Propane", "Butane")
-    assert case.config.fixed_first_component_mass_fraction == pytest.approx(0.62)
-    assert case.config.vary_first_component_mass_fraction is True
+    assert case.refrigerant == "Propane;Butane|0.62;0.38|mass"
+    assert case.config.vary_composition is True
+
+
+def test_optimisation_case_generation_keeps_nested_refrigerants_atomic():
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={
+            "refrigerant_ls": [
+                ["Propane", "Butane", "Pentane"],
+                [("Propane", 0.2), ("Butane", 0.3), ("Pentane", 0.5)],
+                "Propane;Butane;Pentane|0.3;0.4;0.3|mol",
+            ]
+        }
+    )
+
+    assert len(cases) == 3
+    assert cases[0].refrigerant.endswith("|mass")
+    assert _composition(cases[0].refrigerant) == pytest.approx((1 / 3, 1 / 3, 1 / 3))
+    assert _composition(cases[1].refrigerant) == pytest.approx((0.2, 0.3, 0.5))
+    assert cases[2].refrigerant.endswith("|mol")
+
+
+def test_equivalent_list_and_mass_string_cases_share_signature():
+    list_case = case_helpers._build_optimisation_case(
+        base_case=None,
+        refrigerant=["Propane", "Butane"],
+    )
+    string_case = case_helpers._build_optimisation_case(
+        base_case=None,
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+    )
+
+    assert list_case.signature == string_case.signature
 
 
 def test_optimisation_case_filtering_skips_completed_signatures(tmp_path):
@@ -988,10 +1125,28 @@ def test_batch_runner_executes_cases_serially_and_writes_rows(monkeypatch, tmp_p
     assert all(write["file_name"] == "temp/optimisation/R" for write in written)
 
 
+def test_batch_result_row_reports_generic_composition_fields():
+    case = case_helpers._build_optimisation_case(
+        base_case=None,
+        refrigerant=["Propane", "Butane"],
+    )
+
+    row = batch_helpers._result_row(case, _fake_batch_result())
+
+    assert row["input_refrigerant"] == "Propane;Butane|0.5;0.5|mass"
+    assert row["refrigerant_components"] == "Propane;Butane"
+    assert row["refrigerant_component_count"] == 2
+    assert row["input_basis"] == "mass"
+    assert row["optimisation_basis"] == "mass"
+    assert row["initial_mass_fractions"] == "0.5;0.5"
+    assert row["best_refrigerant"] == "Propane;Butane|0.5;0.5|mass"
+    assert row["best_mass_fractions"] == "0.5;0.5"
+
+
 def test_optimal_result_transfer_ignores_inner_candidate_files(tmp_path):
     cases = case_helpers._build_optimisation_cases(
         param_kwargs={
-            "fluids": ("Propane", "Butane"),
+            "refrigerant": ["Propane", "Butane"],
             "T_air_tar_ls": [180.0, 200.0],
         },
     )
@@ -1032,7 +1187,7 @@ def test_single_case_runner_resumes_optimal_result_before_solving(monkeypatch, t
     config = outer_opt.OuterDesignOptimisationConfig(max_exact_evaluations=3)
     case = case_helpers._build_optimisation_case(
         base_case={"T_air_tar": 180.0},
-        fluids=("Propane", "Butane"),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
         config=config,
     )
     batch_helpers.print_result_to_csv(
@@ -1050,7 +1205,7 @@ def test_single_case_runner_resumes_optimal_result_before_solving(monkeypatch, t
     row = outer_opt.optimise_recuperative_heat_pump_case(
         filename="RHPopt_results",
         base_case={"T_air_tar": 180.0},
-        fluids=("Propane", "Butane"),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
         config=config,
         results_dir=tmp_path,
     )
@@ -1212,7 +1367,7 @@ def test_real_local_pattern_search_polish_smoke_when_refprop_is_available(hpl, t
     )
     source = _phase_from_exact_record(
         objective,
-        [0.0, 0.0, 0.5, 0.5],
+        [0.0, 0.0, 0.5, 0.5, 0.5],
         phase="source",
     )
 
@@ -1255,6 +1410,10 @@ def _first_mass_fraction(refrigerant: str) -> float:
     return float(composition.split(";")[0])
 
 
+def _composition(refrigerant: str) -> tuple[float, ...]:
+    return tuple(float(value) for value in refrigerant.split("|")[1].split(";"))
+
+
 def _phase_from_exact_record(objective, x, *, phase):
     record = objective.evaluate(x)
     return outer_opt.PhaseEvaluation.from_record(
@@ -1285,9 +1444,12 @@ def _fake_batch_result():
         sec=0.5,
         cop=2.0,
         pmax=1234.0,
+        x=(0.0, 0.0, 0.5, 0.5, 0.5),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
     )
     return SimpleNamespace(
         best=best,
+        corner=best,
         to_summary_dict=lambda: {
             "optimiser_version": outer_opt.OPTIMISER_VERSION,
             "best_objective": 0.5,
@@ -1297,6 +1459,6 @@ def _fake_batch_result():
             "best_dT_rhx1_cold": 0.0,
             "best_dT_rhx2_cold": 0.0,
             "best_comp2_power_frac": 0.5,
-            "best_first_component_mass_fraction": 0.5,
+            "best_mass_fractions": "0.5;0.5",
         },
     )

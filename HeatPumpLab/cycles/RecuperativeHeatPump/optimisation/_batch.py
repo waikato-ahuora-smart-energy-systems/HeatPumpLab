@@ -8,6 +8,10 @@ import os
 from pathlib import Path
 from typing import Any
 
+from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import (
+    RefrigerantInput,
+    normalise_refrigerant_input,
+)
 from HeatPumpLab.utils.readWriteOutput import print_result_to_csv
 
 from ._cases import (
@@ -20,10 +24,10 @@ from .outer_design import optimise_recuperative_heat_pump
 
 
 def optimise_recuperative_heat_pump_case(
-    filename: str = "RHPopt_results",
+    filename: str = "RHPopt_ncomponent_results",
     base_case: dict[str, Any] | None = None,
     *,
-    fluids: tuple[str, str] = ("Propane", "Butane"),
+    refrigerant: RefrigerantInput = "Propane;Butane|0.5;0.5|mass",
     config: OuterDesignOptimisationConfig | None = None,
     results_dir: str | Path = "results/RHPopt",
 ) -> dict[str, Any]:
@@ -31,7 +35,7 @@ def optimise_recuperative_heat_pump_case(
     config = OuterDesignOptimisationConfig() if config is None else config
     case = _build_optimisation_case(
         base_case=base_case,
-        fluids=fluids,
+        refrigerant=refrigerant,
         config=config,
     )
     _transfer_optimal_results(filename, results_dir=results_dir)
@@ -48,7 +52,7 @@ def optimise_recuperative_heat_pump_case(
 
 
 def optimise_recuperative_heat_pump_cases(
-    filename: str = "RHPopt_results",
+    filename: str = "RHPopt_ncomponent_results",
     param_kwargs: dict[str, Any] | None = None,
     config: OuterDesignOptimisationConfig | None = None,
     n_cpu: int = max((os.cpu_count() or 2) - 1, 1),
@@ -107,7 +111,7 @@ def _solve_optimisation_case(
 ) -> dict[str, Any]:
     result = optimise_recuperative_heat_pump(
         base_case=case.base_case,
-        fluids=case.fluids,
+        refrigerant=case.refrigerant,
         config=case.config,
         results_dir=results_dir,
     )
@@ -122,10 +126,16 @@ def _solve_optimisation_case(
 
 
 def _result_row(case: OptimisationCase, result) -> dict[str, Any]:
+    input_spec = normalise_refrigerant_input(case.refrigerant)
     row: dict[str, Any] = {
         "case_signature": case.signature,
-        "fluid_a": case.fluids[0],
-        "fluid_b": case.fluids[1],
+        "input_refrigerant": case.refrigerant,
+        "refrigerant_components": ";".join(input_spec.components),
+        "refrigerant_component_count": input_spec.component_count,
+        "input_basis": input_spec.basis,
+        "optimisation_basis": "mass",
+        "initial_composition": _format_fractions(input_spec.fractions),
+        "initial_mass_fractions": _format_fractions(result.corner.x[3:]),
         **case.base_case,
         **{f"config_{key}": value for key, value in asdict(case.config).items()},
         **result.to_summary_dict(),
@@ -137,11 +147,19 @@ def _result_row(case: OptimisationCase, result) -> dict[str, Any]:
         }
     )
     if result.best is not None:
+        best_spec = normalise_refrigerant_input(result.best.refrigerant)
         row.update(
             {
                 "best_SEC": result.best.sec,
                 "best_COP": result.best.cop,
                 "best_Pmax": result.best.pmax,
+                "best_refrigerant": result.best.refrigerant,
+                "best_composition": _format_fractions(best_spec.fractions),
+                "best_mass_fractions": _format_fractions(result.best.x[3:]),
             }
         )
     return row
+
+
+def _format_fractions(values) -> str:
+    return ";".join(f"{float(value):.12g}" for value in values)

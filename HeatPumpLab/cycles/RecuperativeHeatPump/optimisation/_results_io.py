@@ -14,9 +14,14 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import (
+    RefrigerantSpec,
+    normalise_refrigerant_input,
+)
+
 from ._types import (
     DEFAULT_BASE_CASE,
-    VARIABLE_NAMES,
+    BASE_VARIABLE_NAMES,
     OuterDesignOptimisationConfig,
     OuterDesignOptimisationResult,
     ResultsCsvCaseDefinition,
@@ -35,10 +40,6 @@ def _outer_design_config_from_case_definition(
         "fixed_comp2_power_frac": reference.get(
             "comp2_power_frac",
             OuterDesignOptimisationConfig.fixed_comp2_power_frac,
-        ),
-        "fixed_first_component_mass_fraction": reference.get(
-            "first_component_mass_fraction",
-            OuterDesignOptimisationConfig.fixed_first_component_mass_fraction,
         ),
     }
     values.update(overrides)
@@ -60,10 +61,10 @@ def _load_case_definition_from_results_csv(
     selected_row = _select_reference_row(df, selector=selector, case_index=case_index)
     best_row = df.loc[pd.to_numeric(df["SEC"], errors="coerce").idxmin()]
     base_case = _base_case_from_results_row(selected_row)
-    fluids, _composition = _parse_binary_refrigerant(str(selected_row["refrigerant"]))
+    refrigerant = normalise_refrigerant_input(str(selected_row["refrigerant"])).format()
     return ResultsCsvCaseDefinition(
         base_case=base_case,
-        fluids=fluids,
+        refrigerant=refrigerant,
         selected_reference=_reference_from_results_row(selected_row),
         best_reference=_reference_from_results_row(best_row),
         source_csv=str(source_csv),
@@ -93,8 +94,8 @@ def _write_outer_design_optimisation_results(
                 "reference_best_comp2_power_frac": case_definition.best_reference.get(
                     "comp2_power_frac"
                 ),
-                "reference_best_first_component_mass_fraction": case_definition.best_reference.get(
-                    "first_component_mass_fraction"
+                "reference_best_refrigerant": case_definition.best_reference.get(
+                    "refrigerant"
                 ),
             }
         )
@@ -226,24 +227,14 @@ def _master_result_schema(path: Path) -> tuple[list[str] | None, set[str]]:
         }
 
 
-def _parse_binary_refrigerant(
-    refrigerant: str,
-) -> tuple[tuple[str, str], tuple[float, float]]:
-    """Parse a HeatPumpLab binary mass-basis refrigerant string."""
-    try:
-        fluids_part, composition_part, basis = refrigerant.split("|")
-        fluids = tuple(part.strip() for part in fluids_part.split(";"))
-        composition = tuple(float(part) for part in composition_part.split(";"))
-    except ValueError as exc:
-        raise ValueError(f"Expected binary refrigerant string, got {refrigerant!r}.") from exc
-    if len(fluids) != 2 or len(composition) != 2 or basis.strip().lower() != "mass":
-        raise ValueError(f"Expected binary mass-basis refrigerant, got {refrigerant!r}.")
-    return (fluids[0], fluids[1]), (composition[0], composition[1])
+def _parse_refrigerant(refrigerant: str) -> RefrigerantSpec:
+    """Parse a HeatPumpLab refrigerant string for result-backed workflows."""
+    return normalise_refrigerant_input(refrigerant)
 
 
 def _read_numeric_results_csv(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
-    required_columns = {"SEC", "refrigerant", *VARIABLE_NAMES[:3]}
+    required_columns = {"SEC", "refrigerant", *BASE_VARIABLE_NAMES}
     missing = sorted(required_columns - set(df.columns))
     if missing:
         raise ValueError(f"Results CSV {path} is missing required columns: {missing}.")
@@ -303,7 +294,7 @@ def _base_case_from_results_row(row: pd.Series) -> dict[str, Any]:
 
 
 def _reference_from_results_row(row: pd.Series) -> dict[str, Any]:
-    fluids, composition = _parse_binary_refrigerant(str(row["refrigerant"]))
+    refrigerant = _parse_refrigerant(str(row["refrigerant"]))
     keys = [
         "SEC",
         "COP",
@@ -316,9 +307,11 @@ def _reference_from_results_row(row: pd.Series) -> dict[str, Any]:
         "converged",
     ]
     reference = {key: _clean_reference_value(row[key]) for key in keys if key in row}
-    reference["fluid_a"] = fluids[0]
-    reference["fluid_b"] = fluids[1]
-    reference["first_component_mass_fraction"] = float(composition[0])
+    reference["refrigerant_components"] = ";".join(refrigerant.components)
+    reference["composition"] = ";".join(
+        f"{value:.12g}" for value in refrigerant.fractions
+    )
+    reference["composition_basis"] = refrigerant.basis
     return reference
 
 

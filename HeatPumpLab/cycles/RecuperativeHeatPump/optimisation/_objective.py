@@ -10,6 +10,13 @@ from typing import Any
 
 import numpy as np
 
+from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import (
+    RefrigerantInput,
+    convert_composition,
+    normalise_refrigerant_input,
+)
+from HeatPumpLab.utils.properties_package import PropertyPackage
+
 from ._types import (
     DEFAULT_BASE_CASE,
     DEFAULT_BOUNDS,
@@ -26,17 +33,26 @@ class _OuterDesignObjective:
         *,
         max_evals: int,
         base_case: dict[str, Any] | None = None,
-        fluids: tuple[str, str] = ("Propane", "Butane"),
+        refrigerant: RefrigerantInput = "Propane;Butane|0.5;0.5|mass",
         bounds: np.ndarray = DEFAULT_BOUNDS,
         analyser: Callable | None = None,
         results_dir: str | Path = "results/outer_design_optimisation",
         use_fast_objective: bool = True,
         penalty: float = PENALTY_OBJECTIVE,
         cache_decimals: int = 8,
+        molar_masses: tuple[float, ...] | None = None,
     ) -> None:
         self.max_evals = int(max_evals)
         self.base_case = dict(DEFAULT_BASE_CASE if base_case is None else base_case)
-        self.fluids = fluids
+        self.refrigerant_spec = normalise_refrigerant_input(refrigerant)
+        self.input_refrigerant = self.refrigerant_spec.format()
+        self.molar_masses = self._get_molar_masses(molar_masses)
+        self.initial_mass_fractions = convert_composition(
+            self.refrigerant_spec.fractions,
+            from_basis=self.refrigerant_spec.basis,
+            to_basis="mass",
+            molar_masses=self.molar_masses,
+        )
         self.bounds = np.asarray(bounds, dtype=float)
         self.analyser = analyser
         self.results_dir = Path(results_dir)
@@ -109,11 +125,7 @@ class _OuterDesignObjective:
                 "dT_rhx1_cold": float(x_arr[0]),
                 "dT_rhx2_cold": float(x_arr[1]),
                 "comp2_power_frac": float(x_arr[2]),
-                "refrigerant": _format_binary_refrigerant(
-                    self.fluids[0],
-                    self.fluids[1],
-                    float(x_arr[3]),
-                ),
+                "refrigerant": self._format_mass_refrigerant(x_arr[3:]),
             }
         )
         return case
@@ -124,6 +136,7 @@ class _OuterDesignObjective:
             x,
             self.bounds,
             max_recuperator_lift=self.max_recuperator_lift,
+            component_count=self.refrigerant_spec.component_count,
         )
 
     def _analyse_case(self, case: dict[str, Any]):
@@ -195,7 +208,8 @@ class _OuterDesignObjective:
             sec=float(sec),
             cop=cop,
             pmax=pmax,
-            refrigerant=str(case["refrigerant"]),
+            refrigerant=self._format_reported_refrigerant(x[3:]),
+            mass_refrigerant=str(case["refrigerant"]),
             case=dict(case),
             report=report,
             constraint_errors={},
@@ -221,7 +235,8 @@ class _OuterDesignObjective:
             sec=None,
             cop=None,
             pmax=None,
-            refrigerant=str(case["refrigerant"]),
+            refrigerant=self._format_reported_refrigerant(x[3:]),
+            mass_refrigerant=str(case["refrigerant"]),
             case=dict(case),
             report={} if report is None else dict(report),
             constraint_errors=errors,
@@ -240,16 +255,30 @@ class _OuterDesignObjective:
     def _cache_key(self, x: np.ndarray) -> tuple[float, ...]:
         return tuple(float(v) for v in np.round(x, self.cache_decimals))
 
+    def _get_molar_masses(
+        self, supplied: tuple[float, ...] | None
+    ) -> tuple[float, ...]:
+        if supplied is not None:
+            masses = tuple(float(value) for value in supplied)
+        elif self.refrigerant_spec.basis == "mol":
+            masses = PropertyPackage(self.input_refrigerant).get_component_molar_masses()
+        else:
+            masses = tuple(1.0 for _ in self.refrigerant_spec.components)
+        if len(masses) != self.refrigerant_spec.component_count:
+            raise ValueError("Molar mass count does not match refrigerant components.")
+        return masses
 
-def _format_binary_refrigerant(
-    fluid_a: str,
-    fluid_b: str,
-    first_mass_fraction: float,
-) -> str:
-    """Return a HeatPumpLab binary mass-basis refrigerant string."""
-    frac_a = float(np.clip(first_mass_fraction, 0.0, 1.0))
-    frac_b = 1.0 - frac_a
-    return f"{fluid_a};{fluid_b}|{frac_a:.12g};{frac_b:.12g}|mass"
+    def _format_mass_refrigerant(self, mass_fractions) -> str:
+        return self.refrigerant_spec.format(tuple(mass_fractions), "mass")
+
+    def _format_reported_refrigerant(self, mass_fractions) -> str:
+        reported = convert_composition(
+            tuple(mass_fractions),
+            from_basis="mass",
+            to_basis=self.refrigerant_spec.basis,
+            molar_masses=self.molar_masses,
+        )
+        return self.refrigerant_spec.format(reported, self.refrigerant_spec.basis)
 
 
 def _clip_to_bounds(x: np.ndarray, bounds: np.ndarray) -> np.ndarray:
@@ -273,9 +302,17 @@ def _repair_design_vector(
     bounds: np.ndarray,
     *,
     max_recuperator_lift: float,
+    component_count: int,
 ) -> np.ndarray:
     """Return a bounded vector that satisfies the recuperator lift constraint."""
-    repaired = _clip_to_bounds(np.asarray(x, dtype=float), bounds)
+    values = np.asarray(x, dtype=float)
+    if values.shape != (3 + int(component_count),):
+        raise ValueError(
+            f"Expected {3 + int(component_count)} design values, got {len(values)}."
+        )
+    repaired = np.concatenate(
+        [_clip_to_bounds(values[:3], bounds), _project_to_simplex(values[3:])]
+    )
     available_lift = max(0.0, float(max_recuperator_lift))
     recuperator_lift = repaired[0] + repaired[1]
     if recuperator_lift > available_lift:
@@ -284,6 +321,31 @@ def _repair_design_vector(
         else:
             repaired[:2] = 0.0
     return repaired
+
+
+def _project_to_simplex(values: np.ndarray | list[float]) -> np.ndarray:
+    """Return the Euclidean projection onto the nonnegative unit simplex."""
+    vector = np.asarray(values, dtype=float)
+    if vector.ndim != 1 or vector.size == 0 or np.any(~np.isfinite(vector)):
+        raise ValueError("Composition coordinates must be a finite non-empty vector.")
+    ordered = np.sort(vector)[::-1]
+    cumulative = np.cumsum(ordered) - 1.0
+    indices = np.arange(1, vector.size + 1)
+    valid = ordered - cumulative / indices > 0.0
+    rho = int(np.nonzero(valid)[0][-1])
+    theta = cumulative[rho] / float(rho + 1)
+    projected = np.maximum(vector - theta, 0.0)
+    projected /= projected.sum()
+    return projected
+
+
+def _build_design_vector(
+    dT1: float,
+    dT2: float,
+    comp2: float,
+    mass_fractions: tuple[float, ...] | list[float] | np.ndarray,
+) -> np.ndarray:
+    return np.asarray([dT1, dT2, comp2, *mass_fractions], dtype=float)
 
 
 def _finite_or_none(value: Any) -> float | None:

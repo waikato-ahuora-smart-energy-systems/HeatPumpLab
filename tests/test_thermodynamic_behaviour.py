@@ -31,6 +31,19 @@ def test_binary_fluid_exposes_temperature_glide_at_saturation(hpl):
     assert dew.temperature - bubble_at_dew_pressure.temperature > 8.0
 
 
+def test_ternary_refrigerant_list_solves_as_equal_mass_mixture(
+    solve_recuperative_case,
+    assert_successful_cycle,
+):
+    hp = solve_recuperative_case(["Propane", "Butane", "Pentane"])
+
+    assert_successful_cycle(hp)
+    assert hp.refrigerant == (
+        "Propane;Butane;Pentane|0.333333333333;0.333333333333;0.333333333333|mass"
+    )
+    assert hp.comp1.flow_in.PP.n_components == 3
+
+
 def test_mass_and_mole_fraction_inputs_describe_different_mixtures(hpl):
     mole_basis = hpl.Stream(
         fluid="Propane;Butane|0.5;0.5|mol", temperature=10.0, quality=1.0

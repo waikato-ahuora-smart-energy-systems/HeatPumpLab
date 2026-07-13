@@ -85,7 +85,7 @@ def base_rhp_args():
 
 @pytest.fixture
 def solve_recuperative_case(hpl, base_rhp_args):
-    def _solve(refrigerant: str, **overrides):
+    def _solve(refrigerant, **overrides):
         hp = hpl.RecuperativeHP(
             **(base_rhp_args | overrides | {"refrigerant": refrigerant})
         )

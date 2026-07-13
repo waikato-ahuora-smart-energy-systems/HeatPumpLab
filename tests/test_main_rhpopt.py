@@ -56,12 +56,12 @@ def test_main_rhpopt_run_one_delegates_to_single_case_optimiser(
         fake_optimise_recuperative_heat_pump_case,
     )
     base_case = {"T_air_tar": 373.15}
-    fluids = ("Propane", "Isobutane")
+    refrigerant = "Propane;Isobutane|0.5;0.5|mass"
     config = main_RHPopt.OuterDesignOptimisationConfig(max_exact_evaluations=3)
 
     returned = main_RHPopt.run_one(
         base_case,
-        fluids=fluids,
+        refrigerant=refrigerant,
         config=config,
         results_dir=tmp_path,
     )
@@ -71,7 +71,7 @@ def test_main_rhpopt_run_one_delegates_to_single_case_optimiser(
         {
             "filename": main_RHPopt.DEFAULT_FILENAME,
             "base_case": base_case,
-            "fluids": fluids,
+            "refrigerant": refrigerant,
             "config": config,
             "results_dir": tmp_path,
         }
@@ -95,6 +95,6 @@ def test_main_rhpopt_run_one_uses_default_config(monkeypatch):
 
     assert calls[0]["filename"] == main_RHPopt.DEFAULT_FILENAME
     assert calls[0]["base_case"] is None
-    assert calls[0]["fluids"] == main_RHPopt.DEFAULT_FLUIDS
+    assert calls[0]["refrigerant"] == main_RHPopt.DEFAULT_REFRIGERANT
     assert calls[0]["config"] == main_RHPopt.OuterDesignOptimisationConfig()
     assert calls[0]["results_dir"] == main_RHPopt.DEFAULT_RESULTS_DIR

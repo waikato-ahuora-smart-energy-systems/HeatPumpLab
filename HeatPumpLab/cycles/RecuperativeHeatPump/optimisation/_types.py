@@ -7,13 +7,12 @@ from typing import Any
 
 import numpy as np
 
-OPTIMISER_VERSION = "edge-first-pattern-search-v2"
+OPTIMISER_VERSION = "edge-first-pattern-search-v3"
 
-VARIABLE_NAMES = (
+BASE_VARIABLE_NAMES = (
     "dT_rhx1_cold",
     "dT_rhx2_cold",
     "comp2_power_frac",
-    "first_component_mass_fraction",
 )
 
 DEFAULT_BOUNDS = np.asarray(
@@ -21,7 +20,6 @@ DEFAULT_BOUNDS = np.asarray(
         (0.0, 100.0),
         (0.0, 100.0),
         (0.1, 0.9),
-        (0.0, 1.0),
     ],
     dtype=float,
 )
@@ -64,6 +62,7 @@ class DesignEvaluation:
     cop: float | None
     pmax: float | None
     refrigerant: str
+    mass_refrigerant: str
     case: dict[str, Any]
     report: dict[str, Any]
     constraint_errors: dict[str, float]
@@ -84,6 +83,8 @@ class PhaseEvaluation:
     elapsed_seconds: float
     cumulative_exact_evaluations: int
     constraint_errors: dict[str, float]
+    refrigerant: str
+    mass_refrigerant: str
 
     @classmethod
     def from_record(
@@ -105,11 +106,14 @@ class PhaseEvaluation:
             elapsed_seconds=record.elapsed_seconds,
             cumulative_exact_evaluations=cumulative_exact_evaluations,
             constraint_errors=dict(record.constraint_errors),
+            refrigerant=record.refrigerant,
+            mass_refrigerant=record.mass_refrigerant,
         )
 
     def to_output_dict(self) -> dict[str, Any]:
         output = asdict(self)
-        output.update({name: value for name, value in zip(VARIABLE_NAMES, self.x)})
+        output.update({name: value for name, value in zip(BASE_VARIABLE_NAMES, self.x[:3])})
+        output["mass_fractions"] = ";".join(f"{value:.12g}" for value in self.x[3:])
         return output
 
 
@@ -130,13 +134,15 @@ class LocalPolishConfig:
     """Configuration for fixed-recuperator local polishing."""
 
     budget: int = 12
-    initial_steps: tuple[float, float] = (0.05, 0.05)
-    min_steps: tuple[float, float] = (0.002, 0.002)
+    initial_comp2_step: float = 0.05
+    initial_composition_step: float = 0.05
+    min_comp2_step: float = 0.002
+    min_composition_step: float = 0.002
     shrink_factor: float = 0.5
     max_failed_shrinks: int = 20
     improvement_tolerance: float = 0.0
     vary_comp2_power_frac: bool = True
-    vary_first_component_mass_fraction: bool = True
+    vary_composition: bool = True
 
 
 @dataclass(frozen=True)
@@ -163,11 +169,10 @@ class OuterDesignOptimisationConfig:
     fixed_dT_rhx1_cold: float = 0.0
     fixed_dT_rhx2_cold: float = 0.0
     fixed_comp2_power_frac: float = 0.5
-    fixed_first_component_mass_fraction: float = 0.5
     vary_dT_rhx1_cold: bool = True
     vary_dT_rhx2_cold: bool = True
     vary_comp2_power_frac: bool = True
-    vary_first_component_mass_fraction: bool = True
+    vary_composition: bool = True
     line_budget: int = 8
     split_budget: int = 8
     polish_budget: int = 12
@@ -210,8 +215,12 @@ class OuterDesignOptimisationResult:
                     "best_message": self.best.message,
                     **{
                         f"best_{name}": value
-                        for name, value in zip(VARIABLE_NAMES, self.best.x)
+                        for name, value in zip(BASE_VARIABLE_NAMES, self.best.x[:3])
                     },
+                    "best_mass_fractions": ";".join(
+                        f"{value:.12g}" for value in self.best.x[3:]
+                    ),
+                    "best_refrigerant": self.best.refrigerant,
                 }
             )
         return output
@@ -222,7 +231,7 @@ class ResultsCsvCaseDefinition:
     """Fixed case and reference point loaded from an existing results CSV."""
 
     base_case: dict[str, Any]
-    fluids: tuple[str, str]
+    refrigerant: str
     selected_reference: dict[str, Any]
     best_reference: dict[str, Any]
     source_csv: str
@@ -233,7 +242,7 @@ class OptimisationCase:
     """One batch case for the RHP outer optimiser."""
 
     base_case: dict[str, Any]
-    fluids: tuple[str, str]
+    refrigerant: str
     config: OuterDesignOptimisationConfig
     signature: str
     temp_suffix: str
