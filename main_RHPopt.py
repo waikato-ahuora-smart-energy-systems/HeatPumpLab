@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import combinations
 import os
 from pathlib import Path
 from typing import Any
@@ -16,24 +17,22 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
 DEFAULT_REFRIGERANT = "Propane;Butane|0.5;0.5|mass"
 DEFAULT_RESULTS_DIR = "results/RHPopt"
 DEFAULT_FILENAME = "RHPopt_ncomponent_results"
+_REFRIGERANTS = (
+    "Propane",
+    "Isobutane",
+    "Butane",
+    "Isopentane",
+    "Neopentane",
+    "Pentane",
+    "CO2",
+)
 DEFAULT_PARAM_KWARGS = {
     "refrigerant_ls": [
-        ("Propane", "Isobutane"),
-        ("Propane", "Butane"),
-        ("Propane", "Isopentane"),
-        ("Propane", "Neopentane"),
-        ("Propane", "Pentane"),
-        ("Isobutane", "Butane"),
-        ("Isobutane", "Isopentane"),
-        ("Isobutane", "Neopentane"),
-        ("Isobutane", "Pentane"),
-        ("Butane", "Isopentane"),
-        ("Butane", "Neopentane"),
-        ("Butane", "Pentane"),
-        ("Isopentane", "Neopentane"),
-        ("Isopentane", "Pentane"),
-        ("Neopentane", "Pentane"),
+        *combinations(_REFRIGERANTS, 2),
+        *combinations(_REFRIGERANTS, 3),
+        ("Water", "Ammonia"),
     ],
+    "T_air_tar_ls": list(range(100, 221, 5)),
 }
 
 
