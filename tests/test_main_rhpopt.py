@@ -63,6 +63,7 @@ def test_main_rhpopt_run_one_delegates_to_single_case_optimiser(
         base_case,
         refrigerant=refrigerant,
         config=config,
+        n_cpu=2,
         results_dir=tmp_path,
     )
 
@@ -73,6 +74,7 @@ def test_main_rhpopt_run_one_delegates_to_single_case_optimiser(
             "base_case": base_case,
             "refrigerant": refrigerant,
             "config": config,
+            "n_cpu": 2,
             "results_dir": tmp_path,
         }
     ]
@@ -97,4 +99,5 @@ def test_main_rhpopt_run_one_uses_default_config(monkeypatch):
     assert calls[0]["base_case"] is None
     assert calls[0]["refrigerant"] == main_RHPopt.DEFAULT_REFRIGERANT
     assert calls[0]["config"] == main_RHPopt.OuterDesignOptimisationConfig()
+    assert calls[0]["n_cpu"] >= 1
     assert calls[0]["results_dir"] == main_RHPopt.DEFAULT_RESULTS_DIR

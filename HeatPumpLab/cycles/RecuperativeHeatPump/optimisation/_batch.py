@@ -29,6 +29,7 @@ def optimise_recuperative_heat_pump_case(
     *,
     refrigerant: RefrigerantInput = "Propane;Butane|0.5;0.5|mass",
     config: OuterDesignOptimisationConfig | None = None,
+    n_cpu: int = 1,
     results_dir: str | Path = "results/RHPopt",
 ) -> dict[str, Any]:
     """Optimise, persist, and resume one fixed RHP case."""
@@ -46,7 +47,11 @@ def optimise_recuperative_heat_pump_case(
     ):
         return completed
 
-    row = _solve_optimisation_case(case, results_dir=str(results_dir))
+    row = _solve_optimisation_case(
+        case,
+        results_dir=str(results_dir),
+        n_cpu=n_cpu,
+    )
     _transfer_optimal_results(filename, results_dir=results_dir)
     return row
 
@@ -88,7 +93,10 @@ def _run_optimisation_cases(
 
     worker_count = max(1, int(n_cpu))
     if worker_count == 1:
-        return [_solve_optimisation_case(case, results_dir=str(results_dir)) for case in cases]
+        return [
+            _solve_optimisation_case(case, results_dir=str(results_dir), n_cpu=1)
+            for case in cases
+        ]
 
     if executor_factory is None:
         executor_factory = ProcessPoolExecutor
@@ -96,7 +104,12 @@ def _run_optimisation_cases(
     executor = executor_factory(max_workers=worker_count)
     try:
         futures = [
-            executor.submit(_solve_optimisation_case, case, results_dir=str(results_dir))
+            executor.submit(
+                _solve_optimisation_case,
+                case,
+                results_dir=str(results_dir),
+                n_cpu=1,
+            )
             for case in cases
         ]
         return [future.result() for future in futures]
@@ -108,11 +121,13 @@ def _solve_optimisation_case(
     case: OptimisationCase,
     *,
     results_dir: str,
+    n_cpu: int = 1,
 ) -> dict[str, Any]:
     result = optimise_recuperative_heat_pump(
         base_case=case.base_case,
         refrigerant=case.refrigerant,
         config=case.config,
+        n_cpu=n_cpu,
         results_dir=results_dir,
     )
     row = _result_row(case, result)

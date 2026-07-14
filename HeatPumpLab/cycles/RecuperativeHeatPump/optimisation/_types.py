@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-OPTIMISER_VERSION = "edge-first-pattern-search-v3"
+OPTIMISER_VERSION = "edge-first-pattern-search-v4"
 
 BASE_VARIABLE_NAMES = (
     "dT_rhx1_cold",
@@ -162,10 +162,29 @@ class LocalPolishResult:
 
 
 @dataclass(frozen=True)
+class CompositionSearchResult:
+    """Edge-first search result for one fixed starting composition."""
+
+    start_index: int
+    composition: tuple[float, ...]
+    corner: PhaseEvaluation
+    edge_a: LineSearchResult
+    edge_b: LineSearchResult
+    split: LineSearchResult | None
+    evaluations: tuple[PhaseEvaluation, ...]
+    success: bool
+    message: str
+    elapsed_seconds: float
+    exact_evaluations: int
+    failed_evaluations: int
+
+
+@dataclass(frozen=True)
 class OuterDesignOptimisationConfig:
     """Configuration for the edge-first optimiser."""
 
-    max_exact_evaluations: int = 100
+    max_exact_evaluations: int = 250
+    max_composition_starts: int = 8
     fixed_dT_rhx1_cold: float = 0.0
     fixed_dT_rhx2_cold: float = 0.0
     fixed_comp2_power_frac: float = 0.5
@@ -180,6 +199,20 @@ class OuterDesignOptimisationConfig:
     use_fast_objective: bool = True
     corner_tolerance: float = 1e-8
 
+    def __post_init__(self) -> None:
+        if self.polish_top_n not in {2, 3}:
+            raise ValueError("polish_top_n must be either 2 or 3.")
+        if self.max_composition_starts < 1:
+            raise ValueError("max_composition_starts must be at least 1.")
+        for name in (
+            "max_exact_evaluations",
+            "line_budget",
+            "split_budget",
+            "polish_budget",
+        ):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must be nonnegative.")
+
 
 @dataclass(frozen=True)
 class OuterDesignOptimisationResult:
@@ -191,6 +224,8 @@ class OuterDesignOptimisationResult:
     edge_a: LineSearchResult
     edge_b: LineSearchResult
     split: LineSearchResult | None
+    composition_searches: tuple[CompositionSearchResult, ...]
+    requested_composition_starts: int
     polish_results: tuple[LocalPolishResult, ...]
     best: PhaseEvaluation | None
     evaluations: tuple[PhaseEvaluation, ...]
@@ -204,6 +239,14 @@ class OuterDesignOptimisationResult:
             "elapsed_seconds": self.elapsed_seconds,
             "exact_evaluations": self.exact_evaluations,
             "failed_evaluations": self.failed_evaluations,
+            "requested_composition_starts": self.requested_composition_starts,
+            "attempted_composition_starts": len(self.composition_searches),
+            "successful_composition_starts": sum(
+                search.success for search in self.composition_searches
+            ),
+            "polished_direction_count": sum(
+                polish.status != "skipped" for polish in self.polish_results
+            ),
             **{f"config_{key}": value for key, value in asdict(self.config).items()},
         }
         if self.best is not None:

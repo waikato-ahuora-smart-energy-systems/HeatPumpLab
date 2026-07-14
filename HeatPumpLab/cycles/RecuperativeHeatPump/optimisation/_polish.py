@@ -2,14 +2,33 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable, Iterable
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+import time
+from typing import Any
 
 import numpy as np
 
 from ._objective import _OuterDesignObjective
 from ._search import _best_phase_evaluation, _is_better_phase
-from ._types import LocalPolishConfig, LocalPolishResult, PhaseEvaluation
+from ._types import (
+    LocalPolishConfig,
+    LocalPolishResult,
+    OuterDesignOptimisationConfig,
+    PhaseEvaluation,
+)
+
+
+@dataclass(frozen=True)
+class _PolishTask:
+    source: PhaseEvaluation
+    budget: int
+    base_case: dict[str, Any]
+    refrigerant: str
+    config: OuterDesignOptimisationConfig
+    results_dir: str
 
 
 def _run_pattern_search_polish(
@@ -213,3 +232,122 @@ def _poll_candidates(
             candidate[3 + donor] -= amount
             candidate[3 + receiver] += amount
             yield candidate
+
+
+def _build_polish_tasks(
+    sources: tuple[PhaseEvaluation, ...],
+    *,
+    remaining_budget: int,
+    base_case: dict[str, Any],
+    refrigerant: str,
+    config: OuterDesignOptimisationConfig,
+    results_dir: str | Path,
+) -> tuple[_PolishTask, ...]:
+    tasks = []
+    remaining = max(0, int(remaining_budget))
+    polish_enabled = config.vary_comp2_power_frac or config.vary_composition
+    for source in sources:
+        if polish_enabled:
+            budget = min(config.polish_budget, remaining)
+            if budget <= 0:
+                break
+            remaining -= budget
+        else:
+            budget = 0
+        tasks.append(
+            _PolishTask(
+                source=source,
+                budget=budget,
+                base_case=dict(base_case),
+                refrigerant=refrigerant,
+                config=config,
+                results_dir=str(results_dir),
+            )
+        )
+    return tuple(tasks)
+
+
+def _run_polishes(
+    tasks: tuple[_PolishTask, ...],
+    *,
+    n_cpu: int,
+    executor_factory=None,
+    objective_factory=_OuterDesignObjective,
+) -> tuple[LocalPolishResult, ...]:
+    if not tasks:
+        return ()
+    if max(1, int(n_cpu)) == 1:
+        return tuple(
+            _run_polish(task, objective_factory=objective_factory) for task in tasks
+        )
+
+    executor_factory = ProcessPoolExecutor if executor_factory is None else executor_factory
+    try:
+        executor = executor_factory(max_workers=min(max(1, int(n_cpu)), len(tasks)))
+    except Exception:
+        return tuple(
+            _run_polish(task, objective_factory=objective_factory) for task in tasks
+        )
+
+    try:
+        futures = [executor.submit(_run_polish_task, task) for task in tasks]
+        results = []
+        for task, future in zip(tasks, futures):
+            try:
+                results.append(future.result())
+            except Exception as exc:
+                results.append(_failed_polish(task, f"{type(exc).__name__}: {exc}"))
+        return tuple(results)
+    finally:
+        executor.shutdown()
+
+
+def _run_polish_task(task: _PolishTask) -> LocalPolishResult:
+    return _run_polish(task, objective_factory=_OuterDesignObjective)
+
+
+def _run_polish(task: _PolishTask, *, objective_factory) -> LocalPolishResult:
+    objective = objective_factory(
+        max_evals=task.budget,
+        base_case=task.base_case,
+        refrigerant=task.refrigerant,
+        results_dir=task.results_dir,
+        use_fast_objective=task.config.use_fast_objective,
+    )
+    evaluations: list[PhaseEvaluation] = []
+
+    def evaluate_phase(phase: str, x: np.ndarray | list[float]) -> PhaseEvaluation:
+        record = objective.evaluate(x)
+        phase_record = PhaseEvaluation.from_record(
+            phase=phase,
+            record=record,
+            cumulative_exact_evaluations=objective.exact_evaluations,
+        )
+        evaluations.append(phase_record)
+        return phase_record
+
+    return _run_pattern_search_polish(
+        source=task.source,
+        objective=objective,
+        config=LocalPolishConfig(
+            budget=task.budget,
+            vary_comp2_power_frac=task.config.vary_comp2_power_frac,
+            vary_composition=task.config.vary_composition,
+        ),
+        evaluate_phase=evaluate_phase,
+    )
+
+
+def _failed_polish(task: _PolishTask, message: str) -> LocalPolishResult:
+    return LocalPolishResult(
+        method="pattern_search",
+        status="failed",
+        source_x=task.source.x,
+        best=None,
+        evaluations=(),
+        success=False,
+        message=message,
+        elapsed_seconds=0.0,
+        exact_evaluations=0,
+        failed_evaluations=0,
+    )

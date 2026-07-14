@@ -42,6 +42,7 @@ def run_one(
     filename: str = DEFAULT_FILENAME,
     refrigerant: RefrigerantInput = DEFAULT_REFRIGERANT,
     config: OuterDesignOptimisationConfig | None = None,
+    n_cpu: int = max((os.cpu_count() or 2) - 1, 1),
     results_dir: str | Path = DEFAULT_RESULTS_DIR,
 ) -> dict[str, Any]:
     """Optimise and persist one recuperative heat-pump case."""
@@ -50,6 +51,7 @@ def run_one(
         base_case=base_case,
         refrigerant=refrigerant,
         config=OuterDesignOptimisationConfig() if config is None else config,
+        n_cpu=n_cpu,
         results_dir=results_dir,
     )
 
@@ -59,7 +61,7 @@ def run_many(
     filename: str = DEFAULT_FILENAME,
     param_kwargs: dict[str, Any] | None = None,
     config: OuterDesignOptimisationConfig | None = None,
-    n_cpu: int = max((os.cpu_count() or 2) - 2, 1),
+    n_cpu: int = max((os.cpu_count() or 2) - 1, 1),
     results_dir: str | Path = DEFAULT_RESULTS_DIR,
 ) -> list[dict[str, Any]]:
     """Run the default RHP outer-design optimisation batch."""

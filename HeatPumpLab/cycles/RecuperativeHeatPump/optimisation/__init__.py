@@ -2,6 +2,7 @@
 
 from ._types import (
     OPTIMISER_VERSION,
+    CompositionSearchResult,
     DesignEvaluation,
     LineSearchResult,
     LocalPolishResult,
@@ -17,6 +18,7 @@ from .outer_design import optimise_recuperative_heat_pump
 
 __all__ = [
     "OPTIMISER_VERSION",
+    "CompositionSearchResult",
     "DesignEvaluation",
     "LineSearchResult",
     "LocalPolishResult",

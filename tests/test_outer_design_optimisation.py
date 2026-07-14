@@ -12,6 +12,12 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
 )
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _batch as batch_helpers
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _cases as case_helpers
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
+    _composition_starts as composition_start_helpers,
+)
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
+    _multistart as multistart_helpers,
+)
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import outer_design as outer_design_module
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _polish as polish_helpers
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
@@ -81,6 +87,7 @@ class SyntheticAnalyser:
 def test_public_api_exposes_only_the_rhp_optimiser_surface():
     assert outer_opt.__all__ == [
         "OPTIMISER_VERSION",
+        "CompositionSearchResult",
         "DesignEvaluation",
         "LineSearchResult",
         "LocalPolishResult",
@@ -110,6 +117,7 @@ def test_public_entry_point_has_no_test_only_dependency_parameters(
     assert "use_fast_objective" not in signature.parameters
     assert "fluids" not in signature.parameters
     assert "refrigerant" in signature.parameters
+    assert "n_cpu" in signature.parameters
     assert list(signature.parameters)[0] == "base_case"
 
     analyser = SyntheticAnalyser(dT1_target=0.0, dT2_target=35.0)
@@ -204,6 +212,314 @@ def test_objective_projects_ternary_composition_onto_simplex():
 
     assert all(value >= 0.0 for value in repaired[3:])
     assert sum(repaired[3:]) == pytest.approx(1.0)
+
+
+def test_binary_composition_multistart_covers_boundaries_and_quarter_points():
+    starts = composition_start_helpers._generate_composition_starts(
+        (0.5, 0.5),
+        vary_composition=True,
+        max_starts=8,
+    )
+
+    assert starts == (
+        (0.5, 0.5),
+        (0.0, 1.0),
+        (1.0, 0.0),
+        (0.25, 0.75),
+        (0.75, 0.25),
+    )
+
+
+def test_ternary_composition_multistart_covers_vertices_and_binary_edges():
+    starts = composition_start_helpers._generate_composition_starts(
+        (1 / 3, 1 / 3, 1 / 3),
+        vary_composition=True,
+        max_starts=8,
+    )
+
+    expected = {
+        (1 / 3, 1 / 3, 1 / 3),
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (0.5, 0.5, 0.0),
+        (0.5, 0.0, 0.5),
+        (0.0, 0.5, 0.5),
+    }
+    assert len(starts) == 7
+    assert set(starts) == expected
+    assert all(sum(start) == pytest.approx(1.0) for start in starts)
+
+
+@pytest.mark.parametrize(
+    ("initial", "vary_composition"),
+    [((1.0,), True), ((0.2, 0.3, 0.5), False)],
+)
+def test_composition_multistart_uses_only_input_when_composition_cannot_vary(
+    initial,
+    vary_composition,
+):
+    assert composition_start_helpers._generate_composition_starts(
+        initial,
+        vary_composition=vary_composition,
+        max_starts=8,
+    ) == (initial,)
+
+
+def test_composition_multistart_is_deterministically_capped():
+    initial = (0.1, 0.2, 0.3, 0.4)
+
+    first = composition_start_helpers._generate_composition_starts(
+        initial,
+        vary_composition=True,
+        max_starts=5,
+    )
+    second = composition_start_helpers._generate_composition_starts(
+        initial,
+        vary_composition=True,
+        max_starts=5,
+    )
+
+    assert first == second
+    assert first[0] == initial
+    assert len(first) == 5
+    assert all(min(start) >= 0.0 and sum(start) == pytest.approx(1.0) for start in first)
+
+
+def test_outer_design_config_defaults_to_robust_multistart_budget():
+    config = outer_opt.OuterDesignOptimisationConfig()
+
+    assert config.max_exact_evaluations == 250
+    assert config.max_composition_starts == 8
+    assert config.polish_top_n == 3
+
+
+@pytest.mark.parametrize("polish_top_n", [0, 1, 4])
+def test_outer_design_config_requires_two_or_three_polish_sources(polish_top_n):
+    with pytest.raises(ValueError, match="polish_top_n"):
+        outer_opt.OuterDesignOptimisationConfig(polish_top_n=polish_top_n)
+
+
+@pytest.mark.parametrize(
+    ("max_evaluations", "expected_starts"),
+    [(100, 2), (250, 8)],
+)
+def test_composition_multistart_plan_reserves_polish_budget(
+    max_evaluations,
+    expected_starts,
+):
+    starts = tuple((index / 10, 1 - index / 10) for index in range(8))
+    config = outer_opt.OuterDesignOptimisationConfig(
+        max_exact_evaluations=max_evaluations,
+    )
+
+    selected, budget_per_start = composition_start_helpers._plan_composition_searches(
+        starts,
+        config,
+    )
+
+    assert len(selected) == expected_starts
+    assert budget_per_start == 25
+    assert len(selected) * budget_per_start + 3 * config.polish_budget <= max_evaluations
+
+
+def test_outer_optimiser_runs_line_searches_from_each_selected_composition(monkeypatch):
+    result = _optimise_synthetic(
+        analyser=SyntheticAnalyser(composition_target=0.1),
+        config=outer_opt.OuterDesignOptimisationConfig(
+            line_budget=3,
+            split_budget=3,
+            polish_budget=0,
+        ),
+        monkeypatch=monkeypatch,
+    )
+
+    assert result.requested_composition_starts == 5
+    assert len(result.composition_searches) == 5
+    assert result.corner.x[3:] == pytest.approx((0.5, 0.5))
+    assert {search.composition for search in result.composition_searches} == {
+        (0.5, 0.5),
+        (0.0, 1.0),
+        (1.0, 0.0),
+        (0.25, 0.75),
+        (0.75, 0.25),
+    }
+
+
+def test_multistart_finds_better_remote_composition_than_single_start(monkeypatch):
+    common = {
+        "line_budget": 3,
+        "split_budget": 0,
+        "polish_budget": 0,
+    }
+    single = _optimise_synthetic(
+        analyser=SyntheticAnalyser(composition_target=0.0),
+        config=outer_opt.OuterDesignOptimisationConfig(
+            max_composition_starts=1,
+            **common,
+        ),
+        monkeypatch=monkeypatch,
+    )
+    multiple = _optimise_synthetic(
+        analyser=SyntheticAnalyser(composition_target=0.0),
+        config=outer_opt.OuterDesignOptimisationConfig(**common),
+        monkeypatch=monkeypatch,
+    )
+
+    assert single.best is not None
+    assert multiple.best is not None
+    assert multiple.best.objective < single.best.objective
+    assert multiple.best.x[3] == pytest.approx(0.0)
+
+
+def test_polish_sources_are_best_candidates_from_distinct_line_directions(monkeypatch):
+    result = _optimise_synthetic(
+        analyser=SyntheticAnalyser(composition_target=0.3),
+        config=outer_opt.OuterDesignOptimisationConfig(
+            line_budget=4,
+            split_budget=4,
+            polish_budget=2,
+            polish_top_n=3,
+        ),
+        monkeypatch=monkeypatch,
+    )
+
+    direction_candidates = {
+        candidate.x
+        for candidate in (
+            result.edge_a.best,
+            result.edge_b.best,
+            None if result.split is None else result.split.best,
+        )
+        if candidate is not None and candidate.success
+    }
+    sources = [polish.source_x for polish in result.polish_results]
+    assert 1 <= len(sources) <= 3
+    assert len(set(sources)) == len(sources)
+    assert set(sources) <= direction_candidates
+
+
+def test_multistart_never_exceeds_case_wide_exact_evaluation_budget(monkeypatch):
+    config = outer_opt.OuterDesignOptimisationConfig(
+        max_exact_evaluations=40,
+        line_budget=5,
+        split_budget=5,
+        polish_budget=6,
+    )
+    result = _optimise_synthetic(
+        analyser=SyntheticAnalyser(),
+        config=config,
+        monkeypatch=monkeypatch,
+    )
+
+    assert result.exact_evaluations <= config.max_exact_evaluations
+    assert result.to_summary_dict()["attempted_composition_starts"] == len(
+        result.composition_searches
+    )
+
+
+def test_parallel_composition_search_preserves_start_order_and_worker_failures():
+    config = outer_opt.OuterDesignOptimisationConfig(
+        max_exact_evaluations=2,
+        line_budget=0,
+        split_budget=0,
+        polish_budget=0,
+    )
+    tasks = multistart_helpers._build_composition_search_tasks(
+        ((0.5, 0.5), (0.0, 1.0)),
+        budget_per_start=1,
+        base_case=opt_types.DEFAULT_BASE_CASE,
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+        config=config,
+        results_dir="results",
+    )
+    executors = []
+    analyser = SyntheticAnalyser()
+
+    def build_synthetic_objective(**kwargs):
+        return objective_helpers._OuterDesignObjective(
+            **kwargs,
+            analyser=analyser,
+            molar_masses=(44.0, 58.0),
+        )
+
+    successful = multistart_helpers._run_composition_search(
+        tasks[0],
+        objective_factory=build_synthetic_objective,
+    )
+
+    class FakeFuture:
+        def __init__(self, task):
+            self.task = task
+
+        def result(self):
+            if self.task.start_index == 0:
+                return successful
+            raise RuntimeError(f"worker {self.task.start_index} failed")
+
+    class FakeExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+            self.submitted = []
+            self.shutdown_called = False
+            executors.append(self)
+
+        def submit(self, fn, task):
+            self.submitted.append((fn, task))
+            return FakeFuture(task)
+
+        def shutdown(self):
+            self.shutdown_called = True
+
+    results = multistart_helpers._run_composition_searches(
+        tasks,
+        n_cpu=4,
+        executor_factory=FakeExecutor,
+    )
+
+    assert [result.start_index for result in results] == [0, 1]
+    assert [result.success for result in results] == [True, False]
+    assert executors[0].max_workers == 2
+    assert executors[0].shutdown_called is True
+
+
+def test_composition_search_falls_back_to_serial_when_pool_setup_fails():
+    analyser = SyntheticAnalyser()
+    config = outer_opt.OuterDesignOptimisationConfig(
+        max_exact_evaluations=2,
+        line_budget=0,
+        split_budget=0,
+        polish_budget=0,
+    )
+    tasks = multistart_helpers._build_composition_search_tasks(
+        ((0.5, 0.5), (0.0, 1.0)),
+        budget_per_start=1,
+        base_case=opt_types.DEFAULT_BASE_CASE,
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+        config=config,
+        results_dir="results",
+    )
+
+    def build_synthetic_objective(**kwargs):
+        return objective_helpers._OuterDesignObjective(
+            **kwargs,
+            analyser=analyser,
+            molar_masses=(44.0, 58.0),
+        )
+
+    def unavailable_executor(*, max_workers):
+        del max_workers
+        raise OSError("processes unavailable")
+
+    results = multistart_helpers._run_composition_searches(
+        tasks,
+        n_cpu=2,
+        executor_factory=unavailable_executor,
+        objective_factory=build_synthetic_objective,
+    )
+
+    assert all(result.success for result in results)
+    assert len(analyser.calls) == 2
 
 
 def test_mole_basis_objective_solves_in_mass_basis_and_reports_in_mole_basis():
@@ -518,12 +834,12 @@ def test_outer_design_optimisation_polish_keeps_dT_values_fixed_and_varies_power
             line_budget=10,
             split_budget=0,
             polish_budget=16,
-            polish_top_n=1,
+            polish_top_n=2,
         ),
         monkeypatch=monkeypatch,
     )
 
-    assert len(result.polish_results) == 1
+    assert len(result.polish_results) == 2
     source = result.polish_results[0].source_x
     polish_records = result.polish_results[0].evaluations
     assert polish_records
@@ -1118,6 +1434,7 @@ def test_batch_runner_executes_cases_serially_and_writes_rows(monkeypatch, tmp_p
 
     assert len(rows) == 2
     assert [call["base_case"]["T_air_tar"] for call in calls] == [180.0, 200.0]
+    assert all(call["n_cpu"] == 1 for call in calls)
     assert [row["case_signature"] for row in rows] == [case.signature for case in cases]
     assert [write["suffix"] for write in written] == [
         case.temp_suffix for case in cases
@@ -1357,6 +1674,39 @@ def test_real_outer_design_optimisation_smoke_when_refprop_is_available(hpl, tmp
     assert result.best is not None
     assert math.isfinite(result.best.objective)
     assert result.best.message
+
+
+def test_real_serial_and_parallel_multistart_select_same_result(hpl, tmp_path):
+    del hpl
+    config = outer_opt.OuterDesignOptimisationConfig(
+        max_exact_evaluations=2,
+        max_composition_starts=2,
+        vary_dT_rhx1_cold=False,
+        vary_dT_rhx2_cold=False,
+        vary_comp2_power_frac=False,
+        line_budget=0,
+        split_budget=0,
+        polish_budget=0,
+    )
+
+    serial = outer_opt.optimise_recuperative_heat_pump(
+        config=config,
+        n_cpu=1,
+        results_dir=tmp_path,
+    )
+    parallel = outer_opt.optimise_recuperative_heat_pump(
+        config=config,
+        n_cpu=2,
+        results_dir=tmp_path,
+    )
+
+    assert serial.best is not None
+    assert parallel.best is not None
+    assert parallel.best.objective == pytest.approx(serial.best.objective)
+    assert parallel.best.x == pytest.approx(serial.best.x)
+    assert [search.composition for search in parallel.composition_searches] == [
+        search.composition for search in serial.composition_searches
+    ]
 
 
 def test_real_local_pattern_search_polish_smoke_when_refprop_is_available(hpl, tmp_path):

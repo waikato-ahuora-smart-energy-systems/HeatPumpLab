@@ -2,32 +2,29 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
+import time
 from typing import Any
-
-import numpy as np
 
 from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import RefrigerantInput
 
-from ._objective import _OuterDesignObjective
-from ._polish import _run_pattern_search_polish
-from ._search import (
-    _best_phase_evaluation,
-    _search_dT1_at_fixed_dT2,
-    _search_dT2_at_fixed_dT1,
-    _search_edge_a,
-    _search_edge_b,
-    _search_split_line,
-    _select_polish_sources,
-    _skipped_line_search,
+from ._composition_starts import (
+    _generate_composition_starts,
+    _plan_composition_searches,
 )
+from ._multistart import (
+    _best_direction_result,
+    _best_evaluation,
+    _build_composition_search_tasks,
+    _run_composition_searches,
+    _select_direction_polish_sources,
+)
+from ._objective import _OuterDesignObjective
+from ._polish import _build_polish_tasks, _run_polishes
 from ._types import (
     OPTIMISER_VERSION,
-    LocalPolishConfig,
     OuterDesignOptimisationConfig,
     OuterDesignOptimisationResult,
-    PhaseEvaluation,
 )
 
 __all__ = ["optimise_recuperative_heat_pump"]
@@ -38,132 +35,81 @@ def optimise_recuperative_heat_pump(
     *,
     refrigerant: RefrigerantInput = "Propane;Butane|0.5;0.5|mass",
     config: OuterDesignOptimisationConfig | None = None,
+    n_cpu: int = 1,
     results_dir: str | Path = "results/outer_design_optimisation",
 ) -> OuterDesignOptimisationResult:
     """Optimise recuperative heat-pump outer design variables for one fixed case."""
     config = OuterDesignOptimisationConfig() if config is None else config
     start = time.perf_counter()
-    evaluations: list[PhaseEvaluation] = []
 
-    objective = _OuterDesignObjective(
-        max_evals=config.max_exact_evaluations,
+    problem = _OuterDesignObjective(
+        max_evals=0,
         base_case=base_case,
         refrigerant=refrigerant,
         results_dir=results_dir,
         use_fast_objective=config.use_fast_objective,
     )
-
-    def evaluate_phase(phase: str, x: np.ndarray | list[float]) -> PhaseEvaluation:
-        record = objective.evaluate(x)
-        phase_record = PhaseEvaluation.from_record(
-            phase=phase,
-            record=record,
-            cumulative_exact_evaluations=objective.exact_evaluations,
-        )
-        evaluations.append(phase_record)
-        return phase_record
-
-    fixed_comp2 = float(config.fixed_comp2_power_frac)
-    fixed_composition = objective.initial_mass_fractions
-    fixed_dT1 = float(config.fixed_dT_rhx1_cold)
-    fixed_dT2 = float(config.fixed_dT_rhx2_cold)
-
-    corner = evaluate_phase(
-        "corner",
-        np.asarray(
-            [
-                fixed_dT1 if not config.vary_dT_rhx1_cold else 0.0,
-                fixed_dT2 if not config.vary_dT_rhx2_cold else 0.0,
-                fixed_comp2,
-                *fixed_composition,
-            ]
-        ),
+    requested_starts = _generate_composition_starts(
+        problem.initial_mass_fractions,
+        vary_composition=config.vary_composition,
+        max_starts=config.max_composition_starts,
+        cache_decimals=problem.cache_decimals,
     )
-    if config.vary_dT_rhx1_cold and config.vary_dT_rhx2_cold:
-        edge_a = _search_edge_a(
-            objective=objective,
-            config=config,
-            fixed_comp2=fixed_comp2,
-            fixed_composition=fixed_composition,
-            evaluate_phase=evaluate_phase,
-        )
-        edge_b = _search_edge_b(
-            objective=objective,
-            config=config,
-            fixed_comp2=fixed_comp2,
-            fixed_composition=fixed_composition,
-            evaluate_phase=evaluate_phase,
-        )
-        split = _search_split_line(
-            objective=objective,
-            config=config,
-            edge_a=edge_a,
-            edge_b=edge_b,
-            fixed_comp2=fixed_comp2,
-            fixed_composition=fixed_composition,
-            evaluate_phase=evaluate_phase,
-        )
-    elif config.vary_dT_rhx1_cold:
-        edge_a = _skipped_line_search(
-            "edge_a",
-            "dT_rhx2_cold",
-            "dT_rhx2_cold is fixed",
-        )
-        edge_b = _search_dT1_at_fixed_dT2(
-            objective=objective,
-            config=config,
-            fixed_dT2=fixed_dT2,
-            fixed_comp2=fixed_comp2,
-            fixed_composition=fixed_composition,
-            evaluate_phase=evaluate_phase,
-        )
-        split = None
-    elif config.vary_dT_rhx2_cold:
-        edge_a = _search_dT2_at_fixed_dT1(
-            objective=objective,
-            config=config,
-            fixed_dT1=fixed_dT1,
-            fixed_comp2=fixed_comp2,
-            fixed_composition=fixed_composition,
-            evaluate_phase=evaluate_phase,
-        )
-        edge_b = _skipped_line_search(
-            "edge_b",
-            "dT_rhx1_cold",
-            "dT_rhx1_cold is fixed",
-        )
-        split = None
-    else:
-        edge_a = _skipped_line_search(
-            "edge_a",
-            "dT_rhx2_cold",
-            "dT_rhx1_cold and dT_rhx2_cold are fixed",
-        )
-        edge_b = _skipped_line_search(
-            "edge_b",
-            "dT_rhx1_cold",
-            "dT_rhx1_cold and dT_rhx2_cold are fixed",
-        )
-        split = None
+    selected_starts, search_budget = _plan_composition_searches(
+        requested_starts,
+        config,
+    )
+    search_tasks = _build_composition_search_tasks(
+        selected_starts,
+        budget_per_start=search_budget,
+        base_case=problem.base_case,
+        refrigerant=problem.input_refrigerant,
+        config=config,
+        results_dir=results_dir,
+    )
+    composition_searches = _run_composition_searches(
+        search_tasks,
+        n_cpu=n_cpu,
+        objective_factory=_OuterDesignObjective,
+    )
 
-    polish_sources = _select_polish_sources(
-        [corner, edge_a.best, edge_b.best, None if split is None else split.best],
+    corner = composition_searches[0].corner
+    edge_a = _best_direction_result(composition_searches, "edge_a")
+    edge_b = _best_direction_result(composition_searches, "edge_b")
+    if edge_a is None or edge_b is None:
+        raise RuntimeError("Composition search did not return both edge results.")
+    split = _best_direction_result(composition_searches, "split")
+    polish_sources = _select_direction_polish_sources(
+        corner=corner,
+        edge_a=edge_a,
+        edge_b=edge_b,
+        split=split,
         top_n=config.polish_top_n,
     )
-    polish_results = tuple(
-        _run_pattern_search_polish(
-            source=source,
-            objective=objective,
-            config=LocalPolishConfig(
-                budget=config.polish_budget,
-                vary_comp2_power_frac=config.vary_comp2_power_frac,
-                vary_composition=config.vary_composition,
-            ),
-            evaluate_phase=evaluate_phase,
-        )
-        for source in polish_sources
+    search_exact = sum(search.exact_evaluations for search in composition_searches)
+    polish_tasks = _build_polish_tasks(
+        polish_sources,
+        remaining_budget=max(0, config.max_exact_evaluations - search_exact),
+        base_case=problem.base_case,
+        refrigerant=problem.input_refrigerant,
+        config=config,
+        results_dir=results_dir,
+    )
+    polish_results = _run_polishes(
+        polish_tasks,
+        n_cpu=n_cpu,
+        objective_factory=_OuterDesignObjective,
     )
 
+    evaluations = tuple(
+        record for search in composition_searches for record in search.evaluations
+    ) + tuple(record for polish in polish_results for record in polish.evaluations)
+    exact_evaluations = search_exact + sum(
+        polish.exact_evaluations for polish in polish_results
+    )
+    failed_evaluations = sum(
+        search.failed_evaluations for search in composition_searches
+    ) + sum(polish.failed_evaluations for polish in polish_results)
     return OuterDesignOptimisationResult(
         optimiser_version=OPTIMISER_VERSION,
         config=config,
@@ -171,10 +117,12 @@ def optimise_recuperative_heat_pump(
         edge_a=edge_a,
         edge_b=edge_b,
         split=split,
+        composition_searches=composition_searches,
+        requested_composition_starts=len(requested_starts),
         polish_results=polish_results,
-        best=_best_phase_evaluation(evaluations),
-        evaluations=tuple(evaluations),
+        best=_best_evaluation(composition_searches, polish_results),
+        evaluations=evaluations,
         elapsed_seconds=time.perf_counter() - start,
-        exact_evaluations=objective.exact_evaluations,
-        failed_evaluations=objective.failed_evaluations,
+        exact_evaluations=exact_evaluations,
+        failed_evaluations=failed_evaluations,
     )
