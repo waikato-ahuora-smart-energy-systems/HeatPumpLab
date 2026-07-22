@@ -61,7 +61,7 @@ def run_many(
     filename: str = DEFAULT_FILENAME,
     param_kwargs: dict[str, Any] | None = None,
     config: OuterDesignOptimisationConfig | None = None,
-    n_cpu: int = max((os.cpu_count() or 2) - 1, 1),
+    n_cpu: int = max((os.cpu_count() or 2) - 4, 1),
     results_dir: str | Path = DEFAULT_RESULTS_DIR,
 ) -> list[dict[str, Any]]:
     """Run the default RHP outer-design optimisation batch."""
