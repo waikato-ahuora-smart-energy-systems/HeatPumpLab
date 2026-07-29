@@ -1,6 +1,27 @@
 import main_RHPopt
 
 
+def test_main_rhpopt_default_param_kwargs_include_pure_binary_and_ternary_options():
+    refrigerants = main_RHPopt.DEFAULT_PARAM_KWARGS["refrigerant_ls"]
+
+    assert refrigerants[:9] == [
+        "Propane",
+        "Isobutane",
+        "Butane",
+        "Isopentane",
+        "Neopentane",
+        "Pentane",
+        "CO2",
+        "Water",
+        "Ammonia",
+    ]
+    assert ("Propane", "Butane") in refrigerants
+    assert ("Propane", "Isobutane", "Butane") in refrigerants
+    assert ("Water", "Ammonia") in refrigerants
+    assert len(refrigerants) == 66
+    assert len(main_RHPopt.DEFAULT_PARAM_KWARGS["T_air_tar_ls"]) == 25
+
+
 def test_main_rhpopt_run_many_delegates_to_public_batch_optimiser(
     monkeypatch,
     tmp_path,
@@ -37,6 +58,33 @@ def test_main_rhpopt_run_many_delegates_to_public_batch_optimiser(
             "results_dir": tmp_path,
         }
     ]
+
+
+def test_main_rhpopt_run_many_can_reverse_default_case_order(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_optimise_recuperative_heat_pump_cases(**kwargs):
+        calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(
+        main_RHPopt,
+        "optimise_recuperative_heat_pump_cases",
+        fake_optimise_recuperative_heat_pump_cases,
+    )
+    original_refrigerants = list(main_RHPopt.DEFAULT_PARAM_KWARGS["refrigerant_ls"])
+    original_air_targets = list(main_RHPopt.DEFAULT_PARAM_KWARGS["T_air_tar_ls"])
+
+    main_RHPopt.run_many(reverse=True, results_dir=tmp_path)
+
+    assert calls[0]["param_kwargs"]["refrigerant_ls"] == list(
+        reversed(original_refrigerants)
+    )
+    assert calls[0]["param_kwargs"]["T_air_tar_ls"] == list(
+        reversed(original_air_targets)
+    )
+    assert main_RHPopt.DEFAULT_PARAM_KWARGS["refrigerant_ls"] == original_refrigerants
+    assert main_RHPopt.DEFAULT_PARAM_KWARGS["T_air_tar_ls"] == original_air_targets
 
 
 def test_main_rhpopt_run_one_delegates_to_single_case_optimiser(
