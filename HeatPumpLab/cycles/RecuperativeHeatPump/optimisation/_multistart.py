@@ -130,6 +130,15 @@ def _run_composition_search(
         refrigerant=task.refrigerant,
         results_dir=task.results_dir,
         use_fast_objective=task.config.use_fast_objective,
+        exact_evaluation_timeout_seconds=(
+            task.config.exact_evaluation_timeout_seconds
+        ),
+        exact_evaluation_timeout_retries=(
+            task.config.exact_evaluation_timeout_retries
+        ),
+        exact_evaluation_worker_max_tasks=(
+            task.config.exact_evaluation_worker_max_tasks
+        ),
     )
     evaluations: list[PhaseEvaluation] = []
 

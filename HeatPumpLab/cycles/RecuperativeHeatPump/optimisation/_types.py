@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-OPTIMISER_VERSION = "multibasin-screened-pattern-search-v10"
+OPTIMISER_VERSION = "isolated-refprop-pattern-search-v11"
 
 BASE_VARIABLE_NAMES = (
     "dT_rhx1_cold",
@@ -226,6 +226,9 @@ class OuterDesignOptimisationConfig:
     preserve_incumbent: bool = True
     incumbent_replay_limit: int = 3
     incumbent_polish_budget: int = 12
+    exact_evaluation_timeout_seconds: float | None = 180.0
+    exact_evaluation_timeout_retries: int = 1
+    exact_evaluation_worker_max_tasks: int = 20
 
     def __post_init__(self) -> None:
         if self.polish_top_n not in {2, 3}:
@@ -234,6 +237,15 @@ class OuterDesignOptimisationConfig:
             raise ValueError("max_composition_starts must be at least 1.")
         if self.incumbent_replay_limit < 0:
             raise ValueError("incumbent_replay_limit must be nonnegative.")
+        if (
+            self.exact_evaluation_timeout_seconds is not None
+            and self.exact_evaluation_timeout_seconds <= 0.0
+        ):
+            raise ValueError("exact_evaluation_timeout_seconds must be positive.")
+        if self.exact_evaluation_worker_max_tasks < 1:
+            raise ValueError("exact_evaluation_worker_max_tasks must be at least 1.")
+        if self.exact_evaluation_timeout_retries < 0:
+            raise ValueError("exact_evaluation_timeout_retries must be nonnegative.")
         for name in (
             "max_exact_evaluations",
             "line_budget",
@@ -274,6 +286,14 @@ class OuterDesignOptimisationResult:
             "elapsed_seconds": self.elapsed_seconds,
             "exact_evaluations": self.exact_evaluations,
             "failed_evaluations": self.failed_evaluations,
+            "timed_out_evaluations": sum(
+                "evaluation_timeout" in record.constraint_errors
+                for record in self.evaluations
+            ),
+            "isolated_worker_failures": sum(
+                "worker_failure" in record.constraint_errors
+                for record in self.evaluations
+            ),
             "requested_composition_starts": self.requested_composition_starts,
             "attempted_composition_starts": len(self.composition_searches),
             "successful_composition_starts": sum(

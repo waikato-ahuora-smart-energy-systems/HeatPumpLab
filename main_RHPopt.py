@@ -16,7 +16,7 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
 
 DEFAULT_REFRIGERANT = "Propane;Butane|0.5;0.5|mass"
 DEFAULT_RESULTS_DIR = "results/RHPopt"
-DEFAULT_FILENAME = "RHPopt_ncomponent_results_v10"
+DEFAULT_FILENAME = "RHPopt_ncomponent_results_v11"
 _REFRIGERANTS = (
     "Propane",
     "Isobutane",
@@ -31,8 +31,8 @@ DEFAULT_PARAM_KWARGS = {
     "refrigerant_ls": [
         *_PURE_REFRIGERANTS,
         *combinations(_REFRIGERANTS, 2),
-        *combinations(_REFRIGERANTS, 3),
         ("Water", "Ammonia"),
+        *combinations(_REFRIGERANTS, 3),
     ],
     "T_air_tar_ls": list(range(100, 221, 5)),
 }

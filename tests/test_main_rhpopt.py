@@ -18,6 +18,9 @@ def test_main_rhpopt_default_param_kwargs_include_pure_binary_and_ternary_option
     assert ("Propane", "Butane") in refrigerants
     assert ("Propane", "Isobutane", "Butane") in refrigerants
     assert ("Water", "Ammonia") in refrigerants
+    assert refrigerants.index(("Water", "Ammonia")) < refrigerants.index(
+        ("Propane", "Isobutane", "Butane")
+    )
     assert len(refrigerants) == 66
     assert len(main_RHPopt.DEFAULT_PARAM_KWARGS["T_air_tar_ls"]) == 25
 

@@ -578,3 +578,44 @@ screen: the retained composition-diverse polish produced
 `(dT1, split, composition) = (68.675 K, 0.896875, 84.6875/15.3125)` and the
 retained seven-call feedback line independently reached 84.262 K and SEC
 0.650076687.
+
+## Isolated REFPROP optimiser v11
+
+V10's paused batch contained two isolated binary holes: Propane/CO2 at 115 C
+and Pentane/CO2 at 220 C. Native process samples showed that both workers were
+CPU-bound inside REFPROP's `ABFLSH` pressure-enthalpy saturation path rather
+than looping in the bounded Python search. The Propane candidate completed in
+a fresh process but did not return after the preceding deterministic sequence,
+which also demonstrated sensitivity to the history of a long-lived REFPROP
+process.
+
+V11 contains every exact thermodynamic objective evaluation in a dedicated
+subprocess. The parent waits at most 180 seconds, terminates a non-returning
+child, and retries the candidate once in a fresh process. If the retry also
+times out, the candidate receives the normal finite optimisation penalty with
+an `evaluation_timeout` constraint marker and the search continues. Unexpected
+worker exits are handled in the same way with a `worker_failure` marker.
+
+Healthy workers are proactively recycled after 20 exact evaluations. This
+limits accumulated REFPROP state even when no individual call reaches the
+timeout. Both values and the single retry are configurable through
+`OuterDesignOptimisationConfig`:
+
+- `exact_evaluation_timeout_seconds=180.0`
+- `exact_evaluation_timeout_retries=1`
+- `exact_evaluation_worker_max_tasks=20`
+
+The result summary reports `timed_out_evaluations` and
+`isolated_worker_failures`. Historical incumbent replay uses the same isolated
+path, so a pathological incumbent cannot block the final no-regression guard.
+The existing v10 files remain historical incumbent sources; v11 writes to
+`RHPopt_ncomponent_results_v11.csv`.
+
+Water/Ammonia's 25 absent v10 rows were queued after every ternary rather than
+stuck. V11 schedules Water/Ammonia immediately after the conventional binary
+families and before the ternaries, making its slow but finite progress visible
+much earlier in the batch.
+
+The v11 timeout, restart, nested-batch-process, and normal-result paths were
+exercised against the installed REFPROP runtime. The complete project suite
+passes: 408 tests.

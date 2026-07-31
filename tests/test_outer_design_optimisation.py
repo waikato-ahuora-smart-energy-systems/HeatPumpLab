@@ -17,6 +17,9 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     _composition_starts as composition_start_helpers,
 )
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
+    _isolated_evaluation as isolated_helpers,
+)
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     _multistart as multistart_helpers,
 )
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import outer_design as outer_design_module
@@ -307,6 +310,24 @@ def test_outer_design_config_defaults_to_robust_multistart_budget():
     assert config.preserve_incumbent is True
     assert config.incumbent_replay_limit == 3
     assert config.incumbent_polish_budget == 12
+    assert config.exact_evaluation_timeout_seconds == pytest.approx(180.0)
+    assert config.exact_evaluation_timeout_retries == 1
+    assert config.exact_evaluation_worker_max_tasks == 20
+
+
+def test_outer_design_config_rejects_invalid_exact_evaluation_limits():
+    with pytest.raises(ValueError, match="timeout_seconds must be positive"):
+        outer_opt.OuterDesignOptimisationConfig(
+            exact_evaluation_timeout_seconds=0.0
+        )
+    with pytest.raises(ValueError, match="worker_max_tasks must be at least 1"):
+        outer_opt.OuterDesignOptimisationConfig(
+            exact_evaluation_worker_max_tasks=0
+        )
+    with pytest.raises(ValueError, match="timeout_retries must be nonnegative"):
+        outer_opt.OuterDesignOptimisationConfig(
+            exact_evaluation_timeout_retries=-1
+        )
 
 
 def test_v10_never_selects_worse_than_successful_current_solver_incumbent(
@@ -809,6 +830,116 @@ def test_objective_returns_finite_penalty_for_failed_exact_solve():
     assert record.constraint_errors == {"solve_failure": pytest.approx(1.0)}
     assert "synthetic solve failed" in record.message
     assert objective.failed_evaluations == 1
+
+
+def test_objective_records_isolated_exact_evaluation_timeout(monkeypatch):
+    class TimingOutEvaluator:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def evaluate(self, request):
+            raise isolated_helpers.ExactEvaluationTimeout(
+                "exact thermodynamic evaluation timed out after 0.01 seconds"
+            )
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        objective_helpers,
+        "IsolatedExactEvaluator",
+        TimingOutEvaluator,
+    )
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        refrigerant="Propane;CO2|0.5;0.5|mass",
+        exact_evaluation_timeout_seconds=0.01,
+    )
+
+    record = objective.evaluate([0.0, 0.0, 0.5, 0.5, 0.5])
+
+    assert record.success is False
+    assert record.objective == pytest.approx(opt_types.PENALTY_OBJECTIVE + 1.0)
+    assert record.constraint_errors == {"evaluation_timeout": 1.0}
+    assert "timed out after 0.01 seconds" in record.message
+    assert objective.failed_evaluations == 1
+
+
+def test_isolated_evaluator_replaces_worker_after_timeout(monkeypatch):
+    class FakeConnection:
+        def __init__(self, response):
+            self.response = response
+            self.sent = []
+            self.closed = False
+
+        def send(self, payload):
+            self.sent.append(payload)
+
+        def poll(self, timeout):
+            del timeout
+            return self.response is not None
+
+        def recv(self):
+            return self.response
+
+        def close(self):
+            self.closed = True
+
+    class FakeProcess:
+        def __init__(self):
+            self.alive = False
+            self.terminated = False
+            self.closed = False
+
+        def start(self):
+            self.alive = True
+
+        def is_alive(self):
+            return self.alive
+
+        def join(self, timeout):
+            del timeout
+
+        def terminate(self):
+            self.terminated = True
+            self.alive = False
+
+        def kill(self):
+            self.alive = False
+
+        def close(self):
+            self.closed = True
+
+    class FakeContext:
+        def __init__(self):
+            self.responses = [None, ("ok", "recovered")]
+            self.processes = []
+
+        def Pipe(self, duplex):
+            assert duplex is True
+            return FakeConnection(self.responses.pop(0)), FakeConnection(None)
+
+        def Process(self, **kwargs):
+            assert kwargs["target"] is isolated_helpers._exact_evaluation_worker
+            process = FakeProcess()
+            self.processes.append(process)
+            return process
+
+    context = FakeContext()
+    monkeypatch.setattr(isolated_helpers, "get_context", lambda name: context)
+    evaluator = isolated_helpers.IsolatedExactEvaluator(
+        timeout_seconds=0.01,
+        max_tasks=20,
+    )
+
+    with pytest.raises(isolated_helpers.ExactEvaluationTimeout):
+        evaluator.evaluate({"candidate": 1})
+    result = evaluator.evaluate({"candidate": 2})
+
+    assert result == "recovered"
+    assert len(context.processes) == 2
+    assert context.processes[0].terminated is True
+    evaluator.close()
 
 
 def test_objective_penalty_uses_squared_physical_constraint_errors():

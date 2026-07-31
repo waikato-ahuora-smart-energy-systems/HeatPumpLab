@@ -17,6 +17,11 @@ from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import (
 )
 from HeatPumpLab.utils.properties_package import PropertyPackage
 
+from ._isolated_evaluation import (
+    ExactEvaluationTimeout,
+    ExactEvaluationWorkerError,
+    IsolatedExactEvaluator,
+)
 from ._types import (
     DEFAULT_BASE_CASE,
     DEFAULT_BOUNDS,
@@ -41,6 +46,9 @@ class _OuterDesignObjective:
         penalty: float = PENALTY_OBJECTIVE,
         cache_decimals: int = 8,
         molar_masses: tuple[float, ...] | None = None,
+        exact_evaluation_timeout_seconds: float | None = None,
+        exact_evaluation_timeout_retries: int = 1,
+        exact_evaluation_worker_max_tasks: int = 20,
     ) -> None:
         self.max_evals = int(max_evals)
         self.base_case = dict(DEFAULT_BASE_CASE)
@@ -63,6 +71,16 @@ class _OuterDesignObjective:
         self.cache: dict[tuple[float, ...], DesignEvaluation] = {}
         self.records: list[DesignEvaluation] = []
         self.budget_exhausted_calls = 0
+        self.exact_evaluation_timeout_seconds = (
+            None if analyser is not None else exact_evaluation_timeout_seconds
+        )
+        self.exact_evaluation_worker_max_tasks = int(
+            exact_evaluation_worker_max_tasks
+        )
+        self.exact_evaluation_timeout_retries = int(
+            exact_evaluation_timeout_retries
+        )
+        self._isolated_evaluator: IsolatedExactEvaluator | None = None
 
     @property
     def exact_evaluations(self) -> int:
@@ -97,13 +115,32 @@ class _OuterDesignObjective:
         case = self.vector_to_case(x_arr)
         start = time.perf_counter()
         try:
-            hp, solve_time = self._analyse_case(case)
-            record = self._record_from_hp(
+            if self.exact_evaluation_timeout_seconds is None:
+                hp, solve_time = self._analyse_case(case)
+                record = self._record_from_hp(
+                    x=x_arr,
+                    case=case,
+                    hp=hp,
+                    elapsed_seconds=time.perf_counter() - start,
+                    fallback_solve_time=solve_time,
+                )
+            else:
+                record = self._evaluate_isolated(x_arr)
+        except ExactEvaluationTimeout as exc:
+            record = self._failure_record(
                 x=x_arr,
                 case=case,
-                hp=hp,
+                message=str(exc),
                 elapsed_seconds=time.perf_counter() - start,
-                fallback_solve_time=solve_time,
+                constraint_errors={"evaluation_timeout": 1.0},
+            )
+        except ExactEvaluationWorkerError as exc:
+            record = self._failure_record(
+                x=x_arr,
+                case=case,
+                message=f"isolated exact-evaluation worker failed: {exc}",
+                elapsed_seconds=time.perf_counter() - start,
+                constraint_errors={"worker_failure": 1.0},
             )
         except Exception as exc:
             record = self._failure_record(
@@ -116,6 +153,48 @@ class _OuterDesignObjective:
         self.cache[cache_key] = record
         self.records.append(record)
         return record
+
+    def close(self) -> None:
+        """Release the isolated exact-evaluation worker, if one was started."""
+        if self._isolated_evaluator is not None:
+            self._isolated_evaluator.close()
+            self._isolated_evaluator = None
+
+    def _evaluate_isolated(self, x: np.ndarray) -> DesignEvaluation:
+        if self._isolated_evaluator is None:
+            assert self.exact_evaluation_timeout_seconds is not None
+            self._isolated_evaluator = IsolatedExactEvaluator(
+                timeout_seconds=self.exact_evaluation_timeout_seconds,
+                max_tasks=self.exact_evaluation_worker_max_tasks,
+            )
+        request = {
+            "x": tuple(float(value) for value in x),
+            "base_case": self.base_case,
+            "refrigerant": self.input_refrigerant,
+            "bounds": self.bounds,
+            "results_dir": str(self.results_dir),
+            "use_fast_objective": self.use_fast_objective,
+            "penalty": self.penalty,
+            "cache_decimals": self.cache_decimals,
+            "molar_masses": self.molar_masses,
+        }
+        attempts = self.exact_evaluation_timeout_retries + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._isolated_evaluator.evaluate(request)
+            except (ExactEvaluationTimeout, ExactEvaluationWorkerError) as exc:
+                if attempt == attempts:
+                    if attempts == 1:
+                        raise
+                    message = f"{exc} after {attempts} isolated attempts"
+                    raise type(exc)(message) from exc
+        raise AssertionError("isolated exact-evaluation retry loop did not return")
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def vector_to_case(self, x: np.ndarray | list[float] | tuple[float, ...]) -> dict[str, Any]:
         """Map a bounded optimiser vector to a recuperative HP case."""

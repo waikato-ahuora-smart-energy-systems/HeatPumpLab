@@ -409,6 +409,15 @@ def _run_polish(task: _PolishTask, *, objective_factory) -> LocalPolishResult:
         refrigerant=task.refrigerant,
         results_dir=task.results_dir,
         use_fast_objective=task.config.use_fast_objective,
+        exact_evaluation_timeout_seconds=(
+            task.config.exact_evaluation_timeout_seconds
+        ),
+        exact_evaluation_timeout_retries=(
+            task.config.exact_evaluation_timeout_retries
+        ),
+        exact_evaluation_worker_max_tasks=(
+            task.config.exact_evaluation_worker_max_tasks
+        ),
     )
     evaluations: list[PhaseEvaluation] = []
 
@@ -556,6 +565,15 @@ def _run_lift_feedback(
         refrigerant=task.refrigerant,
         results_dir=task.results_dir,
         use_fast_objective=task.config.use_fast_objective,
+        exact_evaluation_timeout_seconds=(
+            task.config.exact_evaluation_timeout_seconds
+        ),
+        exact_evaluation_timeout_retries=(
+            task.config.exact_evaluation_timeout_retries
+        ),
+        exact_evaluation_worker_max_tasks=(
+            task.config.exact_evaluation_worker_max_tasks
+        ),
     )
     source = task.source
     evaluations: list[PhaseEvaluation] = []

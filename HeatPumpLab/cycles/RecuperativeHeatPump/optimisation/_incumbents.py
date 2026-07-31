@@ -71,6 +71,7 @@ def replay_historical_incumbents(
         refrigerant=refrigerant,
         results_dir=results_dir,
         use_fast_objective=config.use_fast_objective,
+        exact_evaluation_timeout_seconds=None,
     )
     compatible = tuple(
         incumbent
@@ -83,6 +84,9 @@ def replay_historical_incumbents(
         refrigerant=refrigerant,
         results_dir=results_dir,
         use_fast_objective=config.use_fast_objective,
+        exact_evaluation_timeout_seconds=config.exact_evaluation_timeout_seconds,
+        exact_evaluation_timeout_retries=config.exact_evaluation_timeout_retries,
+        exact_evaluation_worker_max_tasks=config.exact_evaluation_worker_max_tasks,
     )
     replays = []
     for incumbent in compatible:
