@@ -16,7 +16,7 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
 
 DEFAULT_REFRIGERANT = "Propane;Butane|0.5;0.5|mass"
 DEFAULT_RESULTS_DIR = "results/RHPopt"
-DEFAULT_FILENAME = "RHPopt_ncomponent_results"
+DEFAULT_FILENAME = "RHPopt_ncomponent_results_v10"
 _REFRIGERANTS = (
     "Propane",
     "Isobutane",
@@ -70,9 +70,9 @@ def run_many(
     *,
     filename: str = DEFAULT_FILENAME,
     param_kwargs: dict[str, Any] | None = None,
-    reverse: bool = True,
+    reverse: bool = False,
     config: OuterDesignOptimisationConfig | None = None,
-    n_cpu: int = max((os.cpu_count() or 2) - 6, 1),
+    n_cpu: int = max((os.cpu_count() or 2) - 4, 1),
     results_dir: str | Path = DEFAULT_RESULTS_DIR,
 ) -> list[dict[str, Any]]:
     """Run the default RHP outer-design optimisation batch."""

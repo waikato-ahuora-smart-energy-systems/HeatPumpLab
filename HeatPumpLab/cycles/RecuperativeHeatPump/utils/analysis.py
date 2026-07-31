@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 _FIXED_PRESSURE_OBJECTIVE_FLAG = "fixed_discharge_pressure_objective"
 _PRESSURE_SEED_FIELD = "P_H_est"
 _EVAP_OUTLET_SEED_FIELD = "Tref_evap_outlet"
+_OFFSET_FEASIBILITY_START = 0.1
+_OFFSET_FEASIBILITY_REFINEMENTS = 8
 
 
 #######################################################################################################
@@ -43,6 +45,9 @@ def analyse_RHP_case(
     case["record_failed_solve"] = bool(
         record_result and case.get("record_failed_solve", True)
     )
+    case["report_failed_solve"] = bool(
+        record_result and case.get("report_failed_solve", True)
+    )
     dt_ls = []
 
     dT_gc_out_min_offset = (
@@ -57,6 +62,7 @@ def analyse_RHP_case(
     using_fast_objective = False
     seed_hp = None
     seed_dt = None
+    minimum_feasible_offset = 0.0
 
     if use_fast_objective:
         objective_case, dt, using_fast_objective, seed_hp = _get_fast_objective_case(
@@ -66,12 +72,30 @@ def analyse_RHP_case(
             seed_dt = dt
             dt_ls.append(dt)
 
+    if seed_hp is not None and not _is_successfully_solved(seed_hp):
+        if not _should_attempt_offset_recovery(seed_hp):
+            return seed_hp, seed_dt
+        feasibility_seed = _find_feasible_offset_seed(
+            HP_fn,
+            case,
+            lower_offset=dT_gc_out_min_offset,
+            upper_offset=float(vars_input["dT_gc_out_min_offset"]["bnds"][1]),
+        )
+        if feasibility_seed is None:
+            return seed_hp, seed_dt
+        seed_hp, dT_gc_out_min_offset, seed_dt, feasibility_dt = feasibility_seed
+        dt_ls.append(feasibility_dt)
+        minimum_feasible_offset = dT_gc_out_min_offset
+        vars_input["dT_gc_out_min_offset"]["xi"] = dT_gc_out_min_offset
+        objective_case = _get_fixed_pressure_objective_case(case, seed_hp)
+        using_fast_objective = True
+
     try:
         # Attempt to calculate the gradient at the boundary, if it fails,
         # assume that further optimisation could be possible
         fprime, dt = get_fprime(
             HP_fn,
-            param=objective_case,
+            param=_with_offset_initial(objective_case, minimum_feasible_offset),
             f_obj=compute_SEC_obj,
         )
         dt_ls.append(dt)
@@ -82,7 +106,10 @@ def analyse_RHP_case(
             try:
                 fprime, dt = get_fprime(
                     HP_fn,
-                    param=objective_case,
+                    param=_with_offset_initial(
+                        objective_case,
+                        minimum_feasible_offset,
+                    ),
                     f_obj=compute_SEC_obj,
                 )
                 dt_ls.append(dt)
@@ -91,15 +118,21 @@ def analyse_RHP_case(
         else:
             fprime = 1
 
-    if fprime > 0.0:
+    fprime_value = _finite_scalar_or_none(fprime)
+    if fprime_value is None:
+        if seed_hp is None or not _is_successfully_solved(seed_hp):
+            return seed_hp, seed_dt if seed_dt is not None else dt
+        fprime_value = 0.0
+
+    if fprime_value > 0.0:
         result, dt = _get_local_optimum_with_exact_fallback(
             HP_fn, objective_case, case, vars_input, using_fast_objective
         )
         dt_ls.append(dt)
         dT_gc_out_min_offset = result.x[0]
         is_solved = result.success
-    elif fprime <= 0.0:
-        dT_gc_out_min_offset = 0.0
+    elif fprime_value <= 0.0:
+        dT_gc_out_min_offset = minimum_feasible_offset
         result = {
             "nfev": 2,
             "message": "Success",
@@ -120,7 +153,11 @@ def analyse_RHP_case(
             dt_ls.append(dt)
         obj = compute_SEC_obj(hp, case)
 
-        hp.dQdW = _get_dQdW(hp) if _is_successfully_solved(hp) else 0.0
+        hp.dQdW = (
+            _get_dQdW(hp)
+            if record_result and _is_successfully_solved(hp)
+            else 0.0
+        )
         if record_result:
             get_results_report(
                 hp=hp,
@@ -199,14 +236,85 @@ def _get_fast_objective_case(
     if seed is None:
         return case, dt, False, hp
 
-    return (
-        case
-        | seed
-        | {_FIXED_PRESSURE_OBJECTIVE_FLAG: True},
-        dt,
-        True,
-        hp,
-    )
+    return (_get_fixed_pressure_objective_case(case, hp), dt, True, hp)
+
+
+def _get_fixed_pressure_objective_case(
+    case: dict,
+    seed_hp: "BaseHeatPump",
+) -> dict:
+    """Return a fixed-pressure objective case seeded by a converged exact solve."""
+    seed = _get_exact_state_seed_from_hp(seed_hp)
+    if seed is None:
+        return dict(case)
+    return dict(case) | seed | {_FIXED_PRESSURE_OBJECTIVE_FLAG: True}
+
+
+def _find_feasible_offset_seed(
+    HP_fn,
+    case: dict,
+    *,
+    lower_offset: float,
+    upper_offset: float,
+) -> tuple["BaseHeatPump", float, float, float] | None:
+    """Bracket and refine the first feasible gas-cooler outlet offset."""
+    lower = max(0.0, float(lower_offset))
+    upper_limit = max(lower, float(upper_offset))
+    trial = min(upper_limit, max(_OFFSET_FEASIBILITY_START, lower * 2.0))
+    elapsed = 0.0
+    feasible_hp = None
+    feasible_dt = 0.0
+
+    while trial > lower and trial <= upper_limit:
+        try:
+            hp, dt = solve_single_case_with_timer(
+                HP_fn,
+                _get_exact_solve_args(case, trial),
+            )
+        except Exception:
+            hp, dt = None, 0.0
+        elapsed += dt
+        if hp is not None and _is_successfully_solved(hp):
+            feasible_hp = hp
+            feasible_dt = dt
+            break
+        lower = trial
+        next_trial = min(upper_limit, trial * 2.0)
+        if next_trial <= trial:
+            break
+        trial = next_trial
+
+    if feasible_hp is None:
+        return None
+
+    upper = trial
+    for _ in range(_OFFSET_FEASIBILITY_REFINEMENTS):
+        midpoint = (lower + upper) / 2.0
+        try:
+            hp, dt = solve_single_case_with_timer(
+                HP_fn,
+                _get_exact_solve_args(case, midpoint),
+            )
+        except Exception:
+            hp, dt = None, 0.0
+        elapsed += dt
+        if hp is not None and _is_successfully_solved(hp):
+            upper = midpoint
+            feasible_hp = hp
+            feasible_dt = dt
+        else:
+            lower = midpoint
+
+    return feasible_hp, upper, feasible_dt, elapsed
+
+
+def _with_offset_initial(case: dict, offset: float) -> dict:
+    """Copy an objective case with a selected finite-difference origin."""
+    gradient_case = copy.deepcopy(case)
+    gradient_case["additional_data"]["vars_input"][
+        "dT_gc_out_min_offset"
+    ]["xi"] = float(offset)
+    return gradient_case
 
 
 def _get_local_optimum_with_exact_fallback(
@@ -297,6 +405,15 @@ def _is_finite_number(value: object) -> bool:
         return False
 
 
+def _finite_scalar_or_none(value: object) -> float | None:
+    """Return one finite scalar value, or ``None`` for non-finite inputs."""
+    try:
+        scalar = float(np.asarray(value, dtype=float).reshape(-1)[0])
+    except (TypeError, ValueError, IndexError):
+        return None
+    return scalar if math.isfinite(scalar) else None
+
+
 def _is_finite_positive(value: object) -> bool:
     """Return True for finite positive values."""
     return _is_finite_number(value) and float(value) > 0.0
@@ -324,6 +441,12 @@ def _can_reuse_exact_seed(
 def _is_successfully_solved(hp: "BaseHeatPump") -> bool:
     """Return True when a seed solve produced usable exact results."""
     return bool(getattr(hp, "feasible", False) and getattr(hp, "converged", False))
+
+
+def _should_attempt_offset_recovery(hp: "BaseHeatPump") -> bool:
+    """Return whether a failed boundary solve matches the recoverable Pentane mode."""
+    errors = getattr(hp, "constraint_errors", {}) or {}
+    return "cycle_iteration" in errors
 
 
 def _get_dQdW(hp0: "BaseHeatPump") -> float:

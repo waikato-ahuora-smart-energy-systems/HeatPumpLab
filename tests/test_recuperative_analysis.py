@@ -198,7 +198,13 @@ def test_analyse_rhp_case_can_skip_candidate_result_persistence(monkeypatch):
     monkeypatch.setattr(
         rhp_analysis, "get_fprime", lambda *args, **kwargs: (-0.1, 0.2)
     )
-    monkeypatch.setattr(rhp_analysis, "_get_dQdW", lambda solved_hp: 0.0)
+    monkeypatch.setattr(
+        rhp_analysis,
+        "_get_dQdW",
+        lambda solved_hp: pytest.fail(
+            "non-recording optimiser candidates do not need dQdW"
+        ),
+    )
     monkeypatch.setattr(
         rhp_analysis,
         "solve_single_case_with_timer",
@@ -219,6 +225,7 @@ def test_analyse_rhp_case_can_skip_candidate_result_persistence(monkeypatch):
 
     assert solved_hp is hp
     assert solved_args[0]["record_failed_solve"] is False
+    assert solved_args[0]["report_failed_solve"] is False
 
 
 def test_analyse_rhp_case_keeps_failure_recording_for_standalone_solves(monkeypatch):
@@ -243,6 +250,7 @@ def test_analyse_rhp_case_keeps_failure_recording_for_standalone_solves(monkeypa
     )
 
     assert solved_args[0]["record_failed_solve"] is True
+    assert solved_args[0]["report_failed_solve"] is True
 
 
 def test_analyse_rhp_case_skips_dqdw_follow_up_for_failed_exact_solve(monkeypatch):
@@ -479,11 +487,11 @@ def test_analyse_rhp_case_reuses_exact_seed_when_selected_offset_is_unchanged(
     assert reports[0]["dt"] == pytest.approx(0.11 + 0.2)
 
 
-def test_analyse_rhp_case_does_not_reuse_failed_seed_solve(monkeypatch):
+def test_analyse_rhp_case_brackets_feasible_offset_after_failed_seed(monkeypatch):
     failed_seed = FakeHeatPump(sec=9.9)
     failed_seed.feasible = False
     failed_seed.converged = False
-    final_hp = FakeHeatPump(sec=1.1)
+    failed_seed.constraint_errors = {"cycle_iteration": 1.0}
     solved_args = []
     reports = []
 
@@ -500,9 +508,12 @@ def test_analyse_rhp_case_does_not_reuse_failed_seed_solve(monkeypatch):
 
     def solve_single_case(hp_cls, args):
         solved_args.append(args)
-        if len(solved_args) == 1:
+        offset = args["dT_gc_out_min_offset"]
+        if offset < 0.8:
             return failed_seed, 0.11
-        return final_hp, 0.44
+        hp = FakeHeatPump(sec=1.1)
+        hp.dT_gc_out_min_offset = offset
+        return hp, 0.44
 
     monkeypatch.setattr(rhp_analysis, "solve_single_case_with_timer", solve_single_case)
 
@@ -512,10 +523,50 @@ def test_analyse_rhp_case_does_not_reuse_failed_seed_solve(monkeypatch):
         results_dir="custom-results",
     )
 
-    assert solved_hp is final_hp
+    assert solved_hp is not failed_seed
+    assert solved_hp.feasible is True
     assert solve_time == pytest.approx(0.44)
-    assert len(solved_args) == 2
+    assert len(solved_args) == 13
+    assert solved_hp.dT_gc_out_min_offset == pytest.approx(0.8, abs=0.002)
+    assert max(args["dT_gc_out_min_offset"] for args in solved_args) <= 0.8
     assert reports[0]["obj"] == pytest.approx(1.1)
+
+
+def test_analyse_rhp_case_does_not_recover_temperature_cross_seed(monkeypatch):
+    failed_seed = FakeHeatPump(sec=0.9)
+    failed_seed.feasible = False
+    failed_seed.converged = False
+    failed_seed.constraint_errors = {"heat_exchanger_temperature_cross": 2.0}
+    solves = []
+
+    monkeypatch.setattr(
+        rhp_analysis,
+        "_get_fast_objective_case",
+        lambda hp_cls, case, offset: (case, 3.8, False, failed_seed),
+    )
+    monkeypatch.setattr(
+        rhp_analysis,
+        "solve_single_case_with_timer",
+        lambda *args, **kwargs: solves.append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        rhp_analysis,
+        "get_fprime",
+        lambda *args, **kwargs: pytest.fail(
+            "a physical temperature cross should return immediately"
+        ),
+    )
+
+    solved_hp, solve_time = rhp_analysis.analyse_RHP_case(
+        FakeHeatPump,
+        {"refrigerant": "Water;Ammonia|0.5;0.5|mass"},
+        use_fast_objective=True,
+        record_result=False,
+    )
+
+    assert solved_hp is failed_seed
+    assert solve_time == pytest.approx(3.8)
+    assert solves == []
 
 
 def test_dqdw_uses_followup_case_to_estimate_heating_sensitivity(monkeypatch):

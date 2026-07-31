@@ -67,15 +67,27 @@ def _plan_composition_searches(
         return starts[:1], config.max_exact_evaluations
 
     polish_enabled = config.vary_comp2_power_frac or config.vary_composition
-    polish_reserve = (
-        config.polish_top_n * config.polish_budget if polish_enabled else 0
+    maximum_starts = min(
+        len(starts),
+        max(1, config.max_exact_evaluations // budget_per_start),
     )
-    remaining_after_first = max(
-        0,
-        config.max_exact_evaluations - budget_per_start - polish_reserve,
-    )
-    additional = remaining_after_first // budget_per_start
-    return starts[: min(len(starts), 1 + additional)], budget_per_start
+    for start_count in range(maximum_starts, 0, -1):
+        polish_count = min(config.polish_top_n, start_count) if polish_enabled else 0
+        requested = (
+            start_count * budget_per_start
+            + polish_count * config.polish_budget
+        )
+        if requested <= config.max_exact_evaluations:
+            search_allowance = (
+                config.max_exact_evaluations
+                - polish_count * config.polish_budget
+            )
+            distributed_budget = min(
+                budget_per_start + 12,
+                search_allowance // start_count,
+            )
+            return starts[:start_count], distributed_budget
+    return starts[:1], budget_per_start
 
 
 def _full_search_budget(config: OuterDesignOptimisationConfig) -> int:

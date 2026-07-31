@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import inspect
 import math
 from types import SimpleNamespace
@@ -22,6 +23,9 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import outer_design as
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _polish as polish_helpers
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     _results_io as results_io,
+)
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
+    _search as search_helpers,
 )
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _types as opt_types
 
@@ -89,6 +93,8 @@ def test_public_api_exposes_only_the_rhp_optimiser_surface():
         "OPTIMISER_VERSION",
         "CompositionSearchResult",
         "DesignEvaluation",
+        "HistoricalIncumbent",
+        "IncumbentReplay",
         "LineSearchResult",
         "LocalPolishResult",
         "OuterDesignOptimisationConfig",
@@ -199,6 +205,10 @@ def test_objective_maps_vector_to_domain_case_without_mutating_base_case():
     assert case["comp2_power_frac"] == pytest.approx(0.42)
     assert case["refrigerant"] == "Propane;Butane|0.8;0.2|mass"
     assert base_case == {"T_air_tar": 180.0, "dT_rhx3_cold": 0.0}
+    assert objective.base_case["T_source_in"] == pytest.approx(
+        opt_types.DEFAULT_BASE_CASE["T_source_in"]
+    )
+    assert objective.base_case["T_air_tar"] == pytest.approx(180.0)
 
 
 def test_objective_projects_ternary_composition_onto_simplex():
@@ -292,6 +302,132 @@ def test_outer_design_config_defaults_to_robust_multistart_budget():
     assert config.max_exact_evaluations == 250
     assert config.max_composition_starts == 8
     assert config.polish_top_n == 3
+    assert config.polish_budget == 24
+    assert config.polish_pure_recuperator_lifts is True
+    assert config.preserve_incumbent is True
+    assert config.incumbent_replay_limit == 3
+    assert config.incumbent_polish_budget == 12
+
+
+def test_v10_never_selects_worse_than_successful_current_solver_incumbent(
+    monkeypatch,
+):
+    analyser = SyntheticAnalyser(
+        dT1_target=55.0,
+        dT2_target=25.0,
+        comp2_target=0.3,
+        composition_target=0.8,
+    )
+
+    def build_synthetic_objective(**kwargs):
+        return objective_helpers._OuterDesignObjective(
+            **kwargs,
+            analyser=analyser,
+        )
+
+    monkeypatch.setattr(
+        outer_design_module,
+        "_OuterDesignObjective",
+        build_synthetic_objective,
+    )
+    incumbent = outer_opt.HistoricalIncumbent(
+        source_version="edge-first-pattern-search-v9",
+        source_file="prior.csv",
+        stored_sec=0.99,
+        x=(55.0, 25.0, 0.3, 0.8, 0.2),
+    )
+    config = outer_opt.OuterDesignOptimisationConfig(
+        max_exact_evaluations=3,
+        max_composition_starts=1,
+        line_budget=1,
+        split_budget=0,
+        polish_budget=0,
+        incumbent_polish_budget=0,
+    )
+
+    result = outer_opt.optimise_recuperative_heat_pump(
+        config=config,
+        incumbents=(incumbent,),
+    )
+    summary = result.to_summary_dict()
+
+    assert len(result.incumbent_replays) == 1
+    assert result.incumbent_replays[0].evaluation.success is True
+    assert result.best is not None
+    assert result.best.objective <= result.incumbent_replays[0].evaluation.objective
+    assert result.best.phase == "incumbent_replay"
+    assert summary["incumbent_source_version"] == incumbent.source_version
+    assert summary["incumbent_stored_SEC"] == pytest.approx(0.99)
+    assert summary["incumbent_replayed_SEC"] == pytest.approx(1.0)
+    assert summary["selected_incumbent"] is True
+    assert summary["no_worse_than_replayed_incumbent"] is True
+    assert summary["SEC_change_vs_incumbent_pct"] <= 0.0
+    assert summary["historical_model_drift_pct"] == pytest.approx(
+        100.0 * (1.0 / 0.99 - 1.0)
+    )
+
+
+def test_historical_incumbents_are_attached_and_included_in_case_signature(
+    tmp_path,
+):
+    [case] = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0]},
+    )
+    row = batch_helpers._result_row(case, _fake_batch_result())
+    row.update(
+        {
+            "optimiser_version": "edge-first-pattern-search-v9",
+            "best_SEC": 0.48,
+            "best_dT_rhx1_cold": 12.0,
+            "best_dT_rhx2_cold": 44.0,
+            "best_comp2_power_frac": 0.4,
+            "best_mass_fractions": "0.6;0.4",
+        }
+    )
+    batch_helpers.print_result_to_csv(
+        output=row,
+        file_name="historical",
+        results_dir=tmp_path,
+    )
+
+    [attached] = case_helpers._attach_incumbents_and_refresh_signatures(
+        [case],
+        results_dir=tmp_path,
+    )
+
+    assert len(attached.incumbents) == 1
+    incumbent = attached.incumbents[0]
+    assert incumbent.source_version == "edge-first-pattern-search-v9"
+    assert incumbent.source_file == "historical.csv"
+    assert incumbent.stored_sec == pytest.approx(0.48)
+    assert incumbent.x == pytest.approx((12.0, 44.0, 0.4, 0.6, 0.4))
+    assert attached.signature != case.signature
+    assert attached.temp_suffix == f"-{attached.signature}"
+
+
+def test_historical_incumbent_requires_all_extra_case_inputs_to_match(tmp_path):
+    case = case_helpers._build_optimisation_case(
+        base_case={"T_air_tar": 180.0},
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+    )
+    row = batch_helpers._result_row(case, _fake_batch_result())
+    row["optimiser_version"] = "edge-first-pattern-search-v9"
+    batch_helpers.print_result_to_csv(
+        output=row,
+        file_name="historical",
+        results_dir=tmp_path,
+    )
+    case_with_extra_input = case_helpers._build_optimisation_case(
+        base_case={"T_air_tar": 180.0, "experimental_solver_setting": 2.0},
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+    )
+
+    [attached] = case_helpers._attach_incumbents_and_refresh_signatures(
+        [case_with_extra_input],
+        results_dir=tmp_path,
+    )
+
+    assert attached.incumbents == ()
 
 
 @pytest.mark.parametrize("polish_top_n", [0, 1, 4])
@@ -302,7 +438,7 @@ def test_outer_design_config_requires_two_or_three_polish_sources(polish_top_n):
 
 @pytest.mark.parametrize(
     ("max_evaluations", "expected_starts"),
-    [(100, 2), (250, 8)],
+    [(100, 2), (250, 7)],
 )
 def test_composition_multistart_plan_reserves_polish_budget(
     max_evaluations,
@@ -319,8 +455,13 @@ def test_composition_multistart_plan_reserves_polish_budget(
     )
 
     assert len(selected) == expected_starts
-    assert budget_per_start == 25
-    assert len(selected) * budget_per_start + 3 * config.polish_budget <= max_evaluations
+    expected_budget = 26 if max_evaluations == 100 else 25
+    assert budget_per_start == expected_budget
+    assert (
+        len(selected) * budget_per_start
+        + min(3, len(selected)) * config.polish_budget
+        <= max_evaluations
+    )
 
 
 def test_outer_optimiser_runs_line_searches_from_each_selected_composition(monkeypatch):
@@ -386,10 +527,11 @@ def test_polish_sources_are_best_candidates_from_distinct_line_directions(monkey
 
     direction_candidates = {
         candidate.x
+        for search in result.composition_searches
         for candidate in (
-            result.edge_a.best,
-            result.edge_b.best,
-            None if result.split is None else result.split.best,
+            search.edge_a.best,
+            search.edge_b.best,
+            None if search.split is None else search.split.best,
         )
         if candidate is not None and candidate.success
     }
@@ -481,6 +623,19 @@ def test_parallel_composition_search_preserves_start_order_and_worker_failures()
     assert [result.success for result in results] == [True, False]
     assert executors[0].max_workers == 2
     assert executors[0].shutdown_called is True
+
+
+def test_spare_binary_search_budget_strengthens_line_and_split_coverage():
+    config = outer_opt.OuterDesignOptimisationConfig()
+
+    expanded = multistart_helpers._search_config_for_budget(
+        config,
+        max_evaluations=35,
+    )
+
+    assert expanded.line_budget == 12
+    assert expanded.split_budget == 10
+    assert composition_start_helpers._full_search_budget(expanded) == 35
 
 
 def test_composition_search_falls_back_to_serial_when_pool_setup_fails():
@@ -617,6 +772,29 @@ def test_objective_reuses_cached_exact_solution_for_duplicate_vectors():
     assert len(analyser.calls) == 1
 
 
+def test_objective_does_not_carry_inner_solver_state_between_designs():
+    calls = []
+
+    def analyser(hp_cls, case, results_dir, use_fast_objective=True):
+        del hp_cls, results_dir, use_fast_objective
+        calls.append(dict(case))
+        return FakeHeatPump(sec=1.0, case=case), 0.01
+
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=3,
+        analyser=analyser,
+        refrigerant="Pentane",
+    )
+
+    objective.evaluate([20.0, 35.0, 0.45, 1.0])
+    objective.evaluate([21.0, 35.0, 0.45, 1.0])
+
+    assert "P_H_est" not in calls[0]
+    assert "Tref_evap_outlet" not in calls[0]
+    assert "P_H_est" not in calls[1]
+    assert "Tref_evap_outlet" not in calls[1]
+
+
 def test_objective_returns_finite_penalty_for_failed_exact_solve():
     objective = objective_helpers._OuterDesignObjective(
         max_evals=3,
@@ -676,6 +854,97 @@ def test_objective_does_not_exceed_exact_evaluation_budget():
     assert second.message == "exact evaluation budget exhausted"
     assert objective.exact_evaluations == 1
     assert objective.budget_exhausted_calls == 1
+
+
+def test_line_search_refines_the_best_observed_sample_bracket():
+    sampled_values = []
+
+    def evaluate_phase(phase, x):
+        value = float(x[0])
+        sampled_values.append(value)
+        return SimpleNamespace(
+            phase=phase,
+            x=(value,),
+            objective=(value - 75.0) ** 2,
+            success=True,
+        )
+
+    result = search_helpers._line_search(
+        phase="test",
+        variable_name="x",
+        lo=0.0,
+        hi=100.0,
+        budget=8,
+        build_x=lambda value: [value],
+        evaluate_phase=evaluate_phase,
+    )
+
+    assert sampled_values[:5] == pytest.approx((0.0, 25.0, 50.0, 75.0, 100.0))
+    assert all(50.0 <= value <= 100.0 for value in sampled_values[5:])
+    assert result.best is not None
+    assert result.best.x[0] == pytest.approx(75.0)
+
+
+def test_line_search_uses_observed_multibasin_values_to_choose_refinement_region():
+    def evaluate_phase(phase, x):
+        value = float(x[0])
+        broad_well = 0.2 + (value - 20.0) ** 2 / 4000.0
+        narrow_well = (value - 75.0) ** 2 / 20.0
+        return SimpleNamespace(
+            phase=phase,
+            x=(value,),
+            objective=min(broad_well, narrow_well),
+            success=True,
+        )
+
+    result = search_helpers._line_search(
+        phase="test",
+        variable_name="x",
+        lo=0.0,
+        hi=100.0,
+        budget=8,
+        build_x=lambda value: [value],
+        evaluate_phase=evaluate_phase,
+    )
+
+    assert result.best is not None
+    assert result.best.x[0] == pytest.approx(75.0)
+    assert result.best.objective == pytest.approx(0.0)
+
+
+def test_line_search_refines_distinct_interior_basin_when_screen_best_is_boundary():
+    sampled_values = []
+
+    def evaluate_phase(phase, x):
+        value = float(x[0])
+        sampled_values.append(value)
+        objective = (
+            0.1 + (value - 56.0) ** 2 / 200.0
+            if 35.0 <= value <= 70.0
+            else 0.2 + value / 100.0
+        )
+        return SimpleNamespace(
+            phase=phase,
+            x=(value,),
+            objective=objective,
+            success=True,
+        )
+
+    result = search_helpers._line_search(
+        phase="test",
+        variable_name="x",
+        lo=0.0,
+        hi=100.0,
+        budget=9,
+        build_x=lambda value: [value],
+        evaluate_phase=evaluate_phase,
+    )
+
+    assert sampled_values[:5] == pytest.approx((0.0, 25.0, 50.0, 75.0, 100.0))
+    assert any(25.0 <= value <= 75.0 for value in sampled_values[5:])
+    assert result.best is not None
+    assert result.best.objective < 0.2
+    assert result.best.x[0] == pytest.approx(56.0, abs=1.0)
 
 
 def test_outer_design_optimisation_edge_a_holds_dT1_at_zero(monkeypatch):
@@ -883,6 +1152,106 @@ def test_pattern_search_polish_improves_unsmooth_objective_without_leaving_bound
     assert sum(result.best.x[3:]) == pytest.approx(1.0)
 
 
+def test_pattern_search_screens_remote_compressor_split_basin():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=6,
+        analyser=SyntheticAnalyser(comp2_target=0.1),
+    )
+    source = _phase_from_exact_record(
+        objective,
+        [20.0, 35.0, 0.5, 0.5, 0.5],
+        phase="source",
+    )
+
+    result = polish_helpers._run_pattern_search_polish(
+        source=source,
+        objective=objective,
+        config=opt_types.LocalPolishConfig(
+            budget=5,
+            comp2_screen_points=5,
+            vary_composition=False,
+        ),
+        evaluate_phase=_phase_evaluator(objective, []),
+    )
+
+    assert result.best is not None
+    assert result.best.x[2] == pytest.approx(0.1)
+    assert result.best.objective < source.objective
+
+
+def test_pattern_search_can_reopen_recuperator_lifts():
+    objective = objective_helpers._OuterDesignObjective(
+        max_evals=8,
+        analyser=SyntheticAnalyser(
+            dT1_target=0.0,
+            dT2_target=5.0,
+            comp2_target=0.1,
+            composition_target=0.5,
+        ),
+    )
+    source = _phase_from_exact_record(
+        objective,
+        [0.0, 0.0, 0.5, 0.5, 0.5],
+        phase="source",
+    )
+
+    result = polish_helpers._run_pattern_search_polish(
+        source=source,
+        objective=objective,
+        config=opt_types.LocalPolishConfig(
+            budget=7,
+            vary_dT_rhx2_cold=True,
+            vary_composition=False,
+        ),
+        evaluate_phase=_phase_evaluator(objective, []),
+    )
+
+    assert result.best is not None
+    assert result.best.x[1] == pytest.approx(5.0)
+    assert result.best.x[2] == pytest.approx(0.1)
+    assert result.best.objective < source.objective
+
+
+def test_mixture_lift_feedback_relines_after_composition_polish():
+    analyser = SyntheticAnalyser(
+        dT1_target=85.0,
+        dT2_target=0.0,
+        comp2_target=0.9,
+        composition_target=0.85,
+    )
+    source_objective = objective_helpers._OuterDesignObjective(
+        max_evals=1,
+        analyser=analyser,
+    )
+    source = _phase_from_exact_record(
+        source_objective,
+        [68.0, 0.0, 0.9, 0.85, 0.15],
+        phase="polish_pattern_search",
+    )
+    task = polish_helpers._LiftFeedbackTask(
+        source=source,
+        budget=7,
+        base_case=dict(opt_types.DEFAULT_BASE_CASE),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+        config=outer_opt.OuterDesignOptimisationConfig(),
+        results_dir="results",
+    )
+
+    result = polish_helpers._run_lift_feedback(
+        task,
+        objective_factory=lambda **kwargs: objective_helpers._OuterDesignObjective(
+            **kwargs,
+            analyser=analyser,
+        ),
+    )
+
+    assert result.success is True
+    assert result.best is not None
+    assert result.best.x[0] == pytest.approx(85.0, abs=3.0)
+    assert result.best.objective < source.objective
+    assert all(record.phase == "lift_feedback" for record in result.evaluations)
+
+
 def test_pattern_search_transfers_mass_across_ternary_simplex():
     objective = objective_helpers._OuterDesignObjective(
         max_evals=16,
@@ -984,6 +1353,7 @@ def test_pattern_search_shrinks_steps_when_no_poll_improves():
         objective=objective,
         config=opt_types.LocalPolishConfig(
             budget=8,
+            comp2_screen_points=0,
             initial_comp2_step=0.05,
             initial_composition_step=0.05,
             min_comp2_step=0.01,
@@ -1500,6 +1870,40 @@ def test_optimal_result_transfer_ignores_inner_candidate_files(tmp_path):
     assert candidate_path.exists()
 
 
+def test_completed_result_transfer_only_merges_the_finished_case(tmp_path):
+    cases = case_helpers._build_optimisation_cases(
+        param_kwargs={"T_air_tar_ls": [180.0, 200.0]},
+    )
+    for index, case in enumerate(cases):
+        batch_helpers.print_result_to_csv(
+            output={
+                "case_signature": case.signature,
+                "batch_success": True,
+                "best_objective": 0.5 + index,
+            },
+            file_name="temp/optimisation/R",
+            suffix=case.temp_suffix,
+            results_dir=tmp_path,
+        )
+
+    batch_helpers._transfer_completed_optimal_result(
+        "RHPopt_results",
+        cases[0],
+        results_dir=tmp_path,
+    )
+
+    master = (tmp_path / "RHPopt_results.csv").read_text()
+    assert cases[0].signature in master
+    assert cases[1].signature not in master
+    remaining_temp = (
+        tmp_path
+        / "temp"
+        / "optimisation"
+        / f"R{cases[1].temp_suffix}.csv"
+    )
+    assert remaining_temp.exists()
+
+
 def test_single_case_runner_resumes_optimal_result_before_solving(monkeypatch, tmp_path):
     config = outer_opt.OuterDesignOptimisationConfig(max_exact_evaluations=3)
     case = case_helpers._build_optimisation_case(
@@ -1530,6 +1934,38 @@ def test_single_case_runner_resumes_optimal_result_before_solving(monkeypatch, t
     assert row is not None
     assert row["case_signature"] == case.signature
     assert (tmp_path / "RHPopt_results.csv").exists()
+
+
+def test_batch_worker_passes_attached_incumbents_to_outer_optimiser(
+    monkeypatch,
+    tmp_path,
+):
+    case = case_helpers._build_optimisation_case(
+        base_case={"T_air_tar": 180.0},
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+    )
+    incumbent = outer_opt.HistoricalIncumbent(
+        source_version="edge-first-pattern-search-v4",
+        source_file="historical.csv",
+        stored_sec=0.48,
+        x=(12.0, 44.0, 0.4, 0.6, 0.4),
+    )
+    case = replace(case, incumbents=(incumbent,))
+    calls = []
+
+    def optimise(**kwargs):
+        calls.append(kwargs)
+        return _fake_batch_result()
+
+    monkeypatch.setattr(batch_helpers, "optimise_recuperative_heat_pump", optimise)
+
+    batch_helpers._solve_optimisation_case(
+        case,
+        results_dir=str(tmp_path),
+        n_cpu=1,
+    )
+
+    assert calls[0]["incumbents"] == (incumbent,)
 
 
 def test_batch_runner_submits_parallel_cases_to_executor(tmp_path):
@@ -1612,6 +2048,7 @@ def test_public_batch_runner_transfers_optimal_files_before_and_after(
         config=outer_opt.OuterDesignOptimisationConfig(),
     )
     transfers = []
+    completed_transfers = []
     events = []
 
     monkeypatch.setattr(
@@ -1620,6 +2057,14 @@ def test_public_batch_runner_transfers_optimal_files_before_and_after(
         lambda filename, results_dir: (
             transfers.append((filename, results_dir)),
             events.append("transfer"),
+        ),
+    )
+    monkeypatch.setattr(
+        batch_helpers,
+        "_transfer_completed_optimal_result",
+        lambda filename, case, results_dir: (
+            completed_transfers.append((filename, case.signature, results_dir)),
+            events.append("completed-transfer"),
         ),
     )
 
@@ -1633,9 +2078,11 @@ def test_public_batch_runner_transfers_optimal_files_before_and_after(
         get_cases,
     )
 
-    def run_cases(cases, results_dir, n_cpu):
+    def run_cases(cases, results_dir, n_cpu, result_callback):
         events.append("optimise")
-        return [{"case_signature": cases[0].signature}]
+        row = {"case_signature": cases[0].signature, "batch_success": True}
+        result_callback(cases[0], row)
+        return [row]
 
     monkeypatch.setattr(
         batch_helpers,
@@ -1651,12 +2098,23 @@ def test_public_batch_runner_transfers_optimal_files_before_and_after(
         results_dir=tmp_path,
     )
 
-    assert rows == [{"case_signature": cases[0].signature}]
+    assert rows == [
+        {"case_signature": cases[0].signature, "batch_success": True}
+    ]
     assert transfers == [
         ("RHPopt_results", tmp_path),
         ("RHPopt_results", tmp_path),
     ]
-    assert events == ["transfer", "filter", "optimise", "transfer"]
+    assert completed_transfers == [
+        ("RHPopt_results", cases[0].signature, tmp_path)
+    ]
+    assert events == [
+        "transfer",
+        "filter",
+        "optimise",
+        "completed-transfer",
+        "transfer",
+    ]
 
 
 def test_real_outer_design_optimisation_smoke_when_refprop_is_available(hpl, tmp_path):

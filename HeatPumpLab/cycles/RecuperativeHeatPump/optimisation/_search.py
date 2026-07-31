@@ -217,29 +217,47 @@ def _line_search(
         )
 
     evaluations: list[PhaseEvaluation] = []
-    sample_budget = min(budget, max(3, budget // 2))
-    for value in _line_sample_points(lo, hi, sample_budget):
+    sample_budget = min(budget, max(3, budget // 2 + 1))
+    sample_values = _line_sample_points(lo, hi, sample_budget)
+    for value in sample_values:
         evaluations.append(evaluate_phase(phase, build_x(float(value))))
 
     remaining = budget - len(evaluations)
-    if remaining > 0 and hi > lo:
-        calls = 0
-
-        def scalar(value: float) -> float:
-            nonlocal calls
-            if calls >= remaining:
-                return PENALTY_OBJECTIVE
-            calls += 1
-            record = evaluate_phase(phase, build_x(float(value)))
-            evaluations.append(record)
-            return record.objective
-
-        optimize.minimize_scalar(
-            scalar,
-            bounds=(float(lo), float(hi)),
-            method="bounded",
-            options={"maxiter": remaining, "xatol": 1e-4},
+    if remaining > 0 and hi > lo and len(sample_values) > 1:
+        refinement_indices = _refinement_sample_indices(
+            evaluations,
+            max_basins=2 if remaining >= 4 else 1,
         )
+        base_allowance, extra_allowance = divmod(
+            remaining,
+            len(refinement_indices),
+        )
+        total_calls = 0
+        for basin_number, refinement_index in enumerate(refinement_indices):
+            allowance = base_allowance + int(basin_number < extra_allowance)
+            bracket_left = max(0, refinement_index - 1)
+            bracket_right = min(len(sample_values) - 1, refinement_index + 1)
+            basin_calls = 0
+
+            def scalar(value: float) -> float:
+                nonlocal basin_calls, total_calls
+                if basin_calls >= allowance or total_calls >= remaining:
+                    return PENALTY_OBJECTIVE
+                basin_calls += 1
+                total_calls += 1
+                record = evaluate_phase(phase, build_x(float(value)))
+                evaluations.append(record)
+                return record.objective
+
+            optimize.minimize_scalar(
+                scalar,
+                bounds=(
+                    float(sample_values[bracket_left]),
+                    float(sample_values[bracket_right]),
+                ),
+                method="bounded",
+                options={"maxiter": allowance, "xatol": 1e-4},
+            )
 
     best = _best_phase_evaluation(evaluations)
     return LineSearchResult(
@@ -250,6 +268,34 @@ def _line_search(
         success=bool(best and best.success),
         message="success" if best and best.success else "no successful evaluations",
     )
+
+
+def _refinement_sample_indices(
+    evaluations: list[PhaseEvaluation],
+    *,
+    max_basins: int,
+) -> tuple[int, ...]:
+    """Return the strongest distinct local minima observed in the screen."""
+    local_minima = []
+    for index, evaluation in enumerate(evaluations):
+        if not evaluation.success:
+            continue
+        left = evaluations[index - 1].objective if index > 0 else float("inf")
+        right = (
+            evaluations[index + 1].objective
+            if index < len(evaluations) - 1
+            else float("inf")
+        )
+        if evaluation.objective <= left and evaluation.objective <= right:
+            local_minima.append(index)
+    if not local_minima:
+        sampled_best = _best_phase_evaluation(evaluations)
+        return (evaluations.index(sampled_best),)
+    ordered = sorted(
+        local_minima,
+        key=lambda index: evaluations[index].objective,
+    )
+    return tuple(ordered[: max(1, int(max_basins))])
 
 
 def _line_sample_points(lo: float, hi: float, n_points: int) -> np.ndarray:

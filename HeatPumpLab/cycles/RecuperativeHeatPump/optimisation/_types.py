@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-OPTIMISER_VERSION = "edge-first-pattern-search-v4"
+OPTIMISER_VERSION = "multibasin-screened-pattern-search-v10"
 
 BASE_VARIABLE_NAMES = (
     "dT_rhx1_cold",
@@ -118,6 +118,24 @@ class PhaseEvaluation:
 
 
 @dataclass(frozen=True)
+class HistoricalIncumbent:
+    """One prior successful design available for current-solver replay."""
+
+    source_version: str
+    source_file: str
+    stored_sec: float
+    x: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class IncumbentReplay:
+    """Current-solver evaluation paired with its historical provenance."""
+
+    incumbent: HistoricalIncumbent
+    evaluation: PhaseEvaluation
+
+
+@dataclass(frozen=True)
 class LineSearchResult:
     """Result of one edge or split-line search."""
 
@@ -131,9 +149,12 @@ class LineSearchResult:
 
 @dataclass(frozen=True)
 class LocalPolishConfig:
-    """Configuration for fixed-recuperator local polishing."""
+    """Configuration for screened local pattern-search polishing."""
 
     budget: int = 12
+    comp2_screen_points: int = 5
+    initial_dT_step: float = 5.0
+    min_dT_step: float = 0.25
     initial_comp2_step: float = 0.05
     initial_composition_step: float = 0.05
     min_comp2_step: float = 0.002
@@ -141,6 +162,8 @@ class LocalPolishConfig:
     shrink_factor: float = 0.5
     max_failed_shrinks: int = 20
     improvement_tolerance: float = 0.0
+    vary_dT_rhx1_cold: bool = False
+    vary_dT_rhx2_cold: bool = False
     vary_comp2_power_frac: bool = True
     vary_composition: bool = True
 
@@ -194,21 +217,30 @@ class OuterDesignOptimisationConfig:
     vary_composition: bool = True
     line_budget: int = 8
     split_budget: int = 8
-    polish_budget: int = 12
+    polish_budget: int = 24
     polish_top_n: int = 3
+    polish_pure_recuperator_lifts: bool = True
+    mixture_lift_feedback_budget: int = 7
     use_fast_objective: bool = True
     corner_tolerance: float = 1e-8
+    preserve_incumbent: bool = True
+    incumbent_replay_limit: int = 3
+    incumbent_polish_budget: int = 12
 
     def __post_init__(self) -> None:
         if self.polish_top_n not in {2, 3}:
             raise ValueError("polish_top_n must be either 2 or 3.")
         if self.max_composition_starts < 1:
             raise ValueError("max_composition_starts must be at least 1.")
+        if self.incumbent_replay_limit < 0:
+            raise ValueError("incumbent_replay_limit must be nonnegative.")
         for name in (
             "max_exact_evaluations",
             "line_budget",
             "split_budget",
             "polish_budget",
+            "mixture_lift_feedback_budget",
+            "incumbent_polish_budget",
         ):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must be nonnegative.")
@@ -227,6 +259,9 @@ class OuterDesignOptimisationResult:
     composition_searches: tuple[CompositionSearchResult, ...]
     requested_composition_starts: int
     polish_results: tuple[LocalPolishResult, ...]
+    lift_feedback_results: tuple[LineSearchResult, ...]
+    incumbent_replays: tuple[IncumbentReplay, ...]
+    incumbent_polish_results: tuple[LocalPolishResult, ...]
     best: PhaseEvaluation | None
     evaluations: tuple[PhaseEvaluation, ...]
     elapsed_seconds: float
@@ -247,8 +282,83 @@ class OuterDesignOptimisationResult:
             "polished_direction_count": sum(
                 polish.status != "skipped" for polish in self.polish_results
             ),
+            "lift_feedback_count": sum(
+                result.success for result in self.lift_feedback_results
+            ),
+            "incumbent_candidate_count": len(self.incumbent_replays),
+            "successful_incumbent_replays": sum(
+                replay.evaluation.success for replay in self.incumbent_replays
+            ),
+            "incumbent_polished_direction_count": sum(
+                polish.status != "skipped"
+                for polish in self.incumbent_polish_results
+            ),
             **{f"config_{key}": value for key, value in asdict(self.config).items()},
         }
+        successful_replays = [
+            replay for replay in self.incumbent_replays if replay.evaluation.success
+        ]
+        if successful_replays:
+            incumbent_best = min(
+                successful_replays,
+                key=lambda replay: replay.evaluation.objective,
+            )
+            incumbent_evaluations = tuple(
+                replay.evaluation for replay in self.incumbent_replays
+            ) + tuple(
+                record
+                for polish in self.incumbent_polish_results
+                for record in polish.evaluations
+            )
+            output.update(
+                {
+                    "incumbent_source_version": (
+                        incumbent_best.incumbent.source_version
+                    ),
+                    "incumbent_source_file": incumbent_best.incumbent.source_file,
+                    "incumbent_stored_SEC": incumbent_best.incumbent.stored_sec,
+                    "incumbent_replayed_SEC": incumbent_best.evaluation.sec,
+                    "incumbent_replay_success": True,
+                    "selected_incumbent": self.best in incumbent_evaluations,
+                    "no_worse_than_replayed_incumbent": (
+                        self.best is not None
+                        and self.best.objective
+                        <= incumbent_best.evaluation.objective
+                    ),
+                    "SEC_change_vs_incumbent_pct": (
+                        None
+                        if self.best is None
+                        else 100.0
+                        * (
+                            self.best.objective
+                            / incumbent_best.evaluation.objective
+                            - 1.0
+                        )
+                    ),
+                    "historical_model_drift_pct": (
+                        100.0
+                        * (
+                            incumbent_best.evaluation.objective
+                            / incumbent_best.incumbent.stored_sec
+                            - 1.0
+                        )
+                    ),
+                }
+            )
+        else:
+            output.update(
+                {
+                    "incumbent_source_version": None,
+                    "incumbent_source_file": None,
+                    "incumbent_stored_SEC": None,
+                    "incumbent_replayed_SEC": None,
+                    "incumbent_replay_success": False,
+                    "selected_incumbent": False,
+                    "no_worse_than_replayed_incumbent": None,
+                    "SEC_change_vs_incumbent_pct": None,
+                    "historical_model_drift_pct": None,
+                }
+            )
         if self.best is not None:
             output.update(
                 {
@@ -289,3 +399,4 @@ class OptimisationCase:
     config: OuterDesignOptimisationConfig
     signature: str
     temp_suffix: str
+    incumbents: tuple[HistoricalIncumbent, ...] = ()

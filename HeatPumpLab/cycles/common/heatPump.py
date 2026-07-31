@@ -31,6 +31,7 @@ class BaseHeatPump:
     tol: float = 1e-6
     debug: float = False
     record_failed_solve: bool = True
+    report_failed_solve: bool = True
     output: dict
     constraint_errors: dict[str, float]
 

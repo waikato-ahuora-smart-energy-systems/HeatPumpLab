@@ -1,3 +1,4 @@
+import math
 from types import SimpleNamespace
 
 import numpy as np
@@ -239,8 +240,16 @@ def test_solve_single_case_with_timer_instantiates_and_solves_heat_pump():
 def test_get_local_optimum_passes_domain_initial_values_and_bounds(monkeypatch):
     calls = []
 
-    def fake_minimize(fun, x0, bounds, method, tol):
-        calls.append({"x0": x0, "bounds": bounds, "method": method, "tol": tol})
+    def fake_minimize(fun, x0, bounds, method, tol, options):
+        calls.append(
+            {
+                "x0": x0,
+                "bounds": bounds,
+                "method": method,
+                "tol": tol,
+                "options": options,
+            }
+        )
         return SimpleNamespace(success=True)
 
     monkeypatch.setattr(analysis, "loc_min", fake_minimize)
@@ -265,6 +274,7 @@ def test_get_local_optimum_passes_domain_initial_values_and_bounds(monkeypatch):
             "bounds": [(0.0, 40.0), (0.0, 1.0)],
             "method": "COBYQA",
             "tol": 1e-4,
+            "options": {"maxfev": 80, "maxiter": 160},
         }
     ]
 
@@ -278,7 +288,8 @@ def test_get_local_optimum_evaluates_candidate_objective_with_domain_arguments(
         solved_args.append((HP_fn, args))
         return SimpleNamespace(SEC=0.123), 0.0
 
-    def fake_minimize(fun, x0, bounds, method, tol):
+    def fake_minimize(fun, x0, bounds, method, tol, options):
+        assert options == {"maxfev": 80, "maxiter": 160}
         return SimpleNamespace(fun=fun(np.array([0.75])))
 
     monkeypatch.setattr(
@@ -317,16 +328,55 @@ def test_get_local_optimum_evaluates_candidate_objective_with_domain_arguments(
 
 
 def test_get_fprime_returns_negative_objective_derivative(monkeypatch):
+    origins = []
+
+    def approximate(xk, f, epsilon):
+        origins.append(xk)
+        return np.array([2.5])
+
     monkeypatch.setattr(
         analysis,
         "approx_fprime",
-        lambda xk, f, epsilon: np.array([2.5]),
+        approximate,
     )
 
-    fprime, dt = get_fprime(object, param={}, f_obj=lambda hp, param: hp.SEC)
+    fprime, dt = get_fprime(
+        object,
+        param={
+            "additional_data": {
+                "vars_input": {
+                    "dT_gc_out_min_offset": {"xi": 0.8, "bnds": (0.0, 40.0)}
+                }
+            }
+        },
+        f_obj=lambda hp, param: hp.SEC,
+    )
 
     assert fprime == pytest.approx(np.array([-2.5]))
     assert dt >= 0.0
+    assert origins == [[0.8]]
+
+
+def test_failed_objective_is_replaced_by_finite_penalty(monkeypatch):
+    monkeypatch.setattr(
+        analysis,
+        "solve_single_case_with_timer",
+        lambda hp_cls, args: (SimpleNamespace(SEC=float("inf")), 0.0),
+    )
+
+    value = analysis._get_obj(
+        object,
+        np.array([0.25]),
+        {
+            "additional_data": {
+                "vars_input": {"candidate": {"xi": 0.0, "bnds": (0.0, 1.0)}}
+            }
+        },
+        compute_SEC_obj,
+    )
+
+    assert math.isfinite(value)
+    assert value == pytest.approx(1e9)
 
 
 def test_get_results_report_adds_optimisation_metadata_and_weight(monkeypatch):

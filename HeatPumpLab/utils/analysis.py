@@ -1,5 +1,6 @@
 """Analysis utilities for running and post-processing heat pump cases."""
 
+import math
 import numpy as np
 import os
 
@@ -20,6 +21,10 @@ if TYPE_CHECKING:
     from ..cycles.common.heatPump import BaseHeatPump
 
 __all__ = ["get_parameter_sweep"]
+
+_FAILED_OBJECTIVE_PENALTY = 1e6
+_LOCAL_OPTIMISATION_MAX_EVALUATIONS = 80
+_LOCAL_OPTIMISATION_MAX_ITERATIONS = 160
 
 
 #######################################################################################################
@@ -121,7 +126,9 @@ def _get_obj(HP_fn, vars: np.ndarray, param: dict, f_obj) -> float:
         hp, _ = solve_single_case_with_timer(
             HP_fn, param | get_var_kwargs(vars.tolist(), param)
         )
-        obj = f_obj(hp, param)
+        obj = float(f_obj(hp, param))
+        if not math.isfinite(obj):
+            obj = _FAILED_OBJECTIVE_PENALTY
         return obj * 1000
 
 
@@ -141,14 +148,20 @@ def get_local_optimum(
         bounds=_get_bounds(vars_input),
         method=method,
         tol=tol,
+        options={
+            "maxfev": _LOCAL_OPTIMISATION_MAX_EVALUATIONS,
+            "maxiter": _LOCAL_OPTIMISATION_MAX_ITERATIONS,
+        },
     )
 
 
 @timer_func
 def get_fprime(HP_fn, param: dict, f_obj) -> dict:
     """Estimate the derivative of the objective at the lower bound."""
+    vars_input = param.get("additional_data", {}).get("vars_input", {})
+    x0 = _get_initial_val(vars_input) if vars_input else 0.0
     return (
-        approx_fprime(xk=0.0, f=lambda x: _get_obj(HP_fn, x, param, f_obj), epsilon=0.1)
+        approx_fprime(xk=x0, f=lambda x: _get_obj(HP_fn, x, param, f_obj), epsilon=0.1)
         * -1
     )
 

@@ -4,6 +4,14 @@ from math import log
 from ..stream import Stream
 
 
+class TemperatureCrossError(ValueError):
+    """Report a non-positive heat-exchanger temperature approach."""
+
+    def __init__(self, approach_violation: float) -> None:
+        self.approach_violation = max(0.0, float(approach_violation))
+        super().__init__("LMTD is undefined because a temperature cross occurs.")
+
+
 class BaseHeatExchanger:
     """Shared heat-exchanger behaviour extended by concrete component models."""
 
@@ -455,7 +463,7 @@ def _get_LMTD(Thin, Thout, Tcin, Tcout):
     dt_hot = Thin - Tcout
     dt_cold = Thout - Tcin
     if dt_hot <= 0.0 or dt_cold <= 0.0:
-        raise ValueError("LMTD is undefined because a temperature cross occurs.")
+        raise TemperatureCrossError(-min(dt_hot, dt_cold))
     if dt_hot == dt_cold:
         return dt_hot
     return (dt_hot - dt_cold) / log(dt_hot / dt_cold)

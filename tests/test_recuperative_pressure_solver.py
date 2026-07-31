@@ -163,4 +163,4 @@ def test_multicomponent_bracket_selects_lowest_accepted_pressure(monkeypatch):
     )
 
     assert converged is True
-    assert pressure == pytest.approx(1.2, rel=1e-5)
+    assert pressure == pytest.approx(1.2, rel=1e-3)

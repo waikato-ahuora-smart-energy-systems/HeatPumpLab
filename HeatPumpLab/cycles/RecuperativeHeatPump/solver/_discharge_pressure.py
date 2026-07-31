@@ -30,6 +30,10 @@ __all__ = [
 ]
 
 _PRESSURE_FALLBACK_SAMPLES = 25
+_PRESSURE_BOUND_EXPANSION_MAX_ITERATIONS = 100
+# Pressure location is secondary to the explicitly checked 0.05 K pinch band.
+# Finer mixture searches multiply expensive coupled-cycle and REFPROP calls.
+_MIXTURE_PRESSURE_RELATIVE_TOLERANCE = 1e-3
 
 
 def pressure_target_tolerance(hp: BaseHeatPump) -> float:
@@ -61,7 +65,10 @@ def select_gc_target_pressure(
                 bounds,
                 (residuals[1], residuals[0]),
                 target_tolerance=pressure_target_tolerance(hp),
-                relative_tolerance=hp.tol,
+                relative_tolerance=max(
+                    hp.tol,
+                    _MIXTURE_PRESSURE_RELATIVE_TOLERANCE,
+                ),
             )
             if result.success:
                 return result.value, True
@@ -131,7 +138,7 @@ def expand_discharge_pressure_bounds(
     pressure_start: float,
     residual_start: float,
     step: float = 1.1,
-    max_iterations: int = 1000,
+    max_iterations: int = _PRESSURE_BOUND_EXPANSION_MAX_ITERATIONS,
 ) -> tuple[float, float, float, float]:
     """Expand pressure bounds until the pinch residual reaches or crosses target."""
     lower_pressure = upper_pressure = pressure_start

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ....components.common import TemperatureCrossError
 from ...common import CycleFailure, cycle_has_converged
 from ....utils.property_cache import property_call_cache
 from ....utils.readWriteOutput import print_result_to_csv
@@ -31,6 +32,11 @@ def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
     unexpected = False
     try:
         failure = _solve_case(hp)
+    except TemperatureCrossError as exc:
+        failure = CycleFailure(
+            str(exc),
+            {"heat_exchanger_temperature_cross": exc.approach_violation},
+        )
     except Exception as exc:
         failure = CycleFailure(str(exc), {})
         unexpected = True
@@ -101,10 +107,11 @@ def _apply_failure(
     else:
         disposition = "The failed case was not recorded."
     failure_kind = " with an unexpected exception" if unexpected else ""
-    print(
-        f"Heat pump solver failed{failure_kind}. "
-        f"{disposition} Error: {failure.message}"
-    )
+    if unexpected or getattr(hp, "report_failed_solve", True):
+        print(
+            f"Heat pump solver failed{failure_kind}. "
+            f"{disposition} Error: {failure.message}"
+        )
 
 
 def _record_failed_solve(

@@ -140,7 +140,8 @@ def test_profile_context_records_objective_evaluations(monkeypatch):
     def fake_solve_single_case_with_timer(hp_cls, args):
         return SimpleNamespace(SEC=args["candidate"]), 0.0
 
-    def fake_minimize(fun, x0, bounds, method, tol):
+    def fake_minimize(fun, x0, bounds, method, tol, options):
+        assert options == {"maxfev": 80, "maxiter": 160}
         fun(np.array([0.75]))
         fun(np.array([0.5]))
         return SimpleNamespace(success=True)

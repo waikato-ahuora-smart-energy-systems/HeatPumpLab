@@ -1,4 +1,4 @@
-"""Simplex-aware pattern-search polish for fixed recuperator lifts."""
+"""Screened simplex-aware pattern-search polish."""
 
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ from typing import Any
 import numpy as np
 
 from ._objective import _OuterDesignObjective
-from ._search import _best_phase_evaluation, _is_better_phase
+from ._search import _best_phase_evaluation, _is_better_phase, _line_search
 from ._types import (
+    LineSearchResult,
     LocalPolishConfig,
     LocalPolishResult,
     OuterDesignOptimisationConfig,
@@ -29,6 +30,17 @@ class _PolishTask:
     refrigerant: str
     config: OuterDesignOptimisationConfig
     results_dir: str
+    phase: str = "polish_pattern_search"
+
+
+@dataclass(frozen=True)
+class _LiftFeedbackTask:
+    source: PhaseEvaluation
+    budget: int
+    base_case: dict[str, Any]
+    refrigerant: str
+    config: OuterDesignOptimisationConfig
+    results_dir: str
 
 
 def _run_pattern_search_polish(
@@ -38,7 +50,7 @@ def _run_pattern_search_polish(
     config: LocalPolishConfig | None = None,
     evaluate_phase: Callable[[str, np.ndarray | list[float]], PhaseEvaluation],
 ) -> LocalPolishResult:
-    """Polish compressor split and composition without changing recuperator lifts."""
+    """Screen remote split basins, then polish the enabled design coordinates."""
     config = LocalPolishConfig() if config is None else config
     start = time.perf_counter()
     start_exact = objective.exact_evaluations
@@ -47,7 +59,12 @@ def _run_pattern_search_polish(
 
     if config.budget <= 0:
         return _skipped_result(source, start, "polish budget was zero")
-    if not config.vary_comp2_power_frac and not can_vary_composition:
+    if (
+        not config.vary_dT_rhx1_cold
+        and not config.vary_dT_rhx2_cold
+        and not config.vary_comp2_power_frac
+        and not can_vary_composition
+    ):
         return _skipped_result(
             source,
             start,
@@ -152,14 +169,24 @@ def _poll_until_converged(evaluator: _LocalPolishEvaluator) -> None:
     current = evaluator.evaluate(np.asarray(evaluator.source.x, dtype=float))
     if current is None:
         return
+    current = _screen_comp2_power_fraction(evaluator, current)
     shrink_factor = float(evaluator.config.shrink_factor)
     if not 0.0 < shrink_factor < 1.0:
         raise ValueError("shrink_factor must be between 0 and 1.")
 
+    dT_step = float(evaluator.config.initial_dT_step)
     comp2_step = float(evaluator.config.initial_comp2_step)
     composition_step = float(evaluator.config.initial_composition_step)
     failed_shrinks = 0
     while evaluator.remaining_exact > 0 and failed_shrinks <= evaluator.config.max_failed_shrinks:
+        dT1_active = (
+            evaluator.config.vary_dT_rhx1_cold
+            and dT_step >= evaluator.config.min_dT_step
+        )
+        dT2_active = (
+            evaluator.config.vary_dT_rhx2_cold
+            and dT_step >= evaluator.config.min_dT_step
+        )
         comp2_active = (
             evaluator.config.vary_comp2_power_frac
             and comp2_step >= evaluator.config.min_comp2_step
@@ -168,13 +195,21 @@ def _poll_until_converged(evaluator: _LocalPolishEvaluator) -> None:
             evaluator.vary_composition
             and composition_step >= evaluator.config.min_composition_step
         )
-        if not comp2_active and not composition_active:
+        if (
+            not dT1_active
+            and not dT2_active
+            and not comp2_active
+            and not composition_active
+        ):
             break
 
         best_poll = current
         for candidate in _poll_candidates(
             np.asarray(current.x, dtype=float),
             objective=evaluator.objective,
+            dT_step=dT_step if dT1_active or dT2_active else None,
+            vary_dT1=dT1_active,
+            vary_dT2=dT2_active,
             comp2_step=comp2_step if comp2_active else None,
             composition_step=composition_step if composition_active else None,
         ):
@@ -192,6 +227,8 @@ def _poll_until_converged(evaluator: _LocalPolishEvaluator) -> None:
             current = best_poll
             failed_shrinks = 0
         else:
+            if dT1_active or dT2_active:
+                dT_step *= shrink_factor
             if comp2_active:
                 comp2_step *= shrink_factor
             if composition_active:
@@ -199,13 +236,55 @@ def _poll_until_converged(evaluator: _LocalPolishEvaluator) -> None:
             failed_shrinks += 1
 
 
+def _screen_comp2_power_fraction(
+    evaluator: _LocalPolishEvaluator,
+    current: PhaseEvaluation,
+) -> PhaseEvaluation:
+    """Screen the complete compressor-split interval before local polling."""
+    if not evaluator.config.vary_comp2_power_frac:
+        return current
+    point_count = max(0, int(evaluator.config.comp2_screen_points))
+    if point_count <= 1:
+        return current
+
+    best = current
+    lower, upper = evaluator.objective.bounds[2]
+    for value in np.linspace(float(lower), float(upper), point_count):
+        candidate = np.asarray(current.x, dtype=float)
+        candidate[2] = value
+        record = evaluator.evaluate(candidate)
+        if record is None:
+            break
+        if _is_better_phase(
+            record,
+            best,
+            tolerance=evaluator.config.improvement_tolerance,
+        ):
+            best = record
+    return best
+
+
 def _poll_candidates(
     current: np.ndarray,
     *,
     objective: _OuterDesignObjective,
+    dT_step: float | None = None,
+    vary_dT1: bool = False,
+    vary_dT2: bool = False,
     comp2_step: float | None,
     composition_step: float | None,
 ) -> Iterable[np.ndarray]:
+    if dT_step is not None:
+        for index, varies in enumerate((vary_dT1, vary_dT2)):
+            if not varies:
+                continue
+            for sign in (1.0, -1.0):
+                candidate = current.copy()
+                candidate[index] += sign * dT_step
+                candidate = objective.repair_vector(candidate)
+                if not np.allclose(candidate, current, atol=1e-14, rtol=0.0):
+                    yield candidate
+
     if comp2_step is not None:
         for sign in (1.0, -1.0):
             candidate = current.copy()
@@ -242,13 +321,29 @@ def _build_polish_tasks(
     refrigerant: str,
     config: OuterDesignOptimisationConfig,
     results_dir: str | Path,
+    phase: str = "polish_pattern_search",
+    per_source_budget: int | None = None,
 ) -> tuple[_PolishTask, ...]:
     tasks = []
     remaining = max(0, int(remaining_budget))
-    polish_enabled = config.vary_comp2_power_frac or config.vary_composition
     for source in sources:
+        pure_lift_polish_enabled = (
+            config.polish_pure_recuperator_lifts
+            and len(source.x[3:]) == 1
+            and (config.vary_dT_rhx1_cold or config.vary_dT_rhx2_cold)
+        )
+        polish_enabled = (
+            config.vary_comp2_power_frac
+            or config.vary_composition
+            or pure_lift_polish_enabled
+        )
         if polish_enabled:
-            budget = min(config.polish_budget, remaining)
+            requested_budget = (
+                config.polish_budget
+                if per_source_budget is None
+                else max(0, int(per_source_budget))
+            )
+            budget = min(requested_budget, remaining)
             if budget <= 0:
                 break
             remaining -= budget
@@ -262,6 +357,7 @@ def _build_polish_tasks(
                 refrigerant=refrigerant,
                 config=config,
                 results_dir=str(results_dir),
+                phase=phase,
             )
         )
     return tuple(tasks)
@@ -331,10 +427,20 @@ def _run_polish(task: _PolishTask, *, objective_factory) -> LocalPolishResult:
         objective=objective,
         config=LocalPolishConfig(
             budget=task.budget,
+            vary_dT_rhx1_cold=(
+                task.config.polish_pure_recuperator_lifts
+                and task.config.vary_dT_rhx1_cold
+                and len(task.source.x[3:]) == 1
+            ),
+            vary_dT_rhx2_cold=(
+                task.config.polish_pure_recuperator_lifts
+                and task.config.vary_dT_rhx2_cold
+                and len(task.source.x[3:]) == 1
+            ),
             vary_comp2_power_frac=task.config.vary_comp2_power_frac,
             vary_composition=task.config.vary_composition,
         ),
-        evaluate_phase=evaluate_phase,
+        evaluate_phase=lambda _phase, x: evaluate_phase(task.phase, x),
     )
 
 
@@ -350,4 +456,180 @@ def _failed_polish(task: _PolishTask, message: str) -> LocalPolishResult:
         elapsed_seconds=0.0,
         exact_evaluations=0,
         failed_evaluations=0,
+    )
+
+
+def _build_lift_feedback_tasks(
+    polishes: tuple[LocalPolishResult, ...],
+    *,
+    remaining_budget: int,
+    base_case: dict[str, Any],
+    refrigerant: str,
+    config: OuterDesignOptimisationConfig,
+    results_dir: str | Path,
+) -> tuple[_LiftFeedbackTask, ...]:
+    """Feed changed mixture coordinates back into one-dimensional lift searches."""
+    remaining = max(0, int(remaining_budget))
+    sources = [
+        polish.best
+        for polish in polishes
+        if polish.best is not None
+        and polish.best.success
+        and len(polish.best.x[3:]) > 1
+        and (polish.best.x[0] > config.corner_tolerance
+             or polish.best.x[1] > config.corner_tolerance)
+    ]
+    sources.sort(key=lambda source: source.objective, reverse=True)
+    tasks = []
+    for source in sources:
+        budget = min(config.mixture_lift_feedback_budget, remaining)
+        if budget <= 0:
+            break
+        remaining -= budget
+        tasks.append(
+            _LiftFeedbackTask(
+                source=source,
+                budget=budget,
+                base_case=dict(base_case),
+                refrigerant=refrigerant,
+                config=config,
+                results_dir=str(results_dir),
+            )
+        )
+    return tuple(tasks)
+
+
+def _run_lift_feedbacks(
+    tasks: tuple[_LiftFeedbackTask, ...],
+    *,
+    n_cpu: int,
+    executor_factory=None,
+    objective_factory=_OuterDesignObjective,
+) -> tuple[LineSearchResult, ...]:
+    if not tasks:
+        return ()
+    if max(1, int(n_cpu)) == 1:
+        return tuple(
+            _run_lift_feedback(task, objective_factory=objective_factory)
+            for task in tasks
+        )
+
+    executor_factory = ProcessPoolExecutor if executor_factory is None else executor_factory
+    try:
+        executor = executor_factory(max_workers=min(max(1, int(n_cpu)), len(tasks)))
+    except Exception:
+        return tuple(
+            _run_lift_feedback(task, objective_factory=objective_factory)
+            for task in tasks
+        )
+
+    try:
+        futures = [
+            executor.submit(_run_lift_feedback_task, task)
+            for task in tasks
+        ]
+        results = []
+        for task, future in zip(tasks, futures):
+            try:
+                results.append(future.result())
+            except Exception as exc:
+                results.append(
+                    _failed_lift_feedback(f"{type(exc).__name__}: {exc}")
+                )
+        return tuple(results)
+    finally:
+        executor.shutdown()
+
+
+def _run_lift_feedback_task(task: _LiftFeedbackTask) -> LineSearchResult:
+    return _run_lift_feedback(task, objective_factory=_OuterDesignObjective)
+
+
+def _run_lift_feedback(
+    task: _LiftFeedbackTask,
+    *,
+    objective_factory,
+) -> LineSearchResult:
+    objective = objective_factory(
+        max_evals=task.budget,
+        base_case=task.base_case,
+        refrigerant=task.refrigerant,
+        results_dir=task.results_dir,
+        use_fast_objective=task.config.use_fast_objective,
+    )
+    source = task.source
+    evaluations: list[PhaseEvaluation] = []
+
+    def evaluate_phase(phase: str, x) -> PhaseEvaluation:
+        record = objective.evaluate(x)
+        phase_record = PhaseEvaluation.from_record(
+            phase=phase,
+            record=record,
+            cumulative_exact_evaluations=objective.exact_evaluations,
+        )
+        evaluations.append(phase_record)
+        return phase_record
+
+    x = np.asarray(source.x, dtype=float)
+    tolerance = task.config.corner_tolerance
+    edge_high = float(
+        min(
+            objective.bounds[0, 1],
+            objective.bounds[1, 1],
+            objective.max_recuperator_lift,
+        )
+    )
+    if x[0] <= tolerance:
+        variable_name = "dT_rhx2_cold"
+        high = edge_high
+        build_x = lambda value: np.asarray(  # noqa: E731
+            [0.0, value, x[2], *x[3:]],
+            dtype=float,
+        )
+    elif x[1] <= tolerance:
+        variable_name = "dT_rhx1_cold"
+        high = edge_high
+        build_x = lambda value: np.asarray(  # noqa: E731
+            [value, 0.0, x[2], *x[3:]],
+            dtype=float,
+        )
+    else:
+        variable_name = "total_recuperator_lift"
+        total = x[0] + x[1]
+        first_share = x[0] / total
+        second_share = x[1] / total
+        high = min(
+            objective.max_recuperator_lift,
+            objective.bounds[0, 1] / first_share,
+            objective.bounds[1, 1] / second_share,
+        )
+        build_x = lambda value: np.asarray(  # noqa: E731
+            [
+                value * first_share,
+                value * second_share,
+                x[2],
+                *x[3:],
+            ],
+            dtype=float,
+        )
+    result = _line_search(
+        phase="lift_feedback",
+        variable_name=variable_name,
+        lo=0.0,
+        hi=float(high),
+        budget=task.budget,
+        build_x=build_x,
+        evaluate_phase=evaluate_phase,
+    )
+    return result
+
+
+def _failed_lift_feedback(message: str) -> LineSearchResult:
+    return LineSearchResult(
+        phase="lift_feedback",
+        variable_name="recuperator_lift",
+        best=None,
+        evaluations=(),
+        success=False,
+        message=message,
     )

@@ -18,6 +18,7 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.solver import (
     _gas_cooler_pinch as gas_cooler_pinch,
 )
 from HeatPumpLab.cycles.RecuperativeHeatPump.solver import _metrics as metrics
+from HeatPumpLab.components.common import TemperatureCrossError
 
 
 def test_expected_failure_marks_case_infeasible_and_records_report(monkeypatch, capsys):
@@ -78,6 +79,70 @@ def test_unexpected_exception_is_caught_without_physical_diagnostics(
     assert result.constraint_errors == {}
     assert result.solve_error == "property failure"
     assert "unexpected exception" in capsys.readouterr().out
+
+
+def test_expected_nonrecording_failure_can_be_silent(monkeypatch, capsys):
+    hp = SimpleNamespace(
+        debug=False,
+        record_failed_solve=False,
+        report_failed_solve=False,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: CycleFailure("trial point was infeasible", {}),
+    )
+
+    result = cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert result.feasible is False
+    assert result.converged is False
+    assert capsys.readouterr().out == ""
+
+
+def test_unexpected_nonrecording_failure_is_still_reported(monkeypatch, capsys):
+    hp = SimpleNamespace(
+        debug=False,
+        record_failed_solve=False,
+        report_failed_solve=False,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: (_ for _ in ()).throw(RuntimeError("property failure")),
+    )
+
+    cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert "unexpected exception" in capsys.readouterr().out
+
+
+def test_temperature_cross_is_expected_physical_failure_and_can_be_silent(
+    monkeypatch,
+    capsys,
+):
+    hp = SimpleNamespace(
+        debug=False,
+        record_failed_solve=False,
+        report_failed_solve=False,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: (_ for _ in ()).throw(TemperatureCrossError(2.5)),
+    )
+
+    result = cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert result.feasible is False
+    assert result.converged is False
+    assert result.solve_error == (
+        "LMTD is undefined because a temperature cross occurs."
+    )
+    assert result.constraint_errors == {
+        "heat_exchanger_temperature_cross": pytest.approx(2.5)
+    }
+    assert capsys.readouterr().out == ""
 
 
 def test_fixed_pressure_objective_uses_seed_and_objective_metrics(monkeypatch):
@@ -290,6 +355,40 @@ def test_gas_cooler_midpoint_search_skips_nonpositive_duty():
     approach = gas_cooler_pinch.find_internal_gc_approach(gas_cooler)
 
     assert approach == (np.inf, 0.0, False)
+
+
+def test_gas_cooler_midpoint_search_uses_bounded_duty_resolution(monkeypatch):
+    observed = {}
+    gas_cooler = SimpleNamespace(
+        duty=100.0,
+        source_pinch=SimpleNamespace(),
+        source_out=SimpleNamespace(pressure=2.0),
+        sink_pinch=SimpleNamespace(),
+        sink_in=SimpleNamespace(pressure=1.0),
+    )
+
+    def fake_minimize(evaluate, *, method, bounds, options):
+        observed.update(method=method, bounds=bounds, options=options)
+        return SimpleNamespace(fun=evaluate(50.0), x=50.0, success=True)
+
+    monkeypatch.setattr(gas_cooler_pinch, "minimize_scalar", fake_minimize)
+    monkeypatch.setattr(
+        gas_cooler_pinch,
+        "_pinch_temperature_difference",
+        lambda duty, solved_gas_cooler: 2.0,
+    )
+
+    approach = gas_cooler_pinch.find_internal_gc_approach(gas_cooler)
+
+    assert approach == pytest.approx((2.0, 0.5, True))
+    assert observed == {
+        "method": "bounded",
+        "bounds": pytest.approx((0.1, 99.9)),
+        "options": {
+            "xatol": pytest.approx(0.3),
+            "maxiter": 40,
+        },
+    }
 
 
 def test_gas_cooler_sink_temperatures_follow_total_cycle_duty():

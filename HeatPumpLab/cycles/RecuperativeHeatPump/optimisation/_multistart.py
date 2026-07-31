@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import time
 from typing import Any
@@ -14,6 +14,7 @@ from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import (
     normalise_refrigerant_input,
 )
 
+from ._composition_starts import _full_search_budget
 from ._objective import _OuterDesignObjective
 from ._search import (
     _best_phase_evaluation,
@@ -142,7 +143,7 @@ def _run_composition_search(
         evaluations.append(phase_record)
         return phase_record
 
-    config = task.config
+    config = _search_config_for_budget(task.config, task.max_evaluations)
     fixed_comp2 = float(config.fixed_comp2_power_frac)
     fixed_dT1 = float(config.fixed_dT_rhx1_cold)
     fixed_dT2 = float(config.fixed_dT_rhx2_cold)
@@ -242,6 +243,39 @@ def _run_composition_search(
     )
 
 
+def _search_config_for_budget(
+    config: OuterDesignOptimisationConfig,
+    max_evaluations: int,
+) -> OuterDesignOptimisationConfig:
+    """Use spare per-start budget to strengthen line and split coverage."""
+    extra = max(0, int(max_evaluations) - _full_search_budget(config))
+    line_budget = int(config.line_budget)
+    split_budget = int(config.split_budget)
+    active_line_count = int(config.vary_dT_rhx1_cold) + int(
+        config.vary_dT_rhx2_cold
+    )
+    target_line_budget = max(line_budget, 12)
+    target_split_budget = max(split_budget, 12)
+
+    while active_line_count and line_budget < target_line_budget:
+        if extra < active_line_count:
+            break
+        line_budget += 1
+        extra -= active_line_count
+    if config.vary_dT_rhx1_cold and config.vary_dT_rhx2_cold:
+        split_budget += min(extra, target_split_budget - split_budget)
+    if (
+        line_budget == config.line_budget
+        and split_budget == config.split_budget
+    ):
+        return config
+    return replace(
+        config,
+        line_budget=line_budget,
+        split_budget=split_budget,
+    )
+
+
 def _failed_composition_search(
     task: _CompositionSearchTask,
     message: str,
@@ -312,12 +346,21 @@ def _select_direction_polish_sources(
     edge_a: LineSearchResult,
     edge_b: LineSearchResult,
     split: LineSearchResult | None,
+    searches: tuple[CompositionSearchResult, ...] = (),
     top_n: int,
 ) -> tuple[PhaseEvaluation, ...]:
-    sources = _select_polish_sources(
-        [edge_a.best, edge_b.best, None if split is None else split.best],
-        top_n=top_n,
-    )
+    candidates = [
+        candidate
+        for search in searches
+        for candidate in (
+            search.edge_a.best,
+            search.edge_b.best,
+            None if search.split is None else search.split.best,
+        )
+    ]
+    if not candidates:
+        candidates = [edge_a.best, edge_b.best, None if split is None else split.best]
+    sources = _select_polish_sources(candidates, top_n=top_n)
     if sources:
         return sources
     return _select_polish_sources([corner], top_n=1)
@@ -326,7 +369,9 @@ def _select_direction_polish_sources(
 def _best_evaluation(
     searches: tuple[CompositionSearchResult, ...],
     polishes: tuple[LocalPolishResult, ...],
+    additional: tuple[PhaseEvaluation, ...] = (),
 ) -> PhaseEvaluation | None:
     records = [record for search in searches for record in search.evaluations]
     records.extend(record for polish in polishes for record in polish.evaluations)
+    records.extend(additional)
     return _best_phase_evaluation(records)

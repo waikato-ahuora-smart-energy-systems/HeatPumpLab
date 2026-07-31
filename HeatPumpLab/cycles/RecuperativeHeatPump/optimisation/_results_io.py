@@ -122,6 +122,41 @@ def _transfer_optimal_results(
     """Merge completed optimum rows into the master CSV and remove temp files."""
     results_path = Path(results_dir)
     temp_paths = _optimal_result_temp_paths(results_path)
+    _transfer_optimal_result_paths(
+        filename,
+        results_path=results_path,
+        temp_paths=temp_paths,
+    )
+
+
+def _transfer_completed_optimal_result(
+    filename: str,
+    case,
+    *,
+    results_dir: str | Path,
+) -> None:
+    """Merge one completed case without inspecting temp files still being written."""
+    results_path = Path(results_dir)
+    temp_path = (
+        results_path
+        / "temp"
+        / "optimisation"
+        / f"R{case.temp_suffix}.csv"
+    )
+    _transfer_optimal_result_paths(
+        filename,
+        results_path=results_path,
+        temp_paths=[temp_path] if temp_path.exists() else [],
+    )
+
+
+def _transfer_optimal_result_paths(
+    filename: str,
+    *,
+    results_path: Path,
+    temp_paths: list[Path],
+) -> None:
+    """Merge selected completed optimum rows into the master CSV."""
     if not temp_paths:
         return
 

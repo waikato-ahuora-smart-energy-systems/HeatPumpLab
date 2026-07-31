@@ -24,6 +24,9 @@ __all__ = [
 
 PinchCandidate: TypeAlias = tuple[float, float, bool]
 
+_INTERNAL_PINCH_RELATIVE_DUTY_TOLERANCE = 3e-3
+_INTERNAL_PINCH_MAX_ITERATIONS = 40
+
 
 @profiled_section("gc_dtmin_eval")
 def find_gc_pinch_residual(
@@ -75,7 +78,16 @@ def find_internal_gc_approach(gas_cooler: GasCooler) -> PinchCandidate:
         lambda duty: _pinch_temperature_difference(duty, gas_cooler),
         method="bounded",
         bounds=(0.001 * gas_cooler.duty, 0.999 * gas_cooler.duty),
-        options={"xatol": max(gas_cooler.tol * gas_cooler.duty, 1e-9)},
+        options={
+            # The internal duty location only supports the explicitly checked
+            # 0.05 K pressure-target band; cycle tolerance is unnecessarily
+            # strict here and multiplies expensive mixture P-h flashes.
+            "xatol": max(
+                _INTERNAL_PINCH_RELATIVE_DUTY_TOLERANCE * gas_cooler.duty,
+                1e-9,
+            ),
+            "maxiter": _INTERNAL_PINCH_MAX_ITERATIONS,
+        },
     )
     return (result.fun, result.x / gas_cooler.duty, result.success)
 

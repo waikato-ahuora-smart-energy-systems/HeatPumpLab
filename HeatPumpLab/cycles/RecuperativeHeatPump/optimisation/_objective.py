@@ -43,7 +43,8 @@ class _OuterDesignObjective:
         molar_masses: tuple[float, ...] | None = None,
     ) -> None:
         self.max_evals = int(max_evals)
-        self.base_case = dict(DEFAULT_BASE_CASE if base_case is None else base_case)
+        self.base_case = dict(DEFAULT_BASE_CASE)
+        self.base_case.update(base_case or {})
         self.refrigerant_spec = normalise_refrigerant_input(refrigerant)
         self.input_refrigerant = self.refrigerant_spec.format()
         self.molar_masses = self._get_molar_masses(molar_masses)

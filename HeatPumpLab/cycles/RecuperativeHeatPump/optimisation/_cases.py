@@ -15,6 +15,7 @@ from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import (
     normalise_refrigerant_input,
 )
 
+from ._incumbents import attach_historical_incumbents
 from ._results_io import _result_row_is_complete, _results_csv_path
 from ._types import (
     DEFAULT_BASE_CASE,
@@ -59,6 +60,10 @@ def _get_optimisation_case_list_to_solve(
 ) -> list[OptimisationCase]:
     config = OuterDesignOptimisationConfig() if config is None else config
     cases = _build_optimisation_cases(param_kwargs=param_kwargs, config=config)
+    cases = _attach_incumbents_and_refresh_signatures(
+        cases,
+        results_dir=results_dir,
+    )
     completed = _completed_case_signatures(file_name=file_name, results_dir=results_dir)
     return [case for case in cases if case.signature not in completed]
 
@@ -197,15 +202,41 @@ def _case_signature(
     base_case: dict[str, Any],
     refrigerant: str,
     config: OuterDesignOptimisationConfig,
+    incumbents=(),
 ) -> str:
     payload = {
         "optimiser_version": OPTIMISER_VERSION,
         "base_case": base_case,
         "refrigerant": refrigerant,
         "config": asdict(config),
+        "incumbents": [asdict(incumbent) for incumbent in incumbents],
     }
     encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:16]
+
+
+def _attach_incumbents_and_refresh_signatures(
+    cases: list[OptimisationCase],
+    *,
+    results_dir: str | Path,
+) -> list[OptimisationCase]:
+    attached = attach_historical_incumbents(cases, results_dir=results_dir)
+    refreshed = []
+    for case in attached:
+        signature = _case_signature(
+            base_case=case.base_case,
+            refrigerant=case.refrigerant,
+            config=case.config,
+            incumbents=case.incumbents,
+        )
+        refreshed.append(
+            replace(
+                case,
+                signature=signature,
+                temp_suffix=f"-{signature}",
+            )
+        )
+    return refreshed
 
 
 def _completed_case_signatures(
