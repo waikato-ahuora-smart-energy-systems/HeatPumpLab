@@ -1,5 +1,13 @@
-*.pyc
-*.pyc
-__pycache__
+# Python environments and generated caches
+*.py[cod]
+__pycache__/
+/.venv/
+.pytest_cache/
+.ruff_cache/
+
+# macOS metadata
+.DS_Store
+
+# Local research outputs
 /results/
 /paper/
