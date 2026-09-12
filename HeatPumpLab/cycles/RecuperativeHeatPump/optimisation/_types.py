@@ -7,7 +7,8 @@ from typing import Any
 
 import numpy as np
 
-OPTIMISER_VERSION = "isolated-refprop-pattern-search-v11"
+# BO replaces the staged outer search; invalidate prior completed signatures.
+OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v18"
 
 BASE_VARIABLE_NAMES = (
     "dT_rhx1_cold",
@@ -112,7 +113,9 @@ class PhaseEvaluation:
 
     def to_output_dict(self) -> dict[str, Any]:
         output = asdict(self)
-        output.update({name: value for name, value in zip(BASE_VARIABLE_NAMES, self.x[:3])})
+        output.update(
+            {name: value for name, value in zip(BASE_VARIABLE_NAMES, self.x[:3])}
+        )
         output["mass_fractions"] = ";".join(f"{value:.12g}" for value in self.x[3:])
         return output
 
@@ -136,78 +139,15 @@ class IncumbentReplay:
 
 
 @dataclass(frozen=True)
-class LineSearchResult:
-    """Result of one edge or split-line search."""
-
-    phase: str
-    variable_name: str
-    best: PhaseEvaluation | None
-    evaluations: tuple[PhaseEvaluation, ...]
-    success: bool
-    message: str
-
-
-@dataclass(frozen=True)
-class LocalPolishConfig:
-    """Configuration for screened local pattern-search polishing."""
-
-    budget: int = 12
-    comp2_screen_points: int = 5
-    initial_dT_step: float = 5.0
-    min_dT_step: float = 0.25
-    initial_comp2_step: float = 0.05
-    initial_composition_step: float = 0.05
-    min_comp2_step: float = 0.002
-    min_composition_step: float = 0.002
-    shrink_factor: float = 0.5
-    max_failed_shrinks: int = 20
-    improvement_tolerance: float = 0.0
-    vary_dT_rhx1_cold: bool = False
-    vary_dT_rhx2_cold: bool = False
-    vary_comp2_power_frac: bool = True
-    vary_composition: bool = True
-
-
-@dataclass(frozen=True)
-class LocalPolishResult:
-    """Result of polishing one fixed-recuperator candidate."""
-
-    method: str
-    status: str
-    source_x: tuple[float, ...]
-    best: PhaseEvaluation | None
-    evaluations: tuple[PhaseEvaluation, ...]
-    success: bool
-    message: str
-    elapsed_seconds: float
-    exact_evaluations: int
-    failed_evaluations: int
-
-
-@dataclass(frozen=True)
-class CompositionSearchResult:
-    """Edge-first search result for one fixed starting composition."""
-
-    start_index: int
-    composition: tuple[float, ...]
-    corner: PhaseEvaluation
-    edge_a: LineSearchResult
-    edge_b: LineSearchResult
-    split: LineSearchResult | None
-    evaluations: tuple[PhaseEvaluation, ...]
-    success: bool
-    message: str
-    elapsed_seconds: float
-    exact_evaluations: int
-    failed_evaluations: int
-
-
-@dataclass(frozen=True)
 class OuterDesignOptimisationConfig:
-    """Configuration for the edge-first optimiser."""
+    """Joint Bayesian optimisation; fixed coordinates are removed from the GP."""
 
-    max_exact_evaluations: int = 250
-    max_composition_starts: int = 8
+    max_exact_evaluations: int = 200
+    seed: int = 20260910
+    initial_evaluations: int = 16
+    candidate_pool_size: int = 512
+    acquisition_restarts: int = 6
+    exploration_interval: int = 8
     fixed_dT_rhx1_cold: float = 0.0
     fixed_dT_rhx2_cold: float = 0.0
     fixed_comp2_power_frac: float = 0.5
@@ -215,186 +155,127 @@ class OuterDesignOptimisationConfig:
     vary_dT_rhx2_cold: bool = True
     vary_comp2_power_frac: bool = True
     vary_composition: bool = True
-    line_budget: int = 8
-    split_budget: int = 8
-    polish_budget: int = 24
-    polish_top_n: int = 3
-    polish_pure_recuperator_lifts: bool = True
-    mixture_lift_feedback_budget: int = 7
     use_fast_objective: bool = True
-    corner_tolerance: float = 1e-8
     preserve_incumbent: bool = True
     incumbent_replay_limit: int = 3
-    incumbent_polish_budget: int = 12
     exact_evaluation_timeout_seconds: float | None = 180.0
     exact_evaluation_timeout_retries: int = 1
     exact_evaluation_worker_max_tasks: int = 20
 
     def __post_init__(self) -> None:
-        if self.polish_top_n not in {2, 3}:
-            raise ValueError("polish_top_n must be either 2 or 3.")
-        if self.max_composition_starts < 1:
-            raise ValueError("max_composition_starts must be at least 1.")
-        if self.incumbent_replay_limit < 0:
-            raise ValueError("incumbent_replay_limit must be nonnegative.")
-        if (
-            self.exact_evaluation_timeout_seconds is not None
-            and self.exact_evaluation_timeout_seconds <= 0.0
-        ):
-            raise ValueError("exact_evaluation_timeout_seconds must be positive.")
-        if self.exact_evaluation_worker_max_tasks < 1:
-            raise ValueError("exact_evaluation_worker_max_tasks must be at least 1.")
-        if self.exact_evaluation_timeout_retries < 0:
-            raise ValueError("exact_evaluation_timeout_retries must be nonnegative.")
         for name in (
             "max_exact_evaluations",
-            "line_budget",
-            "split_budget",
-            "polish_budget",
-            "mixture_lift_feedback_budget",
-            "incumbent_polish_budget",
+            "incumbent_replay_limit",
+            "exact_evaluation_timeout_retries",
         ):
-            if getattr(self, name) < 0:
-                raise ValueError(f"{name} must be nonnegative.")
+            value = getattr(self, name)
+            if not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a nonnegative integer.")
+        for name in (
+            "initial_evaluations",
+            "candidate_pool_size",
+            "acquisition_restarts",
+            "exploration_interval",
+            "exact_evaluation_worker_max_tasks",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer.")
+        if not isinstance(self.seed, int) or self.seed < 0:
+            raise ValueError("seed must be a nonnegative integer.")
+        if self.exact_evaluation_timeout_seconds is not None and (
+            not np.isfinite(self.exact_evaluation_timeout_seconds)
+            or self.exact_evaluation_timeout_seconds <= 0
+        ):
+            raise ValueError("exact_evaluation_timeout_seconds must be positive.")
+        for value, (lower, upper) in zip(
+            (
+                self.fixed_dT_rhx1_cold,
+                self.fixed_dT_rhx2_cold,
+                self.fixed_comp2_power_frac,
+            ),
+            DEFAULT_BOUNDS,
+        ):
+            if not np.isfinite(value) or not lower <= value <= upper:
+                raise ValueError(
+                    "Fixed design values must satisfy the physical box bounds."
+                )
 
 
 @dataclass(frozen=True)
 class OuterDesignOptimisationResult:
-    """Complete result from the edge-first optimiser."""
+    """One budgeted joint BO trajectory and its best successful observation."""
 
     optimiser_version: str
     config: OuterDesignOptimisationConfig
-    corner: PhaseEvaluation
-    edge_a: LineSearchResult
-    edge_b: LineSearchResult
-    split: LineSearchResult | None
-    composition_searches: tuple[CompositionSearchResult, ...]
-    requested_composition_starts: int
-    polish_results: tuple[LocalPolishResult, ...]
-    lift_feedback_results: tuple[LineSearchResult, ...]
+    initial_x: tuple[float, ...]
     incumbent_replays: tuple[IncumbentReplay, ...]
-    incumbent_polish_results: tuple[LocalPolishResult, ...]
     best: PhaseEvaluation | None
     evaluations: tuple[PhaseEvaluation, ...]
     elapsed_seconds: float
     exact_evaluations: int
     failed_evaluations: int
+    diagnostics: tuple[dict[str, Any], ...] = ()
 
     def to_summary_dict(self) -> dict[str, Any]:
-        output: dict[str, Any] = {
+        output = {
             "optimiser_version": self.optimiser_version,
+            "optimisation_method": "botorch_logei",
             "elapsed_seconds": self.elapsed_seconds,
             "exact_evaluations": self.exact_evaluations,
             "failed_evaluations": self.failed_evaluations,
             "timed_out_evaluations": sum(
-                "evaluation_timeout" in record.constraint_errors
-                for record in self.evaluations
+                "evaluation_timeout" in r.constraint_errors for r in self.evaluations
             ),
             "isolated_worker_failures": sum(
-                "worker_failure" in record.constraint_errors
-                for record in self.evaluations
-            ),
-            "requested_composition_starts": self.requested_composition_starts,
-            "attempted_composition_starts": len(self.composition_searches),
-            "successful_composition_starts": sum(
-                search.success for search in self.composition_searches
-            ),
-            "polished_direction_count": sum(
-                polish.status != "skipped" for polish in self.polish_results
-            ),
-            "lift_feedback_count": sum(
-                result.success for result in self.lift_feedback_results
+                "worker_failure" in r.constraint_errors for r in self.evaluations
             ),
             "incumbent_candidate_count": len(self.incumbent_replays),
             "successful_incumbent_replays": sum(
-                replay.evaluation.success for replay in self.incumbent_replays
-            ),
-            "incumbent_polished_direction_count": sum(
-                polish.status != "skipped"
-                for polish in self.incumbent_polish_results
+                r.evaluation.success for r in self.incumbent_replays
             ),
             **{f"config_{key}": value for key, value in asdict(self.config).items()},
         }
-        successful_replays = [
-            replay for replay in self.incumbent_replays if replay.evaluation.success
-        ]
-        if successful_replays:
-            incumbent_best = min(
-                successful_replays,
-                key=lambda replay: replay.evaluation.objective,
-            )
-            incumbent_evaluations = tuple(
-                replay.evaluation for replay in self.incumbent_replays
-            ) + tuple(
-                record
-                for polish in self.incumbent_polish_results
-                for record in polish.evaluations
-            )
+        replays = [r for r in self.incumbent_replays if r.evaluation.success]
+        if replays:
+            replay = min(replays, key=lambda r: r.evaluation.objective)
             output.update(
-                {
-                    "incumbent_source_version": (
-                        incumbent_best.incumbent.source_version
-                    ),
-                    "incumbent_source_file": incumbent_best.incumbent.source_file,
-                    "incumbent_stored_SEC": incumbent_best.incumbent.stored_sec,
-                    "incumbent_replayed_SEC": incumbent_best.evaluation.sec,
-                    "incumbent_replay_success": True,
-                    "selected_incumbent": self.best in incumbent_evaluations,
-                    "no_worse_than_replayed_incumbent": (
-                        self.best is not None
-                        and self.best.objective
-                        <= incumbent_best.evaluation.objective
-                    ),
-                    "SEC_change_vs_incumbent_pct": (
-                        None
-                        if self.best is None
-                        else 100.0
-                        * (
-                            self.best.objective
-                            / incumbent_best.evaluation.objective
-                            - 1.0
-                        )
-                    ),
-                    "historical_model_drift_pct": (
-                        100.0
-                        * (
-                            incumbent_best.evaluation.objective
-                            / incumbent_best.incumbent.stored_sec
-                            - 1.0
-                        )
-                    ),
-                }
+                incumbent_source_version=replay.incumbent.source_version,
+                incumbent_source_file=replay.incumbent.source_file,
+                incumbent_stored_SEC=replay.incumbent.stored_sec,
+                incumbent_replayed_SEC=replay.evaluation.sec,
+                incumbent_replay_success=True,
+                selected_incumbent=any(self.best == r.evaluation for r in replays),
+                no_worse_than_replayed_incumbent=self.best.objective
+                <= replay.evaluation.objective,
+                historical_model_drift_pct=100
+                * (replay.evaluation.objective / replay.incumbent.stored_sec - 1),
+                SEC_change_vs_incumbent_pct=100
+                * (self.best.objective / replay.evaluation.objective - 1),
             )
         else:
             output.update(
-                {
-                    "incumbent_source_version": None,
-                    "incumbent_source_file": None,
-                    "incumbent_stored_SEC": None,
-                    "incumbent_replayed_SEC": None,
-                    "incumbent_replay_success": False,
-                    "selected_incumbent": False,
-                    "no_worse_than_replayed_incumbent": None,
-                    "SEC_change_vs_incumbent_pct": None,
-                    "historical_model_drift_pct": None,
-                }
+                incumbent_source_version=None,
+                incumbent_source_file=None,
+                incumbent_stored_SEC=None,
+                incumbent_replayed_SEC=None,
+                incumbent_replay_success=False,
+                selected_incumbent=False,
+                no_worse_than_replayed_incumbent=None,
+                historical_model_drift_pct=None,
+                SEC_change_vs_incumbent_pct=None,
             )
         if self.best is not None:
             output.update(
-                {
-                    "best_objective": self.best.objective,
-                    "best_phase": self.best.phase,
-                    "best_success": self.best.success,
-                    "best_message": self.best.message,
-                    **{
-                        f"best_{name}": value
-                        for name, value in zip(BASE_VARIABLE_NAMES, self.best.x[:3])
-                    },
-                    "best_mass_fractions": ";".join(
-                        f"{value:.12g}" for value in self.best.x[3:]
-                    ),
-                    "best_refrigerant": self.best.refrigerant,
-                }
+                best_objective=self.best.objective,
+                best_phase=self.best.phase,
+                best_success=self.best.success,
+                best_message=self.best.message,
+                best_mass_fractions=";".join(f"{v:.12g}" for v in self.best.x[3:]),
+                best_refrigerant=self.best.refrigerant,
+            )
+            output.update(
+                {f"best_{k}": v for k, v in zip(BASE_VARIABLE_NAMES, self.best.x[:3])}
             )
         return output
 

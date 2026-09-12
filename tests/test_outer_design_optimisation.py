@@ -14,21 +14,13 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _batch as batch_helpers
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _cases as case_helpers
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
-    _composition_starts as composition_start_helpers,
-)
-from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     _isolated_evaluation as isolated_helpers,
 )
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
-    _multistart as multistart_helpers,
+    outer_design as outer_design_module,
 )
-from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import outer_design as outer_design_module
-from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _polish as polish_helpers
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     _results_io as results_io,
-)
-from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
-    _search as search_helpers,
 )
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _types as opt_types
 
@@ -94,12 +86,9 @@ class SyntheticAnalyser:
 def test_public_api_exposes_only_the_rhp_optimiser_surface():
     assert outer_opt.__all__ == [
         "OPTIMISER_VERSION",
-        "CompositionSearchResult",
         "DesignEvaluation",
         "HistoricalIncumbent",
         "IncumbentReplay",
-        "LineSearchResult",
-        "LocalPolishResult",
         "OuterDesignOptimisationConfig",
         "OuterDesignOptimisationResult",
         "PhaseEvaluation",
@@ -133,9 +122,6 @@ def test_public_entry_point_has_no_test_only_dependency_parameters(
     objective_kwargs = []
     config = outer_opt.OuterDesignOptimisationConfig(
         max_exact_evaluations=8,
-        line_budget=2,
-        split_budget=0,
-        polish_budget=0,
         use_fast_objective=False,
     )
 
@@ -227,107 +213,15 @@ def test_objective_projects_ternary_composition_onto_simplex():
     assert sum(repaired[3:]) == pytest.approx(1.0)
 
 
-def test_binary_composition_multistart_covers_boundaries_and_quarter_points():
-    starts = composition_start_helpers._generate_composition_starts(
-        (0.5, 0.5),
-        vary_composition=True,
-        max_starts=8,
-    )
-
-    assert starts == (
-        (0.5, 0.5),
-        (0.0, 1.0),
-        (1.0, 0.0),
-        (0.25, 0.75),
-        (0.75, 0.25),
-    )
-
-
-def test_ternary_composition_multistart_covers_vertices_and_binary_edges():
-    starts = composition_start_helpers._generate_composition_starts(
-        (1 / 3, 1 / 3, 1 / 3),
-        vary_composition=True,
-        max_starts=8,
-    )
-
-    expected = {
-        (1 / 3, 1 / 3, 1 / 3),
-        (1.0, 0.0, 0.0),
-        (0.0, 1.0, 0.0),
-        (0.0, 0.0, 1.0),
-        (0.5, 0.5, 0.0),
-        (0.5, 0.0, 0.5),
-        (0.0, 0.5, 0.5),
-    }
-    assert len(starts) == 7
-    assert set(starts) == expected
-    assert all(sum(start) == pytest.approx(1.0) for start in starts)
-
-
-@pytest.mark.parametrize(
-    ("initial", "vary_composition"),
-    [((1.0,), True), ((0.2, 0.3, 0.5), False)],
-)
-def test_composition_multistart_uses_only_input_when_composition_cannot_vary(
-    initial,
-    vary_composition,
-):
-    assert composition_start_helpers._generate_composition_starts(
-        initial,
-        vary_composition=vary_composition,
-        max_starts=8,
-    ) == (initial,)
-
-
-def test_composition_multistart_is_deterministically_capped():
-    initial = (0.1, 0.2, 0.3, 0.4)
-
-    first = composition_start_helpers._generate_composition_starts(
-        initial,
-        vary_composition=True,
-        max_starts=5,
-    )
-    second = composition_start_helpers._generate_composition_starts(
-        initial,
-        vary_composition=True,
-        max_starts=5,
-    )
-
-    assert first == second
-    assert first[0] == initial
-    assert len(first) == 5
-    assert all(min(start) >= 0.0 and sum(start) == pytest.approx(1.0) for start in first)
-
-
-def test_outer_design_config_defaults_to_robust_multistart_budget():
-    config = outer_opt.OuterDesignOptimisationConfig()
-
-    assert config.max_exact_evaluations == 250
-    assert config.max_composition_starts == 8
-    assert config.polish_top_n == 3
-    assert config.polish_budget == 24
-    assert config.polish_pure_recuperator_lifts is True
-    assert config.preserve_incumbent is True
-    assert config.incumbent_replay_limit == 3
-    assert config.incumbent_polish_budget == 12
-    assert config.exact_evaluation_timeout_seconds == pytest.approx(180.0)
-    assert config.exact_evaluation_timeout_retries == 1
-    assert config.exact_evaluation_worker_max_tasks == 20
-
-
 def test_outer_design_config_rejects_invalid_exact_evaluation_limits():
     with pytest.raises(ValueError, match="timeout_seconds must be positive"):
-        outer_opt.OuterDesignOptimisationConfig(
-            exact_evaluation_timeout_seconds=0.0
-        )
-    with pytest.raises(ValueError, match="worker_max_tasks must be at least 1"):
-        outer_opt.OuterDesignOptimisationConfig(
-            exact_evaluation_worker_max_tasks=0
-        )
-    with pytest.raises(ValueError, match="timeout_retries must be nonnegative"):
-        outer_opt.OuterDesignOptimisationConfig(
-            exact_evaluation_timeout_retries=-1
-        )
+        outer_opt.OuterDesignOptimisationConfig(exact_evaluation_timeout_seconds=0.0)
+    with pytest.raises(ValueError, match="worker_max_tasks must be a positive integer"):
+        outer_opt.OuterDesignOptimisationConfig(exact_evaluation_worker_max_tasks=0)
+    with pytest.raises(
+        ValueError, match="timeout_retries must be a nonnegative integer"
+    ):
+        outer_opt.OuterDesignOptimisationConfig(exact_evaluation_timeout_retries=-1)
 
 
 def test_v10_never_selects_worse_than_successful_current_solver_incumbent(
@@ -359,11 +253,6 @@ def test_v10_never_selects_worse_than_successful_current_solver_incumbent(
     )
     config = outer_opt.OuterDesignOptimisationConfig(
         max_exact_evaluations=3,
-        max_composition_starts=1,
-        line_budget=1,
-        split_budget=0,
-        polish_budget=0,
-        incumbent_polish_budget=0,
     )
 
     result = outer_opt.optimise_recuperative_heat_pump(
@@ -449,253 +338,6 @@ def test_historical_incumbent_requires_all_extra_case_inputs_to_match(tmp_path):
     )
 
     assert attached.incumbents == ()
-
-
-@pytest.mark.parametrize("polish_top_n", [0, 1, 4])
-def test_outer_design_config_requires_two_or_three_polish_sources(polish_top_n):
-    with pytest.raises(ValueError, match="polish_top_n"):
-        outer_opt.OuterDesignOptimisationConfig(polish_top_n=polish_top_n)
-
-
-@pytest.mark.parametrize(
-    ("max_evaluations", "expected_starts"),
-    [(100, 2), (250, 7)],
-)
-def test_composition_multistart_plan_reserves_polish_budget(
-    max_evaluations,
-    expected_starts,
-):
-    starts = tuple((index / 10, 1 - index / 10) for index in range(8))
-    config = outer_opt.OuterDesignOptimisationConfig(
-        max_exact_evaluations=max_evaluations,
-    )
-
-    selected, budget_per_start = composition_start_helpers._plan_composition_searches(
-        starts,
-        config,
-    )
-
-    assert len(selected) == expected_starts
-    expected_budget = 26 if max_evaluations == 100 else 25
-    assert budget_per_start == expected_budget
-    assert (
-        len(selected) * budget_per_start
-        + min(3, len(selected)) * config.polish_budget
-        <= max_evaluations
-    )
-
-
-def test_outer_optimiser_runs_line_searches_from_each_selected_composition(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(composition_target=0.1),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            line_budget=3,
-            split_budget=3,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.requested_composition_starts == 5
-    assert len(result.composition_searches) == 5
-    assert result.corner.x[3:] == pytest.approx((0.5, 0.5))
-    assert {search.composition for search in result.composition_searches} == {
-        (0.5, 0.5),
-        (0.0, 1.0),
-        (1.0, 0.0),
-        (0.25, 0.75),
-        (0.75, 0.25),
-    }
-
-
-def test_multistart_finds_better_remote_composition_than_single_start(monkeypatch):
-    common = {
-        "line_budget": 3,
-        "split_budget": 0,
-        "polish_budget": 0,
-    }
-    single = _optimise_synthetic(
-        analyser=SyntheticAnalyser(composition_target=0.0),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            max_composition_starts=1,
-            **common,
-        ),
-        monkeypatch=monkeypatch,
-    )
-    multiple = _optimise_synthetic(
-        analyser=SyntheticAnalyser(composition_target=0.0),
-        config=outer_opt.OuterDesignOptimisationConfig(**common),
-        monkeypatch=monkeypatch,
-    )
-
-    assert single.best is not None
-    assert multiple.best is not None
-    assert multiple.best.objective < single.best.objective
-    assert multiple.best.x[3] == pytest.approx(0.0)
-
-
-def test_polish_sources_are_best_candidates_from_distinct_line_directions(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(composition_target=0.3),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            line_budget=4,
-            split_budget=4,
-            polish_budget=2,
-            polish_top_n=3,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    direction_candidates = {
-        candidate.x
-        for search in result.composition_searches
-        for candidate in (
-            search.edge_a.best,
-            search.edge_b.best,
-            None if search.split is None else search.split.best,
-        )
-        if candidate is not None and candidate.success
-    }
-    sources = [polish.source_x for polish in result.polish_results]
-    assert 1 <= len(sources) <= 3
-    assert len(set(sources)) == len(sources)
-    assert set(sources) <= direction_candidates
-
-
-def test_multistart_never_exceeds_case_wide_exact_evaluation_budget(monkeypatch):
-    config = outer_opt.OuterDesignOptimisationConfig(
-        max_exact_evaluations=40,
-        line_budget=5,
-        split_budget=5,
-        polish_budget=6,
-    )
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(),
-        config=config,
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.exact_evaluations <= config.max_exact_evaluations
-    assert result.to_summary_dict()["attempted_composition_starts"] == len(
-        result.composition_searches
-    )
-
-
-def test_parallel_composition_search_preserves_start_order_and_worker_failures():
-    config = outer_opt.OuterDesignOptimisationConfig(
-        max_exact_evaluations=2,
-        line_budget=0,
-        split_budget=0,
-        polish_budget=0,
-    )
-    tasks = multistart_helpers._build_composition_search_tasks(
-        ((0.5, 0.5), (0.0, 1.0)),
-        budget_per_start=1,
-        base_case=opt_types.DEFAULT_BASE_CASE,
-        refrigerant="Propane;Butane|0.5;0.5|mass",
-        config=config,
-        results_dir="results",
-    )
-    executors = []
-    analyser = SyntheticAnalyser()
-
-    def build_synthetic_objective(**kwargs):
-        return objective_helpers._OuterDesignObjective(
-            **kwargs,
-            analyser=analyser,
-            molar_masses=(44.0, 58.0),
-        )
-
-    successful = multistart_helpers._run_composition_search(
-        tasks[0],
-        objective_factory=build_synthetic_objective,
-    )
-
-    class FakeFuture:
-        def __init__(self, task):
-            self.task = task
-
-        def result(self):
-            if self.task.start_index == 0:
-                return successful
-            raise RuntimeError(f"worker {self.task.start_index} failed")
-
-    class FakeExecutor:
-        def __init__(self, max_workers):
-            self.max_workers = max_workers
-            self.submitted = []
-            self.shutdown_called = False
-            executors.append(self)
-
-        def submit(self, fn, task):
-            self.submitted.append((fn, task))
-            return FakeFuture(task)
-
-        def shutdown(self):
-            self.shutdown_called = True
-
-    results = multistart_helpers._run_composition_searches(
-        tasks,
-        n_cpu=4,
-        executor_factory=FakeExecutor,
-    )
-
-    assert [result.start_index for result in results] == [0, 1]
-    assert [result.success for result in results] == [True, False]
-    assert executors[0].max_workers == 2
-    assert executors[0].shutdown_called is True
-
-
-def test_spare_binary_search_budget_strengthens_line_and_split_coverage():
-    config = outer_opt.OuterDesignOptimisationConfig()
-
-    expanded = multistart_helpers._search_config_for_budget(
-        config,
-        max_evaluations=35,
-    )
-
-    assert expanded.line_budget == 12
-    assert expanded.split_budget == 10
-    assert composition_start_helpers._full_search_budget(expanded) == 35
-
-
-def test_composition_search_falls_back_to_serial_when_pool_setup_fails():
-    analyser = SyntheticAnalyser()
-    config = outer_opt.OuterDesignOptimisationConfig(
-        max_exact_evaluations=2,
-        line_budget=0,
-        split_budget=0,
-        polish_budget=0,
-    )
-    tasks = multistart_helpers._build_composition_search_tasks(
-        ((0.5, 0.5), (0.0, 1.0)),
-        budget_per_start=1,
-        base_case=opt_types.DEFAULT_BASE_CASE,
-        refrigerant="Propane;Butane|0.5;0.5|mass",
-        config=config,
-        results_dir="results",
-    )
-
-    def build_synthetic_objective(**kwargs):
-        return objective_helpers._OuterDesignObjective(
-            **kwargs,
-            analyser=analyser,
-            molar_masses=(44.0, 58.0),
-        )
-
-    def unavailable_executor(*, max_workers):
-        del max_workers
-        raise OSError("processes unavailable")
-
-    results = multistart_helpers._run_composition_searches(
-        tasks,
-        n_cpu=2,
-        executor_factory=unavailable_executor,
-        objective_factory=build_synthetic_objective,
-    )
-
-    assert all(result.success for result in results)
-    assert len(analyser.calls) == 2
 
 
 def test_mole_basis_objective_solves_in_mass_basis_and_reports_in_mole_basis():
@@ -987,669 +629,6 @@ def test_objective_does_not_exceed_exact_evaluation_budget():
     assert objective.budget_exhausted_calls == 1
 
 
-def test_line_search_refines_the_best_observed_sample_bracket():
-    sampled_values = []
-
-    def evaluate_phase(phase, x):
-        value = float(x[0])
-        sampled_values.append(value)
-        return SimpleNamespace(
-            phase=phase,
-            x=(value,),
-            objective=(value - 75.0) ** 2,
-            success=True,
-        )
-
-    result = search_helpers._line_search(
-        phase="test",
-        variable_name="x",
-        lo=0.0,
-        hi=100.0,
-        budget=8,
-        build_x=lambda value: [value],
-        evaluate_phase=evaluate_phase,
-    )
-
-    assert sampled_values[:5] == pytest.approx((0.0, 25.0, 50.0, 75.0, 100.0))
-    assert all(50.0 <= value <= 100.0 for value in sampled_values[5:])
-    assert result.best is not None
-    assert result.best.x[0] == pytest.approx(75.0)
-
-
-def test_line_search_uses_observed_multibasin_values_to_choose_refinement_region():
-    def evaluate_phase(phase, x):
-        value = float(x[0])
-        broad_well = 0.2 + (value - 20.0) ** 2 / 4000.0
-        narrow_well = (value - 75.0) ** 2 / 20.0
-        return SimpleNamespace(
-            phase=phase,
-            x=(value,),
-            objective=min(broad_well, narrow_well),
-            success=True,
-        )
-
-    result = search_helpers._line_search(
-        phase="test",
-        variable_name="x",
-        lo=0.0,
-        hi=100.0,
-        budget=8,
-        build_x=lambda value: [value],
-        evaluate_phase=evaluate_phase,
-    )
-
-    assert result.best is not None
-    assert result.best.x[0] == pytest.approx(75.0)
-    assert result.best.objective == pytest.approx(0.0)
-
-
-def test_line_search_refines_distinct_interior_basin_when_screen_best_is_boundary():
-    sampled_values = []
-
-    def evaluate_phase(phase, x):
-        value = float(x[0])
-        sampled_values.append(value)
-        objective = (
-            0.1 + (value - 56.0) ** 2 / 200.0
-            if 35.0 <= value <= 70.0
-            else 0.2 + value / 100.0
-        )
-        return SimpleNamespace(
-            phase=phase,
-            x=(value,),
-            objective=objective,
-            success=True,
-        )
-
-    result = search_helpers._line_search(
-        phase="test",
-        variable_name="x",
-        lo=0.0,
-        hi=100.0,
-        budget=9,
-        build_x=lambda value: [value],
-        evaluate_phase=evaluate_phase,
-    )
-
-    assert sampled_values[:5] == pytest.approx((0.0, 25.0, 50.0, 75.0, 100.0))
-    assert any(25.0 <= value <= 75.0 for value in sampled_values[5:])
-    assert result.best is not None
-    assert result.best.objective < 0.2
-    assert result.best.x[0] == pytest.approx(56.0, abs=1.0)
-
-
-def test_outer_design_optimisation_edge_a_holds_dT1_at_zero(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(dT1_target=0.0, dT2_target=42.0),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            line_budget=12,
-            split_budget=0,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.edge_a.success is True
-    assert result.edge_a.best is not None
-    assert result.edge_a.best.x[0] == pytest.approx(0.0)
-    assert result.edge_a.best.x[1] == pytest.approx(42.0, abs=2.0)
-    assert all(record.x[0] == pytest.approx(0.0) for record in result.edge_a.evaluations)
-
-
-def test_outer_design_optimisation_edge_b_holds_dT2_at_zero(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(dT1_target=28.0, dT2_target=0.0),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            line_budget=12,
-            split_budget=0,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.edge_b.success is True
-    assert result.edge_b.best is not None
-    assert result.edge_b.best.x[0] == pytest.approx(28.0, abs=2.0)
-    assert result.edge_b.best.x[1] == pytest.approx(0.0)
-    assert all(record.x[1] == pytest.approx(0.0) for record in result.edge_b.evaluations)
-
-
-def test_outer_design_optimisation_split_line_uses_sum_of_edge_optima(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(dT1_target=25.0, dT2_target=35.0),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            line_budget=14,
-            split_budget=10,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.split is not None
-    assert result.edge_a.best is not None
-    assert result.edge_b.best is not None
-    expected_sum = result.edge_a.best.x[1] + result.edge_b.best.x[0]
-    split_sums = [record.x[0] + record.x[1] for record in result.split.evaluations]
-    assert split_sums
-    assert all(total == pytest.approx(expected_sum, abs=1e-7) for total in split_sums)
-
-
-def test_outer_design_optimisation_skips_split_when_both_edges_select_corner(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(dT1_target=0.0, dT2_target=0.0),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            line_budget=10,
-            split_budget=10,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.edge_a.best is not None
-    assert result.edge_b.best is not None
-    assert result.edge_a.best.x[:2] == pytest.approx((0.0, 0.0))
-    assert result.edge_b.best.x[:2] == pytest.approx((0.0, 0.0))
-    assert result.split is None
-
-
-def test_outer_design_optimisation_fixed_dT1_searches_only_dT2(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(dT1_target=18.0, dT2_target=42.0),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            fixed_dT_rhx1_cold=18.0,
-            vary_dT_rhx1_cold=False,
-            line_budget=12,
-            split_budget=8,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.edge_a.success is True
-    assert result.edge_b.message == "dT_rhx1_cold is fixed"
-    assert result.split is None
-    assert result.edge_a.best is not None
-    assert result.edge_a.best.x[0] == pytest.approx(18.0)
-    assert result.edge_a.best.x[1] == pytest.approx(42.0, abs=2.0)
-    assert all(record.x[0] == pytest.approx(18.0) for record in result.edge_a.evaluations)
-
-
-def test_outer_design_optimisation_fixed_dT2_searches_only_dT1(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(dT1_target=27.0, dT2_target=16.0),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            fixed_dT_rhx2_cold=16.0,
-            vary_dT_rhx2_cold=False,
-            line_budget=12,
-            split_budget=8,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.edge_a.message == "dT_rhx2_cold is fixed"
-    assert result.edge_b.success is True
-    assert result.split is None
-    assert result.edge_b.best is not None
-    assert result.edge_b.best.x[0] == pytest.approx(27.0, abs=2.0)
-    assert result.edge_b.best.x[1] == pytest.approx(16.0)
-    assert all(record.x[1] == pytest.approx(16.0) for record in result.edge_b.evaluations)
-
-
-def test_outer_design_optimisation_fixed_dT_pair_skips_edge_and_split(monkeypatch):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(dT1_target=11.0, dT2_target=22.0),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            fixed_dT_rhx1_cold=11.0,
-            fixed_dT_rhx2_cold=22.0,
-            vary_dT_rhx1_cold=False,
-            vary_dT_rhx2_cold=False,
-            line_budget=12,
-            split_budget=8,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert result.corner.x[:2] == pytest.approx((11.0, 22.0))
-    assert result.edge_a.evaluations == ()
-    assert result.edge_b.evaluations == ()
-    assert result.split is None
-    assert result.best is not None
-    assert result.best.x[:2] == pytest.approx((11.0, 22.0))
-
-
-def test_outer_design_optimisation_polish_keeps_dT_values_fixed_and_varies_power_and_composition(
-    monkeypatch,
-):
-    result = _optimise_synthetic(
-        analyser=SyntheticAnalyser(
-            dT1_target=0.0,
-            dT2_target=40.0,
-            comp2_target=0.62,
-            composition_target=0.8,
-        ),
-        config=outer_opt.OuterDesignOptimisationConfig(
-            fixed_comp2_power_frac=0.4,
-            line_budget=10,
-            split_budget=0,
-            polish_budget=16,
-            polish_top_n=2,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    assert len(result.polish_results) == 2
-    source = result.polish_results[0].source_x
-    polish_records = result.polish_results[0].evaluations
-    assert polish_records
-    assert all(record.x[:2] == pytest.approx(source[:2]) for record in polish_records)
-    assert any(
-        record.x[2] != pytest.approx(source[2])
-        or record.x[3] != pytest.approx(source[3])
-        for record in polish_records
-    )
-
-
-def test_pattern_search_polish_improves_unsmooth_objective_without_leaving_bounds():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=20,
-        analyser=SyntheticAnalyser(
-            dT1_target=0.0,
-            dT2_target=40.0,
-            comp2_target=0.6,
-            composition_target=0.6,
-        ),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [0.0, 40.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-    phase_records = []
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(budget=10),
-        evaluate_phase=_phase_evaluator(objective, phase_records),
-    )
-
-    assert result.status == "ok"
-    assert result.best is not None
-    assert result.best.objective < source.objective
-    assert opt_types.DEFAULT_BOUNDS[2, 0] <= result.best.x[2] <= opt_types.DEFAULT_BOUNDS[2, 1]
-    assert all(0.0 <= fraction <= 1.0 for fraction in result.best.x[3:])
-    assert sum(result.best.x[3:]) == pytest.approx(1.0)
-
-
-def test_pattern_search_screens_remote_compressor_split_basin():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=6,
-        analyser=SyntheticAnalyser(comp2_target=0.1),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [20.0, 35.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(
-            budget=5,
-            comp2_screen_points=5,
-            vary_composition=False,
-        ),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.best is not None
-    assert result.best.x[2] == pytest.approx(0.1)
-    assert result.best.objective < source.objective
-
-
-def test_pattern_search_can_reopen_recuperator_lifts():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=8,
-        analyser=SyntheticAnalyser(
-            dT1_target=0.0,
-            dT2_target=5.0,
-            comp2_target=0.1,
-            composition_target=0.5,
-        ),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [0.0, 0.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(
-            budget=7,
-            vary_dT_rhx2_cold=True,
-            vary_composition=False,
-        ),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.best is not None
-    assert result.best.x[1] == pytest.approx(5.0)
-    assert result.best.x[2] == pytest.approx(0.1)
-    assert result.best.objective < source.objective
-
-
-def test_mixture_lift_feedback_relines_after_composition_polish():
-    analyser = SyntheticAnalyser(
-        dT1_target=85.0,
-        dT2_target=0.0,
-        comp2_target=0.9,
-        composition_target=0.85,
-    )
-    source_objective = objective_helpers._OuterDesignObjective(
-        max_evals=1,
-        analyser=analyser,
-    )
-    source = _phase_from_exact_record(
-        source_objective,
-        [68.0, 0.0, 0.9, 0.85, 0.15],
-        phase="polish_pattern_search",
-    )
-    task = polish_helpers._LiftFeedbackTask(
-        source=source,
-        budget=7,
-        base_case=dict(opt_types.DEFAULT_BASE_CASE),
-        refrigerant="Propane;Butane|0.5;0.5|mass",
-        config=outer_opt.OuterDesignOptimisationConfig(),
-        results_dir="results",
-    )
-
-    result = polish_helpers._run_lift_feedback(
-        task,
-        objective_factory=lambda **kwargs: objective_helpers._OuterDesignObjective(
-            **kwargs,
-            analyser=analyser,
-        ),
-    )
-
-    assert result.success is True
-    assert result.best is not None
-    assert result.best.x[0] == pytest.approx(85.0, abs=3.0)
-    assert result.best.objective < source.objective
-    assert all(record.phase == "lift_feedback" for record in result.evaluations)
-
-
-def test_pattern_search_transfers_mass_across_ternary_simplex():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=16,
-        refrigerant="Propane;Butane;Pentane|0.2;0.3;0.5|mass",
-        analyser=SyntheticAnalyser(composition_target=0.4),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [20.0, 35.0, 0.45, 0.2, 0.3, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(
-            budget=12,
-            vary_comp2_power_frac=False,
-        ),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.best is not None
-    assert result.best.objective < source.objective
-    assert all(sum(record.x[3:]) == pytest.approx(1.0) for record in result.evaluations)
-    assert all(value >= 0.0 for record in result.evaluations for value in record.x[3:])
-
-
-def test_binary_composition_poll_retains_positive_first_fraction_direction():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=2,
-        analyser=SyntheticAnalyser(composition_target=0.6),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [20.0, 35.0, 0.45, 0.5, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(
-            budget=1,
-            vary_comp2_power_frac=False,
-        ),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.best is not None
-    assert result.best.x[3:] == pytest.approx((0.55, 0.45))
-
-
-def test_pattern_search_uses_cache_for_duplicate_current_point():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=3,
-        analyser=SyntheticAnalyser(),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [20.0, 35.0, 0.45, 0.72, 0.28],
-        phase="source",
-    )
-    exact_before = objective.exact_evaluations
-    phase_records = []
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(budget=1),
-        evaluate_phase=_phase_evaluator(objective, phase_records),
-    )
-
-    assert result.evaluations[0].x == pytest.approx(source.x)
-    assert result.evaluations[0].cumulative_exact_evaluations == exact_before
-    assert result.exact_evaluations == 1
-    assert objective.exact_evaluations == exact_before + 1
-
-
-def test_pattern_search_shrinks_steps_when_no_poll_improves():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=12,
-        analyser=SyntheticAnalyser(
-            dT1_target=20.0,
-            dT2_target=35.0,
-            comp2_target=0.5,
-            composition_target=0.5,
-        ),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [20.0, 35.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-    phase_records = []
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(
-            budget=8,
-            comp2_screen_points=0,
-            initial_comp2_step=0.05,
-            initial_composition_step=0.05,
-            min_comp2_step=0.01,
-            min_composition_step=0.01,
-        ),
-        evaluate_phase=_phase_evaluator(objective, phase_records),
-    )
-
-    comp2_offsets = sorted({round(abs(record.x[2] - 0.5), 3) for record in result.evaluations})
-    assert 0.025 in comp2_offsets
-    assert result.best is not None
-    assert result.best.x[2:] == pytest.approx((0.5, 0.5, 0.5))
-
-
-def test_pattern_search_keeps_dT_values_fixed():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=20,
-        analyser=SyntheticAnalyser(comp2_target=0.6, composition_target=0.6),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [12.0, 44.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-    phase_records = []
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(budget=8),
-        evaluate_phase=_phase_evaluator(objective, phase_records),
-    )
-
-    assert result.evaluations
-    assert all(record.x[:2] == pytest.approx((12.0, 44.0)) for record in result.evaluations)
-
-
-def test_pattern_search_respects_fixed_comp2_power_fraction():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=12,
-        analyser=SyntheticAnalyser(comp2_target=0.8, composition_target=0.7),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [12.0, 44.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(
-            budget=8,
-            vary_comp2_power_frac=False,
-            vary_composition=True,
-        ),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.evaluations
-    assert all(record.x[2] == pytest.approx(0.5) for record in result.evaluations)
-    assert any(record.x[3] != pytest.approx(0.5) for record in result.evaluations)
-
-
-def test_pattern_search_respects_fixed_composition():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=12,
-        analyser=SyntheticAnalyser(comp2_target=0.7, composition_target=0.9),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [12.0, 44.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(
-            budget=8,
-            vary_comp2_power_frac=True,
-            vary_composition=False,
-        ),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.evaluations
-    assert any(record.x[2] != pytest.approx(0.5) for record in result.evaluations)
-    assert all(record.x[3:] == pytest.approx((0.5, 0.5)) for record in result.evaluations)
-
-
-def test_pattern_search_skips_when_all_polish_variables_are_fixed():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=4,
-        analyser=SyntheticAnalyser(),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [12.0, 44.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(
-            budget=8,
-            vary_comp2_power_frac=False,
-            vary_composition=False,
-        ),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.status == "skipped"
-    assert result.best is source
-    assert result.evaluations == ()
-    assert result.exact_evaluations == 0
-
-
-def test_local_polish_is_pattern_search_only():
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=10,
-        analyser=SyntheticAnalyser(comp2_target=0.6, composition_target=0.6),
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [20.0, 35.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(budget=5),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.method == "pattern_search"
-    assert result.status == "ok"
-    assert result.best is not None
-    assert all(record.phase == "polish_pattern_search" for record in result.evaluations)
-
-
-def test_outer_design_optimisation_shares_exact_cache_across_phases(monkeypatch):
-    analyser = SyntheticAnalyser(dT1_target=0.0, dT2_target=0.0)
-
-    result = _optimise_synthetic(
-        analyser=analyser,
-        config=outer_opt.OuterDesignOptimisationConfig(
-            max_exact_evaluations=30,
-            line_budget=3,
-            split_budget=0,
-            polish_budget=0,
-        ),
-        monkeypatch=monkeypatch,
-    )
-
-    corner_visits = [
-        record for record in result.evaluations if record.x[:2] == pytest.approx((0.0, 0.0))
-    ]
-    assert len(corner_visits) >= 3
-    assert result.exact_evaluations < len(result.evaluations)
-    assert len(analyser.calls) == result.exact_evaluations
-
-
 def test_outer_design_optimisation_result_identifies_final_best_candidate(monkeypatch):
     result = _optimise_synthetic(
         analyser=SyntheticAnalyser(
@@ -1659,9 +638,7 @@ def test_outer_design_optimisation_result_identifies_final_best_candidate(monkey
             composition_target=0.5,
         ),
         config=outer_opt.OuterDesignOptimisationConfig(
-            line_budget=14,
-            split_budget=8,
-            polish_budget=8,
+            max_exact_evaluations=8,
         ),
         monkeypatch=monkeypatch,
     )
@@ -1690,7 +667,7 @@ def test_case_definition_loads_fixed_case_and_reference_from_results_csv(tmp_pat
     case_definition = results_io._load_case_definition_from_results_csv(csv_path)
     config = results_io._outer_design_config_from_case_definition(
         case_definition,
-        line_budget=4,
+        initial_evaluations=4,
     )
 
     assert case_definition.refrigerant == "Propane;Butane|0.6;0.4|mass"
@@ -1705,7 +682,7 @@ def test_case_definition_loads_fixed_case_and_reference_from_results_csv(tmp_pat
     assert case_definition.best_reference["dT_rhx2_cold"] == pytest.approx(55.0)
     assert case_definition.best_reference["composition"] == "0.6;0.4"
     assert config.fixed_comp2_power_frac == pytest.approx(0.65)
-    assert config.line_budget == 4
+    assert config.initial_evaluations == 4
 
 
 def test_write_outer_design_optimisation_results_includes_reference_metadata(
@@ -1728,9 +705,7 @@ def test_write_outer_design_optimisation_results_includes_reference_metadata(
     result = _optimise_synthetic(
         analyser=SyntheticAnalyser(dT1_target=0.0, dT2_target=0.0),
         config=outer_opt.OuterDesignOptimisationConfig(
-            line_budget=3,
-            split_budget=0,
-            polish_budget=0,
+            max_exact_evaluations=8,
         ),
         monkeypatch=monkeypatch,
     )
@@ -1746,7 +721,7 @@ def test_write_outer_design_optimisation_results_includes_reference_metadata(
     summary_csv = (tmp_path / "outer_design_optimisation_summary.csv").read_text()
     assert "reference_best_SEC" in summary
     assert "0.62" in summary
-    assert "edge_a" in evaluations
+    assert "bayesian_optimisation" in evaluations
     assert outer_opt.OPTIMISER_VERSION in summary_csv
 
 
@@ -1762,7 +737,7 @@ def test_optimisation_case_generation_expands_fixed_variable_lists():
             "dT_rhx2_cold_ls": [5.0],
             "comp2_power_frac_ls": [0.4, 0.6],
         },
-        config=outer_opt.OuterDesignOptimisationConfig(line_budget=2),
+        config=outer_opt.OuterDesignOptimisationConfig(initial_evaluations=2),
     )
 
     assert len(cases) == 16
@@ -1862,9 +837,7 @@ def test_optimisation_case_filtering_retries_unsuccessful_result_rows(tmp_path):
         param_kwargs={"T_air_tar_ls": [180.0]},
     )
     results_path = tmp_path / "RHPopt_results.csv"
-    results_path.write_text(
-        f"case_signature,batch_success\n{case.signature},False\n"
-    )
+    results_path.write_text(f"case_signature,batch_success\n{case.signature},False\n")
 
     remaining = case_helpers._get_optimisation_case_list_to_solve(
         file_name="RHPopt_results",
@@ -1881,8 +854,7 @@ def test_successful_retry_is_transferred_after_failed_master_row(tmp_path):
     )
     master_path = tmp_path / "RHPopt_results.csv"
     master_path.write_text(
-        "case_signature,batch_success,best_objective\n"
-        f"{case.signature},False,1e30\n"
+        f"case_signature,batch_success,best_objective\n{case.signature},False,1e30\n"
     )
     batch_helpers.print_result_to_csv(
         output={
@@ -2026,16 +998,13 @@ def test_completed_result_transfer_only_merges_the_finished_case(tmp_path):
     master = (tmp_path / "RHPopt_results.csv").read_text()
     assert cases[0].signature in master
     assert cases[1].signature not in master
-    remaining_temp = (
-        tmp_path
-        / "temp"
-        / "optimisation"
-        / f"R{cases[1].temp_suffix}.csv"
-    )
+    remaining_temp = tmp_path / "temp" / "optimisation" / f"R{cases[1].temp_suffix}.csv"
     assert remaining_temp.exists()
 
 
-def test_single_case_runner_resumes_optimal_result_before_solving(monkeypatch, tmp_path):
+def test_single_case_runner_resumes_optimal_result_before_solving(
+    monkeypatch, tmp_path
+):
     config = outer_opt.OuterDesignOptimisationConfig(max_exact_evaluations=3)
     case = case_helpers._build_optimisation_case(
         base_case={"T_air_tar": 180.0},
@@ -2229,16 +1198,12 @@ def test_public_batch_runner_transfers_optimal_files_before_and_after(
         results_dir=tmp_path,
     )
 
-    assert rows == [
-        {"case_signature": cases[0].signature, "batch_success": True}
-    ]
+    assert rows == [{"case_signature": cases[0].signature, "batch_success": True}]
     assert transfers == [
         ("RHPopt_results", tmp_path),
         ("RHPopt_results", tmp_path),
     ]
-    assert completed_transfers == [
-        ("RHPopt_results", cases[0].signature, tmp_path)
-    ]
+    assert completed_transfers == [("RHPopt_results", cases[0].signature, tmp_path)]
     assert events == [
         "transfer",
         "filter",
@@ -2252,12 +1217,11 @@ def test_real_outer_design_optimisation_smoke_when_refprop_is_available(hpl, tmp
     del hpl
     config = outer_opt.OuterDesignOptimisationConfig(
         max_exact_evaluations=4,
-        line_budget=1,
-        split_budget=0,
-        polish_budget=0,
     )
 
-    result = outer_opt.optimise_recuperative_heat_pump(config=config, results_dir=tmp_path)
+    result = outer_opt.optimise_recuperative_heat_pump(
+        config=config, results_dir=tmp_path
+    )
 
     assert result.exact_evaluations <= 4
     assert result.best is not None
@@ -2265,61 +1229,34 @@ def test_real_outer_design_optimisation_smoke_when_refprop_is_available(hpl, tmp
     assert result.best.message
 
 
-def test_real_serial_and_parallel_multistart_select_same_result(hpl, tmp_path):
-    del hpl
-    config = outer_opt.OuterDesignOptimisationConfig(
-        max_exact_evaluations=2,
-        max_composition_starts=2,
-        vary_dT_rhx1_cold=False,
-        vary_dT_rhx2_cold=False,
-        vary_comp2_power_frac=False,
-        line_budget=0,
-        split_budget=0,
-        polish_budget=0,
+@pytest.mark.parametrize("propane_fraction", [0.1, 0.5, 0.9])
+def test_full_optimisation_keeps_requested_mass_composition(
+    monkeypatch, propane_fraction
+):
+    # The synthetic objective prefers a different composition, so any accidental
+    # composition polling would be attractive to the optimiser.
+    analyser = SyntheticAnalyser(composition_target=0.72)
+
+    def build_objective(**kwargs):
+        return objective_helpers._OuterDesignObjective(**kwargs, analyser=analyser)
+
+    monkeypatch.setattr(outer_design_module, "_OuterDesignObjective", build_objective)
+    result = outer_opt.optimise_recuperative_heat_pump(
+        refrigerant=[("Propane", propane_fraction), ("Butane", 1 - propane_fraction)],
+        config=outer_opt.OuterDesignOptimisationConfig(
+            max_exact_evaluations=8,
+            vary_composition=False,
+            preserve_incumbent=False,
+        ),
     )
 
-    serial = outer_opt.optimise_recuperative_heat_pump(
-        config=config,
-        n_cpu=1,
-        results_dir=tmp_path,
-    )
-    parallel = outer_opt.optimise_recuperative_heat_pump(
-        config=config,
-        n_cpu=2,
-        results_dir=tmp_path,
-    )
-
-    assert serial.best is not None
-    assert parallel.best is not None
-    assert parallel.best.objective == pytest.approx(serial.best.objective)
-    assert parallel.best.x == pytest.approx(serial.best.x)
-    assert [search.composition for search in parallel.composition_searches] == [
-        search.composition for search in serial.composition_searches
-    ]
-
-
-def test_real_local_pattern_search_polish_smoke_when_refprop_is_available(hpl, tmp_path):
-    del hpl
-    objective = objective_helpers._OuterDesignObjective(
-        max_evals=2,
-        results_dir=tmp_path,
-    )
-    source = _phase_from_exact_record(
-        objective,
-        [0.0, 0.0, 0.5, 0.5, 0.5],
-        phase="source",
-    )
-
-    result = polish_helpers._run_pattern_search_polish(
-        source=source,
-        objective=objective,
-        config=opt_types.LocalPolishConfig(budget=1),
-        evaluate_phase=_phase_evaluator(objective, []),
-    )
-
-    assert result.method == "pattern_search"
-    assert result.best is not None
-    assert math.isfinite(result.best.objective)
+    assert result.best is not None and result.best.success
+    for record in result.evaluations:
+        assert record.x[3:] == pytest.approx((propane_fraction, 1 - propane_fraction))
+    for case in analyser.calls:
+        assert _composition(case["refrigerant"]) == pytest.approx(
+            (propane_fraction, 1 - propane_fraction)
+        )
 
 
 def _optimise_synthetic(
@@ -2388,7 +1325,7 @@ def _fake_batch_result():
     )
     return SimpleNamespace(
         best=best,
-        corner=best,
+        initial_x=best.x,
         to_summary_dict=lambda: {
             "optimiser_version": outer_opt.OPTIMISER_VERSION,
             "best_objective": 0.5,

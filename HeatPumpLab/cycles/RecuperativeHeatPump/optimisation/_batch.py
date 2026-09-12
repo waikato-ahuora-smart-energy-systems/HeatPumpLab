@@ -30,7 +30,7 @@ from .outer_design import optimise_recuperative_heat_pump
 
 
 def optimise_recuperative_heat_pump_case(
-    filename: str = "RHPopt_ncomponent_results_v11",
+    filename: str = "RHPopt_ncomponent_results_bo_v18",
     base_case: dict[str, Any] | None = None,
     *,
     refrigerant: RefrigerantInput = "Propane;Butane|0.5;0.5|mass",
@@ -68,7 +68,7 @@ def optimise_recuperative_heat_pump_case(
 
 
 def optimise_recuperative_heat_pump_cases(
-    filename: str = "RHPopt_ncomponent_results_v11",
+    filename: str = "RHPopt_ncomponent_results_bo_v18",
     param_kwargs: dict[str, Any] | None = None,
     config: OuterDesignOptimisationConfig | None = None,
     n_cpu: int = max((os.cpu_count() or 2) - 1, 1),
@@ -213,7 +213,7 @@ def _result_row(case: OptimisationCase, result) -> dict[str, Any]:
         "input_basis": input_spec.basis,
         "optimisation_basis": "mass",
         "initial_composition": _format_fractions(input_spec.fractions),
-        "initial_mass_fractions": _format_fractions(result.corner.x[3:]),
+        "initial_mass_fractions": _format_fractions(result.initial_x[3:]),
         **case.base_case,
         **{f"config_{key}": value for key, value in asdict(case.config).items()},
         **result.to_summary_dict(),

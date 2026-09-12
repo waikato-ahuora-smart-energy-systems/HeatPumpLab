@@ -11,10 +11,18 @@ dependencies = [
     "pandas>=3.0.3",
     "plotly>=6.7.0",
     "scipy>=1.17.1",
+    "botorch>=0.18.1",
 ]
 
 [dependency-groups]
+benchmark = [
+    "cma>=4.4.4",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.15.14",
 ]
+
+[tool.pytest.ini_options]
+# Frozen experiment copies have duplicate module names and run separately.
+testpaths = ["tests"]

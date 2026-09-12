@@ -2,12 +2,9 @@
 
 from ._types import (
     OPTIMISER_VERSION,
-    CompositionSearchResult,
     DesignEvaluation,
     HistoricalIncumbent,
     IncumbentReplay,
-    LineSearchResult,
-    LocalPolishResult,
     OuterDesignOptimisationConfig,
     OuterDesignOptimisationResult,
     PhaseEvaluation,
@@ -20,12 +17,9 @@ from .outer_design import optimise_recuperative_heat_pump
 
 __all__ = [
     "OPTIMISER_VERSION",
-    "CompositionSearchResult",
     "DesignEvaluation",
     "HistoricalIncumbent",
     "IncumbentReplay",
-    "LineSearchResult",
-    "LocalPolishResult",
     "OuterDesignOptimisationConfig",
     "OuterDesignOptimisationResult",
     "PhaseEvaluation",
