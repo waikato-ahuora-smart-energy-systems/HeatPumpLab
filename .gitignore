@@ -4,6 +4,15 @@ __pycache__/
 /.venv/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.hypothesis/
+.ipynb_checkpoints/
+
+# Python packaging and coverage reports
+/build/
+/dist/
+*.egg-info/
+htmlcov/
 
 # macOS metadata
 .DS_Store
@@ -11,3 +20,5 @@ __pycache__/
 # Local research outputs
 /results/
 /paper/
+/experiments/
+/outputs/
