@@ -1,0 +1,13 @@
+# Local 128-point GP continuation
+
+The original clean v17 search is continued from its saved observations, with 4,000 total search evaluations per binary family, failures included. The separate comparison trial is not imported. All four propane binary combinations run concurrently, each with one numerical thread. Frozen thermodynamic v17 code is unchanged.
+
+Each GP uses the nearest 128 successful observations in normalised four-variable design space. The complete observed COP–VHC_total Pareto front defines qLogEHVI improvement; all failures remain in the feasibility-distance heuristic. Both objectives are maximised against reference (0,0). All observations remain in the checkpoints. The original metadata describes the global phase; local128_phase and per-record search_method describe this continuation, including source hashes and its first evaluation.
+
+Six anchors cover the eligible mixed-fluid observed front (1–99% propane by mass), including its COP and VHC extremes. Local boxes have half-width 0.05 in normalised design space: ±5 K recuperator lifts, ±0.04 compressor-2 power share and ±0.05 propane mass fraction. Original bounds and combined lift limit apply. Anchors refresh every 48 new candidates (eight visits per region), using the updated full observed front. This refresh interval is a continuation policy; the preceding short trial used fixed anchors. Refreshed anchors start fresh local model caches.
+
+Each local model refits on its first BO visit and every five BO visits thereafter. Every eighth local step uses maximin exploration within its selected box. Acquisition uses 64 MC samples, pool scoring batches of eight, six continuous restarts, 128 raw samples, maxiter 60, restart batch one and initialisation batch eight. Subsets may extend outside the proposal box in sparse regions. Seed is 20260912 with deterministic epoch and step offsets. Epoch origins and model states are checkpointed so resume reconstructs the same anchors and sequence.
+
+Each candidate uses a fresh native evaluation worker with a 180-second timeout and no retry. Infrastructure failures stop the affected family instead of becoming thermodynamic observations. Complete final fronts, including historical points, are checked in fresh workers; COP, VHC, SEC and pressure must match at rtol 1e-6 and atol 1e-9. Replays are outside the search budget. Rejected points are removed from the front and newly exposed points replayed.
+
+This is local refinement of observed fronts, not evidence of global convergence. The stopping rule remains 4,000 search candidates per family. Pre-continuation checkpoints are archived under before_local128; the new runtime is separately frozen and source-hashed.
