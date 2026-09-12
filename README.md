@@ -122,3 +122,20 @@ unique candidates and winner replays before aggregating the repeats.
 See the [origin-start study](HeatPumpLab/cycles/RecuperativeHeatPump/ORIGIN_OPTIMISER_COMPARISON.md)
 for the repeated-trial results and the inner solver's sensitivity to numerical
 pressure initialisation, which limits interpretation of the nominal COP peaks.
+
+## Tests and archived experiments
+
+Run the maintained test suite from the repository root with
+`.venv/bin/python -m pytest`. The `experiments/` directory is optional: maintained
+search modules, reporting entry points and tests import the root source and
+`HeatPumpLab/` package directly. Local Pareto continuation checkpoints are
+restored by `restore_search` in `rhp_local_pareto_search.py`.
+
+Archived experiment runners retain their frozen implementations for historical
+reproduction. Run any archive-specific tests in a separate process from that
+archive's directory; they are not dependencies of the maintained test suite.
+
+The two historical paper-figure audits run only when the local figure generator
+under `paper/figures/` and the saved v11 dataset under `results/RHPopt/` are
+available. They explicitly skip otherwise, so a source checkout does not require
+those ignored research artifacts to collect or run the suite.

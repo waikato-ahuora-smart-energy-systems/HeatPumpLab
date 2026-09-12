@@ -4,17 +4,15 @@ import datetime
 import hashlib
 import json
 from pathlib import Path
-import sys
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT/'experiments/mobo_v17_clean_runtime'))
-from main_RHPmobo import PARTNERS, frontier_indices  # noqa: E402
+from main_RHPmobo import PARTNERS, frontier_indices
 
+ROOT = Path(__file__).resolve().parent
 COLORS = ('#087f8c', '#db7c26', '#6554c0', '#b83d77')
 NAMES = {'Butane': 'Butane (R600)', 'Isopentane': 'Isopentane (R601a)',
          'Pentane': 'Pentane (R601)', 'Isobutane': 'Isobutane (R600a)'}

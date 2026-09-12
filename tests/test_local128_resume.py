@@ -1,12 +1,9 @@
 """Continuation epochs must survive checkpoints without changing local proposals."""
 import copy
-from pathlib import Path
-import sys
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'experiments/mobo_v17_local128_runtime'))
-from run_local import restore_search  # noqa: E402
+from rhp_local_pareto_search import restore_search
 
 
 def dataset(count):

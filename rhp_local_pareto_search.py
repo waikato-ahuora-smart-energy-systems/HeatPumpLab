@@ -1,6 +1,4 @@
 """Experimental local Pareto BO with full-data or nearest-neighbour GP models."""
-from pathlib import Path
-import sys
 import time
 import warnings
 
@@ -13,9 +11,31 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from scipy.spatial.distance import cdist
 from scipy.stats import qmc
 
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT/'experiments/mobo_v17_clean_runtime'))
-from rhp_mobo_search import ParetoBOSearch, FeasibilityWeightedLogEHVI  # noqa: E402
+from rhp_mobo_search import ParetoBOSearch, FeasibilityWeightedLogEHVI
+
+
+REFRESH_EVERY = 48
+
+
+def restore_search(result):
+    """Restore local-128 continuation state using the maintained search code.
+
+    Anchor epochs and cached GP parameters retain the existing checkpoint
+    format. Historical experiment runners keep their own frozen implementation.
+    """
+    phase = result['local128_phase']
+    start = phase['start_evaluations']
+    epoch = start + ((len(result['records']) - start) // REFRESH_EVERY) * REFRESH_EVERY
+    baseline = dict(records=result['records'][:epoch], kernel_state=result.get('kernel_state'),
+                    mean_state=result.get('mean_state'))
+    search = LocalParetoSearch(baseline, 128, seed=phase['seed'] + 104729 * (epoch-start))
+    for record in result['records'][epoch:]:
+        search.tell(record['x'], record['COP'], record['VHC_MJ_per_m3'],
+                    record['success'] and not record.get('validation_rejected'))
+    saved = result.get('local128_state', {})
+    if saved.get('epoch_start') == epoch:
+        search.states = {int(key): value for key, value in saved['model_states'].items()}
+    return search, epoch
 
 
 def front_indices(values):
