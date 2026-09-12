@@ -638,10 +638,13 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
         name="Evaporator source inlet",
         pp_instance="src",
     )
+    # Seed from the known source state: the unaligned refrigerant temperature
+    # can put water below freezing. The evaporator solve sets the actual outlet
+    # enthalpy from its duty and source mass flow.
     hp.evaporator.source_out.props_in_ab(
         input_str="PT",
         prop1=0.5,
-        prop2=min(hp.evaporator.sink_in.temperature + hp.dTmin_rhx, hp.T_source_in),
+        prop2=hp.T_source_in,
         mass_flow=1e6,
         name="Evaporator source outlet",
         pp_instance="src",

@@ -486,6 +486,44 @@ def test_outer_design_cases_solve_at_superheater_limited_suction_pressure(
     assert hp.comp_discharge.pressure < hp.comp_discharge.P_max
 
 
+@pytest.mark.parametrize(
+    "refrigerant",
+    [
+        "Propane;Cyclopentane|0.5;0.5|mass",
+        "Butane;Cyclopentane|0.5;0.5|mass",
+        "Isobutane;Cyclopentane|0.25;0.75|mass",
+    ],
+)
+def test_large_glide_mixture_initializes_water_before_evaporator_alignment(
+    hpl, base_rhp_args, assert_successful_cycle, refrigerant
+):
+    hp = hpl.RecuperativeHP(
+        **(
+            base_rhp_args
+            | {
+                "refrigerant": refrigerant,
+                "comp2_power_frac": 0.1,
+                "record_failed_solve": False,
+                "report_failed_solve": False,
+            }
+        )
+    )
+
+    # The unaligned refrigerant state would give a subzero water seed.
+    assert hp.evaporator.sink_in.temperature + hp.dTmin_rhx < 0.0
+    assert hp.evaporator.source_out.temperature == pytest.approx(hp.T_source_in)
+
+    hp.solve()
+
+    assert_successful_cycle(hp)
+    source_in = hp.evaporator.source_in
+    source_out = hp.evaporator.source_out
+    assert 0.0 < source_out.temperature < source_in.temperature
+    assert source_out.mass_flow * (
+        source_in.enthalpy - source_out.enthalpy
+    ) == pytest.approx(hp.evaporator.duty, rel=1e-7)
+
+
 def test_three_stage_recuperative_model_initialises_optional_heat_recovery_path(
     hpl, base_rhp_args
 ):
