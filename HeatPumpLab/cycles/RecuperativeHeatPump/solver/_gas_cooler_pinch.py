@@ -37,9 +37,12 @@ def find_gc_pinch_residual(
 ) -> float:
     """Return current minus target gas-cooler minimum temperature difference."""
     candidates = get_all_gc_pinch_candidates(discharge_pressure, hp)
-    candidates.pop(-1)
-    if candidates[-1][1] < 1e-3:
+    if ";" not in getattr(hp, "refrigerant", ""):
         candidates.pop(-1)
+        if candidates[-1][1] < 1e-3:
+            candidates.pop(-1)
+    # Mixtures target the lower tolerance boundary, so the fixed cold terminal
+    # is not a spurious zero root. Use the same candidates as final validation.
     residual = min(candidates)[0] - hp.dT_GC_min_tar
     return abs(residual) if return_abs else residual
 
@@ -98,9 +101,14 @@ def update_gc_pinch_properties(
 ) -> BaseHeatPump:
     """Refresh pinch stream properties after discharge pressure changes."""
     candidates = get_all_gc_pinch_candidates(discharge_pressure, hp)
+    # Include every terminal, even the fixed cold terminal omitted from the
+    # pressure-search residual, when validating the final physical state.
+    hp.gc_minimum_approach = float(np.min([candidate[0] for candidate in candidates]))
     candidate_index = 1
     for gas_cooler in hp.gas_coolers:
-        _set_pinch_properties(candidates[candidate_index][1], gas_cooler)
+        _set_pinch_properties(
+            candidates[candidate_index][1] * gas_cooler.duty, gas_cooler
+        )
         candidate_index += 3
     return hp
 
@@ -115,8 +123,7 @@ def _pinch_temperature_difference(duty: float, gas_cooler: GasCooler) -> float:
 
 def _set_pinch_properties(duty: float, gas_cooler: GasCooler) -> GasCooler:
     gas_cooler.source_pinch.enthalpy = (
-        gas_cooler.source_out.enthalpy
-        + duty / gas_cooler.source_out.mass_flow
+        gas_cooler.source_out.enthalpy + duty / gas_cooler.source_out.mass_flow
     )
     gas_cooler.source_pinch.props_in_mPH()
     gas_cooler.sink_pinch.enthalpy = (

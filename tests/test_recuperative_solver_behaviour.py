@@ -19,6 +19,90 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.solver import (
 )
 from HeatPumpLab.cycles.RecuperativeHeatPump.solver import _metrics as metrics
 from HeatPumpLab.components.common import TemperatureCrossError
+from HeatPumpLab.utils.properties_package import RefpropError
+
+
+def test_native_failure_retries_with_fresh_state_once(monkeypatch):
+    class Model:
+        def __init__(self, **args):
+            self.args = args
+            self.refrigerant = "Propane;Pentane|0.6;0.4|mass"
+            self.Tref_evap_outlet = args.get("Tref_evap_outlet", 10.)
+            self.Tref_evap_inlet = 10.
+            self.evap_sup = SimpleNamespace(sink_out=SimpleNamespace(temperature=35.))
+            self.tol = 1e-6
+            self.debug = self.record_failed_solve = self.report_failed_solve = False
+            self.state = []
+    hp = Model()
+    attempts = []
+    def solve(model):
+        attempts.append(model.Tref_evap_outlet)
+        assert model.state == []
+        model.state.append("mutated")
+        if len(attempts) == 1:
+            raise RefpropError("PH [226]")
+        model.converged = True
+    monkeypatch.setattr(cycle_solver, "_solve_case", solve)
+    assert cycle_solver.solve_heat_pump_cycle(hp) is hp
+    assert attempts == [10., 34.9999]
+    assert hp.converged
+    assert hp.numerical_retries[0]["reason"] == "PH [226]"
+
+
+def test_native_retry_failure_is_not_retried_again(monkeypatch):
+    calls = []
+    def failed(hp):
+        calls.append(1)
+        raise RefpropError("native failure")
+    hp = SimpleNamespace(debug=False, record_failed_solve=False, report_failed_solve=False)
+    monkeypatch.setattr(cycle_solver, "_solve_case", failed)
+    monkeypatch.setattr(cycle_solver, "_retry_evaporator_seed", lambda hp, exc: failed(hp))
+    cycle_solver.solve_heat_pump_cycle(hp)
+    assert len(calls) == 2
+    assert not hp.converged
+
+
+@pytest.mark.parametrize("shortfall,expected_calls", [(1e-4, 2), (.007703, 2), (.05, 2), (.0501, 1), (.1, 1)])
+def test_only_small_final_pinch_shortfalls_retry_with_tighter_convergence(monkeypatch, shortfall, expected_calls):
+    class Model:
+        def __init__(self, **args):
+            self.args = args
+            self.tol = args.get('tol', 1e-6)
+            self.refrigerant = 'Propane;Pentane|0.6;0.4|mass'
+            self.debug = self.record_failed_solve = self.report_failed_solve = False
+    hp = Model()
+    calls = []
+    def solve(model):
+        calls.append(model.tol)
+        if model.tol > 1e-8:
+            return CycleFailure('Final gas-cooler pinch is below the required approach.',
+                                {'gas_cooler_pinch_shortfall': shortfall})
+        model.converged = True
+    monkeypatch.setattr(cycle_solver, '_solve_case', solve)
+    cycle_solver.solve_heat_pump_cycle(hp)
+    assert len(calls) == expected_calls
+    if expected_calls == 2:
+        assert calls == [1e-6, 1e-8] and hp.converged
+    else:
+        assert not hp.converged
+
+
+@pytest.mark.parametrize("suction_flows,expected_vhc", [((.5,), 6.), ((.5, .25), 4.), ((.5, .25, .25), 3.)])
+def test_optional_lmtd_native_failure_preserves_checked_cycle_metrics(monkeypatch, suction_flows, expected_vhc):
+    def failed():
+        raise RefpropError("PH [226]")
+    hp = SimpleNamespace(
+        gas_coolers=[SimpleNamespace(duty=3., delta_entropy_src=.01, get_LMTD_ave=failed)],
+        evaporators=[SimpleNamespace(duty=2., delta_entropy_snk=.01)],
+        compressors=[SimpleNamespace(power=1./len(suction_flows), flow_in=SimpleNamespace(vol_flow=flow))
+                     for flow in suction_flows],
+        comp_discharge=SimpleNamespace(pressure=5., P_crit=4.),
+    )
+    monkeypatch.setattr(metrics, "cycle_has_converged", lambda hp: True)
+    metrics.populate_full_metrics(hp)
+    assert hp.converged and hp.COP == pytest.approx(3.) and hp.VHC == pytest.approx(expected_vhc)
+    assert np.isnan(hp.LMTD_gcs)
+    assert hp.metric_errors == {"LMTD_gcs": "PH [226]"}
 
 
 def test_expected_failure_marks_case_infeasible_and_records_report(monkeypatch, capsys):
@@ -156,7 +240,7 @@ def test_fixed_pressure_objective_uses_seed_and_objective_metrics(monkeypatch):
     monkeypatch.setattr(
         cycle_solver,
         "solve_at_discharge_pressure",
-        lambda pressure, solved_hp: calls.append(("fixed", pressure)),
+        lambda pressure, solved_hp, **kwargs: calls.append(("fixed", pressure, kwargs)),
     )
     monkeypatch.setattr(
         cycle_solver,
@@ -170,7 +254,11 @@ def test_fixed_pressure_objective_uses_seed_and_objective_metrics(monkeypatch):
     )
 
     assert cycle_solver.solve_heat_pump_cycle(hp) is hp
-    assert calls == [("fixed", 4.2), "plot", "objective_metrics"]
+    assert calls == [
+        ("fixed", 4.2, {"validate_pinch": False}),
+        "plot",
+        "objective_metrics",
+    ]
 
 
 def test_initial_evaporator_outlet_reports_superheater_reversal():
@@ -204,7 +292,10 @@ def test_objective_metrics_require_only_cycle_energy_inputs():
 
 
 def test_sequential_cycle_analysis_reports_iteration_limit(monkeypatch):
-    compressor = SimpleNamespace(power=1.0)
+    compressor = SimpleNamespace(
+        power=1.0,
+        flow_in=SimpleNamespace(pressure=1.0, enthalpy=100.0, mass_flow=1.0),
+    )
     operation = SimpleNamespace(converged=True)
 
     def solve_operation():

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from ...common import calculate_cop, calculate_sec, cycle_has_converged
 from ....utils.solve_profile import profile_section
+from ....utils.properties_package import RefpropError
 
 if TYPE_CHECKING:
     from ...common import BaseHeatPump
@@ -18,8 +19,11 @@ def populate_full_metrics(hp: BaseHeatPump) -> BaseHeatPump:
     with profile_section("metrics"):
         hp.converged = cycle_has_converged(hp)
         _populate_headline_metrics(hp)
+        # Total VHC uses the combined suction volume flow of active compressors.
         hp.VHC = (
-            _total_heat_duty(hp) / hp.comp1.flow_in.vol_flow
+            _total_heat_duty(hp) / sum(
+                compressor.flow_in.vol_flow for compressor in hp.compressors
+            )
             if hp.converged
             else 0.0
         )
@@ -37,10 +41,17 @@ def populate_full_metrics(hp: BaseHeatPump) -> BaseHeatPump:
             else 0.0
         )
         hp.SLE = hp.SEC / hp.eDTL * 1000 if hp.converged else 0.0
-        hp.LMTD_gcs = sum(
-            gas_cooler.duty * gas_cooler.get_LMTD_ave()
-            for gas_cooler in hp.gas_coolers
-        ) / _total_heat_duty(hp)
+        hp.metric_errors = {}
+        try:
+            hp.LMTD_gcs = sum(
+                gas_cooler.duty * gas_cooler.get_LMTD_ave()
+                for gas_cooler in hp.gas_coolers
+            ) / _total_heat_duty(hp)
+        except RefpropError as exc:
+            # Reporting samples do not define cycle feasibility. Keep the
+            # unavailable metric explicit without reusing a failed flash.
+            hp.LMTD_gcs = float("nan")
+            hp.metric_errors["LMTD_gcs"] = str(exc)
         hp.cycle_type = (
             "Transcritical"
             if hp.comp_discharge.pressure > hp.comp_discharge.P_crit

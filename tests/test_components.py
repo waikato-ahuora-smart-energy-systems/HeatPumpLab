@@ -535,9 +535,10 @@ def test_heat_exchanger_dtmin_terminal_limits_hot_outlet_approach(hpl):
         dP_c=0.02,
     )
     set_state(exchanger.source_in, pressure=1.0, temperature=100.0, mass_flow=1.0)
-    set_state(exchanger.sink_in, pressure=1.0, temperature=20.0, mass_flow=2.0)
+    # Enough air capacity for the butane cold-end approach to limit duty.
+    set_state(exchanger.sink_in, pressure=1.0, temperature=20.0, mass_flow=10.0)
     exchanger.source_out.mass_flow = 1.0
-    exchanger.sink_out.mass_flow = 2.0
+    exchanger.sink_out.mass_flow = 10.0
 
     exchanger.solve()
 
@@ -831,9 +832,10 @@ def test_gas_cooler_fixed_hot_outlet_heats_air_sink(hpl):
         dTmin=10.0,
     )
     set_state(gas_cooler.source_in, pressure=2.0, temperature=120.0, mass_flow=1.0)
-    set_state(gas_cooler.sink_in, pressure=1.0, temperature=25.0, mass_flow=3.0)
+    # Condensing butane releases enough heat to cross temperatures at 3 kg/s.
+    set_state(gas_cooler.sink_in, pressure=1.0, temperature=25.0, mass_flow=6.0)
     gas_cooler.source_out.mass_flow = 1.0
-    gas_cooler.sink_out.mass_flow = 3.0
+    gas_cooler.sink_out.mass_flow = 6.0
     gas_cooler.source_out.temperature = 55.0
 
     gas_cooler.solve()

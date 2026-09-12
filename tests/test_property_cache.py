@@ -27,13 +27,16 @@ class CountingRefprop:
         self.std_calls = 0
         self.specified_calls = 0
 
+    def SETFLUIDSdll(self, name):
+        return 0
+
     def ABFLSHdll(self, *args):
         self.std_calls += 1
-        return SimpleNamespace(P=1000.0, h=20.0, q=-1.0, T=300.15, s=4.0, Cp=6.0, D=2.0)
+        return SimpleNamespace(P=1000.0, h=20.0, q=-1.0, T=300.15, s=4.0, Cp=6.0, D=2.0, ierr=0, herr="")
 
     def REFPROPdll(self, *args):
         self.specified_calls += 1
-        return SimpleNamespace(Output=[1.0, 2.0, 3.0])
+        return SimpleNamespace(Output=[1.0, 2.0, 3.0], ierr=0, herr="")
 
 
 def test_property_cache_reuses_identical_property_requests_within_context():

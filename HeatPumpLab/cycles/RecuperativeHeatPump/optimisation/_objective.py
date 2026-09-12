@@ -270,10 +270,16 @@ class _OuterDesignObjective:
             and sec is not None
         )
         if not success:
+            report["solve_error"] = getattr(hp, "solve_error", None)
+            report["solve_failure_kind"] = getattr(hp, "solve_failure_kind", None)
+            report["solve_error_stage"] = getattr(hp, "solve_error_stage", None)
+            report["property_failure_context"] = getattr(hp, "property_failure_context", None)
+            report["numerical_retries"] = list(getattr(hp, "numerical_retries", []))
             return self._failure_record(
                 x=x,
                 case=case,
-                message="heat pump was infeasible, unconverged, or missing SEC",
+                message=(getattr(hp, "solve_error", None)
+                         or "heat pump was infeasible, unconverged, or missing SEC"),
                 elapsed_seconds=elapsed_seconds,
                 report=report,
                 constraint_errors=getattr(hp, "constraint_errors", None),

@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from math import exp, log
 
 import pytest
 
@@ -6,6 +7,23 @@ from HeatPumpLab.cycles.common import ScalarSearchResult
 from HeatPumpLab.cycles.RecuperativeHeatPump.solver import (
     _discharge_pressure as pressure_solver,
 )
+
+
+@pytest.mark.parametrize("initial", [3.0, 5.0, 7.0, 10.0])
+def test_mixture_feasible_plateau_does_not_stop_pressure_minimisation(monkeypatch, initial):
+    hp = SimpleNamespace(
+        tol=1e-6, refrigerant="Propane;Pentane|0.6;0.4|mass",
+        comp1=SimpleNamespace(flow_in=SimpleNamespace(pressure=0.3)),
+        comp_discharge=SimpleNamespace(pressure=initial, P_max=20., pressure_bnds=(6., 8.)),
+    )
+    def residual(p, hp):
+        return min(p - 4., .005)
+    monkeypatch.setattr(pressure_solver, "find_gc_pinch_residual", residual)
+    bounds, start, feasible, residuals = pressure_solver.get_discharge_pressure_bounds(hp)
+    assert feasible
+    pressure, success = pressure_solver.select_gc_target_pressure(bounds, start, residuals, hp)
+    assert success
+    assert pressure == pytest.approx(3.95001, abs=1e-8)
 
 
 @pytest.mark.parametrize("compute_jac", [False, True])
@@ -164,3 +182,36 @@ def test_multicomponent_bracket_selects_lowest_accepted_pressure(monkeypatch):
 
     assert converged is True
     assert pressure == pytest.approx(1.2, rel=1e-3)
+
+
+def test_mixture_pressure_moves_continuously_with_a_small_design_change(monkeypatch):
+    hp = SimpleNamespace(tol=1e-6, refrigerant="Propane;Butane|0.5;0.5|mass")
+    selected = []
+    for perturbation in (-1e-7, 0., 1e-7):
+        target = log(1.5) + perturbation
+        def residual(p, hp):
+            return log(p) - target
+        monkeypatch.setattr(pressure_solver, "find_gc_pinch_residual", residual)
+        pressure, converged = pressure_solver.select_gc_target_pressure(
+            (1., 2.), 1.5, (residual(2., hp), residual(1., hp)), hp,
+        )
+        assert converged
+        assert pressure == pytest.approx(exp(target - .05 + 1e-5), abs=1e-9)
+        selected.append(pressure)
+    assert selected[2] - selected[0] == pytest.approx(2e-7*selected[1], rel=1e-5)
+
+
+def test_failed_pressure_interpolation_keeps_the_bracketed_fallback(monkeypatch):
+    hp = SimpleNamespace(tol=1e-6, refrigerant="Propane;Butane|0.5;0.5|mass")
+    monkeypatch.setattr(pressure_solver, "find_gc_pinch_residual", lambda p, hp: p-1.5)
+
+    def failed_root(*args, **kwargs):
+        raise RuntimeError("interpolation failed")
+
+    monkeypatch.setattr(pressure_solver, "root_scalar", failed_root)
+    pressure, converged = pressure_solver.select_gc_target_pressure(
+        (1., 2.), 1.5, (.5, -.5), hp,
+    )
+    assert converged
+    assert 1.45 <= pressure < 1.452
+    assert hp.pressure_interpolation_fallbacks == 1

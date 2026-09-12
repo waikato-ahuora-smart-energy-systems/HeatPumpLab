@@ -118,6 +118,12 @@ class RecuperativeHP(BaseHeatPump):
             "SLE": self.SLE,
             "dQ_per_dW": self.dQdW,
             "LMTD_gcs": self.LMTD_gcs,
+            "metric_errors": getattr(self, "metric_errors", {}),
+            "numerical_retries": getattr(self, "numerical_retries", []),
+            "solve_error": getattr(self, "solve_error", None),
+            "solve_failure_kind": getattr(self, "solve_failure_kind", None),
+            "solve_error_stage": getattr(self, "solve_error_stage", None),
+            "property_failure_context": getattr(self, "property_failure_context", None),
             "Pmax": self.comp_discharge.pressure * 1000,
             "converged": self.converged,
             # Parameters

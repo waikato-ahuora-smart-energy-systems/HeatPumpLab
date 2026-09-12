@@ -39,6 +39,41 @@ def analyse_RHP_case(
     use_fast_objective: bool = True,
     record_result: bool = True,
 ) -> Tuple["BaseHeatPump", float]:
+    """Analyse a design, with bounded fresh pressure seeds for numerical failures."""
+    hp, elapsed = _analyse_RHP_case_once(HP_fn, case, results_dir, use_fast_objective, record_result)
+    if (hp is None or _is_successfully_solved(hp)
+            or ";" not in str(case.get("refrigerant", ""))
+            or case.get(_FIXED_PRESSURE_OBJECTIVE_FLAG, False)
+            or not _has_retryable_numerical_failure(hp)):
+        return hp, elapsed
+    original = hp
+    total = elapsed or 0.0
+    history = list(getattr(hp, "numerical_retries", []))
+    for seed in (3.0, 7.0):
+        if seed == case.get(_PRESSURE_SEED_FIELD, 0.0):
+            continue
+        history.append({"reason": getattr(hp, "solve_error", "Numerical solve failure"),
+                        "P_H_est": seed, "kind": "fresh_pressure_seed"})
+        retry_case = dict(case, P_H_est=seed, numerical_retry_history=list(history))
+        hp, dt = _analyse_RHP_case_once(HP_fn, retry_case, results_dir, use_fast_objective, record_result)
+        total += dt or 0.0
+        if hp is not None and _is_successfully_solved(hp):
+            return hp, total
+        if hp is not None:
+            history = list(getattr(hp, "numerical_retries", history))
+    original.numerical_retries = history
+    return original, total
+
+
+def _has_retryable_numerical_failure(hp):
+    errors = getattr(hp, "constraint_errors", {}) or {}
+    return (getattr(hp, "solve_failure_kind", None) in ("native_property", "invalid_sink_state")
+            or 0 < errors.get("gas_cooler_pinch_shortfall", 0) <= 0.05)
+
+
+def _analyse_RHP_case_once(
+    HP_fn, case, results_dir="results", use_fast_objective=True, record_result=True,
+) -> Tuple["BaseHeatPump", float]:
     """Optimise the gas-cooler offset for a single case and solve it."""
     case = dict(case)
     case["refrigerant"] = normalise_refrigerant_input(case["refrigerant"]).format()

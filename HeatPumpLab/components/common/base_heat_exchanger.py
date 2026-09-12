@@ -145,6 +145,18 @@ class BaseHeatExchanger:
         else:
             raise ValueError("No heat exchanger model selected.")
 
+    def _preserve_negligible_duty_states(self):
+        """Keep unchanged states when heat is below the absolute duty tolerance."""
+        if not (0 <= self.duty <= self.tol and self.dP_h == 0 and self.dP_c == 0):
+            return False
+        self.source_out.copy_fld_props(self.source_in)
+        self.source_out.set_flows(self.source_in.mass_flow)
+        self.sink_out.copy_fld_props(self.sink_in)
+        self.sink_out.set_flows(self.sink_in.mass_flow)
+        self.duty = 0.0
+        self.converged = self.source_in.temperature >= self.sink_in.temperature
+        return True
+
     def get_dTmin_terminal_model(self):
         """Solve for the duty limited by the specified terminal delta T."""
         try:
@@ -165,6 +177,14 @@ class BaseHeatExchanger:
             )
 
             self.duty = min(self.dH_h_max, self.dH_c_max)
+
+            if self._preserve_negligible_duty_states():
+                # Below the component's absolute duty tolerance, preserve both
+                # inlet states. Reflashing can introduce a larger enthalpy error
+                # than the heat being transferred. Zero duty conserves energy
+                # exactly on both sides; never apply this to pressure drops or
+                # negative requested duty.
+                return
 
             self.source_out.enthalpy = (
                 self.source_in.enthalpy - self.duty / self.source_in.mass_flow
@@ -336,6 +356,9 @@ class BaseHeatExchanger:
         self.sink_out.props_in_mPT()
         self.duty = self.sink_out.heat_flow - self.sink_in.heat_flow
 
+        if 0 <= self.dT_c <= self.tol and self._preserve_negligible_duty_states():
+            return
+
         self.source_out.pressure = self.source_in.pressure - self.dP_h
         self.source_out.enthalpy = (
             self.source_in.enthalpy - self.duty / self.source_out.mass_flow
@@ -355,6 +378,9 @@ class BaseHeatExchanger:
         self.source_out.temperature = self.source_in.temperature - self.dT_h
         self.source_out.props_in_mPT()
         self.duty = self.source_in.heat_flow - self.source_out.heat_flow
+
+        if 0 <= self.dT_h <= self.tol and self._preserve_negligible_duty_states():
+            return
 
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c
         self.sink_out.enthalpy = (

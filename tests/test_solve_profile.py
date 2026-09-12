@@ -24,11 +24,14 @@ def test_profile_context_records_named_sections():
 
 def test_profile_context_records_property_package_calls():
     class FakeRefprop:
+        def SETFLUIDSdll(self, name):
+            return 0
+
         def ABFLSHdll(self, *args):
-            return SimpleNamespace(P=1000.0, h=20.0, q=-1.0, T=300.15, s=4.0, Cp=6.0, D=2.0)
+            return SimpleNamespace(P=1000.0, h=20.0, q=-1.0, T=300.15, s=4.0, Cp=6.0, D=2.0, ierr=0, herr="")
 
         def REFPROPdll(self, *args):
-            return SimpleNamespace(Output=[1.0, 2.0, 3.0])
+            return SimpleNamespace(Output=[1.0, 2.0, 3.0], ierr=0, herr="")
 
     package = object.__new__(PropertyPackage)
     package.RP = FakeRefprop()
@@ -65,8 +68,7 @@ def test_profile_context_records_recuperative_metric_timing():
             )
         ],
         evaporators=[SimpleNamespace(duty=4.0, delta_entropy_snk=1.0)],
-        compressors=[SimpleNamespace(power=2.0)],
-        comp1=SimpleNamespace(flow_in=SimpleNamespace(vol_flow=0.5)),
+        compressors=[SimpleNamespace(power=2.0, flow_in=SimpleNamespace(vol_flow=0.5))],
         comp_discharge=SimpleNamespace(pressure=5.0, P_crit=4.0),
     )
 

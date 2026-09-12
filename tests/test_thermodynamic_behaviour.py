@@ -384,7 +384,7 @@ def test_binary_cases_accept_colder_expansion_outlet_at_superheater_limit(
     )
 
 
-def test_internal_temperature_cross_from_unsolved_csv_is_reported_infeasible(
+def test_mixture_phase_envelope_removes_false_internal_temperature_cross(
     solve_recuperative_case,
     monkeypatch,
 ):
@@ -400,9 +400,23 @@ def test_internal_temperature_cross_from_unsolved_csv_is_reported_infeasible(
         dT_gc_out_min_offset=0.0,
     )
 
-    assert hp.feasible is False
-    assert hp.converged is False
-    assert "temperature cross" in hp.solve_error
+    assert hp.feasible is True
+    assert hp.converged is True
+    # The old -53 K spike used a PH error-248 output whose enthalpy missed
+    # its input by 334 kJ/kg. Check the whole profile, not just solver status.
+    import numpy as np
+    from HeatPumpLab.cycles.RecuperativeHeatPump.solver._gas_cooler_pinch import (
+        _pinch_temperature_difference,
+    )
+
+    for exchanger, minimum in [(gc, 19.95) for gc in hp.gas_coolers] + [(hp.rhx2, 5.0)]:
+        exchanger.source_pinch.pressure = exchanger.source_out.pressure
+        exchanger.sink_pinch.pressure = exchanger.sink_in.pressure
+        approaches = [
+            _pinch_temperature_difference(float(duty), exchanger)
+            for duty in np.linspace(0, exchanger.duty, 501)
+        ]
+        assert min(approaches) >= minimum - 1e-6
 
 
 def test_recuperated_binary_case_uses_superheater_limited_suction_pressure(
