@@ -11,7 +11,8 @@ import time
 import numpy as np
 
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._objective import _OuterDesignObjective
-from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import DEFAULT_BASE_CASE, OPTIMISER_VERSION
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
+    DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO, OPTIMISER_VERSION)
 from HeatPumpLab.cycles.RecuperativeHeatPump.utils.composition_pareto import nondominated_mask
 from main_RHPoptimiser_benchmark import serialise
 
@@ -30,6 +31,8 @@ def frontier_indices(records):
 def metadata_for(partner, budget, seed):
     return dict(partner=partner, refrigerant=f"Propane;{partner}|0.5;0.5|mass", budget=budget,
                 seed=seed, base_case=DEFAULT_BASE_CASE, evaluation_version=OPTIMISER_VERSION,
+                max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
+                compressor_gas_only=True,
                 algorithm="BoTorch qLogEHVI, q=1, distance-weighted feasibility; every eighth adaptive step maximin",
                 objectives=["COP", "VHC_total_MJ_per_m3"], reference_point=[0., 0.],
                 variables=["RHX1_K", "RHX2_K", "compressor_2_power_fraction", "propane_mass_fraction"],

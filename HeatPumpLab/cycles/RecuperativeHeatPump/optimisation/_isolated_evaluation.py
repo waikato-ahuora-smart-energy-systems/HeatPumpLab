@@ -38,6 +38,7 @@ def _exact_evaluation_worker(connection: Connection) -> None:
                     cache_decimals=request["cache_decimals"],
                     molar_masses=request["molar_masses"],
                     exact_evaluation_timeout_seconds=None,
+                    max_stage_pressure_ratio=request["max_stage_pressure_ratio"],
                 )
                 connection.send(("ok", objective.evaluate(request["x"])))
             except BaseException as exc:  # Keep parent alive after native-worker errors.

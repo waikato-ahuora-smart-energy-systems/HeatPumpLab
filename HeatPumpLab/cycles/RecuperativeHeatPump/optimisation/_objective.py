@@ -15,7 +15,9 @@ from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import (
     convert_composition,
     normalise_refrigerant_input,
 )
-from HeatPumpLab.utils.properties_package import PropertyPackage
+from HeatPumpLab.utils.properties_package import (
+    COMPRESSOR_GAS_PHASES, PropertyPackage, phase_from_refprop_quality,
+)
 
 from ._isolated_evaluation import (
     ExactEvaluationTimeout,
@@ -25,6 +27,7 @@ from ._isolated_evaluation import (
 from ._types import (
     DEFAULT_BASE_CASE,
     DEFAULT_BOUNDS,
+    DEFAULT_MAX_STAGE_PRESSURE_RATIO,
     PENALTY_OBJECTIVE,
     DesignEvaluation,
 )
@@ -49,7 +52,11 @@ class _OuterDesignObjective:
         exact_evaluation_timeout_seconds: float | None = None,
         exact_evaluation_timeout_retries: int = 1,
         exact_evaluation_worker_max_tasks: int = 20,
+        max_stage_pressure_ratio: float = DEFAULT_MAX_STAGE_PRESSURE_RATIO,
     ) -> None:
+        if not np.isfinite(max_stage_pressure_ratio) or max_stage_pressure_ratio <= 1:
+            raise ValueError("max_stage_pressure_ratio must be finite and greater than one.")
+        self.max_stage_pressure_ratio = float(max_stage_pressure_ratio)
         self.max_evals = int(max_evals)
         self.base_case = dict(DEFAULT_BASE_CASE)
         self.base_case.update(base_case or {})
@@ -177,6 +184,7 @@ class _OuterDesignObjective:
             "penalty": self.penalty,
             "cache_decimals": self.cache_decimals,
             "molar_masses": self.molar_masses,
+            "max_stage_pressure_ratio": self.max_stage_pressure_ratio,
         }
         attempts = self.exact_evaluation_timeout_retries + 1
         for attempt in range(1, attempts + 1):
@@ -284,6 +292,46 @@ class _OuterDesignObjective:
                 report=report,
                 constraint_errors=getattr(hp, "constraint_errors", None),
             )
+
+        # A converged cycle can still lie outside the compressor operating limits.
+        # Check actual active-stage ratios, not the overall ratio or stage split.
+        errors = {}
+        violations = []
+        for stage in range(1, int(case['n_comp'])+1):
+            ratio = _finite_or_none(report.get(f'PR_{stage}'))
+            if ratio is None or ratio < 1:
+                errors[f'stage_{stage}_pressure_ratio_invalid'] = 1.0
+                violations.append(f'stage {stage}: missing or invalid pressure ratio')
+            elif ratio > self.max_stage_pressure_ratio:
+                errors[f'stage_{stage}_pressure_ratio_excess'] = ratio-self.max_stage_pressure_ratio
+                violations.append(f'stage {stage}: PR={ratio:.8g} exceeds {self.max_stage_pressure_ratio:g}')
+        report['max_stage_pressure_ratio_limit'] = self.max_stage_pressure_ratio
+        phase_errors = {}
+        phase_violations = []
+        for stage in range(1, int(case['n_comp'])+1):
+            for end in ('in', 'out'):
+                quality = _finite_or_none(report.get(f'Comp_{stage}_q_refprop_{end}'))
+                phase = phase_from_refprop_quality(quality)
+                report[f'Comp_{stage}_phase_{end}'] = phase
+                if phase not in COMPRESSOR_GAS_PHASES:
+                    phase_errors[f'stage_{stage}_{end}_not_gas'] = 1.0
+                    phase_violations.append(f'stage {stage} {end}: {phase} (REFPROP q={quality})')
+        report['compressor_gas_only'] = True
+        if errors:
+            report['solve_failure_kind'] = 'constraint_violation'
+            report['solve_error_stage'] = 'compressor_pressure_ratio'
+            return self._failure_record(
+                x=x, case=case, message='Compressor pressure-ratio constraint: '
+                +'; '.join(violations+phase_violations),
+                elapsed_seconds=elapsed_seconds, report=report,
+                constraint_errors={**errors, **phase_errors})
+        if phase_errors:
+            report['solve_failure_kind'] = 'constraint_violation'
+            report['solve_error_stage'] = 'compressor_phase'
+            return self._failure_record(
+                x=x, case=case,
+                message='Compressor gas-only constraint: '+'; '.join(phase_violations),
+                elapsed_seconds=elapsed_seconds, report=report, constraint_errors=phase_errors)
 
         return DesignEvaluation(
             x=tuple(float(v) for v in x),

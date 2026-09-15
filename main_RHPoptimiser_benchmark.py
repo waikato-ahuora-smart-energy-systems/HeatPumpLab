@@ -45,7 +45,7 @@ def load_case(refrigerant, source):
 
 
 def serialise(record):
-    return dict(x=list(record.x), success=record.success, SEC=record.sec,
+    item = dict(x=list(record.x), success=record.success, SEC=record.sec,
                 COP=record.cop, VHC_MJ_per_m3=record.report.get("VHC", 0) / 1000,
                 Pmax_MPa=record.pmax / 1000 if record.pmax is not None else None,
                 elapsed_seconds=record.elapsed_seconds, message=record.message,
@@ -54,6 +54,12 @@ def serialise(record):
                 solve_error_stage=record.report.get("solve_error_stage"),
                 property_failure_context=record.report.get("property_failure_context"),
                 numerical_retries=record.report.get("numerical_retries", []))
+    for stage in range(1, 4):
+        for end in ('in', 'out'):
+            for quantity in ('q_refprop', 'phase'):
+                field = f'Comp_{stage}_{quantity}_{end}'
+                item[field] = record.report.get(field)
+    return item
 
 
 def run_trial(task):

@@ -15,6 +15,8 @@ def state(**kwargs):
         "enthalpy": 100.0,
         "entropy": 1.0,
         "vol_flow": 0.1,
+        "refprop_quality": 998.0,
+        "phase": "superheated_vapour",
     }
     return SimpleNamespace(**(defaults | kwargs))
 
@@ -24,6 +26,7 @@ def component(converged=True, **kwargs):
         "converged": converged,
         "pressure_ratio": 2.0,
         "isentropic_eff": 0.75,
+        "flow_in": state(),
         "flow_out": state(pressure=2.0, temperature=80.0),
     }
     return SimpleNamespace(**(defaults | kwargs))
@@ -82,6 +85,7 @@ def report_hp(n_comp):
             isentropic_eff=0.73,
             flow_out=state(pressure=5.0, temperature=120.0),
         )
+    hp.compressors = [getattr(hp, f"comp{stage}") for stage in range(1, n_comp+1)]
     return hp
 
 
@@ -112,6 +116,11 @@ def test_rhp_report_exposes_domain_parameters_and_performance(n_comp):
     assert report["dT_rhx_cold_sum"] == pytest.approx(6.0)
     assert report["Overall_PR"] == pytest.approx(12.5)
     assert report["Solve time"] == pytest.approx(2.5)
+    for stage in range(1, n_comp+1):
+        for end in ("in", "out"):
+            assert report[f"Comp_{stage}_q_refprop_{end}"] == 998.0
+            assert report[f"Comp_{stage}_phase_{end}"] == "superheated_vapour"
+    assert f"Comp_{n_comp+1}_phase_in" not in report
 
     if n_comp == 1:
         assert report["Comp_2_P_out"] == pytest.approx(5000.0)

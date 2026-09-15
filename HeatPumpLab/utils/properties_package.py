@@ -16,6 +16,35 @@ class RefpropError(ValueError):
     """A REFPROP operation failed or returned an unusable state."""
 
 
+def phase_from_refprop_quality(quality) -> str:
+    """Interpret ABFLSH's molar quality, including its single-phase flags.
+
+    REFPROP uses q < 0 for liquid, q > 1 for superheated vapour,
+    998 for vapour with undefined quality and 999 for supercritical fluid.
+    Missing values and the wrapper's historical sentinel are not phase evidence.
+    """
+    if not isinstance(quality, Real) or not isfinite(quality):
+        return "unknown"
+    if quality == 999:
+        return "supercritical"
+    if 1 < quality <= 998:
+        return "superheated_vapour"
+    if quality == 1:
+        return "saturated_vapour"
+    if 0 < quality < 1:
+        return "two_phase"
+    if quality == 0:
+        return "saturated_liquid"
+    if -998 <= quality < 0:
+        return "liquid"
+    return "unknown"
+
+
+COMPRESSOR_GAS_PHASES = frozenset(
+    {"saturated_vapour", "superheated_vapour", "supercritical"}
+)
+
+
 def _get_refprop_paths(platform_name: str) -> tuple[str, str, str, str]:
     """Return REFPROP library paths and root path for the current platform."""
     if platform_name == "darwin":
@@ -538,6 +567,9 @@ class PropertyPackage:
             "q": molar_props.q
             if (molar_props.q >= 0.0 and molar_props.q <= 1.0)
             else self.DEFAULT_VAL,
+            # Preserve phase evidence independently of the legacy quality field.
+            "q_refprop": molar_props.q,
+            "phase": phase_from_refprop_quality(molar_props.q),
             "T": molar_props.T - self.TC_to_K,
             "s": molar_props.s / self.molar_mass,
             "Cp": molar_props.Cp / self.molar_mass

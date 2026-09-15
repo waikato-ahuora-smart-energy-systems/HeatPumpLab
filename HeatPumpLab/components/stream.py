@@ -47,6 +47,8 @@ class Stream:
         self.enthalpy = enthalpy
         self.entropy = entropy
         self.quality = quality
+        self.refprop_quality = None
+        self.phase = "unknown"
         self.specific_volume = specific_volume
         if fluid is not None:
             self.set_fluid(fluid, pp_instance)
@@ -161,6 +163,8 @@ class Stream:
         self.pressure = props["P"]
         self.enthalpy = props["h"]
         self.quality = props["q"]
+        self.refprop_quality = props.get("q_refprop")
+        self.phase = props.get("phase", "unknown")
         self.temperature = props["T"]
         self.entropy = props["s"]
         self.heat_capacity = props["Cp"]
@@ -213,6 +217,8 @@ class Stream:
         self.entropy = fld.entropy
         self.heat_capacity = fld.heat_capacity
         self.quality = fld.quality
+        self.refprop_quality = fld.refprop_quality
+        self.phase = fld.phase
         self.density = fld.density
         self.specific_volume = fld.specific_volume
 

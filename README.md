@@ -125,6 +125,25 @@ pressure initialisation, which limits interpretation of the nominal COP peaks.
 
 ## Tests and archived experiments
 
+Optimisation enforces a maximum pressure ratio of 10 per active compressor stage
+by default (`OuterDesignOptimisationConfig.max_stage_pressure_ratio`). This check
+uses the solved stage ratios, including during isolated-worker evaluations and
+historical-candidate replays. Missing or invalid active-stage ratios fail the
+constraint. Rejected candidates retain their report and consume their evaluation
+budget, but cannot become successful incumbents or Pareto points. Historical
+results produced without this constraint require re-evaluation; the optimiser
+version and run source signatures prevent silent reuse under the new settings.
+
+Every active compressor's suction and actual discharge must also be dry vapour
+or single-phase supercritical fluid. Saturated vapour (`q=1`) is accepted without
+an added superheat margin; any liquid fraction, liquid state, or missing phase
+evidence rejects the candidate. The property wrapper preserves REFPROP's native
+molar quality/phase flags separately from its legacy quality sentinel. Reports
+include `Comp_<stage>_q_refprop_<in|out>` and `Comp_<stage>_phase_<in|out>`;
+supercritical fluid is labelled explicitly, since its vapour quality is undefined.
+These checks apply to the final solved states, so intermediate iteration states
+do not prematurely terminate convergence. Previous results need fresh evaluation.
+
 Run the maintained test suite from the repository root with
 `.venv/bin/python -m pytest`. The `experiments/` directory is optional: maintained
 search modules, reporting entry points and tests import the root source and

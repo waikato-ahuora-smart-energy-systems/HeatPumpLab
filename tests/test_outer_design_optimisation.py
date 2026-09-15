@@ -38,8 +38,14 @@ class FakeHeatPump:
             "Pmax": 4100.0,
             "converged": True,
             "Tref_evap_outlet": 21.0,
+            "PR_1": 3.0,
+            "PR_2": 2.0,
+            "PR_3": 1.5,
         }
         self.comp_discharge = SimpleNamespace(pressure=4.1)
+        for stage in range(1, 4):
+            for end in ('in', 'out'):
+                self.output[f'Comp_{stage}_q_refprop_{end}'] = 998.0
         self.Tref_evap_outlet = 21.0
         self.dT_gc_out_min_offset = 0.0
 

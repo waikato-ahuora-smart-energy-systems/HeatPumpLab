@@ -8,7 +8,8 @@ from typing import Any
 import numpy as np
 
 # BO replaces the staged outer search; invalidate prior completed signatures.
-OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v18"
+OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v20-compressor-gas-only"
+DEFAULT_MAX_STAGE_PRESSURE_RATIO = 10.0
 
 BASE_VARIABLE_NAMES = (
     "dT_rhx1_cold",
@@ -161,8 +162,11 @@ class OuterDesignOptimisationConfig:
     exact_evaluation_timeout_seconds: float | None = 180.0
     exact_evaluation_timeout_retries: int = 1
     exact_evaluation_worker_max_tasks: int = 20
+    max_stage_pressure_ratio: float = DEFAULT_MAX_STAGE_PRESSURE_RATIO
 
     def __post_init__(self) -> None:
+        if not np.isfinite(self.max_stage_pressure_ratio) or self.max_stage_pressure_ratio <= 1:
+            raise ValueError("max_stage_pressure_ratio must be finite and greater than one.")
         for name in (
             "max_exact_evaluations",
             "incumbent_replay_limit",

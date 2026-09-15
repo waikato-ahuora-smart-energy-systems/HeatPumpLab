@@ -47,6 +47,7 @@ def optimise_recuperative_heat_pump(
         exact_evaluation_timeout_seconds=config.exact_evaluation_timeout_seconds,
         exact_evaluation_timeout_retries=config.exact_evaluation_timeout_retries,
         exact_evaluation_worker_max_tasks=config.exact_evaluation_worker_max_tasks,
+        max_stage_pressure_ratio=config.max_stage_pressure_ratio,
     )
     evaluations, replays = [], []
     try:

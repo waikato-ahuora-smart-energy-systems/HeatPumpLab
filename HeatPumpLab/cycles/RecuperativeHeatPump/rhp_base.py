@@ -183,6 +183,10 @@ class RecuperativeHP(BaseHeatPump):
             "n_vol_3": self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,
             "Solve time": dt,
         }
+        for stage, compressor in enumerate(self.compressors, start=1):
+            for end, stream in (("in", compressor.flow_in), ("out", compressor.flow_out)):
+                self.output[f"Comp_{stage}_q_refprop_{end}"] = stream.refprop_quality
+                self.output[f"Comp_{stage}_phase_{end}"] = stream.phase
         return self.output
 
     def get_components_sets_to_graph(self) -> list:
