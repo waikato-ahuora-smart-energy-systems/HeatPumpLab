@@ -13,7 +13,8 @@ import time
 import numpy as np
 
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._objective import _OuterDesignObjective
-from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import DEFAULT_BASE_CASE
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
+    DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO)
 # Import the BO implementation only in parent-side functions. Spawned native
 # workers import this entry point and should not load Torch/BoTorch needlessly.
 
@@ -60,10 +61,10 @@ def finite(value):
     return float(value) if value is not None and np.isfinite(value) else None
 
 
-def exact_evaluation(partner, x, temperature, output):
+def exact_evaluation(partner, x, temperature, output, *, first='Propane'):
     from rhp_temperature_mobo import usable
     objective = _OuterDesignObjective(max_evals=1,
-        refrigerant=f'Propane;{partner}|0.5;0.5|mass',
+        refrigerant=f'{first};{partner}|0.5;0.5|mass',
         base_case=dict(DEFAULT_BASE_CASE, T_air_tar=float(temperature)),
         exact_evaluation_timeout_seconds=180, exact_evaluation_timeout_retries=0,
         exact_evaluation_worker_max_tasks=1, results_dir=str(output/'oracle'))
@@ -85,8 +86,14 @@ def exact_evaluation(partner, x, temperature, output):
                     property_failure_context=report.get('property_failure_context'),
                     numerical_retries=report.get('numerical_retries', []))
         for field in ('T_comp_discharge', 'T_gc_out', 'Tref_evap_outlet', 'Comp_1_T_out',
-                      'Comp_2_T_out', 'PR_1', 'PR_2', 'Overall_PR', 'dT_gc_out_min_offset'):
+                      'Comp_2_T_out', 'PR_1', 'PR_2', 'PR_3', 'Overall_PR', 'dT_gc_out_min_offset'):
             item[field] = finite(report.get(field))
+        for stage in range(1, 4):
+            for end in ('in', 'out'):
+                field = f'Comp_{stage}_q_refprop_{end}'
+                item[field] = finite(report.get(field))
+                field = f'Comp_{stage}_phase_{end}'
+                item[field] = report.get(field)
         if item['success']:
             if not usable(item) or not np.isclose(report['T_air_tar'], temperature, atol=1e-6, rtol=0):
                 raise ValueError('Successful solve lacks valid objectives or requested temperature')
@@ -99,6 +106,8 @@ def metadata(partner, budget, seed):
     from rhp_temperature_mobo import MILESTONES, TEMPERATURES
     paths = sorted((ROOT/'HeatPumpLab').rglob('*.py'))+[ROOT/'rhp_temperature_mobo.py', ROOT/'rhp_temperature_report.py', Path(__file__).resolve()]
     return dict(run_version=RUN_VERSION, partner=partner, budget=budget, seed=seed,
+        max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
+        compressor_gas_only=True,
         milestones=sorted(set([m for m in MILESTONES if m <= budget]+[budget])),
         temperatures_C=TEMPERATURES.tolist(), base_case=DEFAULT_BASE_CASE,
         objectives=['COP', 'VHC_total_MJ_per_m3', 'T_air_tar_C'],
