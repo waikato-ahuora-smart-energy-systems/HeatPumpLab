@@ -21,6 +21,7 @@ from ._evaporator_alignment import (
 )
 from ._metrics import populate_full_metrics, populate_objective_metrics
 from ._cycle_analysis import InvalidSinkStateError
+from ._fluid_policy import uses_band_pressure_targeting
 
 if TYPE_CHECKING:
     from ...common import BaseHeatPump
@@ -45,7 +46,7 @@ def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
         if (failure is not None
                 and failure.message == "Final gas-cooler pinch is below the required approach."
                 and 0 < failure.constraint_errors.get("gas_cooler_pinch_shortfall", 0) <= 0.05
-                and ";" in getattr(hp, "refrigerant", "")
+                and uses_band_pressure_targeting(hp)
                 and hasattr(hp, "args") and hp.tol > 1e-8):
             retries = hp.numerical_retries + [{"reason": failure.message, "tol": 1e-8}]
             hp.__init__(**dict(hp.args, tol=1e-8))
@@ -78,7 +79,7 @@ def solve_heat_pump_cycle(hp: BaseHeatPump) -> BaseHeatPump:
 
 def _retry_evaporator_seed(hp, original_error):
     """Retry one numerical failure with freshly constructed coupled state."""
-    if (";" not in getattr(hp, "refrigerant", "")
+    if (not uses_band_pressure_targeting(hp)
             or not hasattr(hp, "args")
             or _uses_fixed_discharge_pressure_objective(hp)):
         raise original_error

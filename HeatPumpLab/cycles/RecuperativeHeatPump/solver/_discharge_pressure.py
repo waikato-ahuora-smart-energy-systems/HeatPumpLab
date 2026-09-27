@@ -17,6 +17,7 @@ from ...common import (
 from ....utils.solve_profile import profiled_section
 from ....utils.properties_package import RefpropError
 from ._cycle_analysis import run_sequential_cycle_analysis
+from ._fluid_policy import uses_band_pressure_targeting
 from ._gas_cooler_pinch import find_gc_pinch_residual, update_gc_pinch_properties
 
 if TYPE_CHECKING:
@@ -45,8 +46,11 @@ def pressure_target_tolerance(hp: BaseHeatPump) -> float:
 
 
 def is_multicomponent_working_fluid(hp: BaseHeatPump) -> bool:
-    """Return whether the working-fluid string names a mixture."""
-    return ";" in getattr(hp, "refrigerant", "")
+    """Return whether the band-target pressure search applies (name kept for callers).
+
+    Since v21 this is true for pure fluids as well; see ``uses_band_pressure_targeting``.
+    """
+    return uses_band_pressure_targeting(hp)
 
 
 def _mixture_target(hp):

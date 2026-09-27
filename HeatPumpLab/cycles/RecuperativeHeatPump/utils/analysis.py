@@ -42,7 +42,8 @@ def analyse_RHP_case(
     """Analyse a design, with bounded fresh pressure seeds for numerical failures."""
     hp, elapsed = _analyse_RHP_case_once(HP_fn, case, results_dir, use_fast_objective, record_result)
     if (hp is None or _is_successfully_solved(hp)
-            or ";" not in str(case.get("refrigerant", ""))
+            or (";" not in str(case.get("refrigerant", ""))
+                and case.get("legacy_pure_solver_path", False))
             or case.get(_FIXED_PRESSURE_OBJECTIVE_FLAG, False)
             or not _has_retryable_numerical_failure(hp)):
         return hp, elapsed

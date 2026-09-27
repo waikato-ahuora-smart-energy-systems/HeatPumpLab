@@ -29,8 +29,10 @@ def test_mixture_feasible_plateau_does_not_stop_pressure_minimisation(monkeypatc
 @pytest.mark.parametrize("compute_jac", [False, True])
 def test_pressure_bounds_reuse_the_available_local_domain(monkeypatch, compute_jac):
     observed = []
+    # Legacy pure-fluid path (pre-v21): cached bounds are reused.
     hp = SimpleNamespace(
         compute_jac=compute_jac,
+        legacy_pure_solver_path=True,
         tol=1e-6,
         comp_discharge=SimpleNamespace(pressure=10.0, pressure_bnds=(8.0, 12.0)),
     )
@@ -82,7 +84,9 @@ def test_pressure_bound_expansion_stops_at_property_limit(monkeypatch):
 
 
 def test_minimum_pressure_accepts_endpoint_within_target_tolerance(monkeypatch):
+    # Legacy pure-fluid path (pre-v21): an endpoint inside the band is accepted.
     hp = SimpleNamespace(
+        legacy_pure_solver_path=True,
         tol=1e-6,
         feasible=True,
         comp_discharge=SimpleNamespace(pressure=1.5, pressure_bnds=None),
@@ -110,6 +114,7 @@ def test_infeasible_pressure_returns_structured_shortfall(monkeypatch):
     hp = SimpleNamespace(
         tol=1e-6,
         refrigerant="Butane",
+        legacy_pure_solver_path=True,
         comp_discharge=SimpleNamespace(pressure=1.5, pressure_bnds=None),
     )
     monkeypatch.setattr(

@@ -10,6 +10,7 @@ from scipy.optimize import minimize_scalar
 from ....utils.graph import plot_driving_force
 from ....utils.solve_profile import profiled_section
 from ._cycle_analysis import run_sequential_cycle_analysis
+from ._fluid_policy import uses_band_pressure_targeting
 
 if TYPE_CHECKING:
     from ....components import GasCooler, Stream
@@ -37,7 +38,7 @@ def find_gc_pinch_residual(
 ) -> float:
     """Return current minus target gas-cooler minimum temperature difference."""
     candidates = get_all_gc_pinch_candidates(discharge_pressure, hp)
-    if ";" not in getattr(hp, "refrigerant", ""):
+    if not uses_band_pressure_targeting(hp):
         candidates.pop(-1)
         if candidates[-1][1] < 1e-3:
             candidates.pop(-1)
