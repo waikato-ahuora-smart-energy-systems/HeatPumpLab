@@ -28,7 +28,8 @@ def restore_search(result):
     epoch = start + ((len(result['records']) - start) // REFRESH_EVERY) * REFRESH_EVERY
     baseline = dict(records=result['records'][:epoch], kernel_state=result.get('kernel_state'),
                     mean_state=result.get('mean_state'))
-    search = LocalParetoSearch(baseline, 128, seed=phase['seed'] + 104729 * (epoch-start))
+    search = LocalParetoSearch(baseline, 128, seed=phase['seed'] + 104729 * (epoch-start),
+                              fixed_comp_frac=result.get('metadata', {}).get('fixed_comp_frac'))
     for record in result['records'][epoch:]:
         search.tell(record['x'], record['COP'], record['VHC_MJ_per_m3'],
                     record['success'] and not record.get('validation_rejected'))
@@ -91,8 +92,8 @@ class LocalParetoSearch(ParetoBOSearch):
     failures remain available to the distance-based feasibility heuristic.
     """
 
-    def __init__(self, baseline, subset_size, seed=20260911, radius=.05):
-        super().__init__(123.33333333333333, seed)
+    def __init__(self, baseline, subset_size, seed=20260911, radius=.05, *, fixed_comp_frac=None):
+        super().__init__(123.33333333333333, seed, fixed_comp_frac=fixed_comp_frac)
         self.subset_size = subset_size
         self.radius = radius
         self.anchor_indices = choose_anchors(baseline['records'])
@@ -113,9 +114,9 @@ class LocalParetoSearch(ParetoBOSearch):
         return good[order[:self.subset_size]]
 
     def local_pool(self, lower, upper, seed):
-        unit = qmc.Sobol(4, scramble=True, seed=seed).random_base2(9)
+        unit = qmc.Sobol(self.dimension, scramble=True, seed=seed).random_base2(9)
         parts = [unit]
-        for axis in range(4):
+        for axis in range(self.dimension):
             for side in (0., 1.):
                 edge = unit[:64].copy()
                 edge[:, axis] = side
@@ -197,7 +198,7 @@ class LocalParetoSearch(ParetoBOSearch):
                     inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double), -self.max_lift/100)],
                     options={'maxiter':60, 'batch_limit':1, 'init_batch_limit':8},
                     return_best_only=False, retry_on_optimization_warning=False)
-                proposals = self._admissible(proposals.detach().numpy().reshape(-1,4))
+                proposals = self._admissible(proposals.detach().numpy().reshape(-1,self.dimension))
                 proposals = proposals[((proposals >= lower) & (proposals <= upper)).all(1)]
                 if len(proposals):
                     proposals = proposals[cdist(proposals, self.x).min(1) > 1e-7]

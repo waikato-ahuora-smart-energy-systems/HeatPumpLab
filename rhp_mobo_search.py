@@ -1,4 +1,4 @@
-"""Four-dimensional COP/total-VHC Bayesian optimisation with BoTorch LogEHVI."""
+"""COP/total-VHC Bayesian optimisation with optional fixed compressor split."""
 
 import warnings
 
@@ -42,8 +42,12 @@ class FeasibilityWeightedLogEHVI(AcquisitionFunction):
 class ParetoBOSearch:
     """Optimise RHX1, RHX2, compressor split and propane mass fraction together."""
 
-    def __init__(self, max_lift, seed=20260910):
+    def __init__(self, max_lift, seed=20260910, *, fixed_comp_frac=None):
         torch.set_num_threads(1)
+        if fixed_comp_frac is not None and (not np.isfinite(fixed_comp_frac) or not .1 <= fixed_comp_frac <= .9):
+            raise ValueError('fixed_comp_frac must be finite and between 0.1 and 0.9')
+        self.fixed_comp_frac = None if fixed_comp_frac is None else float(fixed_comp_frac)
+        self.dimension = 4 if self.fixed_comp_frac is None else 3
         self.max_lift = float(max_lift)
         self.seed = int(seed)
         self.x, self.y, self.success = [], [], []
@@ -52,21 +56,28 @@ class ParetoBOSearch:
         self.diagnostics = []
         anchors = [[0., 0., split, fraction] for fraction in (0., .25, .5, .75, 1.)
                    for split in (0., .5, 1.)]
-        sobol = self._admissible(qmc.Sobol(4, scramble=True, seed=seed).random_base2(7))
-        self.initial = np.asarray(anchors+sobol[:17].tolist())
+        if self.fixed_comp_frac is not None:
+            anchors = [[0., 0., fraction] for fraction in (0., .25, .5, .75, 1.)]
+        sobol = self._admissible(qmc.Sobol(self.dimension, scramble=True, seed=seed).random_base2(7))
+        self.initial = np.asarray(anchors+sobol[:32-len(anchors)].tolist())
 
     def _admissible(self, points, tolerance=0.):
         p = np.asarray(points)
         return p[np.isfinite(p).all(1) & (p >= -tolerance).all(1) & (p <= 1+tolerance).all(1)
                  & (100*p[:, :2].sum(1) <= self.max_lift+100*tolerance)]
 
-    @staticmethod
-    def decode(u):
+    def decode(self, u):
+        if self.fixed_comp_frac is not None:
+            a, b, fraction = u
+            return np.asarray([100*a, 100*b, self.fixed_comp_frac, fraction, 1-fraction])
         a, b, split, fraction = u
         return np.asarray([100*a, 100*b, .1+.8*split, fraction, 1-fraction])
 
-    @staticmethod
-    def encode(x):
+    def encode(self, x):
+        if self.fixed_comp_frac is not None:
+            if not np.isclose(x[2], self.fixed_comp_frac, rtol=0, atol=1e-12):
+                raise ValueError('Observation does not match fixed_comp_frac')
+            return np.asarray([x[0]/100, x[1]/100, x[3]])
         return np.asarray([x[0]/100, x[1]/100, (x[2]-.1)/.8, x[3]])
 
     def tell(self, x, cop, vhc, success):
@@ -85,9 +96,9 @@ class ParetoBOSearch:
 
     def _candidates(self):
         n = len(self.x)
-        pool = qmc.Sobol(4, scramble=True, seed=self.seed+104729*n).random_base2(9)
+        pool = qmc.Sobol(self.dimension, scramble=True, seed=self.seed+104729*n).random_base2(9)
         parts = [pool]
-        for axis in range(4):
+        for axis in range(self.dimension):
             for side in (0., 1.):
                 boundary = pool[:64].copy()
                 boundary[:, axis] = side
@@ -151,7 +162,7 @@ class ParetoBOSearch:
             try:
                 with warnings.catch_warnings(record=True) as caught:
                     proposals, _ = optimize_acqf(acquisition,
-                        bounds=torch.tensor([[0.]*4, [1.]*4], dtype=torch.double),
+                        bounds=torch.tensor([[0.]*self.dimension, [1.]*self.dimension], dtype=torch.double),
                         q=1, num_restarts=6, raw_samples=128,
                         inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double),
                                                  -self.max_lift/100)],
@@ -159,7 +170,7 @@ class ParetoBOSearch:
                         retry_on_optimization_warning=False)
                 self.diagnostics.extend(dict(evaluation=len(self.x)+1, stage="acquisition", message=str(w.message))
                                         for w in caught)
-                proposals = self._admissible(proposals.detach().numpy().reshape(-1, 4))
+                proposals = self._admissible(proposals.detach().numpy().reshape(-1, self.dimension))
                 if len(proposals):
                     proposals = proposals[cdist(proposals, self.x).min(1) > 1e-7]
                 if len(proposals):

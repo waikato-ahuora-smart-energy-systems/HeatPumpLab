@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent
 PARTNERS = ('Propane', 'Butane', 'Isobutane', 'Pentane', 'Isopentane', 'Neopentane', 'CO2')
 
 
-def settings(partner, budget, seed, first='Propane'):
+def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None):
     from importlib.metadata import version
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
         DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO)
@@ -27,7 +27,8 @@ def settings(partner, budget, seed, first='Propane'):
     return dict(partner=partner, first=first, components=[first, partner],
                 budget=budget, seed=seed, temperature_C=200,
                 max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
-                compressor_gas_only=True,
+                compressor_gas_only=True, fixed_comp_frac=fixed_comp_frac,
+                search_dimensions=4 if fixed_comp_frac is None else 3,
                 base_case=dict(DEFAULT_BASE_CASE, T_air_tar=200.), check_interval=500,
                 relative_tolerance=.001, consecutive_stable_blocks=3, earliest_stop=2000,
                 minimum_frontier_points=10, minimum_recent_success_fraction=.8,
@@ -48,7 +49,8 @@ def restore(result):
     from rhp_mobo_search import ParetoBOSearch
     if result.get('local128_phase'):
         return restore_search(result)
-    search = ParetoBOSearch((200.-15)*2/3, result['metadata']['seed'])
+    search = ParetoBOSearch((200.-15)*2/3, result['metadata']['seed'],
+                           fixed_comp_frac=result['metadata'].get('fixed_comp_frac'))
     for r in result['records']:
         search.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'])
     search.kernel_state = result.get('kernel_state')
@@ -85,15 +87,17 @@ def validate(result, output):
             save(output/'result.json', result)
 
 
-def run_family(partner, budget, seed, output, first='Propane'):
+def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None):
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
     if first not in PARTNERS or partner not in PARTNERS or first == partner:
         raise ValueError('Choose two distinct components from the paper primary pool')
+    if fixed_comp_frac is not None and (not np.isfinite(fixed_comp_frac) or not .1 <= fixed_comp_frac <= .9):
+        raise ValueError('fixed_comp_frac must be finite and between 0.1 and 0.9')
     output = Path(output)/f'{first}_{partner}'
     output.mkdir(parents=True, exist_ok=True)
     with (output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        meta = settings(partner, budget, seed, first)
+        meta = settings(partner, budget, seed, first, fixed_comp_frac)
         path = output/'result.json'
         result = json.loads(path.read_text()) if path.exists() else dict(metadata=meta, records=[], checks=[])
         if result['metadata'] != meta:
@@ -161,6 +165,8 @@ def run_family(partner, budget, seed, output, first='Propane'):
             else:
                 x = search.ask()
                 method = 'local128' if epoch is not None else 'global_bo'
+            if fixed_comp_frac is not None and x[2] != fixed_comp_frac:
+                raise ValueError('Proposal changed the fixed compressor split')
             proposal_seconds = time.perf_counter()-started
             item = exact_evaluation(partner, x, 200., output, first=first)
             item.update(proposal_seconds=proposal_seconds, method=method)
@@ -185,12 +191,17 @@ def main():
     parser.add_argument('--budget', type=int, default=5000)
     parser.add_argument('--seed', type=int, default=20260915)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--comp-frac', type=float, default=None,
+                        help='Fix compressor stage allocation and remove it from BO variables')
     args = parser.parse_args()
     if not 1 <= args.budget <= 5000:
         parser.error('Budget must be between 1 and 5000')
     if args.first == args.partner:
         parser.error('The two mixture components must differ')
-    run_family(args.partner, args.budget, args.seed, args.output, first=args.first)
+    if args.comp_frac is not None and (not np.isfinite(args.comp_frac) or not .1 <= args.comp_frac <= .9):
+        parser.error('comp-frac must be finite and between 0.1 and 0.9')
+    run_family(args.partner, args.budget, args.seed, args.output, first=args.first,
+               fixed_comp_frac=args.comp_frac)
 
 
 if __name__ == '__main__':

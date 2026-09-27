@@ -125,6 +125,13 @@ pressure initialisation, which limits interpretation of the nominal COP peaks.
 
 ## Tests and archived experiments
 
+The fixed-200°C Pareto runner `main_RHPfixed_mobo.py` accepts `--comp-frac 0.5`
+to fix the two-stage pressure allocation. Both global BO and local-128 BO then
+search only the two recuperator lifts and composition, with three-dimensional
+GP inputs. The fixed setting is recorded in checkpoints and retained during
+resume and final replay. At zero pressure loss, 0.5 gives equal stage pressure
+ratios. Use a fresh output directory when changing this setting.
+
 Optimisation enforces a maximum pressure ratio of 10 per active compressor stage
 by default (`OuterDesignOptimisationConfig.max_stage_pressure_ratio`). This check
 uses the solved stage ratios, including during isolated-worker evaluations and
