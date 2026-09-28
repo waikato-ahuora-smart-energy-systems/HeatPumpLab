@@ -45,7 +45,10 @@ def aggregate_margins(margins):
 class ConstraintModel(torch.nn.Module):
     """Independent GPs for each margin group; returns log P(all margins >= 0)."""
 
-    def __init__(self, x, margins, *, fit=True):
+    def __init__(self, x, margins, *, fit=True, state=None):
+        """state: hyperparameters from a previous fit (see ``state()``). They are
+        loaded when the active groups match; the model is then refitted only if
+        ``fit`` is true. Without a usable state the model is always fitted."""
         super().__init__()
         X = torch.as_tensor(np.asarray(x), dtype=torch.double)
         Y = torch.as_tensor(np.asarray(margins), dtype=torch.double)
@@ -56,7 +59,15 @@ class ConstraintModel(torch.nn.Module):
             return
         Y = Y[:, self.active]
         self.model = SingleTaskGP(X, Y, train_Yvar=torch.full_like(Y, 1e-6)).double()
-        if fit:
+        warm = state is not None and state.get("active") == self.active
+        if warm:
+            with torch.no_grad():
+                for module, saved in ((self.model.covar_module, state["covar"]),
+                                      (self.model.mean_module, state["mean"])):
+                    for name, value in saved.items():
+                        module.get_parameter(name).copy_(torch.tensor(value, dtype=torch.double))
+        self.fitted = bool(fit or not warm)
+        if self.fitted:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 fit_gpytorch_mll(
@@ -65,6 +76,14 @@ class ConstraintModel(torch.nn.Module):
                     optimizer_kwargs={"options": {"maxiter": 100}},
                 )
         self.model.eval()
+
+    def state(self):
+        """Hyperparameters for warm starts (outcome scaling is not included)."""
+        if self.model is None:
+            return None
+        return dict(active=list(self.active),
+                    covar={k: v.detach().tolist() for k, v in self.model.covar_module.named_parameters()},
+                    mean={k: v.detach().tolist() for k, v in self.model.mean_module.named_parameters()})
 
     def log_probability(self, X):
         """X: (..., 1, d) or (..., d). Returns (...) log P(feasible)."""

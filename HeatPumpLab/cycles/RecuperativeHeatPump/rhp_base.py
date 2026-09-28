@@ -194,9 +194,9 @@ class RecuperativeHP(BaseHeatPump):
             "n_is_1": self.comp1.isentropic_eff,
             "n_is_2": self.comp2.isentropic_eff if self.n_comp > 1 else 1.0,
             "n_is_3": self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,
-            "n_vol_1": self.comp1.isentropic_eff,
-            "n_vol_2": self.comp2.isentropic_eff if self.n_comp > 1 else 1.0,
-            "n_vol_3": self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,
+            "n_vol_1": self.comp1.volume_eff,
+            "n_vol_2": self.comp2.volume_eff if self.n_comp > 1 else 1.0,
+            "n_vol_3": self.comp3.volume_eff if self.n_comp > 2 else 1.0,
             "Solve time": dt,
         }
         for stage, compressor in enumerate(self.compressors, start=1):

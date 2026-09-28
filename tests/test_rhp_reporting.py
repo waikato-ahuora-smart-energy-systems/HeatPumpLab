@@ -26,6 +26,7 @@ def component(converged=True, **kwargs):
         "converged": converged,
         "pressure_ratio": 2.0,
         "isentropic_eff": 0.75,
+        "volume_eff": 0.9,
         "flow_in": state(),
         "flow_out": state(pressure=2.0, temperature=80.0),
     }
@@ -133,6 +134,8 @@ def test_rhp_report_exposes_domain_parameters_and_performance(n_comp):
         assert report["PR_2"] == pytest.approx(2.2)
         assert report["PR_3"] == pytest.approx(2.3)
         assert report["n_is_2"] == pytest.approx(0.72)
+        # Volumetric efficiency is reported separately from isentropic efficiency.
+        assert report["n_vol_2"] == pytest.approx(0.9)
         assert report["n_is_3"] == pytest.approx(0.73)
 
 

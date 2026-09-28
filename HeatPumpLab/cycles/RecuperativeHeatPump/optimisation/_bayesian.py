@@ -8,8 +8,8 @@ from botorch.acquisition import AcquisitionFunction, LogExpectedImprovement
 from botorch.exceptions.errors import ModelFittingError
 from botorch.fit import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
+from botorch.models.utils.gpytorch_modules import get_covar_module_with_dim_scaled_prior
 from botorch.optim import optimize_acqf
-from gpytorch.kernels import MaternKernel
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from scipy.spatial.distance import cdist
 from scipy.stats import qmc
@@ -98,11 +98,14 @@ class DesignDomain:
         indices = [j for j, i in enumerate(self.axes) if i < 2]
         fixed = sum(self.base[i] for i in (0, 1) if i not in self.axes)
         if indices:
+            # sum(lower + u * span) <= max_lift - fixed, in normalised coordinates.
+            lower = DEFAULT_BOUNDS[[self.axes[j] for j in indices], 0]
+            span = np.diff(DEFAULT_BOUNDS[[self.axes[j] for j in indices]], axis=1).ravel()
             constraints.append(
                 (
                     torch.tensor(indices),
-                    -torch.ones(len(indices), dtype=torch.double),
-                    -(self.max_lift - fixed) / 100,
+                    -torch.tensor(span, dtype=torch.double),
+                    -(self.max_lift - fixed - float(lower.sum())),
                 )
             )
         if self.nc:
@@ -155,6 +158,9 @@ class BayesianDesignSearch:
         self.margins = []
         self.diagnostics = []
         torch.set_num_threads(1)
+        # Origin, one local probe per axis, pure-fluid vertices, then a scrambled
+        # Sobol fill over the whole domain (including its zero-lift faces). The
+        # previous design spent up to 2d + 1 points within 0.05 of the origin.
         self.initial = [domain.encode(domain.base)]
         if domain.dimension:
             u = self.initial[0]
@@ -164,13 +170,40 @@ class BayesianDesignSearch:
                     p[axis] += step
                     if domain.contains(p, tolerance=0):
                         self.initial.append(p)
+                        break
             if domain.nc:
                 for fractions in np.eye(domain.nc + 1):
                     x = domain.base.copy()
                     x[3:] = fractions
                     self.initial.append(domain.encode(x))
             self.initial = list({tuple(p): p for p in self.initial}.values())
+            fill = self._space_filling(config.initial_evaluations - len(self.initial))
+            self.initial += [p for p in fill if not any(np.allclose(p, q) for q in self.initial)]
         self.initial = self.initial[: config.initial_evaluations]
+
+    def _space_filling(self, count):
+        """Up to ``count`` scrambled-Sobol points inside the domain, a third on zero-lift faces."""
+        if count <= 0 or not self.domain.dimension:
+            return []
+        d, nc, k = self.domain.dimension, self.domain.nc, len(self.domain.axes)
+        rng = np.random.default_rng(self.config.seed + 7)
+        pool = qmc.Sobol(d, scramble=True, seed=self.config.seed + 7).random_base2(
+            int(np.ceil(np.log2(max(8 * count, 16)))))
+        if nc:
+            pool[:, k:] = rng.dirichlet(np.ones(nc + 1), len(pool))[:, :-1]
+        lifts = [j for j, axis in enumerate(self.domain.axes) if axis < 2]
+        for row, point in enumerate(pool):
+            if lifts and row % 3 == 1:
+                point[lifts[(row // 3) % len(lifts)]] = 0.0
+        points = [p for p in pool if self.domain.contains(p, tolerance=0)]
+        # Greedy maximin selection keeps the fill spread out.
+        chosen = []
+        anchor = np.asarray(self.initial)
+        while points and len(chosen) < count:
+            ref = np.vstack([anchor] + ([np.asarray(chosen)] if chosen else []))
+            d_min = cdist(points, ref).min(1)
+            chosen.append(points.pop(int(np.argmax(d_min))))
+        return chosen
 
     def observed(self, x):
         u = self.domain.encode(x)
@@ -244,16 +277,19 @@ class BayesianDesignSearch:
         y = torch.tensor(
             -(values - values.mean()) / max(values.std(), 1e-8), dtype=torch.double
         )[:, None]
+        # Matern-5/2 with BoTorch's dimension-scaled length-scale prior (floor 0.025).
         model = SingleTaskGP(
             x,
             y,
             train_Yvar=torch.full_like(y, 1e-6),
-            covar_module=MaternKernel(nu=2.5, ard_num_dims=self.domain.dimension),
+            covar_module=get_covar_module_with_dim_scaled_prior(
+                ard_num_dims=self.domain.dimension, use_rbf_kernel=False
+            ),
             outcome_transform=None,
         ).double()
         fit_gpytorch_mll(
             ExactMarginalLogLikelihood(model.likelihood, model),
-            max_attempts=1,
+            max_attempts=3,
             optimizer_kwargs={"options": {"maxiter": 100}},
         )
         model.eval()

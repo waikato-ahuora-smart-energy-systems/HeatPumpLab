@@ -17,6 +17,13 @@ from rhp_mobo_search import ParetoBOSearch, FeasibilityWeightedLogEHVI
 REFRESH_EVERY = 48
 
 
+def max_lift_for(metadata):
+    """Combined recuperator-lift limit for a run, from its base case."""
+    from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._objective import _max_recuperator_cold_lift
+    from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import DEFAULT_BASE_CASE
+    return _max_recuperator_cold_lift(metadata.get('base_case') or dict(DEFAULT_BASE_CASE, T_air_tar=200.))
+
+
 def restore_search(result):
     """Restore local-128 continuation state using the maintained search code.
 
@@ -29,14 +36,17 @@ def restore_search(result):
     baseline = dict(records=result['records'][:epoch], kernel_state=result.get('kernel_state'),
                     mean_state=result.get('mean_state'))
     search = LocalParetoSearch(baseline, 128, seed=phase['seed'] + 104729 * (epoch-start),
-                              fixed_comp_frac=result.get('metadata', {}).get('fixed_comp_frac'))
+                              fixed_comp_frac=result.get('metadata', {}).get('fixed_comp_frac'),
+                              max_lift=max_lift_for(result.get('metadata', {})))
     for record in result['records'][epoch:]:
         search.tell(record['x'], record['COP'], record['VHC_MJ_per_m3'],
                     record['success'] and not record.get('validation_rejected'),
                     record.get('constraint_margins'))
     saved = result.get('local128_state', {})
     if saved.get('epoch_start') == epoch:
-        search.states = {int(key): value for key, value in saved['model_states'].items()}
+        key = lambda k: int(k) if str(k).lstrip('-').isdigit() else k
+        search.states = {key(k): value for k, value in saved['model_states'].items()}
+        search.constraint_states = {key(k): v for k, v in saved.get('constraint_states', {}).items()}
     return search, epoch
 
 
@@ -123,8 +133,11 @@ class LocalParetoSearch(ParetoBOSearch):
     failures remain available to the distance-based feasibility heuristic.
     """
 
-    def __init__(self, baseline, subset_size, seed=20260911, radius=.05, *, fixed_comp_frac=None):
-        super().__init__(123.33333333333333, seed, fixed_comp_frac=fixed_comp_frac)
+    def __init__(self, baseline, subset_size, seed=20260911, radius=.05, *, fixed_comp_frac=None,
+                 max_lift=None):
+        if max_lift is None:
+            max_lift = max_lift_for({})
+        super().__init__(max_lift, seed, fixed_comp_frac=fixed_comp_frac)
         self.subset_size = subset_size
         self.radius = radius
         self.anchor_indices = choose_anchors(baseline['records'])
@@ -162,7 +175,7 @@ class LocalParetoSearch(ParetoBOSearch):
     def scores(acquisition, pool):
         with torch.no_grad():
             values = [acquisition(t.unsqueeze(-2)) for t in
-                      torch.tensor(pool, dtype=torch.double).split(8)]
+                      torch.tensor(pool, dtype=torch.double).split(64)]
         return torch.cat(values).numpy()
 
     def ask(self):
@@ -217,7 +230,9 @@ class LocalParetoSearch(ParetoBOSearch):
             if self.subset_size is not None and len(solved) > self.subset_size:
                 near = np.linalg.norm(np.asarray(self.x)[solved]-centre, axis=1)
                 solved = solved[np.lexsort((solved, near))[:self.subset_size]]
-            constraint = self.constraint_model(set(solved.tolist()))
+            constraint_start = time.perf_counter()
+            constraint = self.constraint_model(set(solved.tolist()), key=cache_key)
+            diag['constraint_seconds'] = time.perf_counter()-constraint_start
             diag['constraint_model'] = constraint is not None
             acquisition = FeasibilityWeightedLogEHVI(model, observed_front,
                 torch.tensor(self.x, dtype=torch.double), torch.tensor(self.success, dtype=torch.bool), seed,

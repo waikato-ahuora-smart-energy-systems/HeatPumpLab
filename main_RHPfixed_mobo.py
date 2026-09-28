@@ -51,16 +51,17 @@ def pause_requested(output):
 
 
 def restore(result):
-    from rhp_local_pareto_search import restore_search
+    from rhp_local_pareto_search import max_lift_for, restore_search
     from rhp_mobo_search import ParetoBOSearch
     if result.get('local128_phase'):
         return restore_search(result)
-    search = ParetoBOSearch((200.-15)*2/3, result['metadata']['seed'],
+    search = ParetoBOSearch(max_lift_for(result['metadata']), result['metadata']['seed'],
                            fixed_comp_frac=result['metadata'].get('fixed_comp_frac'))
     for r in result['records']:
         search.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'], r.get('constraint_margins'))
     search.kernel_state = result.get('kernel_state')
     search.mean_state = result.get('mean_state')
+    search.constraint_states = dict(result.get('constraint_states') or {})
     return search, None
 
 
@@ -118,9 +119,11 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
         def checkpoint(status):
             if result.get('local128_phase'):
                 result['local128_state'] = dict(epoch_start=epoch,
-                    model_states={str(k): v for k, v in search.states.items()})
+                    model_states={str(k): v for k, v in search.states.items()},
+                    constraint_states={str(k): v for k, v in search.constraint_states.items()})
             else:
                 result['kernel_state'], result['mean_state'] = search.kernel_state, search.mean_state
+                result['constraint_states'] = search.constraint_states
             result.update(status=status, complete=status == 'complete',
                           updated_utc=time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime()))
             save(path, result)
@@ -184,20 +187,27 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
                     pool, distances = search._candidates()
                     x = search.decode(pool[np.argmax(distances)])
                     method = 'global_maximin'
+                    timing = {}
                 else:
+                    ask_started = time.perf_counter()
                     x = search.ask()
                     method = 'local128' if epoch is not None else 'global_bo'
+                    diag = getattr(search, 'last_diagnostic', {}) if epoch is not None else {}
+                    timing = {k: diag[k] for k in ('fit_seconds', 'constraint_seconds', 'pool_score_seconds',
+                                                   'acquisition_opt_seconds') if k in diag}
+                    timing['ask_seconds'] = time.perf_counter()-ask_started
                 if fixed_comp_frac is not None and x[2] != fixed_comp_frac:
                     raise ValueError('Proposal changed the fixed compressor split')
                 search.pending.append(search.encode(x).tolist())
-                batch.append((x, method))
+                batch.append((x, method, timing))
             proposal_seconds = (time.perf_counter()-started)/len(batch)
             with ThreadPoolExecutor(len(batch)) as pool_:
                 items = list(pool_.map(lambda b: exact_evaluation(
                     partner, b[0], 200., output, first=first,
                     min_discharge_superheat_K=min_discharge_superheat_K), batch))
-            for (x, method), item in zip(batch, items):
-                item.update(proposal_seconds=proposal_seconds, method=method, batch_size=len(batch))
+            for (x, method, timing), item in zip(batch, items):
+                item.update(proposal_seconds=proposal_seconds, method=method, batch_size=len(batch),
+                            proposal_timing=timing)
                 search.tell(item['x'], item['COP'], item['VHC_MJ_per_m3'], item['success'],
                             item.get('constraint_margins'))
                 result['records'].append(item)

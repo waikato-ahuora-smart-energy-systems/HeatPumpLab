@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 # BO replaces the staged outer search; invalidate prior completed signatures.
-OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v22-constraint-margins"
+OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v23-sobol-init-prior"
 DEFAULT_MAX_STAGE_PRESSURE_RATIO = 10.0
 
 BASE_VARIABLE_NAMES = (

@@ -19,6 +19,9 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._constraint_model impo
     ConstraintModel, aggregate_margins)
 
 
+CONSTRAINT_REFIT_EVERY = 5
+
+
 class FeasibilityWeightedLogEHVI(AcquisitionFunction):
     """LogEHVI + log P(constraint margins >= 0) + distance penalty (q=1).
 
@@ -68,6 +71,9 @@ class ParetoBOSearch:
         self.margins = []
         # Proposals handed out in the current batch but not yet told.
         self.pending = []
+        # Constraint-GP hyperparameters, keyed by training scope; refitted every
+        # CONSTRAINT_REFIT_EVERY uses of a scope.
+        self.constraint_states = {}
         self.kernel_state = None
         self.mean_state = None
         self.diagnostics = []
@@ -121,14 +127,24 @@ class ParetoBOSearch:
         return torch.tensor([not s and m is None for s, m in zip(self.success, self.margins)],
                             dtype=torch.bool)
 
-    def constraint_model(self, indices=None):
-        """GP on margins of solved designs; None until a violation is observed."""
+    def constraint_model(self, indices=None, key='global'):
+        """GP on margins of solved designs; None until a violation is observed.
+
+        Hyperparameters are warm-started per ``key`` and refitted every
+        CONSTRAINT_REFIT_EVERY uses, as the objective GPs are.
+        """
         known = [i for i, m in enumerate(self.margins) if m is not None
                  and (indices is None or i in indices)]
         if len(known) < self.dimension+2 or not any(min(self.margins[i]) < 0 for i in known):
             return None
+        cached = self.constraint_states.get(key)
+        uses = cached['uses'] if cached else 0
         try:
-            return ConstraintModel(np.asarray(self.x)[known], [self.margins[i] for i in known])
+            model = ConstraintModel(np.asarray(self.x)[known], [self.margins[i] for i in known],
+                                    fit=uses % CONSTRAINT_REFIT_EVERY == 0,
+                                    state=cached['state'] if cached else None)
+            self.constraint_states[key] = dict(uses=uses+1, state=model.state())
+            return model
         except (RuntimeError, ValueError) as exc:
             self.diagnostics.append(dict(evaluation=len(self.x)+1, stage='constraint GP', message=str(exc)))
             return None
