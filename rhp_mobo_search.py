@@ -30,7 +30,7 @@ class FeasibilityWeightedLogEHVI(AcquisitionFunction):
     """
 
     def __init__(self, model, values, history, success, seed, numerical_failure=None,
-                 constraint=None):
+                 constraint=None, mc_samples=64):
         super().__init__(model=model)
         self.constraint = constraint
         if numerical_failure is None:
@@ -40,7 +40,7 @@ class FeasibilityWeightedLogEHVI(AcquisitionFunction):
         self.acquisition = qLogExpectedHypervolumeImprovement(
             model=model, ref_point=ref.tolist(),
             partitioning=NondominatedPartitioning(ref_point=ref, Y=values),
-            sampler=SobolQMCNormalSampler(torch.Size([64]), seed=seed))
+            sampler=SobolQMCNormalSampler(torch.Size([mc_samples]), seed=seed))
         self.register_buffer("history", history)
         self.register_buffer("success", success)
 

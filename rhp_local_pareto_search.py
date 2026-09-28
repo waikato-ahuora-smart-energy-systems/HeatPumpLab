@@ -15,6 +15,13 @@ from rhp_mobo_search import ParetoBOSearch, FeasibilityWeightedLogEHVI
 
 
 REFRESH_EVERY = 48
+# Local proposal cost (the measured bottleneck is pool scoring and acquisition
+# optimisation). A 0.05-radius box in 3-4 dimensions needs far fewer points
+# than the global domain.
+LOCAL_POOL_LOG2 = 8          # 256 Sobol points (was 512)
+LOCAL_EDGE_POINTS = 32       # per box face (was 64)
+LOCAL_MC_SAMPLES = 32        # qLogEHVI samples (was 64)
+LOCAL_RESTARTS, LOCAL_RAW_SAMPLES = 4, 64   # acquisition optimisation (was 6, 128)
 
 
 def max_lift_for(metadata):
@@ -159,11 +166,11 @@ class LocalParetoSearch(ParetoBOSearch):
         return good[order[:self.subset_size]]
 
     def local_pool(self, lower, upper, seed):
-        unit = qmc.Sobol(self.dimension, scramble=True, seed=seed).random_base2(9)
+        unit = qmc.Sobol(self.dimension, scramble=True, seed=seed).random_base2(LOCAL_POOL_LOG2)
         parts = [unit]
         for axis in range(self.dimension):
             for side in (0., 1.):
-                edge = unit[:64].copy()
+                edge = unit[:LOCAL_EDGE_POINTS].copy()
                 edge[:, axis] = side
                 parts.append(edge)
         pool = np.unique(self._admissible(lower+(upper-lower)*np.vstack(parts)), axis=0)
@@ -236,7 +243,8 @@ class LocalParetoSearch(ParetoBOSearch):
             diag['constraint_model'] = constraint is not None
             acquisition = FeasibilityWeightedLogEHVI(model, observed_front,
                 torch.tensor(self.x, dtype=torch.double), torch.tensor(self.success, dtype=torch.bool), seed,
-                numerical_failure=self.numerical_failures(), constraint=constraint)
+                numerical_failure=self.numerical_failures(), constraint=constraint,
+                mc_samples=LOCAL_MC_SAMPLES)
             score_start = time.perf_counter()
             scores = self.scores(acquisition, pool)+self.pending_penalty(pool)
             diag['pool_score_seconds'] = time.perf_counter()-score_start
@@ -249,7 +257,7 @@ class LocalParetoSearch(ParetoBOSearch):
             optimize_start = time.perf_counter()
             try:
                 proposals, _ = optimize_acqf(acquisition, bounds=torch.tensor(np.vstack((lower, upper)), dtype=torch.double),
-                    q=1, num_restarts=6, raw_samples=128,
+                    q=1, num_restarts=LOCAL_RESTARTS, raw_samples=LOCAL_RAW_SAMPLES,
                     inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double), -self.max_lift/100)],
                     options={'maxiter':60, 'batch_limit':1, 'init_batch_limit':8},
                     return_best_only=False, retry_on_optimization_warning=False)
