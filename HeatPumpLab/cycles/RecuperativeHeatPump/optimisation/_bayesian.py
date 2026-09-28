@@ -14,6 +14,7 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from scipy.spatial.distance import cdist
 from scipy.stats import qmc
 
+from ._constraint_model import ConstraintModel, aggregate_margins
 from ._types import DEFAULT_BOUNDS
 
 
@@ -113,23 +114,35 @@ class DesignDomain:
 
 
 class FeasibilityWeightedLogEI(AcquisitionFunction):
-    """Distance-based failure avoidance, not a calibrated feasibility probability."""
+    """LogEI + log P(constraint margins >= 0) + a distance penalty.
 
-    def __init__(self, model, best_f, history, success):
+    The constraint GP covers solved designs that violate a margin. The bounded
+    distance penalty (not a calibrated probability) covers numerical failures
+    only, which report no margins.
+    """
+
+    def __init__(self, model, best_f, history, success, numerical_failure=None,
+                 constraint=None):
         super().__init__(model=model)
         self.log_ei = LogExpectedImprovement(model, best_f=best_f)
+        self.constraint = constraint
         self.register_buffer("history", history)
         self.register_buffer("success", success)
+        if numerical_failure is None:
+            numerical_failure = ~success
+        self.register_buffer("numerical_failure", numerical_failure)
 
     def forward(self, X):
         value = self.log_ei(X)
-        if bool(self.success.all()):
+        if self.constraint is not None:
+            value = value + self.constraint.log_probability(X)
+        if not bool(self.numerical_failure.any()) or not bool(self.success.any()):
             return value
         distance = (
             (X.squeeze(-2).unsqueeze(-2) - self.history).square().sum(-1) + 1e-20
         ).sqrt()
         good = distance[..., self.success].amin(-1)
-        bad = distance[..., ~self.success].amin(-1)
+        bad = distance[..., self.numerical_failure].amin(-1)
         return value + torch.log((bad + 0.02) / (good + bad + 0.04))
 
 
@@ -139,6 +152,7 @@ class BayesianDesignSearch:
     def __init__(self, domain, config):
         self.domain, self.config = domain, config
         self.x, self.y, self.success = [], [], []
+        self.margins = []
         self.diagnostics = []
         torch.set_num_threads(1)
         self.initial = [domain.encode(domain.base)]
@@ -164,7 +178,7 @@ class BayesianDesignSearch:
             self.x and (self.domain.dimension == 0 or cdist([u], self.x).min() <= 1e-7)
         )
 
-    def tell(self, x, objective, success):
+    def tell(self, x, objective, success, margins=None):
         u = self.domain.encode(x)
         if not self.domain.contains(u) or not np.allclose(
             self.domain.decode(u), x, atol=1e-10, rtol=0
@@ -178,6 +192,7 @@ class BayesianDesignSearch:
         valid = bool(success and np.isfinite(objective))
         self.success.append(valid)
         self.y.append(float(objective) if valid else 0.0)
+        self.margins.append(aggregate_margins(margins))
 
     def _candidates(self):
         d = self.domain.dimension
@@ -242,11 +257,30 @@ class BayesianDesignSearch:
             optimizer_kwargs={"options": {"maxiter": 100}},
         )
         model.eval()
+        known = [i for i, m in enumerate(self.margins) if m is not None]
+        constraint = None
+        if len(known) >= max(4, self.domain.dimension + 1) and any(
+            min(self.margins[i]) < 0 for i in known
+        ):
+            try:
+                constraint = ConstraintModel(
+                    np.asarray(self.x)[known], [self.margins[i] for i in known]
+                )
+            except (ModelFittingError, RuntimeError, ValueError) as exc:
+                self.diagnostics.append(
+                    dict(evaluation=len(self.x) + 1, stage="constraint GP", message=str(exc))
+                )
+        numerical = torch.tensor(
+            [not s and m is None for s, m in zip(self.success, self.margins)],
+            dtype=torch.bool,
+        )
         return FeasibilityWeightedLogEI(
             model,
             y.max(),
             torch.tensor(self.x, dtype=torch.double),
             torch.tensor(good, dtype=torch.bool),
+            numerical_failure=numerical,
+            constraint=constraint,
         )
 
     @staticmethod

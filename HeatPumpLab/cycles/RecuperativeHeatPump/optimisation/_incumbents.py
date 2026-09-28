@@ -73,6 +73,7 @@ def replay_historical_incumbents(
         use_fast_objective=config.use_fast_objective,
         exact_evaluation_timeout_seconds=None,
         max_stage_pressure_ratio=config.max_stage_pressure_ratio,
+        min_discharge_superheat_K=config.min_discharge_superheat_K,
     )
     compatible = tuple(
         incumbent
@@ -89,6 +90,7 @@ def replay_historical_incumbents(
         exact_evaluation_timeout_retries=config.exact_evaluation_timeout_retries,
         exact_evaluation_worker_max_tasks=config.exact_evaluation_worker_max_tasks,
         max_stage_pressure_ratio=config.max_stage_pressure_ratio,
+        min_discharge_superheat_K=config.min_discharge_superheat_K,
     )
     replays = []
     for incumbent in compatible:

@@ -53,10 +53,14 @@ class _OuterDesignObjective:
         exact_evaluation_timeout_retries: int = 1,
         exact_evaluation_worker_max_tasks: int = 20,
         max_stage_pressure_ratio: float = DEFAULT_MAX_STAGE_PRESSURE_RATIO,
+        min_discharge_superheat_K: float = 0.0,
     ) -> None:
         if not np.isfinite(max_stage_pressure_ratio) or max_stage_pressure_ratio <= 1:
             raise ValueError("max_stage_pressure_ratio must be finite and greater than one.")
+        if not np.isfinite(min_discharge_superheat_K) or min_discharge_superheat_K < 0:
+            raise ValueError("min_discharge_superheat_K must be finite and nonnegative.")
         self.max_stage_pressure_ratio = float(max_stage_pressure_ratio)
+        self.min_discharge_superheat_K = float(min_discharge_superheat_K)
         self.max_evals = int(max_evals)
         self.base_case = dict(DEFAULT_BASE_CASE)
         self.base_case.update(base_case or {})
@@ -185,6 +189,7 @@ class _OuterDesignObjective:
             "cache_decimals": self.cache_decimals,
             "molar_masses": self.molar_masses,
             "max_stage_pressure_ratio": self.max_stage_pressure_ratio,
+            "min_discharge_superheat_K": self.min_discharge_superheat_K,
         }
         attempts = self.exact_evaluation_timeout_retries + 1
         for attempt in range(1, attempts + 1):
@@ -317,6 +322,22 @@ class _OuterDesignObjective:
                     phase_errors[f'stage_{stage}_{end}_not_gas'] = 1.0
                     phase_violations.append(f'stage {stage} {end}: {phase} (REFPROP q={quality})')
         report['compressor_gas_only'] = True
+        # Continuous margins (>= 0 satisfied) for constraint models in the search.
+        margins = constraint_margins(
+            report, int(case['n_comp']), self.max_stage_pressure_ratio,
+            self.min_discharge_superheat_K)
+        report['constraint_margins'] = margins
+        report['min_discharge_superheat_K'] = self.min_discharge_superheat_K
+        if self.min_discharge_superheat_K > 0:
+            for stage in range(1, int(case['n_comp'])+1):
+                if report.get(f'Comp_{stage}_phase_out') == 'supercritical':
+                    continue
+                margin = margins.get(f'stage_{stage}_discharge_superheat')
+                if margin is None or margin < 0:
+                    phase_errors[f'stage_{stage}_discharge_superheat_shortfall'] = (
+                        1.0 if margin is None else -margin)
+                    phase_violations.append(
+                        f'stage {stage} out: superheat below {self.min_discharge_superheat_K:g} K')
         if errors:
             report['solve_failure_kind'] = 'constraint_violation'
             report['solve_error_stage'] = 'compressor_pressure_ratio'
@@ -413,6 +434,33 @@ class _OuterDesignObjective:
             molar_masses=self.molar_masses,
         )
         return self.refrigerant_spec.format(reported, self.refrigerant_spec.basis)
+
+
+# Margin given to a supercritical compressor state, which the phase check accepts.
+SUPERCRITICAL_MARGIN_K = 0.5
+
+
+def constraint_margins(report, n_comp, max_stage_pressure_ratio, min_discharge_superheat_K=0.0):
+    """Return continuous constraint margins from a solved report (>= 0 satisfied).
+
+    Discharge-superheat margins subtract the required superheat. A supercritical
+    discharge counts as satisfied only if its pseudo-saturation margin is not
+    negative; the explicit phase check remains the authority for acceptance.
+    """
+    margins = {}
+    for stage in range(1, int(n_comp)+1):
+        ratio = _finite_or_none(report.get(f'PR_{stage}'))
+        margins[f'stage_{stage}_pressure_ratio'] = (
+            None if ratio is None else float(max_stage_pressure_ratio) - ratio)
+        for end, name in (('out', 'discharge'), ('in', 'suction')):
+            value = _finite_or_none(report.get(f'Comp_{stage}_dT_sh_{end}'))
+            required = min_discharge_superheat_K if end == 'out' else 0.0
+            margin = None if value is None else value - required
+            if report.get(f'Comp_{stage}_phase_{end}') == 'supercritical':
+                # Accepted regardless of superheat; keep the label consistent.
+                margin = SUPERCRITICAL_MARGIN_K if margin is None else max(margin, SUPERCRITICAL_MARGIN_K)
+            margins[f'stage_{stage}_{name}_superheat'] = margin
+    return margins
 
 
 def _clip_to_bounds(x: np.ndarray, bounds: np.ndarray) -> np.ndarray:

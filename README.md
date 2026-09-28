@@ -141,6 +141,17 @@ budget, but cannot become successful incumbents or Pareto points. Historical
 results produced without this constraint require re-evaluation; the optimiser
 version and run source signatures prevent silent reuse under the new settings.
 
+Each solved design also reports continuous constraint margins
+(`report["constraint_margins"]`): per-stage discharge and suction superheat,
+`T − T_dew(P)` in K (negative when wet), and pressure-ratio headroom `10 − PR`.
+The searches fit a GP to these margins and multiply the acquisition by the
+probability that all are non-negative; the old distance penalty now applies
+only to numerical failures, which report no margins. Set
+`OuterDesignOptimisationConfig.min_discharge_superheat_K` (or
+`main_RHPfixed_mobo.py --min-discharge-superheat`) to require a discharge
+superheat margin; supercritical discharge is exempt. The default, 0 K, keeps
+the previous acceptance rule.
+
 Every active compressor's suction and actual discharge must also be dry vapour
 or single-phase supercritical fluid. Saturated vapour (`q=1`) is accepted without
 an added superheat margin; any liquid fraction, liquid state, or missing phase

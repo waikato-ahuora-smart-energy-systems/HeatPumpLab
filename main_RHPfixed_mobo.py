@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent
 PARTNERS = ('Propane', 'Butane', 'Isobutane', 'Pentane', 'Isopentane', 'Neopentane', 'CO2')
 
 
-def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None):
+def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0):
     from importlib.metadata import version
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
         DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO)
@@ -28,6 +28,8 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None):
                 budget=budget, seed=seed, temperature_C=200,
                 max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
                 compressor_gas_only=True, fixed_comp_frac=fixed_comp_frac,
+                min_discharge_superheat_K=float(min_discharge_superheat_K),
+                constraint_model='GP on discharge/suction superheat and PR margins; distance penalty for numerical failures only',
                 search_dimensions=4 if fixed_comp_frac is None else 3,
                 base_case=dict(DEFAULT_BASE_CASE, T_air_tar=200.), check_interval=500,
                 relative_tolerance=.001, consecutive_stable_blocks=3, earliest_stop=2000,
@@ -52,7 +54,7 @@ def restore(result):
     search = ParetoBOSearch((200.-15)*2/3, result['metadata']['seed'],
                            fixed_comp_frac=result['metadata'].get('fixed_comp_frac'))
     for r in result['records']:
-        search.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'])
+        search.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'], r.get('constraint_margins'))
     search.kernel_state = result.get('kernel_state')
     search.mean_state = result.get('mean_state')
     return search, None
@@ -78,7 +80,8 @@ def validate(result, output):
             if pause_requested(output):
                 return False
             checked = exact_evaluation(result['metadata']['partner'], original['x'], 200., output,
-                                       first=result['metadata']['first'])
+                                       first=result['metadata']['first'],
+                                       min_discharge_superheat_K=result['metadata'].get('min_discharge_superheat_K', 0.0))
             matches = checked['success'] and all(
                 checked.get(k) is not None and original.get(k) is not None
                 and np.isclose(checked[k], original[k], rtol=1e-6, atol=1e-9)
@@ -87,7 +90,7 @@ def validate(result, output):
             save(output/'result.json', result)
 
 
-def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None):
+def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0):
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
     if first not in PARTNERS or partner not in PARTNERS or first == partner:
         raise ValueError('Choose two distinct components from the paper primary pool')
@@ -97,7 +100,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
     output.mkdir(parents=True, exist_ok=True)
     with (output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        meta = settings(partner, budget, seed, first, fixed_comp_frac)
+        meta = settings(partner, budget, seed, first, fixed_comp_frac, min_discharge_superheat_K)
         path = output/'result.json'
         result = json.loads(path.read_text()) if path.exists() else dict(metadata=meta, records=[], checks=[])
         if result['metadata'] != meta:
@@ -168,9 +171,11 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
             if fixed_comp_frac is not None and x[2] != fixed_comp_frac:
                 raise ValueError('Proposal changed the fixed compressor split')
             proposal_seconds = time.perf_counter()-started
-            item = exact_evaluation(partner, x, 200., output, first=first)
+            item = exact_evaluation(partner, x, 200., output, first=first,
+                                    min_discharge_superheat_K=min_discharge_superheat_K)
             item.update(proposal_seconds=proposal_seconds, method=method)
-            search.tell(item['x'], item['COP'], item['VHC_MJ_per_m3'], item['success'])
+            search.tell(item['x'], item['COP'], item['VHC_MJ_per_m3'], item['success'],
+                        item.get('constraint_margins'))
             result['records'].append(item)
             checkpoint('running')
             check_progress()
@@ -193,6 +198,8 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--comp-frac', type=float, default=None,
                         help='Fix compressor stage allocation and remove it from BO variables')
+    parser.add_argument('--min-discharge-superheat', type=float, default=0.0,
+                        help='Required compressor discharge superheat in K (supercritical discharge exempt)')
     args = parser.parse_args()
     if not 1 <= args.budget <= 5000:
         parser.error('Budget must be between 1 and 5000')
@@ -201,7 +208,7 @@ def main():
     if args.comp_frac is not None and (not np.isfinite(args.comp_frac) or not .1 <= args.comp_frac <= .9):
         parser.error('comp-frac must be finite and between 0.1 and 0.9')
     run_family(args.partner, args.budget, args.seed, args.output, first=args.first,
-               fixed_comp_frac=args.comp_frac)
+               fixed_comp_frac=args.comp_frac, min_discharge_superheat_K=args.min_discharge_superheat)
 
 
 if __name__ == '__main__':

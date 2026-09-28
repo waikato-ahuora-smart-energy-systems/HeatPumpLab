@@ -15,12 +15,24 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from scipy.spatial.distance import cdist
 from scipy.stats import qmc
 
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._constraint_model import (
+    ConstraintModel, aggregate_margins)
+
 
 class FeasibilityWeightedLogEHVI(AcquisitionFunction):
-    """LogEHVI times the existing distance-based feasibility heuristic (q=1)."""
+    """LogEHVI + log P(constraint margins >= 0) + distance penalty (q=1).
 
-    def __init__(self, model, values, history, success, seed):
+    The constraint GP covers solved designs that violate a margin; the bounded
+    distance penalty covers numerical failures only (no margins reported).
+    """
+
+    def __init__(self, model, values, history, success, seed, numerical_failure=None,
+                 constraint=None):
         super().__init__(model=model)
+        self.constraint = constraint
+        if numerical_failure is None:
+            numerical_failure = ~success
+        self.register_buffer("numerical_failure", numerical_failure)
         ref = torch.zeros(2, dtype=torch.double)
         self.acquisition = qLogExpectedHypervolumeImprovement(
             model=model, ref_point=ref.tolist(),
@@ -31,11 +43,13 @@ class FeasibilityWeightedLogEHVI(AcquisitionFunction):
 
     def forward(self, X):
         value = self.acquisition(X)
-        if bool(self.success.all()):
+        if self.constraint is not None:
+            value = value+self.constraint.log_probability(X)
+        if not bool(self.numerical_failure.any()) or not bool(self.success.any()):
             return value
         distances = ((X.squeeze(-2).unsqueeze(-2)-self.history).square().sum(-1)+1e-20).sqrt()
         good = distances[..., self.success].amin(-1)
-        bad = distances[..., ~self.success].amin(-1)
+        bad = distances[..., self.numerical_failure].amin(-1)
         return value+torch.log((bad+.02)/(good+bad+.04))
 
 
@@ -51,6 +65,7 @@ class ParetoBOSearch:
         self.max_lift = float(max_lift)
         self.seed = int(seed)
         self.x, self.y, self.success = [], [], []
+        self.margins = []
         self.kernel_state = None
         self.mean_state = None
         self.diagnostics = []
@@ -80,7 +95,7 @@ class ParetoBOSearch:
             return np.asarray([x[0]/100, x[1]/100, x[3]])
         return np.asarray([x[0]/100, x[1]/100, (x[2]-.1)/.8, x[3]])
 
-    def tell(self, x, cop, vhc, success):
+    def tell(self, x, cop, vhc, success, margins=None):
         u = self.encode(x)
         # Encoding a physically valid boundary point can add a few ulps. This
         # check does not repair observations; proposal screening stays strict.
@@ -93,6 +108,23 @@ class ParetoBOSearch:
         self.x.append(u.tolist())
         self.y.append([float(cop), float(vhc)] if valid else [0., 0.])
         self.success.append(valid)
+        self.margins.append(aggregate_margins(margins))
+
+    def numerical_failures(self):
+        return torch.tensor([not s and m is None for s, m in zip(self.success, self.margins)],
+                            dtype=torch.bool)
+
+    def constraint_model(self, indices=None):
+        """GP on margins of solved designs; None until a violation is observed."""
+        known = [i for i, m in enumerate(self.margins) if m is not None
+                 and (indices is None or i in indices)]
+        if len(known) < self.dimension+2 or not any(min(self.margins[i]) < 0 for i in known):
+            return None
+        try:
+            return ConstraintModel(np.asarray(self.x)[known], [self.margins[i] for i in known])
+        except (RuntimeError, ValueError) as exc:
+            self.diagnostics.append(dict(evaluation=len(self.x)+1, stage='constraint GP', message=str(exc)))
+            return None
 
     def _candidates(self):
         n = len(self.x)
@@ -152,7 +184,8 @@ class ParetoBOSearch:
             torch.manual_seed(seed)
             model, values = self._model()
             acquisition = FeasibilityWeightedLogEHVI(model, values,
-                torch.tensor(self.x, dtype=torch.double), torch.tensor(self.success, dtype=torch.bool), seed)
+                torch.tensor(self.x, dtype=torch.double), torch.tensor(self.success, dtype=torch.bool), seed,
+                numerical_failure=self.numerical_failures(), constraint=self.constraint_model())
             scores = self._scores(acquisition, pool)
             if not np.isfinite(scores).any():
                 self.diagnostics.append(dict(evaluation=len(self.x)+1, stage="nonfinite acquisition"))

@@ -48,6 +48,7 @@ def optimise_recuperative_heat_pump(
         exact_evaluation_timeout_retries=config.exact_evaluation_timeout_retries,
         exact_evaluation_worker_max_tasks=config.exact_evaluation_worker_max_tasks,
         max_stage_pressure_ratio=config.max_stage_pressure_ratio,
+        min_discharge_superheat_K=config.min_discharge_superheat_K,
     )
     evaluations, replays = [], []
     try:
@@ -63,7 +64,10 @@ def optimise_recuperative_heat_pump(
                 raise RuntimeError("BO proposed an already cached design")
             if not np.allclose(record.x, x, atol=1e-10, rtol=0):
                 raise RuntimeError("BO design required material repair")
-            search.tell(record.x, record.objective, record.success)
+            search.tell(
+                record.x, record.objective, record.success,
+                (record.report or {}).get("constraint_margins"),
+            )
             phase_record = PhaseEvaluation.from_record(
                 phase=phase,
                 record=record,

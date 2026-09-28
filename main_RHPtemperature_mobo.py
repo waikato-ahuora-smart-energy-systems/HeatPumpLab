@@ -61,13 +61,14 @@ def finite(value):
     return float(value) if value is not None and np.isfinite(value) else None
 
 
-def exact_evaluation(partner, x, temperature, output, *, first='Propane'):
+def exact_evaluation(partner, x, temperature, output, *, first='Propane', min_discharge_superheat_K=0.0):
     from rhp_temperature_mobo import usable
     objective = _OuterDesignObjective(max_evals=1,
         refrigerant=f'{first};{partner}|0.5;0.5|mass',
         base_case=dict(DEFAULT_BASE_CASE, T_air_tar=float(temperature)),
         exact_evaluation_timeout_seconds=180, exact_evaluation_timeout_retries=0,
-        exact_evaluation_worker_max_tasks=1, results_dir=str(output/'oracle'))
+        exact_evaluation_worker_max_tasks=1, results_dir=str(output/'oracle'),
+        min_discharge_superheat_K=min_discharge_superheat_K)
     started = time.perf_counter()
     try:
         record = objective.evaluate(x)
@@ -84,7 +85,8 @@ def exact_evaluation(partner, x, temperature, output, *, first='Propane'):
                     solve_failure_kind=report.get('solve_failure_kind'),
                     solve_error_stage=report.get('solve_error_stage'),
                     property_failure_context=report.get('property_failure_context'),
-                    numerical_retries=report.get('numerical_retries', []))
+                    numerical_retries=report.get('numerical_retries', []),
+                    constraint_margins=report.get('constraint_margins'))
         for field in ('T_comp_discharge', 'T_gc_out', 'Tref_evap_outlet', 'Comp_1_T_out',
                       'Comp_2_T_out', 'PR_1', 'PR_2', 'PR_3', 'Overall_PR', 'dT_gc_out_min_offset'):
             item[field] = finite(report.get(field))

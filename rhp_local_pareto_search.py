@@ -32,7 +32,8 @@ def restore_search(result):
                               fixed_comp_frac=result.get('metadata', {}).get('fixed_comp_frac'))
     for record in result['records'][epoch:]:
         search.tell(record['x'], record['COP'], record['VHC_MJ_per_m3'],
-                    record['success'] and not record.get('validation_rejected'))
+                    record['success'] and not record.get('validation_rejected'),
+                    record.get('constraint_margins'))
     saved = result.get('local128_state', {})
     if saved.get('epoch_start') == epoch:
         search.states = {int(key): value for key, value in saved['model_states'].items()}
@@ -99,7 +100,8 @@ class LocalParetoSearch(ParetoBOSearch):
         self.anchor_indices = choose_anchors(baseline['records'])
         self.centres = np.asarray([self.encode(baseline['records'][i]['x']) for i in self.anchor_indices])
         for r in baseline['records']:
-            self.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'] and not r.get('validation_rejected'))
+            self.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'] and not r.get('validation_rejected'),
+                      r.get('constraint_margins'))
         self.baseline_count = len(self.x)
         self.states = {}
         self.global_seed_state = (baseline.get('kernel_state'), baseline.get('mean_state'))
@@ -180,8 +182,16 @@ class LocalParetoSearch(ParetoBOSearch):
             model.eval()
             # Crucial: use the full observed front, never just the training subset.
             observed_front = torch.tensor(np.asarray(self.y)[front_indices(self.y)], dtype=torch.double)
+            # Constraint GP on the solved designs nearest this region's centre.
+            solved = np.flatnonzero([m is not None for m in self.margins])
+            if self.subset_size is not None and len(solved) > self.subset_size:
+                near = np.linalg.norm(np.asarray(self.x)[solved]-centre, axis=1)
+                solved = solved[np.lexsort((solved, near))[:self.subset_size]]
+            constraint = self.constraint_model(set(solved.tolist()))
+            diag['constraint_model'] = constraint is not None
             acquisition = FeasibilityWeightedLogEHVI(model, observed_front,
-                torch.tensor(self.x, dtype=torch.double), torch.tensor(self.success, dtype=torch.bool), seed)
+                torch.tensor(self.x, dtype=torch.double), torch.tensor(self.success, dtype=torch.bool), seed,
+                numerical_failure=self.numerical_failures(), constraint=constraint)
             score_start = time.perf_counter()
             scores = self.scores(acquisition, pool)
             diag['pool_score_seconds'] = time.perf_counter()-score_start

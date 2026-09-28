@@ -22,6 +22,20 @@ from .utils import (
 )
 
 
+def _superheat_margin(stream) -> float | None:
+    """Return T minus the dew temperature at the stream pressure, in K.
+
+    Negative inside the two-phase region. Above the critical pressure the
+    stream's pseudo-saturation temperature (at critical density) is used, which
+    keeps the margin continuous. None when the property call fails.
+    """
+    try:
+        margin = float(stream.temperature) - float(stream.get_Tsat(1.0))
+    except Exception:
+        return None
+    return margin if margin == margin and abs(margin) != float("inf") else None
+
+
 class RecuperativeHP(BaseHeatPump):
     """Transcritical recuperative heat pump comprised of cascaded components."""
 
@@ -187,6 +201,7 @@ class RecuperativeHP(BaseHeatPump):
             for end, stream in (("in", compressor.flow_in), ("out", compressor.flow_out)):
                 self.output[f"Comp_{stage}_q_refprop_{end}"] = stream.refprop_quality
                 self.output[f"Comp_{stage}_phase_{end}"] = stream.phase
+                self.output[f"Comp_{stage}_dT_sh_{end}"] = _superheat_margin(stream)
         return self.output
 
     def get_components_sets_to_graph(self) -> list:
