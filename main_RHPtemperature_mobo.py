@@ -86,7 +86,8 @@ def exact_evaluation(partner, x, temperature, output, *, first='Propane', min_di
                     solve_error_stage=report.get('solve_error_stage'),
                     property_failure_context=report.get('property_failure_context'),
                     numerical_retries=report.get('numerical_retries', []),
-                    constraint_margins=report.get('constraint_margins'))
+                    constraint_margins=report.get('constraint_margins'),
+                    gc_pinch_active=report.get('gc_pinch_active'))
         for field in ('T_comp_discharge', 'T_gc_out', 'Tref_evap_outlet', 'Comp_1_T_out',
                       'Comp_2_T_out', 'PR_1', 'PR_2', 'PR_3', 'Overall_PR', 'dT_gc_out_min_offset'):
             item[field] = finite(report.get(field))

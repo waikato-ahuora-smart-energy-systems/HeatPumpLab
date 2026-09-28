@@ -105,6 +105,9 @@ def update_gc_pinch_properties(
     # Include every terminal, even the fixed cold terminal omitted from the
     # pressure-search residual, when validating the final physical state.
     hp.gc_minimum_approach = float(np.min([candidate[0] for candidate in candidates]))
+    # Active pinch: which gas cooler (1-based) and which location, for surrogates.
+    active = int(np.argmin([candidate[0] for candidate in candidates]))
+    hp.gc_pinch_active = f"gc{active // 3 + 1}_{('hot', 'internal', 'cold')[active % 3]}"
     candidate_index = 1
     for gas_cooler in hp.gas_coolers:
         _set_pinch_properties(
