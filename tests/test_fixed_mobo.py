@@ -78,12 +78,12 @@ def test_runner_pause_resume_cap_and_fresh_replay(tmp_path, monkeypatch, first):
 
     monkeypatch.setattr(runner, 'exact_evaluation', evaluate)
     monkeypatch.setattr(runner, 'render', lambda *args, **kwargs: None)
-    runner.run_family('Butane', 6, 25, tmp_path, first=first)
+    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1)
     path = tmp_path/f'{first}_Butane'/'result.json'
     paused = json.loads(path.read_text())
     assert paused['status'] == 'paused' and len(paused['records']) == 2
     (tmp_path/'PAUSE').unlink()
-    runner.run_family('Butane', 6, 25, tmp_path, first=first)
+    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1)
     result = json.loads(path.read_text())
     assert result['complete'] and result['stop_reason'] == 'evaluation_cap'
     assert len(result['records']) == 6 and len(calls) > 6
@@ -91,8 +91,31 @@ def test_runner_pause_resume_cap_and_fresh_replay(tmp_path, monkeypatch, first):
     assert result['metadata']['components'] == [first, 'Butane']
     assert (tmp_path/f'{first}_Butane'/'validated_frontier.json').exists()
     before = len(calls)
-    runner.run_family('Butane', 6, 25, tmp_path, first=first)
+    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1)
     assert len(calls) == before
+
+
+def test_batched_runner_pauses_on_a_batch_boundary(tmp_path, monkeypatch):
+    calls = []
+
+    def evaluate(partner, x, temperature, output, **kwargs):
+        calls.append(list(x))
+        if len(calls) == 2:
+            (output.parent/'PAUSE').touch()
+        return record(0, x=list(x), COP=3.-x[3], VHC_MJ_per_m3=1.+x[3])
+
+    monkeypatch.setattr(runner, 'exact_evaluation', evaluate)
+    monkeypatch.setattr(runner, 'render', lambda *args, **kwargs: None)
+    runner.run_family('Butane', 10, 25, tmp_path, batch_size=4)
+    paused = json.loads((tmp_path/'Propane_Butane'/'result.json').read_text())
+    # The PAUSE request arrives mid-batch; the whole batch is still recorded.
+    assert paused['status'] == 'paused' and len(paused['records']) == 4
+    assert [r['batch_size'] for r in paused['records']] == [4]*4
+    (tmp_path/'PAUSE').unlink()
+    runner.run_family('Butane', 10, 25, tmp_path, batch_size=4)
+    result = json.loads((tmp_path/'Propane_Butane'/'result.json').read_text())
+    assert result['complete'] and len(result['records']) == 10
+    assert [r['batch_size'] for r in result['records']] == [4]*8+[2]*2
 
 
 def test_local_checkpoint_resume_reproduces_next_proposal():

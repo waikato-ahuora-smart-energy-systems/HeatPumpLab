@@ -17,7 +17,8 @@ def frontier(records):
     return selected[::-1]
 
 
-def assess(records, previous=None, *, tolerance=.001, minimum_evaluations=2000):
+def assess(records, previous=None, *, tolerance=.001, minimum_evaluations=2000, hv_only=False,
+           required_blocks=3):
     """Use a fixed reference and VHC thresholds; never interpolate observations.
 
     Thresholds are fixed by the first check. Endpoint changes also guard against
@@ -44,8 +45,8 @@ def assess(records, previous=None, *, tolerance=.001, minimum_evaluations=2000):
         recent = records[previous['evaluations']:]
         # Sparse or failing searches do not establish a stable curve.
         healthy = len(points) >= 10 and recent and sum(r['success'] for r in recent)/len(recent) >= .8
-        stable = bool(healthy and abs(gain) < tolerance and curve_change < tolerance
-                      and extent_change < tolerance)
+        stable = bool(healthy and abs(gain) < tolerance and (
+            hv_only or (curve_change < tolerance and extent_change < tolerance)))
     streak = previous['stable_blocks']+1 if previous and stable else 0
     return dict(evaluations=len(records), hypervolume=hv, reference_point=[0., 0.],
                 hypervolume_relative_gain=gain, curve_max_relative_change=curve_change,
@@ -53,7 +54,7 @@ def assess(records, previous=None, *, tolerance=.001, minimum_evaluations=2000):
                 cop_at_vhc_thresholds=envelope, best_cop=best_cop, max_vhc=max_vhc,
                 frontier_points=len(points), frontier=points,
                 failures=sum(not r['success'] for r in records), stable_block=stable,
-                stable_blocks=streak, stop_for_stability=bool(streak >= 3 and len(records) >= minimum_evaluations),
+                stable_blocks=streak, stop_for_stability=bool(streak >= required_blocks and len(records) >= minimum_evaluations),
                 tolerance=tolerance, label='Observed fixed-temperature frontier; final replay validation pending')
 
 

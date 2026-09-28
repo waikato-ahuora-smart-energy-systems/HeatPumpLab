@@ -66,13 +66,19 @@ class ParetoBOSearch:
         self.seed = int(seed)
         self.x, self.y, self.success = [], [], []
         self.margins = []
+        # Proposals handed out in the current batch but not yet told.
+        self.pending = []
         self.kernel_state = None
         self.mean_state = None
         self.diagnostics = []
         anchors = [[0., 0., split, fraction] for fraction in (0., .25, .5, .75, 1.)
                    for split in (0., .5, 1.)]
+        # Most of the front lies on a zero-lift face; seed both faces explicitly.
+        faces = [[.3, 0.], [.6, 0.], [0., .3], [0., .6]]
+        anchors += [[a, b, .5, fraction] for a, b in faces for fraction in (.25, .75)]
         if self.fixed_comp_frac is not None:
             anchors = [[0., 0., fraction] for fraction in (0., .25, .5, .75, 1.)]
+            anchors += [[a, b, fraction] for a, b in faces for fraction in (.25, .75)]
         sobol = self._admissible(qmc.Sobol(self.dimension, scramble=True, seed=seed).random_base2(7))
         self.initial = np.asarray(anchors+sobol[:32-len(anchors)].tolist())
 
@@ -97,6 +103,7 @@ class ParetoBOSearch:
 
     def tell(self, x, cop, vhc, success, margins=None):
         u = self.encode(x)
+        self.pending = [p for p in self.pending if np.linalg.norm(np.subtract(p, u)) > 1e-9]
         # Encoding a physically valid boundary point can add a few ulps. This
         # check does not repair observations; proposal screening stays strict.
         if len(self._admissible(u[None], tolerance=1e-12)) != 1:
@@ -139,8 +146,31 @@ class ParetoBOSearch:
         origin[:, :2] = 0.
         parts.append(origin)
         pool = np.unique(self._admissible(np.vstack(parts)), axis=0)
-        distance = cdist(pool, self.x).min(1)
+        distance = cdist(pool, self.occupied()).min(1)
         return pool[distance > 1e-7], distance[distance > 1e-7]
+
+    def occupied(self):
+        """Observed and pending designs (encoded)."""
+        return np.asarray(self.x + self.pending) if self.x or self.pending else np.empty((0, self.dimension))
+
+    def step_index(self):
+        return len(self.x)+len(self.pending)
+
+    def pending_penalty(self, points, radius=.05):
+        """log-penalty keeping a batch spread out: 0 beyond radius of every pending point."""
+        if not self.pending:
+            return np.zeros(len(points))
+        d = cdist(np.asarray(points), np.asarray(self.pending)).min(1)
+        return np.log(np.clip(d/radius, 1e-3, 1.))
+
+    def ask_batch(self, q):
+        """q proposals for parallel evaluation; later ones avoid earlier pending ones."""
+        batch = []
+        for _ in range(q):
+            x = self.ask()
+            batch.append(x)
+            self.pending.append(self.encode(x).tolist())
+        return batch
 
     def _model(self):
         good = np.asarray(self.success)
@@ -173,22 +203,34 @@ class ParetoBOSearch:
                       torch.tensor(pool, dtype=torch.double).split(128)]
         return torch.cat(values).numpy()
 
+    def face(self):
+        """Every other global BO step is restricted to a zero-lift face (0: RHX1 = 0, 1: RHX2 = 0)."""
+        return {1: 0, 3: 1}.get(self.step_index() % 4)
+
     def ask(self):
-        if len(self.x) < len(self.initial):
-            return self.decode(self.initial[len(self.x)])
+        n = self.step_index()
+        if n < len(self.initial):
+            return self.decode(self.initial[n])
         pool, distances = self._candidates()
-        if sum(self.success) < 6 or (len(self.x)-len(self.initial)) % 8 == 7:
+        if sum(self.success) < 6 or (n-len(self.initial)) % 8 == 7:
             return self.decode(pool[np.argmax(distances)])
+        face = self.face()
+        if face is not None:
+            on_face = pool[:, face] == 0.
+            if on_face.any():
+                pool, distances = pool[on_face], distances[on_face]
+            else:
+                face = None
         with torch.random.fork_rng(devices=[]):
-            seed = self.seed+104729*len(self.x)
+            seed = self.seed+104729*n
             torch.manual_seed(seed)
             model, values = self._model()
             acquisition = FeasibilityWeightedLogEHVI(model, values,
                 torch.tensor(self.x, dtype=torch.double), torch.tensor(self.success, dtype=torch.bool), seed,
                 numerical_failure=self.numerical_failures(), constraint=self.constraint_model())
-            scores = self._scores(acquisition, pool)
+            scores = self._scores(acquisition, pool)+self.pending_penalty(pool)
             if not np.isfinite(scores).any():
-                self.diagnostics.append(dict(evaluation=len(self.x)+1, stage="nonfinite acquisition"))
+                self.diagnostics.append(dict(evaluation=n+1, stage="nonfinite acquisition"))
                 return self.decode(pool[np.argmax(distances)])
             index = int(np.nanargmax(scores))
             chosen, score = pool[index], scores[index]
@@ -199,17 +241,20 @@ class ParetoBOSearch:
                         q=1, num_restarts=6, raw_samples=128,
                         inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double),
                                                  -self.max_lift/100)],
+                        fixed_features=None if face is None else {face: 0.},
                         options={"maxiter": 60, "batch_limit": 3}, return_best_only=False,
                         retry_on_optimization_warning=False)
-                self.diagnostics.extend(dict(evaluation=len(self.x)+1, stage="acquisition", message=str(w.message))
+                self.diagnostics.extend(dict(evaluation=n+1, stage="acquisition", message=str(w.message))
                                         for w in caught)
                 proposals = self._admissible(proposals.detach().numpy().reshape(-1, self.dimension))
+                if face is not None and len(proposals):
+                    proposals = proposals[proposals[:, face] == 0.]
                 if len(proposals):
-                    proposals = proposals[cdist(proposals, self.x).min(1) > 1e-7]
+                    proposals = proposals[cdist(proposals, self.occupied()).min(1) > 1e-7]
                 if len(proposals):
-                    new_scores = self._scores(acquisition, proposals)
+                    new_scores = self._scores(acquisition, proposals)+self.pending_penalty(proposals)
                     if np.isfinite(new_scores).any() and np.nanmax(new_scores) > score:
                         chosen = proposals[np.nanargmax(new_scores)]
             except (RuntimeError, ValueError) as exc:
-                self.diagnostics.append(dict(evaluation=len(self.x)+1, stage="acquisition fallback", message=str(exc)))
+                self.diagnostics.append(dict(evaluation=n+1, stage="acquisition fallback", message=str(exc)))
             return self.decode(chosen)

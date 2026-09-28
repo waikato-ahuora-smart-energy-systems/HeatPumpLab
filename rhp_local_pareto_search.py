@@ -68,22 +68,52 @@ def hypervolume(values):
     return float(result)
 
 
+def _stratum(x):
+    return 'rhx1_zero' if x[0] <= 1e-9 else ('rhx2_zero' if x[1] <= 1e-9 else 'interior')
+
+
 def choose_anchors(records, count=6):
+    """Pick local-region centres: one per zero-lift face, the rest spread along the front.
+
+    The face anchors use each face's own nondominated set, so a branch of the
+    front that the global search has only begun to explore still gets a local
+    region. The remaining anchors keep the previous rule: the max-COP and
+    max-VHC mixed-fluid front points, then maximin spacing in normalised
+    objective space.
+    """
     values = np.asarray([[r['COP'], r['VHC_MJ_per_m3']] if r['success'] and
                          not r.get('validation_rejected') else [0., 0.] for r in records])
-    front = [i for i in front_indices(values) if .01 <= records[i]['x'][3] <= .99]
+    mixed = np.array([.01 <= r['x'][3] <= .99 for r in records])
+    front = [i for i in front_indices(values) if mixed[i]]
     if len(front) < count:
         raise ValueError('Too few mixed-fluid Pareto designs for the planned regions')
-    points = values[front]
-    scale = np.maximum(np.ptp(points, axis=0), 1e-12)
-    points = (points-points.min(0))/scale
-    selected = [int(np.argmax(points[:, 0])), int(np.argmax(points[:, 1]))]
-    selected = list(dict.fromkeys(selected))
+    scale = np.maximum(np.ptp(values[front], axis=0), 1e-12)
+    low = values[front].min(0)
+    norm = lambda idx: (values[idx]-low)/scale
+    selected = []
+    envelope = lambda i: max(values[j, 0] for j in front if values[j, 1] >= values[i, 1] - 1e-12) \
+        if any(values[j, 1] >= values[i, 1] for j in front) else values[i, 0]
+    for face in ('rhx1_zero', 'rhx2_zero'):
+        members = [i for i in range(len(records)) if mixed[i] and values[i, 0] > 0
+                   and _stratum(records[i]['x']) == face]
+        if not members:
+            continue
+        sub = [members[k] for k in front_indices(values[members])]
+        # The face-front design closest (relative COP) to the overall front.
+        gap = [values[i, 0]/max(envelope(i), 1e-12) for i in sub]
+        choice = sub[int(np.argmax(gap))]
+        if choice not in selected:
+            selected.append(choice)
+    for i in (front[int(np.argmax(values[front, 0]))], front[int(np.argmax(values[front, 1]))]):
+        if i not in selected and len(selected) < count:
+            selected.append(i)
     while len(selected) < count:
-        distances = cdist(points, points[selected]).min(1)
-        distances[selected] = -1
-        selected.append(int(np.argmax(distances)))
-    return sorted([front[i] for i in selected], key=lambda i: values[i, 1])
+        remaining = [i for i in front if i not in selected]
+        if not remaining:
+            break
+        d = cdist(norm(remaining), norm(selected)).min(1)
+        selected.append(remaining[int(np.argmax(d))])
+    return sorted(selected, key=lambda i: values[i, 1])
 
 
 class LocalParetoSearch(ParetoBOSearch):
@@ -124,7 +154,7 @@ class LocalParetoSearch(ParetoBOSearch):
                 edge[:, axis] = side
                 parts.append(edge)
         pool = np.unique(self._admissible(lower+(upper-lower)*np.vstack(parts)), axis=0)
-        distance = cdist(pool, self.x).min(1)
+        distance = cdist(pool, self.occupied()).min(1)
         keep = distance > 1e-7
         return pool[keep], distance[keep]
 
@@ -137,7 +167,7 @@ class LocalParetoSearch(ParetoBOSearch):
 
     def ask(self):
         started = time.perf_counter()
-        step = len(self.x)-self.baseline_count
+        step = len(self.x)+len(self.pending)-self.baseline_count
         region = step % len(self.centres)
         centre = self.centres[region]
         lower, upper = np.maximum(centre-self.radius, 0.), np.minimum(centre+self.radius, 1.)
@@ -193,7 +223,7 @@ class LocalParetoSearch(ParetoBOSearch):
                 torch.tensor(self.x, dtype=torch.double), torch.tensor(self.success, dtype=torch.bool), seed,
                 numerical_failure=self.numerical_failures(), constraint=constraint)
             score_start = time.perf_counter()
-            scores = self.scores(acquisition, pool)
+            scores = self.scores(acquisition, pool)+self.pending_penalty(pool)
             diag['pool_score_seconds'] = time.perf_counter()-score_start
             if np.isfinite(scores).any():
                 index = int(np.nanargmax(scores))
@@ -211,9 +241,9 @@ class LocalParetoSearch(ParetoBOSearch):
                 proposals = self._admissible(proposals.detach().numpy().reshape(-1,self.dimension))
                 proposals = proposals[((proposals >= lower) & (proposals <= upper)).all(1)]
                 if len(proposals):
-                    proposals = proposals[cdist(proposals, self.x).min(1) > 1e-7]
+                    proposals = proposals[cdist(proposals, self.occupied()).min(1) > 1e-7]
                 if len(proposals):
-                    more = self.scores(acquisition, proposals)
+                    more = self.scores(acquisition, proposals)+self.pending_penalty(proposals)
                     if np.isfinite(more).any() and np.nanmax(more) > score:
                         chosen, score = proposals[np.nanargmax(more)], float(np.nanmax(more))
             except (ValueError, RuntimeError) as exc:

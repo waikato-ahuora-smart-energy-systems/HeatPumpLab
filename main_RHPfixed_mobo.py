@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parent
 PARTNERS = ('Propane', 'Butane', 'Isobutane', 'Pentane', 'Isopentane', 'Neopentane', 'CO2')
 
 
-def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0):
+def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
+             batch_size=4):
     from importlib.metadata import version
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
         DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO)
@@ -31,10 +32,13 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
                 min_discharge_superheat_K=float(min_discharge_superheat_K),
                 constraint_model='GP on discharge/suction superheat and PR margins; distance penalty for numerical failures only',
                 search_dimensions=4 if fixed_comp_frac is None else 3,
-                base_case=dict(DEFAULT_BASE_CASE, T_air_tar=200.), check_interval=500,
-                relative_tolerance=.001, consecutive_stable_blocks=3, earliest_stop=2000,
+                base_case=dict(DEFAULT_BASE_CASE, T_air_tar=200.), check_interval=100,
+                relative_tolerance=2e-4, consecutive_stable_blocks=3, earliest_stop=400,
+                stop_rule='hypervolume only; curve and extent changes reported, not required',
+                batch_size=int(batch_size),
+                search_coverage='half of global BO steps restricted to a zero-lift face; one local region per face',
                 minimum_frontier_points=10, minimum_recent_success_fraction=.8,
-                curve_check='101 VHC thresholds fixed at first check; maximum relative COP change; max-VHC endpoint change',
+                curve_check='101 VHC thresholds fixed at first check; maximum relative COP change; max-VHC endpoint change (report only)',
                 reference_point=[0., 0.], subset_size=128, local_start_minimum=256,
                 global_exploration_every=8, numerical_threads=1,
                 budget_accounting='All search candidates including failures; fresh final replays counted separately',
@@ -90,7 +94,9 @@ def validate(result, output):
             save(output/'result.json', result)
 
 
-def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0):
+def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
+               batch_size=4):
+    from concurrent.futures import ThreadPoolExecutor
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
     if first not in PARTNERS or partner not in PARTNERS or first == partner:
         raise ValueError('Choose two distinct components from the paper primary pool')
@@ -100,7 +106,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
     output.mkdir(parents=True, exist_ok=True)
     with (output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        meta = settings(partner, budget, seed, first, fixed_comp_frac, min_discharge_superheat_K)
+        meta = settings(partner, budget, seed, first, fixed_comp_frac, min_discharge_superheat_K, batch_size)
         path = output/'result.json'
         result = json.loads(path.read_text()) if path.exists() else dict(metadata=meta, records=[], checks=[])
         if result['metadata'] != meta:
@@ -130,10 +136,14 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
 
         def check_progress():
             n = len(result['records'])
-            if n and n % 500 == 0 and (not result['checks'] or result['checks'][-1]['evaluations'] != n):
-                snapshot = assess(result['records'], result['checks'][-1] if result['checks'] else None)
+            interval = meta['check_interval']
+            if n and n % interval == 0 and (not result['checks'] or result['checks'][-1]['evaluations'] != n):
+                snapshot = assess(result['records'], result['checks'][-1] if result['checks'] else None,
+                                  tolerance=meta['relative_tolerance'], minimum_evaluations=meta['earliest_stop'],
+                                  hv_only=True, required_blocks=meta['consecutive_stable_blocks'])
                 save(output/f'check_{n:05d}.json', snapshot)
-                render(snapshot, output/f'check_{n:05d}.html', partner, first=first)
+                if n % 500 == 0:
+                    render(snapshot, output/f'check_{n:05d}.html', partner, first=first)
                 result['checks'].append({k: v for k, v in snapshot.items() if k != 'frontier'})
                 if snapshot['stop_for_stability']:
                     result['stop_reason'] = 'stable_curve'
@@ -160,27 +170,41 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
                 if next_epoch != epoch:
                     search, epoch = restore_search(result)
             started = time.perf_counter()
-            # Retain whole-domain exploration after switching to local GP fits.
-            if n >= 32 and (n-32) % 8 == 7:
-                pool, distances = search._candidates()
-                x = search.decode(pool[np.argmax(distances)])
-                method = 'global_maximin'
-            else:
-                x = search.ask()
-                method = 'local128' if epoch is not None else 'global_bo'
-            if fixed_comp_frac is not None and x[2] != fixed_comp_frac:
-                raise ValueError('Proposal changed the fixed compressor split')
-            proposal_seconds = time.perf_counter()-started
-            item = exact_evaluation(partner, x, 200., output, first=first,
-                                    min_discharge_superheat_K=min_discharge_superheat_K)
-            item.update(proposal_seconds=proposal_seconds, method=method)
-            search.tell(item['x'], item['COP'], item['VHC_MJ_per_m3'], item['success'],
-                        item.get('constraint_margins'))
-            result['records'].append(item)
-            checkpoint('running')
-            check_progress()
-            if len(result['records']) == 1 or len(result['records']) % 10 == 0:
-                print(f'{first}/{partner}', len(result['records']), '/', budget, method, flush=True)
+            # Propose a batch; slots keep their serial order for reproducible records.
+            # A batch never crosses the local-phase switch or a local refresh epoch.
+            limit = budget-n
+            if not result.get('local128_phase') and n < 256:
+                limit = min(limit, 256-n)
+            elif result.get('local128_phase'):
+                limit = min(limit, REFRESH_EVERY-((n-result['local128_phase']['start_evaluations']) % REFRESH_EVERY))
+            batch = []
+            for m in range(n, n+min(batch_size, limit)):
+                # Retain whole-domain exploration after switching to local GP fits.
+                if m >= 32 and (m-32) % 8 == 7:
+                    pool, distances = search._candidates()
+                    x = search.decode(pool[np.argmax(distances)])
+                    method = 'global_maximin'
+                else:
+                    x = search.ask()
+                    method = 'local128' if epoch is not None else 'global_bo'
+                if fixed_comp_frac is not None and x[2] != fixed_comp_frac:
+                    raise ValueError('Proposal changed the fixed compressor split')
+                search.pending.append(search.encode(x).tolist())
+                batch.append((x, method))
+            proposal_seconds = (time.perf_counter()-started)/len(batch)
+            with ThreadPoolExecutor(len(batch)) as pool_:
+                items = list(pool_.map(lambda b: exact_evaluation(
+                    partner, b[0], 200., output, first=first,
+                    min_discharge_superheat_K=min_discharge_superheat_K), batch))
+            for (x, method), item in zip(batch, items):
+                item.update(proposal_seconds=proposal_seconds, method=method, batch_size=len(batch))
+                search.tell(item['x'], item['COP'], item['VHC_MJ_per_m3'], item['success'],
+                            item.get('constraint_margins'))
+                result['records'].append(item)
+                checkpoint('running')
+                check_progress()
+                if len(result['records']) % 20 == 0:
+                    print(f'{first}/{partner}', len(result['records']), '/', budget, method, flush=True)
         result.setdefault('stop_reason', 'evaluation_cap')
         checkpoint('validating')
         complete = validate(result, output)
@@ -198,6 +222,8 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--comp-frac', type=float, default=None,
                         help='Fix compressor stage allocation and remove it from BO variables')
+    parser.add_argument('--batch-size', type=int, default=4,
+                        help='Candidates proposed and evaluated in parallel per step')
     parser.add_argument('--min-discharge-superheat', type=float, default=0.0,
                         help='Required compressor discharge superheat in K (supercritical discharge exempt)')
     args = parser.parse_args()
@@ -208,7 +234,8 @@ def main():
     if args.comp_frac is not None and (not np.isfinite(args.comp_frac) or not .1 <= args.comp_frac <= .9):
         parser.error('comp-frac must be finite and between 0.1 and 0.9')
     run_family(args.partner, args.budget, args.seed, args.output, first=args.first,
-               fixed_comp_frac=args.comp_frac, min_discharge_superheat_K=args.min_discharge_superheat)
+               fixed_comp_frac=args.comp_frac, min_discharge_superheat_K=args.min_discharge_superheat,
+               batch_size=args.batch_size)
 
 
 if __name__ == '__main__':
