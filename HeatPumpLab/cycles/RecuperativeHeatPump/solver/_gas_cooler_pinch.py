@@ -108,6 +108,7 @@ def update_gc_pinch_properties(
     # Active pinch: which gas cooler (1-based) and which location, for surrogates.
     active = int(np.argmin([candidate[0] for candidate in candidates]))
     hp.gc_pinch_active = f"gc{active // 3 + 1}_{('hot', 'internal', 'cold')[active % 3]}"
+    hp.gc_approaches = gas_cooler_approaches(candidates)
     candidate_index = 1
     for gas_cooler in hp.gas_coolers:
         _set_pinch_properties(
@@ -115,6 +116,25 @@ def update_gc_pinch_properties(
         )
         candidate_index += 3
     return hp
+
+
+def gas_cooler_approaches(candidates: list[PinchCandidate]) -> list[float]:
+    """Minimum approach (K) in each gas cooler, in hp.gas_coolers order (hot to cold).
+
+    The coldest gas cooler's cold terminal is fixed by the sink inlet and outlet
+    specification, so it (and an internal minimum at that terminal) is excluded:
+    it says nothing about how close that gas cooler is to pinching elsewhere.
+    Two adjacent gas coolers with equal approaches mark a pinch-balance ridge.
+    """
+    approaches = []
+    count = len(candidates) // 3
+    for index in range(count):
+        group = list(candidates[3 * index: 3 * index + 3])
+        if index == count - 1:
+            group = [c for k, c in enumerate(group)
+                     if not (k == 2 or (k == 1 and c[1] < 1e-3))]
+        approaches.append(float(min(c[0] for c in group)) if group else float("inf"))
+    return approaches
 
 
 def _pinch_temperature_difference(duty: float, gas_cooler: GasCooler) -> float:

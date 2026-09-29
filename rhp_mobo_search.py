@@ -71,6 +71,9 @@ class ParetoBOSearch:
         self.margins = []
         # Proposals handed out in the current batch but not yet told.
         self.pending = []
+        # Leading records from ridge seeding; the initial design and step
+        # schedule count from after them.
+        self.offset = 0
         # Constraint-GP hyperparameters, keyed by training scope; refitted every
         # CONSTRAINT_REFIT_EVERY uses of a scope.
         self.constraint_states = {}
@@ -170,7 +173,7 @@ class ParetoBOSearch:
         return np.asarray(self.x + self.pending) if self.x or self.pending else np.empty((0, self.dimension))
 
     def step_index(self):
-        return len(self.x)+len(self.pending)
+        return len(self.x)+len(self.pending)-self.offset
 
     def pending_penalty(self, points, radius=.05):
         """log-penalty keeping a batch spread out: 0 beyond radius of every pending point."""
@@ -226,7 +229,13 @@ class ParetoBOSearch:
     def ask(self):
         n = self.step_index()
         if n < len(self.initial):
-            return self.decode(self.initial[n])
+            u = np.asarray(self.initial[n])
+            occupied = self.occupied()
+            if not len(occupied) or cdist(u[None], occupied).min() > 1e-7:
+                return self.decode(u)
+            # Already observed (e.g. a ridge seed): use the most distant candidate instead.
+            pool, distances = self._candidates()
+            return self.decode(pool[np.argmax(distances)])
         pool, distances = self._candidates()
         if sum(self.success) < 6 or (n-len(self.initial)) % 8 == 7:
             return self.decode(pool[np.argmax(distances)])

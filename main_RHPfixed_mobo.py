@@ -16,7 +16,7 @@ PARTNERS = ('Propane', 'Butane', 'Isobutane', 'Pentane', 'Isopentane', 'Neopenta
 
 
 def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
-             batch_size=4):
+             batch_size=4, ridge_seed=False):
     from importlib.metadata import version
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
         DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO)
@@ -36,6 +36,9 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
                 relative_tolerance=2e-4, consecutive_stable_blocks=3, earliest_stop=400,
                 stop_rule='hypervolume only; curve and extent changes reported, not required',
                 batch_size=int(batch_size),
+                ridge_seed=bool(ridge_seed),
+                ridge_seed_design=('pinch-balance ridges A[k+1]=A[k] at propane fractions 0, 1/3, 2/3, 1 and '
+                                   'theta 0, 0.5, 1; 6-point coarse S sweep then Illinois secant') if ridge_seed else None,
                 search_coverage='half of global BO steps restricted to a zero-lift face; one local region per face',
                 minimum_frontier_points=10, minimum_recent_success_fraction=.8,
                 curve_check='101 VHC thresholds fixed at first check; maximum relative COP change; max-VHC endpoint change (report only)',
@@ -59,10 +62,26 @@ def restore(result):
                            fixed_comp_frac=result['metadata'].get('fixed_comp_frac'))
     for r in result['records']:
         search.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'], r.get('constraint_margins'))
+    search.offset = seed_count(result)
     search.kernel_state = result.get('kernel_state')
     search.mean_state = result.get('mean_state')
     search.constraint_states = dict(result.get('constraint_states') or {})
     return search, None
+
+
+def seed_count(result):
+    n = 0
+    for r in result['records']:
+        if r.get('method') != 'ridge_seed':
+            break
+        n += 1
+    return n
+
+
+def local_start(result):
+    """Local-128 search starts 256 evaluations in, or 128 after ridge seeding."""
+    n = seed_count(result)
+    return n+128 if n else 256
 
 
 def validate(result, output):
@@ -96,7 +115,7 @@ def validate(result, output):
 
 
 def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
-               batch_size=4):
+               batch_size=4, ridge_seed=False):
     from concurrent.futures import ThreadPoolExecutor
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
     if first not in PARTNERS or partner not in PARTNERS or first == partner:
@@ -107,7 +126,8 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
     output.mkdir(parents=True, exist_ok=True)
     with (output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        meta = settings(partner, budget, seed, first, fixed_comp_frac, min_discharge_superheat_K, batch_size)
+        meta = settings(partner, budget, seed, first, fixed_comp_frac, min_discharge_superheat_K, batch_size,
+                        ridge_seed)
         path = output/'result.json'
         result = json.loads(path.read_text()) if path.exists() else dict(metadata=meta, records=[], checks=[])
         if result['metadata'] != meta:
@@ -152,6 +172,31 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
                     result['stop_reason'] = 'stable_curve'
                 checkpoint('running')
 
+        if ridge_seed and not result.get('ridge_seed_done'):
+            # Seeding runs as one unit; an interrupted seed phase is simply repeated.
+            from rhp_local_pareto_search import max_lift_for
+            from rhp_ridge import seed as ridge_seed_run
+            if result['records']:
+                raise ValueError('Ridge seeding must run before any other evaluation')
+
+            def seed_evaluation(x):
+                item = exact_evaluation(partner, x, 200., output, first=first,
+                                        min_discharge_superheat_K=min_discharge_superheat_K)
+                item.update(method='ridge_seed', proposal_seconds=0., batch_size=1)
+                return item
+            started = time.perf_counter()
+            seed_records, ridges = ridge_seed_run(
+                seed_evaluation, max_lift_for(meta), fixed_comp_frac if fixed_comp_frac is not None else .5,
+                workers=batch_size)
+            for item in seed_records:
+                search.tell(item['x'], item['COP'], item['VHC_MJ_per_m3'], item['success'],
+                            item.get('constraint_margins'))
+                result['records'].append(item)
+            search.offset = len(seed_records)
+            result.update(ridge_seed_done=True, ridge_seeds=ridges,
+                          ridge_seed_seconds=time.perf_counter()-started)
+            print(f'{first}/{partner} ridge seeding: {len(seed_records)} evaluations, {len(ridges)} ridges', flush=True)
+            checkpoint('running')
         # Recover a check if interruption followed the evaluation checkpoint.
         check_progress()
         while len(result['records']) < budget and not result.get('stop_reason'):
@@ -159,7 +204,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
                 checkpoint('paused')
                 return
             n = len(result['records'])
-            if not result.get('local128_phase') and n >= 256:
+            if not result.get('local128_phase') and n >= local_start(result):
                 try:
                     choose_anchors(result['records'])
                 except ValueError:
@@ -176,14 +221,15 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
             # Propose a batch; slots keep their serial order for reproducible records.
             # A batch never crosses the local-phase switch or a local refresh epoch.
             limit = budget-n
-            if not result.get('local128_phase') and n < 256:
-                limit = min(limit, 256-n)
+            if not result.get('local128_phase') and n < local_start(result):
+                limit = min(limit, local_start(result)-n)
             elif result.get('local128_phase'):
                 limit = min(limit, REFRESH_EVERY-((n-result['local128_phase']['start_evaluations']) % REFRESH_EVERY))
             batch = []
             for m in range(n, n+min(batch_size, limit)):
                 # Retain whole-domain exploration after switching to local GP fits.
-                if m >= 32 and (m-32) % 8 == 7:
+                g = m-seed_count(result)
+                if g >= 32 and (g-32) % 8 == 7:
                     pool, distances = search._candidates()
                     x = search.decode(pool[np.argmax(distances)])
                     method = 'global_maximin'
@@ -232,6 +278,8 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--comp-frac', type=float, default=None,
                         help='Fix compressor stage allocation and remove it from BO variables')
+    parser.add_argument('--ridge-seed', action='store_true',
+                        help='Seed the search with pinch-balance ridge solves (see rhp_ridge.py)')
     parser.add_argument('--batch-size', type=int, default=4,
                         help='Candidates proposed and evaluated in parallel per step')
     parser.add_argument('--min-discharge-superheat', type=float, default=0.0,
@@ -245,7 +293,7 @@ def main():
         parser.error('comp-frac must be finite and between 0.1 and 0.9')
     run_family(args.partner, args.budget, args.seed, args.output, first=args.first,
                fixed_comp_frac=args.comp_frac, min_discharge_superheat_K=args.min_discharge_superheat,
-               batch_size=args.batch_size)
+               batch_size=args.batch_size, ridge_seed=args.ridge_seed)
 
 
 if __name__ == '__main__':

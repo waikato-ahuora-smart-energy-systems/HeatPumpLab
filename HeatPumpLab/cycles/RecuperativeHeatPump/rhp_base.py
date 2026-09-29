@@ -141,6 +141,7 @@ class RecuperativeHP(BaseHeatPump):
             "Pmax": self.comp_discharge.pressure * 1000,
             "gc_pinch_active": getattr(self, "gc_pinch_active", None),
             "gc_minimum_approach": getattr(self, "gc_minimum_approach", None),
+            "gc_approaches": list(getattr(self, "gc_approaches", []) or []),
             "converged": self.converged,
             # Parameters
             "refrigerant": self.refrigerant,
