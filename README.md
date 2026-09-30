@@ -141,6 +141,14 @@ budget, but cannot become successful incumbents or Pareto points. Historical
 results produced without this constraint require re-evaluation; the optimiser
 version and run source signatures prevent silent reuse under the new settings.
 
+`main_RHPfixed_mobo.py` seeds each run with pinch-balance ridge solves by default
+(`rhp_ridge.py`; disable with `--no-ridge-seed`). At a fixed lift share
+theta = RHX1/(RHX1+RHX2), COP peaks where two adjacent gas coolers are pinched at
+once; each solve reports the per-gas-cooler minimum approaches (`gc_approaches`),
+and the seeding solves A[k+1] = A[k] along 12 composition/theta lines (about 130
+evaluations) before BO starts. In a 3-seed Propane/Pentane benchmark this found the
+RHX2 = 0 branch of the front in every seed (2 of 3 without it).
+
 Each solved design also reports continuous constraint margins
 (`report["constraint_margins"]`): per-stage discharge and suction superheat,
 `T − T_dew(P)` in K (negative when wet), and pressure-ratio headroom `10 − PR`.

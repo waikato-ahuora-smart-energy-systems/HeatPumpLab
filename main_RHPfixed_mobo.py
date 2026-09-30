@@ -278,8 +278,9 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--comp-frac', type=float, default=None,
                         help='Fix compressor stage allocation and remove it from BO variables')
-    parser.add_argument('--ridge-seed', action='store_true',
-                        help='Seed the search with pinch-balance ridge solves (see rhp_ridge.py)')
+    parser.add_argument('--ridge-seed', action=argparse.BooleanOptionalAction, default=True,
+                        help='Seed the search with pinch-balance ridge solves (see rhp_ridge.py); '
+                             'on by default, --no-ridge-seed to disable')
     parser.add_argument('--batch-size', type=int, default=4,
                         help='Candidates proposed and evaluated in parallel per step')
     parser.add_argument('--min-discharge-superheat', type=float, default=0.0,
