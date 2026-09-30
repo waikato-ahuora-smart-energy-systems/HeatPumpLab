@@ -117,8 +117,51 @@ def solve_line(evaluate, fraction, theta, max_lift, split):
     return records, ridges
 
 
-def seed(evaluate, max_lift, split, workers=4, fractions=SEED_FRACTIONS, thetas=SEED_THETAS):
-    """Solve every line in parallel; return records in a fixed (line, step) order."""
+def trade_off_gap(p, q):
+    """Area of the COP-VHC box between two ridge points that trade off; 0 when one dominates."""
+    dc, dv = q[1]-p[1], q[2]-p[2]
+    return abs(dc*dv) if dc*dv < 0 else 0.0
+
+
+def refine_fraction(points):
+    """Composition to add on one theta, from (fraction, COP, VHC) of its best ridge point per fraction.
+
+    Ridge points are the high-COP ends of the front's branches. Between two solved compositions
+    whose ridge points trade COP against VHC, the front has an unexplored knee; the widest such
+    gap (COP-VHC box area) gets a line at its midpoint. None when no adjacent pair trades off.
+    """
+    points = sorted(points)
+    gaps = [(trade_off_gap(p, q), .5*(p[0]+q[0])) for p, q in zip(points, points[1:])]
+    if not gaps or max(gaps)[0] <= 0:
+        return None
+    return float(max(gaps)[1])
+
+
+def refinement_lines(records, ridges, thetas):
+    """One extra line per theta, in the widest COP-VHC gap between that theta's ridge points."""
+    lines = []
+    for t in thetas:
+        best = {}
+        for r in ridges:
+            if r['theta'] != t or r['record'] is None:
+                continue
+            rec = records[r['record']]
+            cop, vhc = rec.get('COP'), rec.get('VHC_MJ_per_m3')
+            if not rec.get('success') or cop is None or vhc is None or not (math.isfinite(cop) and math.isfinite(vhc)):
+                continue
+            if r['fraction'] not in best or cop > best[r['fraction']][0]:
+                best[r['fraction']] = (cop, vhc)
+        f = refine_fraction([(f, c, v) for f, (c, v) in best.items()])
+        if f is not None:
+            lines.append((f, t))
+    return lines
+
+
+def seed(evaluate, max_lift, split, workers=4, fractions=SEED_FRACTIONS, thetas=SEED_THETAS, refine=True):
+    """Solve every line in parallel, then one refinement line per theta in its widest front gap.
+
+    Returns records in a fixed (line, step) order and the ridge list.
+    """
     lines = [(f, t) for f in fractions for t in thetas]
     cache = {}
 
@@ -131,11 +174,27 @@ def seed(evaluate, max_lift, split, workers=4, fractions=SEED_FRACTIONS, thetas=
     # S = 0 is the same design for every theta: evaluate it once per composition first.
     for f in fractions:
         cached(design(f, 0.0, 0.0, split))
-    with ThreadPoolExecutor(workers) as pool:
-        results = list(pool.map(lambda line: solve_line(cached, line[0], line[1], max_lift, split), lines))
     records, ridges, seen = [], [], set()
+    solve = lambda line: solve_line(cached, line[0], line[1], max_lift, split)
+    with ThreadPoolExecutor(workers) as pool:
+        results = list(pool.map(solve, lines))
+        collect(results, records, ridges, seen)
+        if refine:
+            extra = refinement_lines(records, ridges, thetas)
+            if extra:
+                for f in sorted({f for f, _ in extra}):
+                    cached(design(f, 0.0, 0.0, split))
+                results = list(pool.map(solve, extra))
+                n = len(ridges)
+                collect(results, records, ridges, seen)
+                for r in ridges[n:]:
+                    r['refinement'] = True
+    return records, ridges
+
+
+def collect(results, records, ridges, seen):
+    """Append line results in order, dropping repeated designs and remapping ridge record indices."""
     for line_records, line_ridges in results:
-        offset = len(records)
         index_map = {}
         for i, r in enumerate(line_records):
             key = tuple(np.round(r['x'], 9))
@@ -147,4 +206,3 @@ def seed(evaluate, max_lift, split, workers=4, fractions=SEED_FRACTIONS, thetas=
         for ridge in line_ridges:
             ridge = dict(ridge, record=index_map.get(ridge['record']))
             ridges.append(ridge)
-    return records, ridges

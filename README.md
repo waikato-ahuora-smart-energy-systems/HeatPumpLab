@@ -146,8 +146,26 @@ version and run source signatures prevent silent reuse under the new settings.
 theta = RHX1/(RHX1+RHX2), COP peaks where two adjacent gas coolers are pinched at
 once; each solve reports the per-gas-cooler minimum approaches (`gc_approaches`),
 and the seeding solves A[k+1] = A[k] along 12 composition/theta lines (about 130
-evaluations) before BO starts. In a 3-seed Propane/Pentane benchmark this found the
-RHX2 = 0 branch of the front in every seed (2 of 3 without it).
+evaluations) before BO starts. A second pass adds one line per theta at the
+composition midway across the widest COP-VHC gap between neighbouring solved
+ridge points (for Propane/Pentane, 5/6 propane, near the 80% ridge-B design). In a
+3-seed Propane/Pentane benchmark the first pass alone found the RHX2 = 0 branch of
+the front in every seed (2 of 3 without it). `run_family()` defaults to seeding and
+needs a budget of at least 200 with it.
+
+The joint-temperature runner `main_RHPtemperature_mobo.py` (COP, VHC and delivery
+temperature on the 100:5:220 °C grid) uses the same machinery: batches of
+`--batch-size` proposals (default 4) with a pending-point penalty, the
+constraint-margin GP (fitted per local region) with the distance penalty for
+numerical failures only, `--min-discharge-superheat`, ridge seeding at 100, 120,
+..., 220 °C (`--no-ridge-seed` to disable; budget at least 2,000), and a 3D
+hypervolume stop rule (relative change below 2e-4 over three blocks of 1,000
+evaluations, not before 5,000; `--no-stop-rule` runs the full budget). Its run
+version changed, so earlier output directories cannot be resumed.
+
+`main_RHPehvi_speed_check.py` reports whether BoTorch's fused qLogEHVI C++ kernel
+loaded (it needs the `ninja` package and a C++ compiler) and times it against the
+pure-Python path.
 
 Each solved design also reports continuous constraint margins
 (`report["constraint_margins"]`): per-stage discharge and suction superheat,

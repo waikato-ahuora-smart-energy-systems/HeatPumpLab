@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import fcntl
 import hashlib
 from importlib.metadata import version
@@ -20,7 +21,16 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
 
 ROOT = Path(__file__).resolve().parent
 PARTNERS = ('Butane', 'Isobutane', 'Pentane', 'Isopentane')
-RUN_VERSION = 'joint-temperature-cop-vhc-local128-v19'
+RUN_VERSION = 'joint-temperature-cop-vhc-local128-v24-batch-constraint-ridge'
+# Hypervolume stop rule, scaled from the fixed-split runner (100/2e-4/3/400 at ~1,000 evaluations).
+STOP_CHECK_INTERVAL = 1000
+STOP_TOLERANCE = 2e-4
+STOP_BLOCKS = 3
+STOP_EARLIEST = 5000
+# Ridge seeding at every fourth grid temperature (100, 120, ..., 220 C), split 0.5.
+SEED_TEMPERATURES = tuple(float(t) for t in np.arange(100., 221., 20.))
+SEED_SPLIT = .5
+RIDGE_SEED_MIN_BUDGET = 2000
 
 
 def save(path, data):
@@ -106,10 +116,19 @@ def exact_evaluation(partner, x, temperature, output, *, first='Propane', min_di
         objective.close()
 
 
-def metadata(partner, budget, seed):
+def metadata(partner, budget, seed, *, batch_size=4, min_discharge_superheat_K=0.0, ridge_seed=True,
+             stop_rule=True):
     from rhp_temperature_mobo import MILESTONES, TEMPERATURES
-    paths = sorted((ROOT/'HeatPumpLab').rglob('*.py'))+[ROOT/'rhp_temperature_mobo.py', ROOT/'rhp_temperature_report.py', Path(__file__).resolve()]
+    paths = sorted((ROOT/'HeatPumpLab').rglob('*.py'))+[ROOT/'rhp_temperature_mobo.py', ROOT/'rhp_temperature_report.py', ROOT/'rhp_ridge.py', Path(__file__).resolve()]
     return dict(run_version=RUN_VERSION, partner=partner, budget=budget, seed=seed,
+        batch_size=int(batch_size), min_discharge_superheat_K=float(min_discharge_superheat_K),
+        constraint_handling='constraint GP on margins (per region) multiplies the acquisition; '
+                            'distance penalty for numerical failures only',
+        ridge_seed=bool(ridge_seed),
+        ridge_seed_temperatures_C=list(SEED_TEMPERATURES) if ridge_seed else None,
+        ridge_seed_split=SEED_SPLIT if ridge_seed else None,
+        stop_rule=dict(check_interval=STOP_CHECK_INTERVAL, relative_tolerance=STOP_TOLERANCE,
+                       consecutive_stable_blocks=STOP_BLOCKS, earliest_stop=STOP_EARLIEST) if stop_rule else None,
         max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
         compressor_gas_only=True,
         milestones=sorted(set([m for m in MILESTONES if m <= budget]+[budget])),
@@ -118,7 +137,8 @@ def metadata(partner, budget, seed):
         reference_point_physical=[0., 0., 95.], scales=[4., 10., 125.],
         subset_size=128, initial_evaluations=200, numerical_threads=1,
         known_objective='Temperature is exact; GP outputs are COP and VHC only',
-        search='qLogEHVI q=1; all grid levels enumerated; global maximin every eighth adaptive step',
+        search=f'qLogEHVI, batches of {int(batch_size)} with a pending-point penalty; all grid levels enumerated; '
+               'global maximin every eighth adaptive step',
         evaluation_timeout_seconds=180, timeout_retries=0, native_tasks_per_worker=1,
         budget_accounting='Includes initial, BO, exploratory and failed candidates; final frontier replays counted separately',
         source_sha256=hashlib.sha256(b''.join(p.read_bytes() for p in paths)).hexdigest(),
@@ -175,7 +195,7 @@ def write_milestones(output, records, marks):
     save(output/'milestone_comparison.json', summaries)
 
 
-def verify_final(partner, output, records):
+def verify_final(partner, output, records, min_discharge_superheat_K=0.0):
     from rhp_temperature_mobo import front_indices
     path = output/'frontier_replays.jsonl'
     replays = {r['evaluation']-1: r for r in read_journal(path)}
@@ -192,7 +212,8 @@ def verify_final(partner, output, records):
             if (output.parent/'PAUSE').exists() or (output/'PAUSE').exists():
                 return False
             original = records[index]
-            checked = exact_evaluation(partner, original['x'], original['T_air_tar'], output)
+            checked = exact_evaluation(partner, original['x'], original['T_air_tar'], output,
+                                       min_discharge_superheat_K=min_discharge_superheat_K)
             matches = checked['success'] and all(
                 checked[key] is not None and original[key] is not None
                 and np.isclose(checked[key], original[key], rtol=1e-6, atol=1e-9)
@@ -212,33 +233,84 @@ def verify_final(partner, output, records):
     return True
 
 
-def run_family(partner, budget, seed, output):
+def stability_check(records, checks):
+    """Append hypervolume checks at each interval crossed; True once the front has stopped moving."""
+    from rhp_temperature_mobo import front_indices, hypervolume_3d, objectives
+    mark = (checks[-1]['evaluations'] if checks else 0)+STOP_CHECK_INTERVAL
+    while mark <= len(records):
+        prefix = records[:mark]
+        hv = hypervolume_3d([objectives(prefix[i]) for i in front_indices(prefix)])
+        change = hv/checks[-1]['hypervolume_normalized']-1 if checks and checks[-1]['hypervolume_normalized'] else None
+        checks.append(dict(evaluations=mark, hypervolume_normalized=hv, relative_change=change))
+        mark += STOP_CHECK_INTERVAL
+    recent = [c['relative_change'] for c in checks[-STOP_BLOCKS:]]
+    return bool(checks and checks[-1]['evaluations'] >= STOP_EARLIEST and len(recent) == STOP_BLOCKS
+                and all(c is not None and abs(c) < STOP_TOLERANCE for c in recent))
+
+
+def rewrite_journal(path, records):
+    temporary = Path(path).with_suffix('.jsonl.tmp')
+    with temporary.open('w') as stream:
+        for record in records:
+            stream.write(json.dumps(record, allow_nan=False)+'\n')
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(path)
+
+
+def run_family(partner, budget, seed, output, *, batch_size=4, min_discharge_superheat_K=0.0, ridge_seed=True,
+               stop_rule=True):
     from rhp_temperature_mobo import TemperatureParetoSearch, hypervolume_3d
+    if ridge_seed and budget < RIDGE_SEED_MIN_BUDGET:
+        raise ValueError(f'Ridge seeding uses about 1,000 evaluations; budget must be at least '
+                         f'{RIDGE_SEED_MIN_BUDGET} (or pass ridge_seed=False / --no-ridge-seed)')
     output = Path(output)/f'Propane_{partner}'
     output.mkdir(parents=True, exist_ok=True)
+    journal = output/'records.jsonl'
+
+    def evaluate(x, temperature):
+        return exact_evaluation(partner, x, temperature, output,
+                                min_discharge_superheat_K=min_discharge_superheat_K)
+
     with (output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        meta = metadata(partner, budget, seed)
+        meta = metadata(partner, budget, seed, batch_size=batch_size,
+                        min_discharge_superheat_K=min_discharge_superheat_K, ridge_seed=ridge_seed,
+                        stop_rule=stop_rule)
         path = output/'metadata.json'
         if path.exists() and json.loads(path.read_text()) != meta:
             raise ValueError('Existing run settings/source differ; use a fresh output directory')
         save(path, meta)
-        records = read_journal(output/'records.jsonl')
+        records = read_journal(journal)
         state_path = output/'state.json'
         saved = json.loads(state_path.read_text()) if state_path.exists() else {}
         if saved.get('complete'):
             return
-        # State can lag a committed record by one if interrupted during append.
-        if saved and len(records) not in (saved['evaluations'], saved['evaluations']+1):
+        seeding = ridge_seed and not saved.get('ridge_seed_done')
+        if seeding and len(records) > saved.get('evaluations', 0):
+            # Seed records are committed one temperature at a time; drop a torn temperature and redo it.
+            records = records[:saved.get('evaluations', 0)]
+            rewrite_journal(journal, records)
+        # State can lag the journal by up to one batch if interrupted while appending.
+        lag = len(records)-saved.get('evaluations', 0) if saved else 0
+        if saved and not 0 <= lag <= batch_size:
             raise ValueError('Checkpoint and journal lengths disagree')
-        search = TemperatureParetoSearch(records, seed=seed, state=saved.get('search_state'))
-        # Reproduce the missing ask to recover model-cache visit counts on a torn checkpoint.
-        if saved and len(records) == saved['evaluations']+1:
-            search = TemperatureParetoSearch(records[:-1], seed=seed, state=saved.get('search_state'))
-            x, temperature = search.ask()
-            if temperature != records[-1]['T_air_tar'] or not np.allclose(x, records[-1]['x'], atol=1e-10, rtol=0):
-                raise ValueError('Uncheckpointed proposal does not reproduce')
-            search.tell(records[-1])
+        if lag:
+            # Reproduce the interrupted batch to recover model-cache visit counts, then drop its unevaluated rest.
+            search = TemperatureParetoSearch(records[:-lag], seed=seed, state=saved.get('search_state'))
+            batch = search.ask_batch(min(batch_size, budget-len(records)+lag))
+            for (x, temperature), record in zip(batch, records[-lag:]):
+                if temperature != record['T_air_tar'] or not np.allclose(x, record['x'], atol=1e-10, rtol=0):
+                    raise ValueError('Uncheckpointed proposal does not reproduce')
+                search.tell(record)
+            search.pending = []
+        else:
+            search = TemperatureParetoSearch(records, seed=seed, state=saved.get('search_state'))
+        checks = list(saved.get('stability_checks', []))
+        seeded = list(saved.get('ridge_seeded_temperatures', []))
+        ridges = list(saved.get('ridge_seeds', []))
+        seed_done = bool(saved.get('ridge_seed_done')) or not ridge_seed
+        stop_reason = saved.get('stop_reason')
         write_milestones(output, records, meta['milestones'])
 
         def checkpoint(status):
@@ -246,28 +318,76 @@ def run_family(partner, budget, seed, output):
                 complete=status == 'complete', search_state=search.state,
                 frontier_points=len(search.front), failures=sum(not r['success'] for r in records),
                 hypervolume_normalized=hypervolume_3d(np.asarray(search.y)[search.front]),
+                ridge_seed_done=seed_done, ridge_seeded_temperatures=seeded, ridge_seeds=ridges,
+                stability_checks=checks, stop_reason=stop_reason,
                 updated_utc=time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())))
 
-        while len(records) < budget:
-            if (output.parent/'PAUSE').exists() or (output/'PAUSE').exists():
-                checkpoint('paused')
-                return
-            started = time.perf_counter()
-            x, temperature = search.ask()
-            proposed_seconds = time.perf_counter()-started
-            item = exact_evaluation(partner, x, temperature, output)
-            item.update(proposal_seconds=proposed_seconds, search_diagnostic=search.diagnostic)
+        def commit(item):
             search.tell(item)
-            append(output/'records.jsonl', item)
+            append(journal, item)
             records.append(item)
+
+        if not seed_done:
+            from rhp_ridge import seed as ridge_seed_run
+            if len(records) != sum(r.get('method') == 'ridge_seed' for r in records):
+                raise ValueError('Ridge seeding must run before any other evaluation')
+            for temperature in SEED_TEMPERATURES:
+                if temperature in seeded:
+                    continue
+                if (output.parent/'PAUSE').exists() or (output/'PAUSE').exists():
+                    checkpoint('paused')
+                    return
+                started = time.perf_counter()
+
+                def seed_evaluation(x, temperature=temperature):
+                    item = evaluate(x, temperature)
+                    item.update(method='ridge_seed', proposal_seconds=0., batch_size=1,
+                                search_diagnostic=dict(method='ridge_seed'))
+                    return item
+                seed_records, seed_ridges = ridge_seed_run(seed_evaluation, (temperature-15)*2/3, SEED_SPLIT,
+                                                           workers=batch_size)
+                offset = len(records)
+                for item in seed_records:
+                    commit(item)
+                ridges.extend(dict(r, T_air_tar=temperature,
+                                   record=None if r['record'] is None else offset+r['record']) for r in seed_ridges)
+                seeded.append(temperature)
+                checkpoint('ridge seeding')
+                print(f'{partner} ridge seeding {temperature:.0f} C: {len(seed_records)} evaluations, '
+                      f'{len(seed_ridges)} ridges ({time.perf_counter()-started:.0f} s)', flush=True)
+            seed_done = True
+            search.offset = len(records)
             checkpoint('running')
-            if len(records) in meta['milestones']:
-                write_milestones(output, records, meta['milestones'])
-            if len(records) == 1 or len(records) % 10 == 0:
-                print(partner, len(records), '/', budget, 'front', len(search.front),
-                      'failures', sum(not r['success'] for r in records), flush=True)
+
+        with ThreadPoolExecutor(max(1, batch_size)) as pool:
+            while len(records) < budget and not stop_reason:
+                if (output.parent/'PAUSE').exists() or (output/'PAUSE').exists():
+                    checkpoint('paused')
+                    return
+                q = min(batch_size, budget-len(records))
+                started = time.perf_counter()
+                batch = search.ask_batch(q)
+                proposed_seconds = (time.perf_counter()-started)/q
+                items = list(pool.map(lambda job: evaluate(*job), batch))
+                before = len(records)
+                for item, diagnostic in zip(items, search.batch_diagnostics):
+                    item.update(proposal_seconds=proposed_seconds, search_diagnostic=diagnostic, batch_size=q)
+                    commit(item)
+                search.pending = []
+                if stop_rule and stability_check(records, checks):
+                    stop_reason = 'stable_hypervolume'
+                checkpoint('running')
+                if any(before < m <= len(records) for m in meta['milestones']):
+                    write_milestones(output, records, meta['milestones'])
+                if before == 0 or len(records)//100 > before//100:
+                    print(partner, len(records), '/', budget, 'front', len(search.front),
+                          'failures', sum(not r['success'] for r in records), flush=True)
+        if stop_reason and len(records) not in meta['milestones']:
+            # Record the stopping point as a final milestone snapshot.
+            write_milestones(output, records, sorted(set([m for m in meta['milestones'] if m < len(records)]
+                                                         + [len(records)])))
         checkpoint('validating final frontier')
-        complete = verify_final(partner, output, records)
+        complete = verify_final(partner, output, records, min_discharge_superheat_K)
         checkpoint('complete' if complete else 'paused during validation')
 
 
@@ -279,10 +399,26 @@ def main():
     parser.add_argument('--budget', type=int, default=25000)
     parser.add_argument('--seed', type=int, default=20260913)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--batch-size', type=int, default=4,
+                        help='Proposals evaluated in parallel per BO step (pending-point penalty)')
+    parser.add_argument('--min-discharge-superheat', type=float, default=0.0,
+                        help='Required compressor discharge superheat margin, K')
+    parser.add_argument('--ridge-seed', action=argparse.BooleanOptionalAction, default=True,
+                        help='Seed with pinch-balance ridge solves at 100, 120, ..., 220 C (rhp_ridge.py)')
+    parser.add_argument('--stop-rule', action=argparse.BooleanOptionalAction, default=True,
+                        help=f'Stop once 3D hypervolume changes < {STOP_TOLERANCE:g} over {STOP_BLOCKS} blocks of '
+                             f'{STOP_CHECK_INTERVAL} evaluations (not before {STOP_EARLIEST})')
     args = parser.parse_args()
     if args.budget < 1 or args.budget > 25000:
         parser.error('Budget must be between 1 and 25000')
-    run_family(args.partner, args.budget, args.seed, args.output)
+    if args.batch_size < 1:
+        parser.error('Batch size must be at least 1')
+    try:
+        run_family(args.partner, args.budget, args.seed, args.output, batch_size=args.batch_size,
+                   min_discharge_superheat_K=args.min_discharge_superheat, ridge_seed=args.ridge_seed,
+                   stop_rule=args.stop_rule)
+    except ValueError as exc:
+        parser.error(str(exc))
 
 
 if __name__ == '__main__':

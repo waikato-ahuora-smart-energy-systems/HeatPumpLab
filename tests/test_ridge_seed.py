@@ -21,7 +21,7 @@ def synthetic(x):
     else:
         A[0], A[1] = 19.95+.25*(S-s1), 19.95+.25*(S-s2)
     cop = 2.4+.2*x[3]-.002*min(abs(S-s1), abs(S-s2))
-    return dict(x=list(map(float, x)), success=True, COP=cop, VHC_MJ_per_m3=5.-.02*S+x[3], SEC=1/(cop-1),
+    return dict(x=list(map(float, x)), success=True, COP=cop, VHC_MJ_per_m3=5.-.02*S+2*x[4], SEC=1/(cop-1),
                 Pmax_MPa=5., gc_pinch_active=f'gc{active+1}_hot', gc_approaches=A,
                 constraint_margins=None, message='success')
 
@@ -54,3 +54,21 @@ def test_ridge_seeding_refuses_budgets_it_would_exhaust(tmp_path):
     import pytest
     with pytest.raises(ValueError, match='Ridge seeding'):
         runner.run_family('Butane', 150, 25, tmp_path, fixed_comp_frac=.5)
+
+
+def test_refinement_fills_the_widest_cop_vhc_gap():
+    # Propane/Pentane ridge B (theta = 1) from the Sep 2026 benchmark: the 2/3-1 pair trades off most.
+    ridge_b = [(0., 2.3505, .438), (1/3, 2.5189, 1.437), (2/3, 2.5142, 2.452), (1., 2.4307, 4.006)]
+    assert abs(rr.refine_fraction(ridge_b)-5/6) < 1e-9
+    # One composition dominating the next leaves no gap.
+    assert rr.refine_fraction([(0., 2.4, 1.), (1., 2.5, 2.)]) is None
+    assert rr.refine_fraction([(0., 2.4, 1.)]) is None
+
+
+def test_seed_adds_one_refinement_line_per_theta():
+    records, ridges = rr.seed(synthetic, 123.333, .5, workers=2, thetas=(0., 1.))
+    extra = [r for r in ridges if r.get('refinement')]
+    assert {r['theta'] for r in extra} == {0., 1.}
+    assert all(min(abs(r['fraction']-m) for m in (1/6, .5, 5/6)) < 1e-9 for r in extra)
+    keys = [tuple(np.round(r['x'], 9)) for r in records]
+    assert len(keys) == len(set(keys))

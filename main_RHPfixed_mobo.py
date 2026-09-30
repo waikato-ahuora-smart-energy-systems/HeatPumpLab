@@ -38,7 +38,8 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
                 batch_size=int(batch_size),
                 ridge_seed=bool(ridge_seed),
                 ridge_seed_design=('pinch-balance ridges A[k+1]=A[k] at propane fractions 0, 1/3, 2/3, 1 and '
-                                   'theta 0, 0.5, 1; 6-point coarse S sweep then Illinois secant') if ridge_seed else None,
+                                   'theta 0, 0.5, 1; 6-point coarse S sweep then Illinois secant; one refinement line per theta '
+                                   'in the widest COP-VHC gap between solved compositions') if ridge_seed else None,
                 search_coverage='half of global BO steps restricted to a zero-lift face; one local region per face',
                 minimum_frontier_points=10, minimum_recent_success_fraction=.8,
                 curve_check='101 VHC thresholds fixed at first check; maximum relative COP change; max-VHC endpoint change (report only)',
