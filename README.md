@@ -153,15 +153,22 @@ ridge points (for Propane/Pentane, 5/6 propane, near the 80% ridge-B design). In
 the front in every seed (2 of 3 without it). `run_family()` defaults to seeding and
 needs a budget of at least 200 with it.
 
-The joint-temperature runner `main_RHPtemperature_mobo.py` (COP, VHC and delivery
-temperature on the 100:5:220 °C grid) uses the same machinery: batches of
-`--batch-size` proposals (default 4) with a pending-point penalty, the
-constraint-margin GP (fitted per local region) with the distance penalty for
+The temperature runner `main_RHPtemperature_mobo.py` finds the COP-VHC front at
+each delivery temperature on the 100:5:220 °C grid. Temperature is a condition,
+not an objective: quality is the mean of the 25 per-temperature 2D hypervolumes
+(COP/4, VHC/10 against the origin). One GP (five inputs including temperature, two
+outputs) is shared across temperatures; each proposal targets one temperature on a
+fixed rotation (adaptive step k takes level 7k mod 25) and uses qLogEHVI against
+that temperature's front, with four local centres per temperature (borrowed from
+neighbouring temperatures while a front is sparse). It uses the same machinery as
+the fixed-split runner: batches of `--batch-size` proposals (default 4) with a
+pending-point penalty, the constraint-margin GP with the distance penalty for
 numerical failures only, `--min-discharge-superheat`, ridge seeding at 100, 120,
-..., 220 °C (`--no-ridge-seed` to disable; budget at least 2,000), and a 3D
-hypervolume stop rule (relative change below 2e-4 over three blocks of 1,000
-evaluations, not before 5,000; `--no-stop-rule` runs the full budget). Its run
-version changed, so earlier output directories cannot be resumed.
+..., 220 °C (`--no-ridge-seed`; budget at least 2,000), and a stop rule on the
+mean hypervolume (relative change below 2e-4 over three blocks of 1,000
+evaluations, not before 5,000; `--no-stop-rule`). Up to v24 temperature was a
+third objective, which concentrated BO at 220 °C (454 of 645 steps in a
+2,000-evaluation trial); v25 output directories are not compatible with earlier ones.
 
 `main_RHPehvi_speed_check.py` reports whether BoTorch's fused qLogEHVI C++ kernel
 loaded (it needs the `ninja` package and a C++ compiler) and times it against the

@@ -107,9 +107,40 @@ def test_actual_joint_bo_proposal_and_resume():
     restored = TemperatureParetoSearch(search.records, seed=812, state=copy.deepcopy(search.state))
     x, temperature = search.ask()
     assert admissible(encode(x, temperature))[0]
-    assert search.diagnostic['method'] == 'joint_qLogEHVI'
+    assert search.diagnostic['method'] == 'temperature_qLogEHVI'
     assert search.diagnostic['training_points'] == 128
     assert len(search.diagnostic['training_temperature_levels']) > 1
     other_x, other_temperature = restored.ask()
     assert temperature == other_temperature
     np.testing.assert_allclose(x, other_x, rtol=0, atol=1e-10)
+
+
+def test_schedule_visits_every_temperature_once_per_25_steps():
+    from rhp_temperature_mobo import LEVELS, SCHEDULE_STRIDE
+    assert sorted((SCHEDULE_STRIDE*k) % LEVELS for k in range(LEVELS)) == list(range(LEVELS))
+    # Consecutive proposals in a batch of four land on well-separated temperatures.
+    assert [(SCHEDULE_STRIDE*k) % LEVELS for k in range(4)] == [0, 7, 14, 21]
+
+
+def test_fronts_and_hypervolume_are_per_temperature():
+    from rhp_temperature_mobo import (mean_temperature_hypervolume, per_temperature_front_indices,
+                                      per_temperature_hypervolumes)
+    # A 220 C design no longer dominates an identical 100 C design, and within one temperature
+    # dominance is 2D.
+    records = [record(100, 3, 2), record(220, 3, 2), record(100, 2, 1, x=[1., 0., .1, .5, .5]),
+               record(100, 2, 3, x=[2., 0., .1, .5, .5])]
+    assert per_temperature_front_indices(records) == [0, 1, 3]
+    hv = per_temperature_hypervolumes(records)
+    assert hv[220.] == pytest.approx(.75*.2)
+    assert hv[100.] == pytest.approx(.5*.3+.25*.2)
+    assert mean_temperature_hypervolume(records) == pytest.approx((hv[100.]+hv[220.])/25)
+
+
+def test_sparse_temperature_borrows_centres_from_neighbours():
+    search = TemperatureParetoSearch()
+    for i, t in enumerate((100, 105)):
+        for j in range(3):
+            search.tell(record(t, cop=3-.1*j, vhc=1+.5*j, x=[10.*j, 5., .4, .2+.1*j+.01*i, .8-.1*j-.01*i]))
+    centres = search.level_centres(24)          # nothing observed at 220 C yet
+    assert len(centres) == 4 and np.all(centres[:, 4] == 1.)
+    assert admissible(centres).all()

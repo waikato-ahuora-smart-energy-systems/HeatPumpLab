@@ -1,4 +1,4 @@
-"""Resumable 25,000-evaluation joint temperature/COP/VHC BO, per propane pair."""
+"""Resumable per-temperature COP-VHC BO over the 100:5:220 C grid, per propane pair (up to 25,000 evaluations)."""
 from __future__ import annotations
 
 import argparse
@@ -21,8 +21,9 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
 
 ROOT = Path(__file__).resolve().parent
 PARTNERS = ('Butane', 'Isobutane', 'Pentane', 'Isopentane')
-RUN_VERSION = 'joint-temperature-cop-vhc-local128-v24-batch-constraint-ridge'
-# Hypervolume stop rule, scaled from the fixed-split runner (100/2e-4/3/400 at ~1,000 evaluations).
+RUN_VERSION = 'per-temperature-cop-vhc-v25-batch-constraint-ridge'
+# Stop rule on the mean per-temperature hypervolume, scaled from the fixed-split runner
+# (100/2e-4/3/400 at ~1,000 evaluations for one temperature).
 STOP_CHECK_INTERVAL = 1000
 STOP_TOLERANCE = 2e-4
 STOP_BLOCKS = 3
@@ -133,12 +134,14 @@ def metadata(partner, budget, seed, *, batch_size=4, min_discharge_superheat_K=0
         compressor_gas_only=True,
         milestones=sorted(set([m for m in MILESTONES if m <= budget]+[budget])),
         temperatures_C=TEMPERATURES.tolist(), base_case=DEFAULT_BASE_CASE,
-        objectives=['COP', 'VHC_total_MJ_per_m3', 'T_air_tar_C'],
-        reference_point_physical=[0., 0., 95.], scales=[4., 10., 125.],
+        objectives=['COP', 'VHC_total_MJ_per_m3'], condition='T_air_tar_C on the 100:5:220 grid',
+        quality='mean over the 25 temperatures of the 2D (COP/4, VHC/10) hypervolume against the origin',
+        reference_point_physical=[0., 0.], scales=[4., 10.],
         subset_size=128, initial_evaluations=200, numerical_threads=1,
-        known_objective='Temperature is exact; GP outputs are COP and VHC only',
-        search=f'qLogEHVI, batches of {int(batch_size)} with a pending-point penalty; all grid levels enumerated; '
-               'global maximin every eighth adaptive step',
+        known_objective='Temperature is an exact input condition; GP outputs are COP and VHC only',
+        search=f'per-temperature qLogEHVI on a shared 5-input GP; adaptive step k targets level (7k) mod 25; '
+               f'batches of {int(batch_size)} with a pending-point penalty; 4 local centres per temperature; '
+               'maximin at the scheduled temperature every eighth adaptive step',
         evaluation_timeout_seconds=180, timeout_retries=0, native_tasks_per_worker=1,
         budget_accounting='Includes initial, BO, exploratory and failed candidates; final frontier replays counted separately',
         source_sha256=hashlib.sha256(b''.join(p.read_bytes() for p in paths)).hexdigest(),
@@ -146,10 +149,12 @@ def metadata(partner, budget, seed, *, batch_size=4, min_discharge_superheat_K=0
 
 
 def milestone_snapshot(records, previous=None):
-    from rhp_temperature_mobo import TEMPERATURES, front_indices, hypervolume_3d, objectives, usable
-    indices = front_indices(records)
+    from rhp_temperature_mobo import (TEMPERATURES, mean_temperature_hypervolume, per_temperature_front_indices,
+                                      per_temperature_hypervolumes, usable)
+    indices = per_temperature_front_indices(records)
     frontier = [dict(evaluation=i+1, **records[i]) for i in indices]
-    hv = hypervolume_3d([objectives(records[i]) for i in indices])
+    hv = mean_temperature_hypervolume(records)
+    level_hv = per_temperature_hypervolumes(records)
     earlier = previous['hypervolume_normalized'] if previous else None
     per_temperature = []
     for temperature in TEMPERATURES:
@@ -158,10 +163,11 @@ def milestone_snapshot(records, previous=None):
         per_temperature.append(dict(temperature_C=float(temperature), evaluations=len(at),
             successful=len(good), failures=sum(not r['success'] for r in at),
             frontier_points=int(sum(r['T_air_tar'] == temperature for r in frontier)),
+            hypervolume_normalized=level_hv[float(temperature)],
             best_COP=max((r['COP'] for r in good), default=None),
             best_VHC_MJ_per_m3=max((r['VHC_MJ_per_m3'] for r in good), default=None)))
     return dict(evaluations=len(records), label='observed frontier, prior to final fresh-process validation',
-        hypervolume_normalized=hv, hypervolume_physical=hv*4*10*125,
+        hypervolume_normalized=hv, hypervolume_physical=hv*4*10,
         hypervolume_gain_since_previous=None if earlier is None else hv-earlier,
         hypervolume_gain_percent_since_previous=None if not earlier else 100*(hv/earlier-1),
         frontier_points=len(frontier), frontier=frontier,
@@ -196,7 +202,7 @@ def write_milestones(output, records, marks):
 
 
 def verify_final(partner, output, records, min_discharge_superheat_K=0.0):
-    from rhp_temperature_mobo import front_indices
+    from rhp_temperature_mobo import per_temperature_front_indices as front_indices
     path = output/'frontier_replays.jsonl'
     replays = {r['evaluation']-1: r for r in read_journal(path)}
     validated = [dict(r) for r in records]
@@ -235,11 +241,10 @@ def verify_final(partner, output, records, min_discharge_superheat_K=0.0):
 
 def stability_check(records, checks):
     """Append hypervolume checks at each interval crossed; True once the front has stopped moving."""
-    from rhp_temperature_mobo import front_indices, hypervolume_3d, objectives
+    from rhp_temperature_mobo import mean_temperature_hypervolume
     mark = (checks[-1]['evaluations'] if checks else 0)+STOP_CHECK_INTERVAL
     while mark <= len(records):
-        prefix = records[:mark]
-        hv = hypervolume_3d([objectives(prefix[i]) for i in front_indices(prefix)])
+        hv = mean_temperature_hypervolume(records[:mark])
         change = hv/checks[-1]['hypervolume_normalized']-1 if checks and checks[-1]['hypervolume_normalized'] else None
         checks.append(dict(evaluations=mark, hypervolume_normalized=hv, relative_change=change))
         mark += STOP_CHECK_INTERVAL
@@ -260,7 +265,7 @@ def rewrite_journal(path, records):
 
 def run_family(partner, budget, seed, output, *, batch_size=4, min_discharge_superheat_K=0.0, ridge_seed=True,
                stop_rule=True):
-    from rhp_temperature_mobo import TemperatureParetoSearch, hypervolume_3d
+    from rhp_temperature_mobo import TemperatureParetoSearch
     if ridge_seed and budget < RIDGE_SEED_MIN_BUDGET:
         raise ValueError(f'Ridge seeding uses about 1,000 evaluations; budget must be at least '
                          f'{RIDGE_SEED_MIN_BUDGET} (or pass ridge_seed=False / --no-ridge-seed)')
@@ -317,7 +322,7 @@ def run_family(partner, budget, seed, output, *, batch_size=4, min_discharge_sup
             save(state_path, dict(evaluations=len(records), budget=budget, status=status,
                 complete=status == 'complete', search_state=search.state,
                 frontier_points=len(search.front), failures=sum(not r['success'] for r in records),
-                hypervolume_normalized=hypervolume_3d(np.asarray(search.y)[search.front]),
+                hypervolume_normalized=search.hypervolume(),
                 ridge_seed_done=seed_done, ridge_seeded_temperatures=seeded, ridge_seeds=ridges,
                 stability_checks=checks, stop_reason=stop_reason,
                 updated_utc=time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())))

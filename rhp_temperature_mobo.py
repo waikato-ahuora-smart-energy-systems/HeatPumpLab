@@ -1,7 +1,14 @@
-"""Joint BO for COP, total VHC and an exactly known, discrete delivery temperature.
+"""BO for the COP-VHC front at each delivery temperature on the 100:5:220 C grid.
 
-All temperatures share two GP outputs and a five-dimensional input space. The
-128-point training subset is independent of the complete 3D hypervolume baseline.
+Temperature is a condition, not an objective: the target is the separate 2D
+(COP, VHC) Pareto front at every grid temperature, scored as the mean of the
+per-temperature hypervolumes. All temperatures share one GP (five inputs,
+temperature included, two outputs), so designs learnt at one temperature inform
+the others. Each proposal targets one temperature on a fixed rotation and uses
+qLogEHVI against that temperature's own front.
+
+The 3D (COP, VHC, temperature) helpers below (front_indices, hypervolume_3d,
+TemperatureGridPartition) are kept for reference and comparison with v19-v24.
 """
 from __future__ import annotations
 
@@ -20,6 +27,7 @@ from botorch.fit import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
 from botorch.optim import optimize_acqf
 from botorch.sampling.normal import SobolQMCNormalSampler
+from botorch.utils.multi_objective.box_decompositions.non_dominated import NondominatedPartitioning
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from scipy.spatial import cKDTree
 from scipy.stats import qmc
@@ -32,6 +40,10 @@ MILESTONES = (5000, 10000, 15000, 20000, 25000)
 OUTCOME_SCALES = np.array([4., 10.])
 CONSTRAINT_REFIT_EVERY = 5
 PENDING_RADIUS = .05
+LEVELS = len(TEMPERATURES)
+SCHEDULE_STRIDE = 7        # adaptive step k targets level (7k) mod 25: every level once per 25 steps
+CENTRES_PER_LEVEL = 4
+LOCAL_POINTS, GLOBAL_POINTS = 64, 128
 
 
 def encode(x, temperature):
@@ -111,6 +123,57 @@ def hypervolume_3d(points):
     return float(volume)
 
 
+def level_of(u):
+    return int(round(float(u[4])*24))
+
+
+def per_temperature_front_indices(records):
+    """Union of the 2D (COP, VHC) fronts at each temperature, ties kept."""
+    by_level = {}
+    for i, r in enumerate(records):
+        if usable(r):
+            by_level.setdefault(r['T_air_tar'], []).append(i)
+    out = []
+    for indices in by_level.values():
+        values = {i: objectives(records[i])[:2] for i in indices}
+        front = []
+        for i in indices:
+            front = update_front_2d(front, values, i)
+        out.extend(front)
+    return sorted(out)
+
+
+def update_front_2d(indices, values, new_index):
+    """Incrementally retain a 2D maximisation front, including ties."""
+    value = np.asarray(values[new_index])
+    old = np.asarray([values[i] for i in indices]).reshape(-1, 2)
+    if np.any(np.all(old >= value, axis=1) & np.any(old > value, axis=1)):
+        return indices
+    dominated = np.all(value >= old, axis=1) & np.any(value > old, axis=1)
+    return [i for i, remove in zip(indices, dominated) if not remove]+[new_index]
+
+
+def hypervolume_2d(points):
+    front = front_2d(points)
+    if not len(front):
+        return 0.
+    return float(np.sum(np.diff(np.r_[0., front[:, 0]])*front[:, 1]))
+
+
+def per_temperature_hypervolumes(records):
+    """Scaled 2D hypervolume (COP/4, VHC/10 against the origin) at each grid temperature."""
+    points = {float(t): [] for t in TEMPERATURES}
+    for r in records:
+        if usable(r):
+            points[r['T_air_tar']].append(objectives(r)[:2])
+    return {t: hypervolume_2d(p) for t, p in points.items()}
+
+
+def mean_temperature_hypervolume(records):
+    """Mean over the 25 grid temperatures of the per-temperature 2D hypervolume."""
+    return float(np.mean(list(per_temperature_hypervolumes(records).values())))
+
+
 class TemperatureGridPartition:
     """Exact non-dominated boxes obtained from the 25 temperature slabs.
 
@@ -178,17 +241,47 @@ class JointAcquisition(AcquisitionFunction):
         return value+torch.log((bad+.02)/(good+bad+.04))
 
 
+class LevelAcquisition(AcquisitionFunction):
+    """qLogEHVI against one temperature's 2D front + log P(margins >= 0) + numerical-failure penalty."""
+
+    def __init__(self, model, front_values, history, success, seed, numerical_failure, constraint=None):
+        super().__init__(model=model)
+        self.constraint = constraint
+        Y = torch.tensor(np.asarray(front_values, dtype=float).reshape(-1, 2), dtype=torch.double)
+        if not len(Y):
+            Y = torch.full((1, 2), 1e-9, dtype=torch.double)
+        ref = torch.zeros(2, dtype=torch.double)
+        self.ehvi = qLogExpectedHypervolumeImprovement(
+            model=model, ref_point=ref.tolist(), partitioning=NondominatedPartitioning(ref_point=ref, Y=Y),
+            sampler=SobolQMCNormalSampler(torch.Size([64]), seed=seed))
+        self.register_buffer('history', torch.tensor(history, dtype=torch.double))
+        self.register_buffer('success', torch.tensor(success, dtype=torch.bool))
+        self.register_buffer('numerical_failure', torch.tensor(numerical_failure, dtype=torch.bool))
+
+    def forward(self, X):
+        value = self.ehvi(X)
+        if self.constraint is not None:
+            value = value+self.constraint.log_probability(X)
+        if not bool(self.numerical_failure.any()) or not bool(self.success.any()):
+            return value
+        distances = (X.squeeze(-2).unsqueeze(-2)-self.history).square().sum(-1).clamp_min(1e-20).sqrt()
+        good = distances[..., self.success].amin(-1)
+        bad = distances[..., self.numerical_failure].amin(-1)
+        return value+torch.log((bad+.02)/(good+bad+.04))
+
+
 class TemperatureParetoSearch:
     def __init__(self, records=(), *, seed=20260913, subset_size=128, state=None):
         torch.set_num_threads(1)
         self.seed, self.subset_size = int(seed), int(subset_size)
-        self.records, self.x, self.y, self.success, self.front = [], [], [], [], []
+        self.records, self.x, self.y, self.success = [], [], [], []
+        self.fronts = {level: [] for level in range(LEVELS)}
         self.margins, self.pending = [], []
         for record in records:
             self.tell(record)
         # Ridge-seed records come first; adaptive step counts start after them.
         self.offset = sum(r.get('method') == 'ridge_seed' for r in self.records)
-        self.state = state or dict(epoch=-1, centres=[], models={}, constraints={})
+        self.state = state or dict(models={}, constraints={}, visits={})
         self.diagnostic = {}
         # Explicit endpoint/composition anchors at every allowed temperature.
         anchors = [[0., 0., 0., fraction, level/24]
@@ -215,7 +308,18 @@ class TemperatureParetoSearch:
         self.success.append(good)
         self.margins.append(aggregate_margins(record.get('constraint_margins')))
         if good:
-            self.front = update_front(self.front, self.y, len(self.y)-1)
+            level = level_of(u)
+            self.fronts[level] = update_front_2d(self.fronts[level], {i: self.y[i][:2] for i in
+                                                  self.fronts[level]+[len(self.y)-1]}, len(self.y)-1)
+
+    @property
+    def front(self):
+        """Union of the per-temperature fronts (observation indices)."""
+        return sorted(i for f in self.fronts.values() for i in f)
+
+    def hypervolume(self):
+        """Mean scaled per-temperature 2D hypervolume."""
+        return float(np.mean([hypervolume_2d(np.asarray(self.y)[f, :2]) if f else 0. for f in self.fronts.values()]))
 
     def numerical_failures(self):
         return np.array([not s and m is None for s, m in zip(self.success, self.margins)], dtype=bool)
@@ -275,19 +379,43 @@ class TemperatureParetoSearch:
         distance = np.linalg.norm(np.asarray(self.x)[good]-centre, axis=1)
         return good[np.lexsort((good, distance))[:self.subset_size]]
 
-    def _centres(self):
-        epoch = max(0, (self.step_index()-len(self.initial))//48)
-        if self.state['epoch'] != epoch:
-            candidates = self.front or list(np.flatnonzero(self.success))
-            y = np.asarray(self.y)[candidates]
-            scaled = (y-y.min(0))/np.maximum(np.ptp(y, axis=0), 1e-12)
-            selected = list(dict.fromkeys(int(np.argmax(scaled[:, i])) for i in range(3)))
-            while len(selected) < min(8, len(candidates)):
-                distances = np.linalg.norm(scaled[:, None]-scaled[selected], axis=-1).min(1)
-                distances[selected] = -1
-                selected.append(int(np.argmax(distances)))
-            self.state = dict(epoch=epoch, centres=[self.x[candidates[i]] for i in selected], models={}, constraints={})
-        return np.asarray(self.state['centres'])
+    def level_centres(self, level):
+        """Local-region centres for one temperature, spread along its 2D front.
+
+        A sparse front borrows equipment designs from the nearest temperatures' fronts
+        (lifts scaled into this temperature's lift limit), which is where the shared GP helps.
+        """
+        t = level/24
+        candidates = [self.x[i] for i in self.fronts[level]]
+        values = [self.y[i][:2] for i in self.fronts[level]]
+        for other in sorted(range(LEVELS), key=lambda l: (abs(l-level), l)):
+            if len(candidates) >= CENTRES_PER_LEVEL:
+                break
+            if other == level:
+                continue
+            for i in self.fronts[other]:
+                u = np.array(self.x[i], dtype=float)
+                u[4] = t
+                limit = (100+120*t-15)*2/300
+                if u[0]+u[1] > limit:
+                    u[:2] *= limit/(u[0]+u[1])
+                candidates.append(u.tolist())
+                values.append(self.y[i][:2])
+        if not candidates:
+            return np.empty((0, 5))
+        y = np.asarray(values)
+        scaled = (y-y.min(0))/np.maximum(np.ptp(y, axis=0), 1e-12)
+        selected = list(dict.fromkeys(int(np.argmax(scaled[:, i])) for i in range(2)))
+        while len(selected) < min(CENTRES_PER_LEVEL, len(candidates)):
+            distances = np.linalg.norm(scaled[:, None]-scaled[selected], axis=-1).min(1)
+            distances[selected] = -1
+            selected.append(int(np.argmax(distances)))
+        return np.asarray([candidates[i] for i in selected])
+
+    def level_pool(self, count, seed, level):
+        pool = qmc.Sobol(4, scramble=True, seed=seed).random_base2(int(np.ceil(np.log2(count))))
+        pool = np.column_stack((pool, np.full(len(pool), level/24)))
+        return pool[admissible(pool)]
 
     @staticmethod
     def scores(acquisition, pool):
@@ -310,27 +438,36 @@ class TemperatureParetoSearch:
             pool = self.global_pool(2048, seed)
             self.diagnostic = dict(method='initial_replaced_maximin', training_points=0)
             return decode(pool[np.argmax(tree.query(pool)[0])])
+        k = n-len(self.initial)
+        level = (SCHEDULE_STRIDE*k) % LEVELS
+        t = level/24
         history = np.asarray(self.x)
-        if sum(self.success) < 8 or (n-len(self.initial)) % 8 == 7:
-            pool = self.global_pool(2048, seed)
-            distance = tree.query(pool)[0]
-            self.diagnostic = dict(method='global_maximin', training_points=0)
-            return decode(pool[np.argmax(distance)])
-        centres = self._centres()
-        region = (n-len(self.initial)) % len(centres)
+        centres = self.level_centres(level)
+        if sum(self.success) < 8 or k % 8 == 7 or not len(centres):
+            pool = self.level_pool(1024, seed, level)
+            self.diagnostic = dict(method='global_maximin', training_points=0, level=level,
+                                   temperature_C=100.+5*level)
+            return decode(pool[np.argmax(tree.query(pool)[0])])
+        visits = self.state.setdefault('visits', {})
+        visit = visits.get(str(level), 0)
+        visits[str(level)] = visit+1
+        region = visit % len(centres)
         centre = centres[region]
         lower, upper = np.maximum(centre[:4]-.08, 0), np.minimum(centre[:4]+.08, 1)
-        local = qmc.Sobol(4, scramble=True, seed=seed).random_base2(4)
-        local = lower+(upper-lower)*local
-        # Enumerate temperatures: no continuous optimisation followed by rounding.
-        pool = np.vstack([np.column_stack((local, np.full(len(local), level/24))) for level in range(25)])
-        pool = np.vstack((pool, self.global_pool(256, seed+1)))
+        local = qmc.Sobol(4, scramble=True, seed=seed).random_base2(int(np.log2(LOCAL_POINTS)))
+        local = np.column_stack((lower+(upper-lower)*local, np.full(len(local), t)))
+        pool = np.vstack((local, self.level_pool(GLOBAL_POINTS, seed+1, level)))
         pool = np.unique(pool[admissible(pool)], axis=0)
         pool = pool[tree.query(pool)[0] > 1e-7]
+        if not len(pool):
+            pool = self.level_pool(1024, seed, level)
+            self.diagnostic = dict(method='global_maximin', training_points=0, level=level,
+                                   temperature_C=100.+5*level)
+            return decode(pool[np.argmax(tree.query(pool)[0])])
         indices = self.training_indices(centre)
         X = torch.tensor(history[indices], dtype=torch.double)
         Y = torch.tensor(np.asarray(self.y)[indices, :2], dtype=torch.double)
-        key = str(region)
+        key = f'{level}:{region}'
         old = self.state['models'].get(key)
         with torch.random.fork_rng(devices=[]), warnings.catch_warnings(record=True) as caught:
             torch.manual_seed(seed)
@@ -340,59 +477,52 @@ class TemperatureParetoSearch:
                     for module, saved in ((model.covar_module, old['kernel']), (model.mean_module, old['mean'])):
                         for name, value in saved.items():
                             module.get_parameter(name).copy_(torch.tensor(value, dtype=torch.double))
-            visits = old['visits'] if old else 0
+            fits = old['visits'] if old else 0
             fit_error = None
-            if not old or visits % 5 == 0:
+            if not old or fits % 5 == 0:
                 try:
                     fit_gpytorch_mll(ExactMarginalLogLikelihood(model.likelihood, model),
                                      max_attempts=1, optimizer_kwargs={'options': {'maxiter': 100}})
                 except RuntimeError as exc:
                     fit_error = str(exc)
-            self.state['models'][key] = dict(visits=visits+1,
+            self.state['models'][key] = dict(visits=fits+1,
                 kernel={k: v.detach().tolist() for k, v in model.covar_module.named_parameters()},
                 mean={k: v.detach().tolist() for k, v in model.mean_module.named_parameters()})
             model.eval()
-            partition = TemperatureGridPartition(np.asarray(self.y)[self.front])
+            front_values = np.asarray(self.y)[self.fronts[level], :2] if self.fronts[level] else np.empty((0, 2))
             constraint = self.constraint_model(centre, key)
-            acquisition = JointAcquisition(model, partition, self.x, self.success, seed,
-                                           numerical_failure=self.numerical_failures(), constraint=constraint)
+            acquisition = LevelAcquisition(model, front_values, self.x, self.success, seed,
+                                           self.numerical_failures(), constraint=constraint)
             scores = self.scores(acquisition, pool)+self.pending_penalty(pool)
             if not np.isfinite(scores).any():
-                raise RuntimeError('No finite joint acquisition scores')
+                raise RuntimeError('No finite acquisition scores')
             best = int(np.nanargmax(scores))
             chosen, score = pool[best], float(scores[best])
-            # Refine the best two enumerated temperatures with temperature fixed.
-            selected = []
-            for index in np.argsort(-scores):
-                temperature = float(pool[index, 4])
-                if temperature in selected:
-                    continue
-                selected.append(temperature)
-                try:
-                    proposal, _ = optimize_acqf(acquisition,
-                        bounds=torch.tensor([[0.]*5, [1.]*5], dtype=torch.double),
-                        q=1, num_restarts=1, raw_samples=None,
-                        batch_initial_conditions=torch.tensor(pool[index][None, None], dtype=torch.double),
-                        fixed_features={4: temperature},
-                        inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double),
-                                                 -(100+120*temperature-15)*2/300)],
-                        options={'maxiter': 35, 'batch_limit': 1, 'init_batch_limit': 8},
-                        retry_on_optimization_warning=False)
-                    proposed = proposal.detach().numpy().reshape(-1, 5)
-                    proposed = proposed[admissible(proposed)]
-                    if len(proposed) and tree.query(proposed)[0][0] > 1e-7:
-                        value = float(self.scores(acquisition, proposed)[0]+self.pending_penalty(proposed)[0])
-                        if np.isfinite(value) and value > score:
-                            chosen, score = proposed[0], value
-                except (ValueError, RuntimeError) as exc:
-                    warnings.warn(f'Acquisition refinement skipped: {exc}', stacklevel=2)
-                if len(selected) == 2:
-                    break
-            self.diagnostic = dict(method='joint_qLogEHVI', region=int(region), training_points=len(indices),
-                training_indices=indices.tolist(), training_temperature_levels=sorted({self.records[i]['T_air_tar'] for i in indices}),
-                frontier_points=len(self.front), hypercells=len(partition.bounds[0]), candidate_pool=len(pool),
-                constraint_gp=constraint is not None and constraint.model is not None, pending=len(self.pending),
+            try:
+                proposal, _ = optimize_acqf(acquisition,
+                    bounds=torch.tensor([[0.]*5, [1.]*5], dtype=torch.double),
+                    q=1, num_restarts=1, raw_samples=None,
+                    batch_initial_conditions=torch.tensor(pool[best][None, None], dtype=torch.double),
+                    fixed_features={4: t},
+                    inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double),
+                                             -(100+120*t-15)*2/300)],
+                    options={'maxiter': 35, 'batch_limit': 1, 'init_batch_limit': 8},
+                    retry_on_optimization_warning=False)
+                proposed = proposal.detach().numpy().reshape(-1, 5)
+                proposed = proposed[admissible(proposed)]
+                if len(proposed) and tree.query(proposed)[0][0] > 1e-7:
+                    value = float(self.scores(acquisition, proposed)[0]+self.pending_penalty(proposed)[0])
+                    if np.isfinite(value) and value > score:
+                        chosen, score = proposed[0], value
+            except (ValueError, RuntimeError) as exc:
+                warnings.warn(f'Acquisition refinement skipped: {exc}', stacklevel=2)
+            self.diagnostic = dict(method='temperature_qLogEHVI', level=level, temperature_C=100.+5*level,
+                region=int(region), training_points=len(indices),
+                training_indices=indices.tolist(),
+                training_temperature_levels=sorted({self.records[i]['T_air_tar'] for i in indices}),
+                level_front_points=len(self.fronts[level]), candidate_pool=len(pool),
                 selected_log_ehvi_weighted=score, fit_error=fit_error,
+                constraint_gp=constraint is not None and constraint.model is not None, pending=len(self.pending),
                 warnings=list(dict.fromkeys(str(w.message) for w in caught)),
                 proposal_seconds=time.perf_counter()-started)
         return decode(chosen)
