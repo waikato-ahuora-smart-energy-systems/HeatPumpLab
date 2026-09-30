@@ -114,14 +114,20 @@ def validate(result, output):
             save(output/'result.json', result)
 
 
+RIDGE_SEED_MIN_BUDGET = 200
+
+
 def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
-               batch_size=4, ridge_seed=False):
+               batch_size=4, ridge_seed=True):
     from concurrent.futures import ThreadPoolExecutor
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
     if first not in PARTNERS or partner not in PARTNERS or first == partner:
         raise ValueError('Choose two distinct components from the paper primary pool')
     if fixed_comp_frac is not None and (not np.isfinite(fixed_comp_frac) or not .1 <= fixed_comp_frac <= .9):
         raise ValueError('fixed_comp_frac must be finite and between 0.1 and 0.9')
+    if ridge_seed and budget < RIDGE_SEED_MIN_BUDGET:
+        raise ValueError(f'Ridge seeding uses about 130 evaluations; budget must be at least '
+                         f'{RIDGE_SEED_MIN_BUDGET} (or pass ridge_seed=False / --no-ridge-seed)')
     output = Path(output)/f'{first}_{partner}'
     output.mkdir(parents=True, exist_ok=True)
     with (output/'run.lock').open('a') as lock:

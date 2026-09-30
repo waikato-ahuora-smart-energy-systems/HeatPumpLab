@@ -40,11 +40,17 @@ def test_ridges_found_on_every_line_including_exact_grid_hits():
 def test_runner_seeds_then_searches(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, 'exact_evaluation', lambda partner, x, t, out, **kw: synthetic(x))
     monkeypatch.setattr(runner, 'render', lambda *a, **k: None)
-    runner.run_family('Butane', 120, 25, tmp_path, fixed_comp_frac=.5, batch_size=2, ridge_seed=True)
+    runner.run_family('Butane', 200, 25, tmp_path, fixed_comp_frac=.5, batch_size=2)  # seeding is the default
     result = json.loads((tmp_path/'Propane_Butane'/'result.json').read_text())
     n_seed = runner.seed_count(result)
     assert result['ridge_seed_done'] and n_seed > 40 and len(result['ridge_seeds']) >= 12
-    assert len(result['records']) == 120 and result['complete']
+    assert len(result['records']) == 200 and result['complete']
     assert all(r['method'] != 'ridge_seed' for r in result['records'][n_seed:])
     xs = [tuple(np.round(r['x'], 9)) for r in result['records']]
     assert len(xs) == len(set(xs))
+
+
+def test_ridge_seeding_refuses_budgets_it_would_exhaust(tmp_path):
+    import pytest
+    with pytest.raises(ValueError, match='Ridge seeding'):
+        runner.run_family('Butane', 150, 25, tmp_path, fixed_comp_frac=.5)

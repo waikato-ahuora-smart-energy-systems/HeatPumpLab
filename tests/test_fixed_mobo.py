@@ -78,12 +78,12 @@ def test_runner_pause_resume_cap_and_fresh_replay(tmp_path, monkeypatch, first):
 
     monkeypatch.setattr(runner, 'exact_evaluation', evaluate)
     monkeypatch.setattr(runner, 'render', lambda *args, **kwargs: None)
-    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1)
+    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1, ridge_seed=False)
     path = tmp_path/f'{first}_Butane'/'result.json'
     paused = json.loads(path.read_text())
     assert paused['status'] == 'paused' and len(paused['records']) == 2
     (tmp_path/'PAUSE').unlink()
-    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1)
+    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1, ridge_seed=False)
     result = json.loads(path.read_text())
     assert result['complete'] and result['stop_reason'] == 'evaluation_cap'
     assert len(result['records']) == 6 and len(calls) > 6
@@ -91,7 +91,7 @@ def test_runner_pause_resume_cap_and_fresh_replay(tmp_path, monkeypatch, first):
     assert result['metadata']['components'] == [first, 'Butane']
     assert (tmp_path/f'{first}_Butane'/'validated_frontier.json').exists()
     before = len(calls)
-    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1)
+    runner.run_family('Butane', 6, 25, tmp_path, first=first, batch_size=1, ridge_seed=False)
     assert len(calls) == before
 
 
@@ -106,13 +106,13 @@ def test_batched_runner_pauses_on_a_batch_boundary(tmp_path, monkeypatch):
 
     monkeypatch.setattr(runner, 'exact_evaluation', evaluate)
     monkeypatch.setattr(runner, 'render', lambda *args, **kwargs: None)
-    runner.run_family('Butane', 10, 25, tmp_path, batch_size=4)
+    runner.run_family('Butane', 10, 25, tmp_path, batch_size=4, ridge_seed=False)
     paused = json.loads((tmp_path/'Propane_Butane'/'result.json').read_text())
     # The PAUSE request arrives mid-batch; the whole batch is still recorded.
     assert paused['status'] == 'paused' and len(paused['records']) == 4
     assert [r['batch_size'] for r in paused['records']] == [4]*4
     (tmp_path/'PAUSE').unlink()
-    runner.run_family('Butane', 10, 25, tmp_path, batch_size=4)
+    runner.run_family('Butane', 10, 25, tmp_path, batch_size=4, ridge_seed=False)
     result = json.loads((tmp_path/'Propane_Butane'/'result.json').read_text())
     assert result['complete'] and len(result['records']) == 10
     assert [r['batch_size'] for r in result['records']] == [4]*8+[2]*2

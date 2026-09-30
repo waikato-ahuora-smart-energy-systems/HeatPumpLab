@@ -68,16 +68,16 @@ def test_fixed_split_runner_preserves_setting_during_pause_resume_and_replay(tmp
         return record(0,x=list(x),COP=3.-x[3],VHC_MJ_per_m3=1.+x[3])
     monkeypatch.setattr(runner,'exact_evaluation',evaluate)
     monkeypatch.setattr(runner,'render',lambda *args,**kwargs:None)
-    runner.run_family('Pentane',6,25,tmp_path,fixed_comp_frac=.5)
+    runner.run_family('Pentane',6,25,tmp_path,fixed_comp_frac=.5, ridge_seed=False)
     (tmp_path/'PAUSE').unlink()
-    runner.run_family('Pentane',6,25,tmp_path,fixed_comp_frac=.5)
+    runner.run_family('Pentane',6,25,tmp_path,fixed_comp_frac=.5, ridge_seed=False)
     result=json.loads((tmp_path/'Propane_Pentane/result.json').read_text())
     assert result['complete'] and len(calls)>6
     assert result['metadata']['fixed_comp_frac']==.5
     assert result['metadata']['search_dimensions']==3
     assert all(r['matches'] for r in result['frontier_replays'].values())
     with pytest.raises(ValueError,match='mismatch'):
-        runner.run_family('Pentane',6,25,tmp_path,fixed_comp_frac=None)
+        runner.run_family('Pentane',6,25,tmp_path,fixed_comp_frac=None, ridge_seed=False)
 
 
 @pytest.mark.parametrize('value',[0.,1.,np.nan,np.inf])
