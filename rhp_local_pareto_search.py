@@ -97,6 +97,12 @@ def choose_anchors(records, count=6):
     region. The remaining anchors keep the previous rule: the max-COP and
     max-VHC mixed-fluid front points, then maximin spacing in normalised
     objective space.
+
+    Tested alternative (phase 8, Oct 2026): choosing the end and maximin anchors
+    over the whole front, pure fluids included, refines the pure-fluid edge but
+    lowers final hypervolume for every pair tested (Propane/Pentane, Propane/Butane,
+    Isobutane/Pentane; 3 seeds with ridge seeding), because regions moved to that
+    one-dimensional edge are taken from the mixed-fluid front.
     """
     values = np.asarray([[r['COP'], r['VHC_MJ_per_m3']] if r['success'] and
                          not r.get('validation_rejected') else [0., 0.] for r in records])
