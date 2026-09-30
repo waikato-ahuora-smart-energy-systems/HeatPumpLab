@@ -4,6 +4,9 @@ import warnings
 
 import numpy as np
 import torch
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._torch_env import ensure_ninja_on_path
+
+ensure_ninja_on_path()  # before BoTorch first loads the fused kernel
 from botorch.acquisition import AcquisitionFunction
 from botorch.acquisition.multi_objective.logei import qLogExpectedHypervolumeImprovement
 from botorch.fit import fit_gpytorch_mll

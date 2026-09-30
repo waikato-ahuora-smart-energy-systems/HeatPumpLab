@@ -1,11 +1,14 @@
 """Check that BoTorch's fused qLogEHVI C++ kernel loads, and time it against the pure-Python path.
 
-Uses a problem the size of the fixed-split search: 5-D inputs, 256 training points, ~150 front
+Uses a problem the size of the fixed-split search: 5-D inputs, 256 training points, a few dozen front
 points, 64 MC samples, candidate pools scored in chunks as in rhp_mobo_search.
 """
 import time
 
 import numpy as np
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._torch_env import ensure_ninja_on_path
+
+ensure_ninja_on_path()  # before BoTorch first loads the fused kernel
 import torch
 from botorch.acquisition.multi_objective import logei
 from botorch.acquisition.multi_objective.logei import qLogExpectedHypervolumeImprovement
@@ -52,7 +55,8 @@ def main():
     print(f'pure Python {python_time:.3f} s, fused {fused_time:.3f} s, speed-up {python_time/fused_time:.2f}x')
     print('max |difference| in log-EHVI:', float((fused_values-python_values).abs().max()))
     if not loaded:
-        print('Fused kernel not active: install ninja (uv pip install ninja) and check a C++ compiler (xcode-select --install).')
+        print('Fused kernel not active: check that .venv/bin/ninja exists (uv sync) and a C++ compiler works '
+              '(xcode-select --install). The first successful load compiles for about a minute.')
 
 
 if __name__ == '__main__':
