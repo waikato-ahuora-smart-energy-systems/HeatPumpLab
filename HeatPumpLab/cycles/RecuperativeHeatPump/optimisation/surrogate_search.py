@@ -14,6 +14,11 @@ from scipy.optimize import minimize
 from scipy.spatial.distance import cdist
 from scipy.special import ndtr
 
+from ._types import COMP2_POWER_FRAC_BOUNDS
+
+_LOWER = np.array([0.0, 0.0, COMP2_POWER_FRAC_BOUNDS[0]])
+_SPAN = np.array([100.0, 100.0, COMP2_POWER_FRAC_BOUNDS[1]-COMP2_POWER_FRAC_BOUNDS[0]])
+
 
 class JointSurrogateSearch:
     """Ask/tell search in normalised physical coordinates, with explicit edges."""
@@ -36,11 +41,11 @@ class JointSurrogateSearch:
 
     @staticmethod
     def decode(u):
-        return np.asarray(u) * [100.0, 100.0, 0.8] + [0.0, 0.0, 0.1]
+        return np.asarray(u) * _SPAN + _LOWER
 
     @staticmethod
     def encode(x):
-        return (np.asarray(x) - [0.0, 0.0, 0.1]) / [100.0, 100.0, 0.8]
+        return (np.asarray(x) - _LOWER) / _SPAN
 
     def _admissible(self, u):
         u = np.asarray(u)

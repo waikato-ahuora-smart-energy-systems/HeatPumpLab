@@ -173,7 +173,7 @@ def test_single_free_coordinate_uses_bo_and_honours_fixed_inputs():
         x = search.ask()
         assert x[:2] == pytest.approx([12.0, 8.0])
         assert x[3:] == pytest.approx([0.3, 0.7])
-        search.tell(x, (x[2] - 0.73) ** 2, True)
+        search.tell(x, (x[2] - 0.53) ** 2, True)
     assert min(search.y) < 1e-4
 
 

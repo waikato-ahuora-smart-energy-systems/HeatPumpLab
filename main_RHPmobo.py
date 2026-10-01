@@ -12,7 +12,7 @@ import numpy as np
 
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._objective import _OuterDesignObjective
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
-    DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO, OPTIMISER_VERSION)
+    DEFAULT_BASE_CASE, DEFAULT_BOUNDS, DEFAULT_MAX_STAGE_PRESSURE_RATIO, OPTIMISER_VERSION)
 from HeatPumpLab.cycles.RecuperativeHeatPump.utils.composition_pareto import nondominated_mask
 from main_RHPoptimiser_benchmark import serialise
 
@@ -36,7 +36,7 @@ def metadata_for(partner, budget, seed):
                 algorithm="BoTorch qLogEHVI, q=1, distance-weighted feasibility; every eighth adaptive step maximin",
                 objectives=["COP", "VHC_total_MJ_per_m3"], reference_point=[0., 0.],
                 variables=["RHX1_K", "RHX2_K", "compressor_2_power_fraction", "propane_mass_fraction"],
-                bounds=[[0., 100.], [0., 100.], [.1, .9], [0., 1.]],
+                bounds=[[0., 100.], [0., 100.], [float(v) for v in DEFAULT_BOUNDS[2]], [0., 1.]],
                 timeout_seconds=180, timeout_retries=0, worker_max_tasks=20,
                 model_source_sha256=hashlib.sha256(b"".join(p.read_bytes() for p in
                     sorted((ROOT/"HeatPumpLab").rglob("*.py")))).hexdigest(),

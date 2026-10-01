@@ -21,7 +21,7 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
 
 ROOT = Path(__file__).resolve().parent
 PARTNERS = ('Butane', 'Isobutane', 'Pentane', 'Isopentane')
-RUN_VERSION = 'per-temperature-cop-vhc-v25-batch-constraint-ridge'
+RUN_VERSION = 'per-temperature-cop-vhc-v26-face-coverage'
 # Stop rule on the mean per-temperature hypervolume, scaled from the fixed-split runner
 # (100/2e-4/3/400 at ~1,000 evaluations for one temperature).
 STOP_CHECK_INTERVAL = 1000
@@ -30,7 +30,8 @@ STOP_BLOCKS = 3
 STOP_EARLIEST = 5000
 # Ridge seeding at every fourth grid temperature (100, 120, ..., 220 C), split 0.5.
 SEED_TEMPERATURES = tuple(float(t) for t in np.arange(100., 221., 20.))
-SEED_SPLIT = .5
+SEED_SPLIT = .5             # clipped into --split-bounds
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS as SPLIT_BOUNDS
 RIDGE_SEED_MIN_BUDGET = 2000
 
 
@@ -118,16 +119,17 @@ def exact_evaluation(partner, x, temperature, output, *, first='Propane', min_di
 
 
 def metadata(partner, budget, seed, *, batch_size=4, min_discharge_superheat_K=0.0, ridge_seed=True,
-             stop_rule=True):
+             stop_rule=True, split_bounds=SPLIT_BOUNDS):
     from rhp_temperature_mobo import MILESTONES, TEMPERATURES
     paths = sorted((ROOT/'HeatPumpLab').rglob('*.py'))+[ROOT/'rhp_temperature_mobo.py', ROOT/'rhp_temperature_report.py', ROOT/'rhp_ridge.py', Path(__file__).resolve()]
     return dict(run_version=RUN_VERSION, partner=partner, budget=budget, seed=seed,
         batch_size=int(batch_size), min_discharge_superheat_K=float(min_discharge_superheat_K),
+        comp2_power_frac_bounds=[float(v) for v in split_bounds],
         constraint_handling='constraint GP on margins (per region) multiplies the acquisition; '
                             'distance penalty for numerical failures only',
         ridge_seed=bool(ridge_seed),
         ridge_seed_temperatures_C=list(SEED_TEMPERATURES) if ridge_seed else None,
-        ridge_seed_split=SEED_SPLIT if ridge_seed else None,
+        ridge_seed_split=float(np.clip(SEED_SPLIT, *split_bounds)) if ridge_seed else None,
         stop_rule=dict(check_interval=STOP_CHECK_INTERVAL, relative_tolerance=STOP_TOLERANCE,
                        consecutive_stable_blocks=STOP_BLOCKS, earliest_stop=STOP_EARLIEST) if stop_rule else None,
         max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
@@ -140,7 +142,8 @@ def metadata(partner, budget, seed, *, batch_size=4, min_discharge_superheat_K=0
         subset_size=128, initial_evaluations=200, numerical_threads=1,
         known_objective='Temperature is an exact input condition; GP outputs are COP and VHC only',
         search=f'per-temperature qLogEHVI on a shared 5-input GP; adaptive step k targets level (7k) mod 25; '
-               f'batches of {int(batch_size)} with a pending-point penalty; 4 local centres per temperature; '
+               f'batches of {int(batch_size)} with a pending-point penalty; per temperature one face-restricted '
+               'region per zero-lift face plus 4 front centres; boundary candidates in every pool; '
                'maximin at the scheduled temperature every eighth adaptive step',
         evaluation_timeout_seconds=180, timeout_retries=0, native_tasks_per_worker=1,
         budget_accounting='Includes initial, BO, exploratory and failed candidates; final frontier replays counted separately',
@@ -264,7 +267,7 @@ def rewrite_journal(path, records):
 
 
 def run_family(partner, budget, seed, output, *, batch_size=4, min_discharge_superheat_K=0.0, ridge_seed=True,
-               stop_rule=True):
+               stop_rule=True, split_bounds=SPLIT_BOUNDS):
     from rhp_temperature_mobo import TemperatureParetoSearch
     if ridge_seed and budget < RIDGE_SEED_MIN_BUDGET:
         raise ValueError(f'Ridge seeding uses about 1,000 evaluations; budget must be at least '
@@ -281,7 +284,7 @@ def run_family(partner, budget, seed, output, *, batch_size=4, min_discharge_sup
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         meta = metadata(partner, budget, seed, batch_size=batch_size,
                         min_discharge_superheat_K=min_discharge_superheat_K, ridge_seed=ridge_seed,
-                        stop_rule=stop_rule)
+                        stop_rule=stop_rule, split_bounds=split_bounds)
         path = output/'metadata.json'
         if path.exists() and json.loads(path.read_text()) != meta:
             raise ValueError('Existing run settings/source differ; use a fresh output directory')
@@ -302,7 +305,8 @@ def run_family(partner, budget, seed, output, *, batch_size=4, min_discharge_sup
             raise ValueError('Checkpoint and journal lengths disagree')
         if lag:
             # Reproduce the interrupted batch to recover model-cache visit counts, then drop its unevaluated rest.
-            search = TemperatureParetoSearch(records[:-lag], seed=seed, state=saved.get('search_state'))
+            search = TemperatureParetoSearch(records[:-lag], seed=seed, state=saved.get('search_state'),
+                                             split_bounds=split_bounds)
             batch = search.ask_batch(min(batch_size, budget-len(records)+lag))
             for (x, temperature), record in zip(batch, records[-lag:]):
                 if temperature != record['T_air_tar'] or not np.allclose(x, record['x'], atol=1e-10, rtol=0):
@@ -310,7 +314,8 @@ def run_family(partner, budget, seed, output, *, batch_size=4, min_discharge_sup
                 search.tell(record)
             search.pending = []
         else:
-            search = TemperatureParetoSearch(records, seed=seed, state=saved.get('search_state'))
+            search = TemperatureParetoSearch(records, seed=seed, state=saved.get('search_state'),
+                                             split_bounds=split_bounds)
         checks = list(saved.get('stability_checks', []))
         seeded = list(saved.get('ridge_seeded_temperatures', []))
         ridges = list(saved.get('ridge_seeds', []))
@@ -349,7 +354,8 @@ def run_family(partner, budget, seed, output, *, batch_size=4, min_discharge_sup
                     item.update(method='ridge_seed', proposal_seconds=0., batch_size=1,
                                 search_diagnostic=dict(method='ridge_seed'))
                     return item
-                seed_records, seed_ridges = ridge_seed_run(seed_evaluation, (temperature-15)*2/3, SEED_SPLIT,
+                seed_records, seed_ridges = ridge_seed_run(seed_evaluation, (temperature-15)*2/3,
+                                                           float(np.clip(SEED_SPLIT, *split_bounds)),
                                                            workers=batch_size)
                 offset = len(records)
                 for item in seed_records:
@@ -413,7 +419,12 @@ def main():
     parser.add_argument('--stop-rule', action=argparse.BooleanOptionalAction, default=True,
                         help=f'Stop once 3D hypervolume changes < {STOP_TOLERANCE:g} over {STOP_BLOCKS} blocks of '
                              f'{STOP_CHECK_INTERVAL} evaluations (not before {STOP_EARLIEST})')
+    parser.add_argument('--split-bounds', type=float, nargs=2, default=list(SPLIT_BOUNDS), metavar=('LOW', 'HIGH'),
+                        help=f'Narrower bounds on the compressor-2 power fraction, within the global '
+                             f'{SPLIT_BOUNDS[0]}-{SPLIT_BOUNDS[1]} (default)')
     args = parser.parse_args()
+    if not SPLIT_BOUNDS[0] <= args.split_bounds[0] < args.split_bounds[1] <= SPLIT_BOUNDS[1]:
+        parser.error(f'Split bounds must satisfy {SPLIT_BOUNDS[0]} <= LOW < HIGH <= {SPLIT_BOUNDS[1]}')
     if args.budget < 1 or args.budget > 25000:
         parser.error('Budget must be between 1 and 25000')
     if args.batch_size < 1:
@@ -421,7 +432,7 @@ def main():
     try:
         run_family(args.partner, args.budget, args.seed, args.output, batch_size=args.batch_size,
                    min_discharge_superheat_K=args.min_discharge_superheat, ridge_seed=args.ridge_seed,
-                   stop_rule=args.stop_rule)
+                   stop_rule=args.stop_rule, split_bounds=tuple(args.split_bounds))
     except ValueError as exc:
         parser.error(str(exc))
 

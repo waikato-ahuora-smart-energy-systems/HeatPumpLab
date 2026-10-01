@@ -44,20 +44,56 @@ LEVELS = len(TEMPERATURES)
 SCHEDULE_STRIDE = 7        # adaptive step k targets level (7k) mod 25: every level once per 25 steps
 CENTRES_PER_LEVEL = 4
 LOCAL_POINTS, GLOBAL_POINTS = 64, 128
+FACES = ('rhx1_zero', 'rhx2_zero')
+FACE_BORROW_LEVELS = 4     # a temperature with no face designs borrows from up to 4 levels away
+BOUNDARY_POINTS = 16       # per box side: copies of local points moved onto each bound of u0..u3
 
 
-def encode(x, temperature):
+def face_of(u):
+    """Zero-lift face of an encoded design: RHX1 = 0, RHX2 = 0, or None."""
+    return 'rhx1_zero' if u[0] <= 1e-9 else ('rhx2_zero' if u[1] <= 1e-9 else None)
+
+
+def project_to_face(points, face):
+    points = np.array(points, dtype=float)
+    points[:, 0 if face == 'rhx1_zero' else 1] = 0.
+    return points
+
+
+def boundary_candidates(points):
+    """Copies of points moved onto each bound of the four design inputs, plus the zero-lift origin."""
+    points = np.asarray(points, dtype=float)[:BOUNDARY_POINTS]
+    parts = []
+    for axis in range(4):
+        for side in (0., 1.):
+            moved = points.copy()
+            moved[:, axis] = side
+            parts.append(moved)
+    origin = points.copy()
+    origin[:, :2] = 0.
+    parts.append(origin)
+    return np.vstack(parts)
+
+
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS
+
+SPLIT_BOUNDS = tuple(COMP2_POWER_FRAC_BOUNDS)  # compressor-2 power fraction (the global design constraint)
+
+
+def encode(x, temperature, split=SPLIT_BOUNDS):
     if temperature not in TEMPERATURES:
         raise ValueError('Temperature must be on the 100:5:220 C grid')
-    return np.array([x[0]/100, x[1]/100, (x[2]-.1)/.8, x[3], (temperature-100)/120])
+    lo, hi = split
+    return np.array([x[0]/100, x[1]/100, (x[2]-lo)/(hi-lo), x[3], (temperature-100)/120])
 
 
-def decode(u):
+def decode(u, split=SPLIT_BOUNDS):
     u = np.asarray(u, dtype=float)
     temperature = 100.+5.*round(float(u[4])*24)
     if abs((temperature-100)/120-u[4]) > 1e-10:
         raise ValueError('Acquisition proposed an off-grid temperature')
-    return np.array([100*u[0], 100*u[1], .1+.8*u[2], u[3], 1-u[3]]), temperature
+    lo, hi = split
+    return np.array([100*u[0], 100*u[1], lo+(hi-lo)*u[2], u[3], 1-u[3]]), temperature
 
 
 def admissible(points, tolerance=1e-12):
@@ -271,9 +307,13 @@ class LevelAcquisition(AcquisitionFunction):
 
 
 class TemperatureParetoSearch:
-    def __init__(self, records=(), *, seed=20260913, subset_size=128, state=None):
+    def __init__(self, records=(), *, seed=20260913, subset_size=128, state=None, split_bounds=SPLIT_BOUNDS):
         torch.set_num_threads(1)
         self.seed, self.subset_size = int(seed), int(subset_size)
+        lo, hi = (float(v) for v in split_bounds)
+        if not SPLIT_BOUNDS[0] <= lo < hi <= SPLIT_BOUNDS[1]:
+            raise ValueError(f'Split bounds must satisfy {SPLIT_BOUNDS[0]} <= low < high <= {SPLIT_BOUNDS[1]}')
+        self.split = (lo, hi)
         self.records, self.x, self.y, self.success = [], [], [], []
         self.fronts = {level: [] for level in range(LEVELS)}
         self.margins, self.pending = [], []
@@ -295,7 +335,7 @@ class TemperatureParetoSearch:
         return pool[admissible(pool)]
 
     def tell(self, record):
-        u = encode(record['x'], record['T_air_tar'])
+        u = encode(record['x'], record['T_air_tar'], self.split)
         if not admissible(u[None])[0]:
             raise ValueError('Observation outside the temperature-dependent design domain')
         if self.x and cKDTree(self.x).query(u)[0] <= 1e-7:
@@ -345,7 +385,7 @@ class TemperatureParetoSearch:
             x, temperature = self.ask()
             batch.append((x, temperature))
             diagnostics.append(dict(self.diagnostic))
-            self.pending.append(encode(x, temperature).tolist())
+            self.pending.append(encode(x, temperature, self.split).tolist())
         self.batch_diagnostics = diagnostics
         return batch
 
@@ -412,6 +452,45 @@ class TemperatureParetoSearch:
             selected.append(int(np.argmax(distances)))
         return np.asarray([candidates[i] for i in selected])
 
+    def face_centres(self, level):
+        """One local-region centre per zero-lift face at this temperature (as the fixed-split runner does).
+
+        Among the face's own nondominated mixed-fluid designs, pick the one closest (relative COP) to the
+        temperature's overall front, so a branch the search has only begun to explore still gets a region.
+        Without face designs at this temperature, borrow them from up to FACE_BORROW_LEVELS levels away.
+        """
+        t = level/24
+        front = np.asarray(self.y)[self.fronts[level], :2] if self.fronts[level] else np.empty((0, 2))
+        out = []
+        for face in FACES:
+            members = []
+            for other in sorted(range(LEVELS), key=lambda l: (abs(l-level), l)):
+                if abs(other-level) > FACE_BORROW_LEVELS or members:
+                    break
+                for i, u in enumerate(self.x):
+                    if (self.success[i] and level_of(u) == other and face_of(u) == face
+                            and .01 <= u[3] <= .99):
+                        members.append(i)
+            if not members:
+                continue
+            values = {i: self.y[i][:2] for i in members}
+            sub = []
+            for i in members:
+                sub = update_front_2d(sub, values, i)
+
+            def closeness(i):
+                cop, vhc = values[i]
+                envelope = [c for c, v in front if v >= vhc-1e-12]
+                return cop/max(max(envelope), 1e-12) if envelope else 1.
+            choice = max(sub, key=lambda i: (closeness(i), -i))
+            u = np.array(self.x[choice], dtype=float)
+            u[4] = t
+            limit = (100+120*t-15)*2/300
+            if u[0]+u[1] > limit:
+                u[:2] *= limit/(u[0]+u[1])
+            out.append((u, face))
+        return out
+
     def level_pool(self, count, seed, level):
         pool = qmc.Sobol(4, scramble=True, seed=seed).random_base2(int(np.ceil(np.log2(count))))
         pool = np.column_stack((pool, np.full(len(pool), level/24)))
@@ -434,40 +513,45 @@ class TemperatureParetoSearch:
             # Initial points already observed (e.g. ridge-seed S = 0 designs) become maximin points.
             if tree is None or tree.query(self.initial[n])[0] > 1e-7:
                 self.diagnostic = dict(method='initial', training_points=0)
-                return decode(self.initial[n])
+                return decode(self.initial[n], self.split)
             pool = self.global_pool(2048, seed)
             self.diagnostic = dict(method='initial_replaced_maximin', training_points=0)
-            return decode(pool[np.argmax(tree.query(pool)[0])])
+            return decode(pool[np.argmax(tree.query(pool)[0])], self.split)
         k = n-len(self.initial)
         level = (SCHEDULE_STRIDE*k) % LEVELS
         t = level/24
         history = np.asarray(self.x)
-        centres = self.level_centres(level)
-        if sum(self.success) < 8 or k % 8 == 7 or not len(centres):
+        regions = [(u, face) for u, face in self.face_centres(level)]
+        regions += [(u, None) for u in self.level_centres(level)]
+        if sum(self.success) < 8 or k % 8 == 7 or not regions:
             pool = self.level_pool(1024, seed, level)
             self.diagnostic = dict(method='global_maximin', training_points=0, level=level,
                                    temperature_C=100.+5*level)
-            return decode(pool[np.argmax(tree.query(pool)[0])])
+            return decode(pool[np.argmax(tree.query(pool)[0])], self.split)
         visits = self.state.setdefault('visits', {})
         visit = visits.get(str(level), 0)
         visits[str(level)] = visit+1
-        region = visit % len(centres)
-        centre = centres[region]
+        region = visit % len(regions)
+        centre, face = regions[region]
         lower, upper = np.maximum(centre[:4]-.08, 0), np.minimum(centre[:4]+.08, 1)
         local = qmc.Sobol(4, scramble=True, seed=seed).random_base2(int(np.log2(LOCAL_POINTS)))
         local = np.column_stack((lower+(upper-lower)*local, np.full(len(local), t)))
-        pool = np.vstack((local, self.level_pool(GLOBAL_POINTS, seed+1, level)))
+        wide = self.level_pool(GLOBAL_POINTS, seed+1, level)
+        if face is not None:
+            # Face region: a face-restricted step, as the fixed-split runner's face steps.
+            local, wide = project_to_face(local, face), project_to_face(wide, face)
+        pool = np.vstack((local, wide, boundary_candidates(local)))
         pool = np.unique(pool[admissible(pool)], axis=0)
         pool = pool[tree.query(pool)[0] > 1e-7]
         if not len(pool):
             pool = self.level_pool(1024, seed, level)
             self.diagnostic = dict(method='global_maximin', training_points=0, level=level,
                                    temperature_C=100.+5*level)
-            return decode(pool[np.argmax(tree.query(pool)[0])])
+            return decode(pool[np.argmax(tree.query(pool)[0])], self.split)
         indices = self.training_indices(centre)
         X = torch.tensor(history[indices], dtype=torch.double)
         Y = torch.tensor(np.asarray(self.y)[indices, :2], dtype=torch.double)
-        key = f'{level}:{region}'
+        key = f'{level}:{face or region}'
         old = self.state['models'].get(key)
         with torch.random.fork_rng(devices=[]), warnings.catch_warnings(record=True) as caught:
             torch.manual_seed(seed)
@@ -503,7 +587,7 @@ class TemperatureParetoSearch:
                     bounds=torch.tensor([[0.]*5, [1.]*5], dtype=torch.double),
                     q=1, num_restarts=1, raw_samples=None,
                     batch_initial_conditions=torch.tensor(pool[best][None, None], dtype=torch.double),
-                    fixed_features={4: t},
+                    fixed_features={4: t, **({0 if face == 'rhx1_zero' else 1: 0.} if face else {})},
                     inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double),
                                              -(100+120*t-15)*2/300)],
                     options={'maxiter': 35, 'batch_limit': 1, 'init_batch_limit': 8},
@@ -517,7 +601,7 @@ class TemperatureParetoSearch:
             except (ValueError, RuntimeError) as exc:
                 warnings.warn(f'Acquisition refinement skipped: {exc}', stacklevel=2)
             self.diagnostic = dict(method='temperature_qLogEHVI', level=level, temperature_C=100.+5*level,
-                region=int(region), training_points=len(indices),
+                region=int(region), face=face, training_points=len(indices),
                 training_indices=indices.tolist(),
                 training_temperature_levels=sorted({self.records[i]['T_air_tar'] for i in indices}),
                 level_front_points=len(self.fronts[level]), candidate_pool=len(pool),
@@ -525,4 +609,4 @@ class TemperatureParetoSearch:
                 constraint_gp=constraint is not None and constraint.model is not None, pending=len(self.pending),
                 warnings=list(dict.fromkeys(str(w.message) for w in caught)),
                 proposal_seconds=time.perf_counter()-started)
-        return decode(chosen)
+        return decode(chosen, self.split)

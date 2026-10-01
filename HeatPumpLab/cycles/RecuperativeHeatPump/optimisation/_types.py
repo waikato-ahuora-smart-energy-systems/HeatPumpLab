@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 # BO replaces the staged outer search; invalidate prior completed signatures.
-OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v23-sobol-init-prior"
+OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v24-split-0.4-0.6"
 DEFAULT_MAX_STAGE_PRESSURE_RATIO = 10.0
 
 BASE_VARIABLE_NAMES = (
@@ -17,11 +17,16 @@ BASE_VARIABLE_NAMES = (
     "comp2_power_frac",
 )
 
+# Compressor-2 share of total compressor power. A design constraint for every search
+# (optimisers, MOBO runners, ridge seeding via the objective's repair); the cycle model
+# itself solves 0.1-0.9.
+COMP2_POWER_FRAC_BOUNDS = (0.4, 0.6)
+
 DEFAULT_BOUNDS = np.asarray(
     [
         (0.0, 100.0),
         (0.0, 100.0),
-        (0.1, 0.9),
+        COMP2_POWER_FRAC_BOUNDS,
     ],
     dtype=float,
 )

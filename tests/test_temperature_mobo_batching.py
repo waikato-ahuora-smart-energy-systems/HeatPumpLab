@@ -27,9 +27,9 @@ def record(temperature, x, success=True, margins=None):
 
 def test_only_marginless_failures_count_as_numerical():
     margins = dict(Comp_1_discharge_superheat=-2., Comp_1_suction_superheat=5., Comp_1_pressure_ratio=1.)
-    search = TemperatureParetoSearch([record(100, [0., 0., .1, .2, .8]),
-                                      record(105, [0., 0., .1, .3, .7], success=False, margins=margins),
-                                      record(110, [0., 0., .1, .4, .6], success=False)])
+    search = TemperatureParetoSearch([record(100, [0., 0., .5, .2, .8]),
+                                      record(105, [0., 0., .5, .3, .7], success=False, margins=margins),
+                                      record(110, [0., 0., .5, .4, .6], success=False)])
     assert search.numerical_failures().tolist() == [False, False, True]
     assert search.margins[1] is not None and search.margins[1][0] < 0
 

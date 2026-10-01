@@ -12,7 +12,7 @@ def test_front_and_hypervolume_keep_ties_and_reject_invalid_values():
 def baseline():
     records=[]
     for i in range(20):
-        records.append(dict(x=[i,2*i,.2+i*.02,.05+i*.045,.95-i*.045],success=True,
+        records.append(dict(x=[i,2*i,.41+i*.01,.05+i*.045,.95-i*.045],success=True,
                             COP=3-i*.02,VHC_MJ_per_m3=1+i*.2))
     return dict(records=records)
 

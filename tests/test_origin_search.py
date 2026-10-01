@@ -6,7 +6,10 @@ import pytest
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation.origin_search import (
     OriginSurrogateSearch,
 )
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS
 from main_RHPorigin_benchmark import make_search
+
+LO, HI = COMP2_POWER_FRAC_BOUNDS
 
 
 def test_cma_stagnation_restart_is_replayable():
@@ -30,10 +33,10 @@ def test_origin_search_is_feasible_and_improves_coupled_objective(method):
     history = []
     for _ in range(200):
         x = search.ask()
-        assert np.all(x >= [0, 0, 0.1]) and np.all(x <= [100, 100, 0.9])
+        assert np.all(x >= [0, 0, LO]) and np.all(x <= [100, 100, HI])
         assert x[0] + x[1] <= 123.3333333 + 1e-9
         assert not any(np.allclose(x, old, atol=1e-8, rtol=0) for old, _ in history)
-        u = (x - [0, 0, 0.1]) / [100, 100, 0.8]
+        u = (x - [0, 0, LO]) / [100, 100, HI-LO]
         y = np.sum((u - [0.6, 0.2, 0.8]) ** 2)
         history.append((x, y))
         search.tell(x, y, True)

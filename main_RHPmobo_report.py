@@ -168,7 +168,7 @@ def build_report(output):
                     f"{v['VHC_total_MJ_per_m3']:.4f} MJ/m³ ({v['COP']:.6f}; {v['propane_mass_percent']:.2f}%) |")
     text += ["", "## Domain and method", "",
              "Both COP and VHC_total are maximised. The four BO variables are RHX1 and RHX2 cold-side lifts "
-             "(0–100 K each, with a combined limit of 123.333333 K), compressor-2 power fraction (0.1–0.9), "
+             "(0–100 K each, with a combined limit of 123.333333 K), compressor-2 power fraction (0.4–0.6), "
              "and propane mass fraction (0–1). The sink target is 200°C, the source inlet 40°C, and the "
              "gas-cooler minimum approach target 20 K. All other settings are the existing DEFAULT_BASE_CASE. "
              "Discharge pressure and gas-cooler offset retain the existing inner cycle-solver policy; "

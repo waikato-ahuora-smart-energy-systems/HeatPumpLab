@@ -236,7 +236,7 @@ def test_v10_never_selects_worse_than_successful_current_solver_incumbent(
     analyser = SyntheticAnalyser(
         dT1_target=55.0,
         dT2_target=25.0,
-        comp2_target=0.3,
+        comp2_target=0.45,
         composition_target=0.8,
     )
 
@@ -255,7 +255,7 @@ def test_v10_never_selects_worse_than_successful_current_solver_incumbent(
         source_version="edge-first-pattern-search-v9",
         source_file="prior.csv",
         stored_sec=0.99,
-        x=(55.0, 25.0, 0.3, 0.8, 0.2),
+        x=(55.0, 25.0, 0.45, 0.8, 0.2),
     )
     config = outer_opt.OuterDesignOptimisationConfig(
         max_exact_evaluations=3,
@@ -665,7 +665,7 @@ def test_case_definition_loads_fixed_case_and_reference_from_results_csv(tmp_pat
                 "SEC,COP,Pmax,Time_to_optimise,refrigerant,T_source_in,Tref_evap_inlet,T_air_inlet,T_air_tar,dT_GC_min_tar,dTmin_rhx,ihx_on,n_comp,comp_PR_uniform,comp_model_index,motor_eff,sink,source,dT_rhx1_cold,dT_rhx2_cold,dT_rhx3_cold,comp2_power_frac,comp3_power_frac,converged",
                 "SEC,COP,Pmax,Time_to_optimise,refrigerant,T_source_in,Tref_evap_inlet,T_air_inlet,T_air_tar,dT_GC_min_tar,dTmin_rhx,ihx_on,n_comp,comp_PR_uniform,comp_model_index,motor_eff,sink,source,dT_rhx1_cold,dT_rhx2_cold,dT_rhx3_cold,comp2_power_frac,comp3_power_frac,converged",
                 "0.70,2.4,1000,1.0,Propane;Butane|0.5;0.5|mass,41,11,16,190,19,4,1,2,False,1,0.95,Air,water,5,40,0,0.45,0,True",
-                "0.62,2.7,900,3.0,Propane;Butane|0.6;0.4|mass,42,12,17,195,18,3,0,2,False,1,0.96,Air,water,2,55,0,0.65,0,True",
+                "0.62,2.7,900,3.0,Propane;Butane|0.6;0.4|mass,42,12,17,195,18,3,0,2,False,1,0.96,Air,water,2,55,0,0.55,0,True",
             ]
         )
     )
@@ -687,7 +687,7 @@ def test_case_definition_loads_fixed_case_and_reference_from_results_csv(tmp_pat
     assert case_definition.best_reference["SEC"] == pytest.approx(0.62)
     assert case_definition.best_reference["dT_rhx2_cold"] == pytest.approx(55.0)
     assert case_definition.best_reference["composition"] == "0.6;0.4"
-    assert config.fixed_comp2_power_frac == pytest.approx(0.65)
+    assert config.fixed_comp2_power_frac == pytest.approx(0.55)
     assert config.initial_evaluations == 4
 
 

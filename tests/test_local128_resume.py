@@ -7,7 +7,7 @@ from rhp_local_pareto_search import restore_search
 
 
 def dataset(count):
-    return dict(records=[dict(x=[i*.25, i*.5, .2+i*.002, .02+i*.01, .98-i*.01],
+    return dict(records=[dict(x=[i*.25, i*.5, .45+i*.002, .02+i*.01, .98-i*.01],
                               COP=3-i*.005, VHC_MJ_per_m3=1+i*.02, success=True)
                          for i in range(count)],
                 local128_phase=dict(start_evaluations=20, seed=20260912))

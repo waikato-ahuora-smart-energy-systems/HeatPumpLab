@@ -124,8 +124,9 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
     if first not in PARTNERS or partner not in PARTNERS or first == partner:
         raise ValueError('Choose two distinct components from the paper primary pool')
-    if fixed_comp_frac is not None and (not np.isfinite(fixed_comp_frac) or not .1 <= fixed_comp_frac <= .9):
-        raise ValueError('fixed_comp_frac must be finite and between 0.1 and 0.9')
+    from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS as SPLIT
+    if fixed_comp_frac is not None and (not np.isfinite(fixed_comp_frac) or not SPLIT[0] <= fixed_comp_frac <= SPLIT[1]):
+        raise ValueError(f'fixed_comp_frac must be finite and between {SPLIT[0]} and {SPLIT[1]}')
     if ridge_seed and budget < RIDGE_SEED_MIN_BUDGET:
         raise ValueError(f'Ridge seeding uses about 130 evaluations; budget must be at least '
                          f'{RIDGE_SEED_MIN_BUDGET} (or pass ridge_seed=False / --no-ridge-seed)')
@@ -297,8 +298,9 @@ def main():
         parser.error('Budget must be between 1 and 5000')
     if args.first == args.partner:
         parser.error('The two mixture components must differ')
-    if args.comp_frac is not None and (not np.isfinite(args.comp_frac) or not .1 <= args.comp_frac <= .9):
-        parser.error('comp-frac must be finite and between 0.1 and 0.9')
+    from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS as SPLIT
+    if args.comp_frac is not None and (not np.isfinite(args.comp_frac) or not SPLIT[0] <= args.comp_frac <= SPLIT[1]):
+        parser.error(f'comp-frac must be finite and between {SPLIT[0]} and {SPLIT[1]}')
     run_family(args.partner, args.budget, args.seed, args.output, first=args.first,
                fixed_comp_frac=args.comp_frac, min_discharge_superheat_K=args.min_discharge_superheat,
                batch_size=args.batch_size, ridge_seed=args.ridge_seed)

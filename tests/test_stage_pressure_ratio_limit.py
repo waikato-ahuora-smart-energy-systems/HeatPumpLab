@@ -6,6 +6,10 @@ from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._objective import _Out
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import OuterDesignOptimisationConfig
 from tests.test_outer_design_optimisation import FakeHeatPump
 
+# Historical designs below use compressor splits outside the search constraint (0.4-0.6);
+# the cycle model solves 0.1-0.9, so evaluate them on the model's own range.
+MODEL_RANGE = np.asarray([(0., 100.), (0., 100.), (0.1, 0.9)])
+
 
 @pytest.mark.parametrize('n_comp,ratios,success,violating_stage', [
     (1, [10., 99., 99.], True, None),
@@ -57,7 +61,7 @@ def test_invalid_limits_are_rejected(limit):
 @pytest.mark.parametrize('limit,success', [(10., True), (8., False)])
 def test_native_isolated_evaluation_propagates_limit(tmp_path, limit, success):
     # Previously solved best-COP Propane/Neopentane point: stage PRs 1.2693 and 8.5533.
-    objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Neopentane|0.5;0.5|mass',
+    objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Neopentane|0.5;0.5|mass', bounds=MODEL_RANGE,
         results_dir=tmp_path, max_stage_pressure_ratio=limit,
         exact_evaluation_timeout_seconds=90, exact_evaluation_timeout_retries=0,
         exact_evaluation_worker_max_tasks=1)
@@ -79,7 +83,7 @@ def test_native_isolated_evaluation_propagates_limit(tmp_path, limit, success):
 
 
 def test_previous_best_cop_pentane_design_is_now_rejected(tmp_path):
-    objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Pentane|0.5;0.5|mass',
+    objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Pentane|0.5;0.5|mass', bounds=MODEL_RANGE,
         results_dir=tmp_path, exact_evaluation_timeout_seconds=90,
         exact_evaluation_timeout_retries=0, exact_evaluation_worker_max_tasks=1)
     try:

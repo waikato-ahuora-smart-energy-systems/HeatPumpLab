@@ -120,7 +120,7 @@ def test_batched_runner_pauses_on_a_batch_boundary(tmp_path, monkeypatch):
 
 def test_local_checkpoint_resume_reproduces_next_proposal():
     result = dict(metadata=dict(seed=29), records=[
-        record(i, x=[i*.25, i*.5, .2+i*.002, .02+i*.01, .98-i*.01]) for i in range(20)],
+        record(i, x=[i*.25, i*.5, .45+i*.002, .02+i*.01, .98-i*.01]) for i in range(20)],
         local128_phase=dict(start_evaluations=20, seed=29))
     search, epoch = runner.restore(result)
     x = search.ask()

@@ -18,6 +18,7 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from scipy.spatial.distance import cdist
 from scipy.stats import qmc
 
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._constraint_model import (
     ConstraintModel, aggregate_margins)
 
@@ -104,14 +105,16 @@ class ParetoBOSearch:
             a, b, fraction = u
             return np.asarray([100*a, 100*b, self.fixed_comp_frac, fraction, 1-fraction])
         a, b, split, fraction = u
-        return np.asarray([100*a, 100*b, .1+.8*split, fraction, 1-fraction])
+        lo, hi = COMP2_POWER_FRAC_BOUNDS
+        return np.asarray([100*a, 100*b, lo+(hi-lo)*split, fraction, 1-fraction])
 
     def encode(self, x):
         if self.fixed_comp_frac is not None:
             if not np.isclose(x[2], self.fixed_comp_frac, rtol=0, atol=1e-12):
                 raise ValueError('Observation does not match fixed_comp_frac')
             return np.asarray([x[0]/100, x[1]/100, x[3]])
-        return np.asarray([x[0]/100, x[1]/100, (x[2]-.1)/.8, x[3]])
+        lo, hi = COMP2_POWER_FRAC_BOUNDS
+        return np.asarray([x[0]/100, x[1]/100, (x[2]-lo)/(hi-lo), x[3]])
 
     def tell(self, x, cop, vhc, success, margins=None):
         u = self.encode(x)

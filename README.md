@@ -125,6 +125,15 @@ pressure initialisation, which limits interpretation of the nominal COP peaks.
 
 ## Tests and archived experiments
 
+**Compressor power split constraint.** Every optimisation search limits the
+compressor-2 share of total compressor power to 0.4-0.6
+(`COMP2_POWER_FRAC_BOUNDS` in `optimisation/_types.py`, which also sets
+`DEFAULT_BOUNDS`): the production BO, the fixed-split and temperature Pareto
+runners, the surrogate and trust-region searches, and the objective's design
+repair. The cycle model itself still solves 0.1-0.9. Earlier results (up to
+optimiser version v23) used 0.1-0.9; designs outside the new range should be
+excluded when they are compared with new runs.
+
 The fixed-200°C Pareto runner `main_RHPfixed_mobo.py` accepts `--comp-frac 0.5`
 to fix the two-stage pressure allocation. Both global BO and local-128 BO then
 search only the two recuperator lifts and composition, with three-dimensional
@@ -159,8 +168,13 @@ not an objective: quality is the mean of the 25 per-temperature 2D hypervolumes
 (COP/4, VHC/10 against the origin). One GP (five inputs including temperature, two
 outputs) is shared across temperatures; each proposal targets one temperature on a
 fixed rotation (adaptive step k takes level 7k mod 25) and uses qLogEHVI against
-that temperature's front, with four local centres per temperature (borrowed from
-neighbouring temperatures while a front is sparse). It uses the same machinery as
+that temperature's front. Each temperature has four local centres along its front
+(borrowed from neighbouring temperatures while a front is sparse) plus, as in the
+fixed-split runner, one face-restricted region per zero-lift face (RHX1 = 0,
+RHX2 = 0); every candidate pool also includes points on each design bound. `--split-bounds` can narrow
+the compressor-2 power fraction further within the global limit below. Without
+the face regions (v25), the 200 °C front of a 23,000-evaluation Propane/Pentane run
+missed the RHX2 = 0 branch and trailed the fixed-200 °C searches by 1-4% in COP. It uses the same machinery as
 the fixed-split runner: batches of `--batch-size` proposals (default 4) with a
 pending-point penalty, the constraint-margin GP with the distance penalty for
 numerical failures only, `--min-discharge-superheat`, ridge seeding at 100, 120,
@@ -168,7 +182,7 @@ numerical failures only, `--min-discharge-superheat`, ridge seeding at 100, 120,
 mean hypervolume (relative change below 2e-4 over three blocks of 1,000
 evaluations, not before 5,000; `--no-stop-rule`). Up to v24 temperature was a
 third objective, which concentrated BO at 220 °C (454 of 645 steps in a
-2,000-evaluation trial); v25 output directories are not compatible with earlier ones.
+2,000-evaluation trial); each run version needs a fresh output directory.
 
 `main_RHPehvi_speed_check.py` reports whether BoTorch's fused qLogEHVI C++ kernel
 loaded (it needs the `ninja` package and a C++ compiler) and times it against the

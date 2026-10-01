@@ -8,7 +8,7 @@ from rhp_mobo_search import ParetoBOSearch
 
 def test_observation_accepts_ulp_overshoot_without_changing_coordinates():
     search = ParetoBOSearch(123.33333333333333)
-    x = np.asarray([76.66171575, 123.33333333333333-76.66171575, .39451915, .82349311, .17650689])
+    x = np.asarray([76.66171575, 123.33333333333333-76.66171575, .49451915, .82349311, .17650689])
     x[1] = np.nextafter(x[1], np.inf)
     encoded = search.encode(x)
     search.tell(x, 2.4, 3., True)
