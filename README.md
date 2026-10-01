@@ -125,6 +125,13 @@ pressure initialisation, which limits interpretation of the nominal COP peaks.
 
 ## Tests and archived experiments
 
+**Ternary mixtures.** `main_RHPfixed_mobo.py --third <fluid>` searches the
+three-component mixture `--first`/`--partner`/`--third` (e.g. Propane/Isobutane/Isopentane):
+the composition is encoded as the first two mass fractions with their sum at most 1,
+initial and boundary designs cover the triangle's vertices, edges and centroid, and ridge
+seeding solves lines at the vertices, edge midpoints and centroid (about 210 evaluations,
+no refinement lines). Binary runs are unchanged.
+
 **Compressor power split constraint.** Every optimisation search limits the
 compressor-2 share of total compressor power to 0.4-0.6
 (`COMP2_POWER_FRAC_BOUNDS` in `optimisation/_types.py`, which also sets

@@ -44,7 +44,8 @@ def restore_search(result):
                     mean_state=result.get('mean_state'))
     search = LocalParetoSearch(baseline, 128, seed=phase['seed'] + 104729 * (epoch-start),
                               fixed_comp_frac=result.get('metadata', {}).get('fixed_comp_frac'),
-                              max_lift=max_lift_for(result.get('metadata', {})))
+                              max_lift=max_lift_for(result.get('metadata', {})),
+                              components=len(result.get('metadata', {}).get('components') or [0, 0]))
     for record in result['records'][epoch:]:
         search.tell(record['x'], record['COP'], record['VHC_MJ_per_m3'],
                     record['success'] and not record.get('validation_rejected'),
@@ -106,7 +107,7 @@ def choose_anchors(records, count=6):
     """
     values = np.asarray([[r['COP'], r['VHC_MJ_per_m3']] if r['success'] and
                          not r.get('validation_rejected') else [0., 0.] for r in records])
-    mixed = np.array([.01 <= r['x'][3] <= .99 for r in records])
+    mixed = np.array([max(r['x'][3:]) <= .99 for r in records])
     front = [i for i in front_indices(values) if mixed[i]]
     if len(front) < count:
         raise ValueError('Too few mixed-fluid Pareto designs for the planned regions')
@@ -147,10 +148,10 @@ class LocalParetoSearch(ParetoBOSearch):
     """
 
     def __init__(self, baseline, subset_size, seed=20260911, radius=.05, *, fixed_comp_frac=None,
-                 max_lift=None):
+                 max_lift=None, components=2):
         if max_lift is None:
             max_lift = max_lift_for({})
-        super().__init__(max_lift, seed, fixed_comp_frac=fixed_comp_frac)
+        super().__init__(max_lift, seed, fixed_comp_frac=fixed_comp_frac, components=components)
         self.subset_size = subset_size
         self.radius = radius
         self.anchor_indices = choose_anchors(baseline['records'])
@@ -179,7 +180,12 @@ class LocalParetoSearch(ParetoBOSearch):
                 edge = unit[:LOCAL_EDGE_POINTS].copy()
                 edge[:, axis] = side
                 parts.append(edge)
-        pool = np.unique(self._admissible(lower+(upper-lower)*np.vstack(parts)), axis=0)
+        points = lower+(upper-lower)*np.vstack(parts)
+        if self.components > 2:
+            # Composition edge with the last component absent, where it crosses this box.
+            edge = self.simplex_edge(points[:LOCAL_EDGE_POINTS])
+            points = np.vstack((points, edge[((edge >= lower-1e-12) & (edge <= upper+1e-12)).all(1)]))
+        pool = np.unique(self._admissible(points), axis=0)
         distance = cdist(pool, self.occupied()).min(1)
         keep = distance > 1e-7
         return pool[keep], distance[keep]
@@ -264,7 +270,7 @@ class LocalParetoSearch(ParetoBOSearch):
             try:
                 proposals, _ = optimize_acqf(acquisition, bounds=torch.tensor(np.vstack((lower, upper)), dtype=torch.double),
                     q=1, num_restarts=LOCAL_RESTARTS, raw_samples=LOCAL_RAW_SAMPLES,
-                    inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double), -self.max_lift/100)],
+                    inequality_constraints=self.inequality_constraints(),
                     options={'maxiter':60, 'batch_limit':1, 'init_batch_limit':8},
                     return_best_only=False, retry_on_optimization_warning=False)
                 proposals = self._admissible(proposals.detach().numpy().reshape(-1,self.dimension))

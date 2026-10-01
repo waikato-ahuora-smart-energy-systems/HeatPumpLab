@@ -19,6 +19,9 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 SEED_FRACTIONS = (0.0, 1/3, 2/3, 1.0)
+# Ternary mixtures: full mass-fraction vectors (vertices, edge midpoints, centroid).
+SEED_COMPOSITIONS_3 = ((1., 0., 0.), (0., 1., 0.), (0., 0., 1.), (.5, .5, 0.), (.5, 0., .5), (0., .5, .5),
+                       (1/3, 1/3, 1/3))
 SEED_THETAS = (0.0, 0.5, 1.0)
 COARSE_POINTS = 6          # S samples per line, including S = 0
 LIFT_CAP = 100.0           # each lift's own bound (DEFAULT_BOUNDS)
@@ -36,8 +39,15 @@ def line_limit(theta, max_lift, cap=LIFT_CAP):
     return limit
 
 
+def composition(fraction):
+    """Mass fractions from a binary first-component fraction or a full composition vector."""
+    if np.ndim(fraction) == 0:
+        return [float(fraction), 1-float(fraction)]
+    return [float(v) for v in fraction]
+
+
 def design(fraction, theta, S, split):
-    return np.array([theta*S, (1-theta)*S, split, fraction, 1-fraction])
+    return np.array([theta*S, (1-theta)*S, split]+composition(fraction))
 
 
 def active_index(record):
@@ -65,7 +75,8 @@ def solve_line(evaluate, fraction, theta, max_lift, split):
 
     def run(S):
         records.append(evaluate(design(fraction, theta, S, split)))
-        records[-1]['ridge_line'] = dict(fraction=fraction, theta=theta, S=float(S))
+        records[-1]['ridge_line'] = dict(fraction=composition(fraction) if np.ndim(fraction) else fraction,
+                                         theta=theta, S=float(S))
         return records[-1]
 
     grid = np.linspace(0.0, line_limit(theta, max_lift), COARSE_POINTS)
@@ -160,6 +171,9 @@ def refinement_lines(records, ridges, thetas):
 def seed(evaluate, max_lift, split, workers=4, fractions=SEED_FRACTIONS, thetas=SEED_THETAS, refine=True):
     """Solve every line in parallel, then one refinement line per theta in its widest front gap.
 
+    ``fractions`` are binary first-component fractions or, for ternaries, full composition
+    vectors (e.g. SEED_COMPOSITIONS_3); refinement applies to binaries only.
+
     Returns records in a fixed (line, step) order and the ridge list.
     """
     lines = [(f, t) for f in fractions for t in thetas]
@@ -179,7 +193,7 @@ def seed(evaluate, max_lift, split, workers=4, fractions=SEED_FRACTIONS, thetas=
     with ThreadPoolExecutor(workers) as pool:
         results = list(pool.map(solve, lines))
         collect(results, records, ridges, seen)
-        if refine:
+        if refine and all(np.ndim(f) == 0 for f in fractions):
             extra = refinement_lines(records, ridges, thetas)
             if extra:
                 for f in sorted({f for f, _ in extra}):

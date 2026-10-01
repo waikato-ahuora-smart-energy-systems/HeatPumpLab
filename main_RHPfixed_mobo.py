@@ -16,7 +16,7 @@ PARTNERS = ('Propane', 'Butane', 'Isobutane', 'Pentane', 'Isopentane', 'Neopenta
 
 
 def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
-             batch_size=4, ridge_seed=False):
+             batch_size=4, ridge_seed=False, third=None):
     from importlib.metadata import version
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
         DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO)
@@ -25,21 +25,24 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
     for path in paths:
         digest.update(str(path.relative_to(ROOT)).encode())
         digest.update(path.read_bytes())
-    return dict(partner=partner, first=first, components=[first, partner],
+    components = [first, partner]+([third] if third else [])
+    return dict(partner=partner, first=first, components=components,
                 budget=budget, seed=seed, temperature_C=200,
                 max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
                 compressor_gas_only=True, fixed_comp_frac=fixed_comp_frac,
                 min_discharge_superheat_K=float(min_discharge_superheat_K),
                 constraint_model='GP on discharge/suction superheat and PR margins; distance penalty for numerical failures only',
-                search_dimensions=4 if fixed_comp_frac is None else 3,
+                search_dimensions=(3 if fixed_comp_frac is None else 2)+len(components)-1,
                 base_case=dict(DEFAULT_BASE_CASE, T_air_tar=200.), check_interval=100,
                 relative_tolerance=2e-4, consecutive_stable_blocks=3, earliest_stop=400,
                 stop_rule='hypervolume only; curve and extent changes reported, not required',
                 batch_size=int(batch_size),
                 ridge_seed=bool(ridge_seed),
-                ridge_seed_design=('pinch-balance ridges A[k+1]=A[k] at propane fractions 0, 1/3, 2/3, 1 and '
-                                   'theta 0, 0.5, 1; 6-point coarse S sweep then Illinois secant; one refinement line per theta '
-                                   'in the widest COP-VHC gap between solved compositions') if ridge_seed else None,
+                ridge_seed_design=(('pinch-balance ridges A[k+1]=A[k] at first-component fractions 0, 1/3, 2/3, 1 and '
+                                    'theta 0, 0.5, 1; 6-point coarse S sweep then Illinois secant; one refinement line per theta '
+                                    'in the widest COP-VHC gap between solved compositions') if len(components) == 2 else
+                                   ('pinch-balance ridges at the 3 vertices, 3 edge midpoints and centroid of the '
+                                    'composition triangle, theta 0, 0.5, 1; no refinement lines')) if ridge_seed else None,
                 search_coverage='half of global BO steps restricted to a zero-lift face; one local region per face',
                 minimum_frontier_points=10, minimum_recent_success_fraction=.8,
                 curve_check='101 VHC thresholds fixed at first check; maximum relative COP change; max-VHC endpoint change (report only)',
@@ -60,7 +63,8 @@ def restore(result):
     if result.get('local128_phase'):
         return restore_search(result)
     search = ParetoBOSearch(max_lift_for(result['metadata']), result['metadata']['seed'],
-                           fixed_comp_frac=result['metadata'].get('fixed_comp_frac'))
+                           fixed_comp_frac=result['metadata'].get('fixed_comp_frac'),
+                           components=len(result['metadata'].get('components') or [0, 0]))
     for r in result['records']:
         search.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'], r.get('constraint_margins'))
     search.offset = seed_count(result)
@@ -98,14 +102,14 @@ def validate(result, output):
             snapshot['validation_evaluations'] = len(replays)
             snapshot['validation_rejections'] = sum(not r['matches'] for r in replays.values())
             save(output/'validated_frontier.json', snapshot)
-            render(snapshot, output/'validated_frontier.html', result['metadata']['partner'],
+            render(snapshot, output/'validated_frontier.html', ' / '.join(result['metadata']['components'][1:]),
                    first=result['metadata']['first'])
             return True
         for original in pending:
             if pause_requested(output):
                 return False
             checked = exact_evaluation(result['metadata']['partner'], original['x'], 200., output,
-                                       first=result['metadata']['first'],
+                                       first=result['metadata']['first'], components=result['metadata']['components'],
                                        min_discharge_superheat_K=result['metadata'].get('min_discharge_superheat_K', 0.0))
             matches = checked['success'] and all(
                 checked.get(k) is not None and original.get(k) is not None
@@ -119,23 +123,25 @@ RIDGE_SEED_MIN_BUDGET = 200
 
 
 def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
-               batch_size=4, ridge_seed=True):
+               batch_size=4, ridge_seed=True, third=None):
     from concurrent.futures import ThreadPoolExecutor
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
-    if first not in PARTNERS or partner not in PARTNERS or first == partner:
-        raise ValueError('Choose two distinct components from the paper primary pool')
+    components = [first, partner]+([third] if third else [])
+    if any(c not in PARTNERS for c in components) or len(set(components)) != len(components):
+        raise ValueError('Choose distinct components from the paper primary pool')
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS as SPLIT
     if fixed_comp_frac is not None and (not np.isfinite(fixed_comp_frac) or not SPLIT[0] <= fixed_comp_frac <= SPLIT[1]):
         raise ValueError(f'fixed_comp_frac must be finite and between {SPLIT[0]} and {SPLIT[1]}')
     if ridge_seed and budget < RIDGE_SEED_MIN_BUDGET:
         raise ValueError(f'Ridge seeding uses about 130 evaluations; budget must be at least '
                          f'{RIDGE_SEED_MIN_BUDGET} (or pass ridge_seed=False / --no-ridge-seed)')
-    output = Path(output)/f'{first}_{partner}'
+    output = Path(output)/'_'.join(components)
+    label = '/'.join(components)
     output.mkdir(parents=True, exist_ok=True)
     with (output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         meta = settings(partner, budget, seed, first, fixed_comp_frac, min_discharge_superheat_K, batch_size,
-                        ridge_seed)
+                        ridge_seed, third)
         path = output/'result.json'
         result = json.loads(path.read_text()) if path.exists() else dict(metadata=meta, records=[], checks=[])
         if result['metadata'] != meta:
@@ -174,7 +180,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
                                   hv_only=True, required_blocks=meta['consecutive_stable_blocks'])
                 save(output/f'check_{n:05d}.json', snapshot)
                 if n % 500 == 0:
-                    render(snapshot, output/f'check_{n:05d}.html', partner, first=first)
+                    render(snapshot, output/f'check_{n:05d}.html', ' / '.join(components[1:]), first=first)
                 result['checks'].append({k: v for k, v in snapshot.items() if k != 'frontier'})
                 if snapshot['stop_for_stability']:
                     result['stop_reason'] = 'stable_curve'
@@ -183,19 +189,19 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
         if ridge_seed and not result.get('ridge_seed_done'):
             # Seeding runs as one unit; an interrupted seed phase is simply repeated.
             from rhp_local_pareto_search import max_lift_for
-            from rhp_ridge import seed as ridge_seed_run
+            from rhp_ridge import SEED_COMPOSITIONS_3, SEED_FRACTIONS, seed as ridge_seed_run
             if result['records']:
                 raise ValueError('Ridge seeding must run before any other evaluation')
 
             def seed_evaluation(x):
-                item = exact_evaluation(partner, x, 200., output, first=first,
+                item = exact_evaluation(partner, x, 200., output, first=first, components=components,
                                         min_discharge_superheat_K=min_discharge_superheat_K)
                 item.update(method='ridge_seed', proposal_seconds=0., batch_size=1)
                 return item
             started = time.perf_counter()
             seed_records, ridges = ridge_seed_run(
                 seed_evaluation, max_lift_for(meta), fixed_comp_frac if fixed_comp_frac is not None else .5,
-                workers=batch_size)
+                workers=batch_size, fractions=SEED_FRACTIONS if len(components) == 2 else SEED_COMPOSITIONS_3)
             for item in seed_records:
                 search.tell(item['x'], item['COP'], item['VHC_MJ_per_m3'], item['success'],
                             item.get('constraint_margins'))
@@ -203,7 +209,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
             search.offset = len(seed_records)
             result.update(ridge_seed_done=True, ridge_seeds=ridges,
                           ridge_seed_seconds=time.perf_counter()-started)
-            print(f'{first}/{partner} ridge seeding: {len(seed_records)} evaluations, {len(ridges)} ridges', flush=True)
+            print(f'{label} ridge seeding: {len(seed_records)} evaluations, {len(ridges)} ridges', flush=True)
             checkpoint('running')
         # Recover a check if interruption followed the evaluation checkpoint.
         check_progress()
@@ -257,7 +263,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
             proposal_seconds = (time.perf_counter()-started)/len(batch)
             with ThreadPoolExecutor(len(batch)) as pool_:
                 items = list(pool_.map(lambda b: exact_evaluation(
-                    partner, b[0], 200., output, first=first,
+                    partner, b[0], 200., output, first=first, components=components,
                     min_discharge_superheat_K=min_discharge_superheat_K), batch))
             for (x, method, timing), item in zip(batch, items):
                 item.update(proposal_seconds=proposal_seconds, method=method, batch_size=len(batch),
@@ -268,7 +274,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
                 checkpoint('running')
                 check_progress()
                 if len(result['records']) % 20 == 0:
-                    print(f'{first}/{partner}', len(result['records']), '/', budget, method, flush=True)
+                    print(label, len(result['records']), '/', budget, method, flush=True)
         result.setdefault('stop_reason', 'evaluation_cap')
         checkpoint('validating')
         complete = validate(result, output)
@@ -281,6 +287,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--partner', choices=PARTNERS, required=True)
     parser.add_argument('--first', choices=PARTNERS, default='Propane')
+    parser.add_argument('--third', choices=PARTNERS, default=None,
+                        help='Optional third component: search the ternary first/partner/third mixture')
     parser.add_argument('--budget', type=int, default=5000)
     parser.add_argument('--seed', type=int, default=20260915)
     parser.add_argument('--output', required=True)
@@ -296,14 +304,14 @@ def main():
     args = parser.parse_args()
     if not 1 <= args.budget <= 5000:
         parser.error('Budget must be between 1 and 5000')
-    if args.first == args.partner:
-        parser.error('The two mixture components must differ')
+    if len({args.first, args.partner, args.third or args.first}) != (3 if args.third else 2):
+        parser.error('The mixture components must differ')
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS as SPLIT
     if args.comp_frac is not None and (not np.isfinite(args.comp_frac) or not SPLIT[0] <= args.comp_frac <= SPLIT[1]):
         parser.error(f'comp-frac must be finite and between {SPLIT[0]} and {SPLIT[1]}')
     run_family(args.partner, args.budget, args.seed, args.output, first=args.first,
                fixed_comp_frac=args.comp_frac, min_discharge_superheat_K=args.min_discharge_superheat,
-               batch_size=args.batch_size, ridge_seed=args.ridge_seed)
+               batch_size=args.batch_size, ridge_seed=args.ridge_seed, third=args.third)
 
 
 if __name__ == '__main__':

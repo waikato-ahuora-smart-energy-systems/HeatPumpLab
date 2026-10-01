@@ -60,15 +60,32 @@ class FeasibilityWeightedLogEHVI(AcquisitionFunction):
         return value+torch.log((bad+.02)/(good+bad+.04))
 
 
-class ParetoBOSearch:
-    """Optimise RHX1, RHX2, compressor split and propane mass fraction together."""
+# Anchor compositions (first n-1 mass fractions) for the initial design.
+ANCHOR_COMPOSITIONS = {
+    2: [[f] for f in (0., .25, .5, .75, 1.)],
+    3: [[1., 0.], [0., 1.], [0., 0.], [.5, .5], [.5, 0.], [0., .5], [1/3, 1/3]],
+}
+FACE_COMPOSITIONS = {2: [[.25], [.75]], 3: [[.4, .3], [.2, .4]]}
 
-    def __init__(self, max_lift, seed=20260910, *, fixed_comp_frac=None):
+
+class ParetoBOSearch:
+    """Optimise RHX1, RHX2, compressor split and mixture composition together.
+
+    Encoded design u = (RHX1/100, RHX2/100, [split], z_1 .. z_{n-1}) for an n-component
+    mixture; z are the first n-1 mass fractions and z_n = 1 - sum(z). Constraints: the
+    combined lift limit and, for n >= 3, sum(z) <= 1.
+    """
+
+    def __init__(self, max_lift, seed=20260910, *, fixed_comp_frac=None, components=2):
         torch.set_num_threads(1)
         if fixed_comp_frac is not None and (not np.isfinite(fixed_comp_frac) or not .1 <= fixed_comp_frac <= .9):
             raise ValueError('fixed_comp_frac must be finite and between 0.1 and 0.9')
         self.fixed_comp_frac = None if fixed_comp_frac is None else float(fixed_comp_frac)
-        self.dimension = 4 if self.fixed_comp_frac is None else 3
+        if int(components) not in ANCHOR_COMPOSITIONS:
+            raise ValueError('Binary and ternary mixtures are supported')
+        self.components = int(components)
+        self.dimension = (3 if self.fixed_comp_frac is None else 2)+self.components-1
+        self.comp = np.arange(self.dimension-self.components+1, self.dimension)
         self.max_lift = float(max_lift)
         self.seed = int(seed)
         self.x, self.y, self.success = [], [], []
@@ -84,37 +101,55 @@ class ParetoBOSearch:
         self.kernel_state = None
         self.mean_state = None
         self.diagnostics = []
-        anchors = [[0., 0., split, fraction] for fraction in (0., .25, .5, .75, 1.)
-                   for split in (0., .5, 1.)]
+        compositions = ANCHOR_COMPOSITIONS[self.components]
+        mixed = FACE_COMPOSITIONS[self.components]
         # Most of the front lies on a zero-lift face; seed both faces explicitly.
         faces = [[.3, 0.], [.6, 0.], [0., .3], [0., .6]]
-        anchors += [[a, b, .5, fraction] for a, b in faces for fraction in (.25, .75)]
-        if self.fixed_comp_frac is not None:
-            anchors = [[0., 0., fraction] for fraction in (0., .25, .5, .75, 1.)]
-            anchors += [[a, b, fraction] for a, b in faces for fraction in (.25, .75)]
+        if self.fixed_comp_frac is None:
+            anchors = [[0., 0., split]+z for z in compositions for split in (0., .5, 1.)]
+            anchors += [[a, b, .5]+z for a, b in faces for z in mixed]
+        else:
+            anchors = [[0., 0.]+z for z in compositions]
+            anchors += [[a, b]+z for a, b in faces for z in mixed]
+        size = 32 if self.components == 2 else len(anchors)+16
         sobol = self._admissible(qmc.Sobol(self.dimension, scramble=True, seed=seed).random_base2(7))
-        self.initial = np.asarray(anchors+sobol[:32-len(anchors)].tolist())
+        self.initial = np.asarray(anchors+sobol[:size-len(anchors)].tolist())
 
     def _admissible(self, points, tolerance=0.):
         p = np.asarray(points)
         return p[np.isfinite(p).all(1) & (p >= -tolerance).all(1) & (p <= 1+tolerance).all(1)
-                 & (100*p[:, :2].sum(1) <= self.max_lift+100*tolerance)]
+                 & (100*p[:, :2].sum(1) <= self.max_lift+100*tolerance)
+                 & (p[:, self.comp].sum(1) <= 1+tolerance)]
+
+    def inequality_constraints(self):
+        """optimize_acqf constraints: combined lift and, for ternaries, the composition simplex."""
+        out = [(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double), -self.max_lift/100)]
+        if self.components > 2:
+            out.append((torch.tensor(self.comp.tolist()), torch.full((len(self.comp),), -1., dtype=torch.double), -1.))
+        return out
+
+    def composition(self, z):
+        z = [float(v) for v in z]
+        return z+[max(0., 1.-sum(z))]
 
     def decode(self, u):
+        u = np.asarray(u, dtype=float)
+        z = self.composition(u[self.comp])
         if self.fixed_comp_frac is not None:
-            a, b, fraction = u
-            return np.asarray([100*a, 100*b, self.fixed_comp_frac, fraction, 1-fraction])
-        a, b, split, fraction = u
+            return np.asarray([100*u[0], 100*u[1], self.fixed_comp_frac]+z)
         lo, hi = COMP2_POWER_FRAC_BOUNDS
-        return np.asarray([100*a, 100*b, lo+(hi-lo)*split, fraction, 1-fraction])
+        return np.asarray([100*u[0], 100*u[1], lo+(hi-lo)*u[2]]+z)
 
     def encode(self, x):
+        if len(x) != 3+self.components:
+            raise ValueError(f'Expected {3+self.components} design values')
+        z = list(x[3:3+self.components-1])
         if self.fixed_comp_frac is not None:
             if not np.isclose(x[2], self.fixed_comp_frac, rtol=0, atol=1e-12):
                 raise ValueError('Observation does not match fixed_comp_frac')
-            return np.asarray([x[0]/100, x[1]/100, x[3]])
+            return np.asarray([x[0]/100, x[1]/100]+z)
         lo, hi = COMP2_POWER_FRAC_BOUNDS
-        return np.asarray([x[0]/100, x[1]/100, (x[2]-lo)/(hi-lo), x[3]])
+        return np.asarray([x[0]/100, x[1]/100, (x[2]-lo)/(hi-lo)]+z)
 
     def tell(self, x, cop, vhc, success, margins=None):
         u = self.encode(x)
@@ -170,9 +205,19 @@ class ParetoBOSearch:
         origin = pool[:64].copy()
         origin[:, :2] = 0.
         parts.append(origin)
+        if self.components > 2:
+            parts.append(self.simplex_edge(pool[:64]))
         pool = np.unique(self._admissible(np.vstack(parts)), axis=0)
         distance = cdist(pool, self.occupied()).min(1)
         return pool[distance > 1e-7], distance[distance > 1e-7]
+
+    def simplex_edge(self, points):
+        """Points moved onto the composition edge where the last component is absent (sum(z) = 1)."""
+        points = np.array(points, dtype=float)
+        total = points[:, self.comp].sum(1, keepdims=True)
+        points[:, self.comp] = np.where(total > 1e-12, points[:, self.comp]/np.maximum(total, 1e-12),
+                                        1./len(self.comp))
+        return points
 
     def occupied(self):
         """Observed and pending designs (encoded)."""
@@ -270,8 +315,7 @@ class ParetoBOSearch:
                     proposals, _ = optimize_acqf(acquisition,
                         bounds=torch.tensor([[0.]*self.dimension, [1.]*self.dimension], dtype=torch.double),
                         q=1, num_restarts=6, raw_samples=128,
-                        inequality_constraints=[(torch.tensor([0, 1]), torch.tensor([-1., -1.], dtype=torch.double),
-                                                 -self.max_lift/100)],
+                        inequality_constraints=self.inequality_constraints(),
                         fixed_features=None if face is None else {face: 0.},
                         options={"maxiter": 60, "batch_limit": 3}, return_best_only=False,
                         retry_on_optimization_warning=False)
