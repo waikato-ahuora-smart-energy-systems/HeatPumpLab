@@ -9,15 +9,19 @@ from tests.test_outer_design_optimisation import FakeHeatPump
 # Historical designs below use compressor splits outside the search constraint (0.4-0.6);
 # the cycle model solves 0.1-0.9, so evaluate them on the model's own range.
 MODEL_RANGE = np.asarray([(0., 100.), (0., 100.), (0.1, 0.9)])
+# Stored values below were solved with the constant-efficiency compressor (model 1).
+from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import DEFAULT_BASE_CASE
+MODEL1_CASE = dict(DEFAULT_BASE_CASE, comp_model_index=1)
 
 
+# Boundary cases at the default limit (DEFAULT_MAX_STAGE_PRESSURE_RATIO = 20 from v25).
 @pytest.mark.parametrize('n_comp,ratios,success,violating_stage', [
-    (1, [10., 99., 99.], True, None),
-    (2, [10., 10., 99.], True, None),
-    (2, [10.000001, 1.1, 1.], False, 1),
-    (2, [1.1, 10.000001, 1.], False, 2),
-    (3, [2., 3., 10.000001], False, 3),
-    (3, [10., 10., 10.], True, None),
+    (1, [20., 99., 99.], True, None),
+    (2, [20., 20., 99.], True, None),
+    (2, [20.000001, 1.1, 1.], False, 1),
+    (2, [1.1, 20.000001, 1.], False, 2),
+    (3, [2., 3., 20.000001], False, 3),
+    (3, [20., 20., 20.], True, None),
     (2, [5., None, 1.], False, 2),
     (2, [np.nan, 5., 1.], False, 1),
     (2, [np.inf, 5., 1.], False, 1),
@@ -61,7 +65,7 @@ def test_invalid_limits_are_rejected(limit):
 @pytest.mark.parametrize('limit,success', [(10., True), (8., False)])
 def test_native_isolated_evaluation_propagates_limit(tmp_path, limit, success):
     # Previously solved best-COP Propane/Neopentane point: stage PRs 1.2693 and 8.5533.
-    objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Neopentane|0.5;0.5|mass', bounds=MODEL_RANGE,
+    objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Neopentane|0.5;0.5|mass', bounds=MODEL_RANGE, base_case=MODEL1_CASE,
         results_dir=tmp_path, max_stage_pressure_ratio=limit,
         exact_evaluation_timeout_seconds=90, exact_evaluation_timeout_retries=0,
         exact_evaluation_worker_max_tasks=1)
@@ -83,7 +87,7 @@ def test_native_isolated_evaluation_propagates_limit(tmp_path, limit, success):
 
 
 def test_previous_best_cop_pentane_design_is_now_rejected(tmp_path):
-    objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Pentane|0.5;0.5|mass', bounds=MODEL_RANGE,
+    objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Pentane|0.5;0.5|mass', bounds=MODEL_RANGE, base_case=MODEL1_CASE,
         results_dir=tmp_path, exact_evaluation_timeout_seconds=90,
         exact_evaluation_timeout_retries=0, exact_evaluation_worker_max_tasks=1)
     try:

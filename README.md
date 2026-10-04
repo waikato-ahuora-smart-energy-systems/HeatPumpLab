@@ -132,6 +132,13 @@ initial and boundary designs cover the triangle's vertices, edges and centroid, 
 seeding solves lines at the vertices, edge midpoints and centroid (about 210 evaluations,
 no refinement lines). Binary runs are unchanged.
 
+**Compressor efficiency.** From optimiser version v25 the production base case uses
+`comp_model_index = 4`: each stage's isentropic efficiency follows the Pareto front of
+published efficiency against pressure ratio, eta_is(PR) = 0.87096 - 0.01991 (ln PR)^2.63312
+(`pareto_front_efficiency` in `components/compressor.py`; about 0.86 at PR 2, 0.80 at PR 5,
+0.69 at PR 10, projected to 0.51 at PR 20 beyond the fitted data), with a 96% motor efficiency. Up to v24 the constant model 1 was used
+(0.729 isentropic, 0.70 overall). Results from the two are not comparable.
+
 **Compressor power split constraint.** Every optimisation search limits the
 compressor-2 share of total compressor power to 0.4-0.6
 (`COMP2_POWER_FRAC_BOUNDS` in `optimisation/_types.py`, which also sets
@@ -148,7 +155,8 @@ GP inputs. The fixed setting is recorded in checkpoints and retained during
 resume and final replay. At zero pressure loss, 0.5 gives equal stage pressure
 ratios. Use a fresh output directory when changing this setting.
 
-Optimisation enforces a maximum pressure ratio of 10 per active compressor stage
+Optimisation enforces a maximum pressure ratio of 20 per active compressor stage (10 up to
+optimiser v24; raised with compressor model 4, whose efficiency falls with PR)
 by default (`OuterDesignOptimisationConfig.max_stage_pressure_ratio`). This check
 uses the solved stage ratios, including during isolated-worker evaluations and
 historical-candidate replays. Missing or invalid active-stage ratios fail the

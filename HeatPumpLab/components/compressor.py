@@ -1,6 +1,30 @@
 """Compressor component model."""
 
+import math
+
 from .stream import Stream
+
+# Pareto front of published compressor efficiency vs pressure ratio,
+# eta(PR) = eta_1 - a * ln(PR)**b, fitted on 1 <= PR <= 10 and projected to PR 20
+# (0.692 at 10, 0.613 at 14, 0.513 at 20; no data above 10). Source data, fit
+# and limitations: paper/compressor_research/efficiency-pr-front-20261004/.
+PARETO_FRONT_COEFFS = {
+    "isentropic": (0.87096, 0.01991, 2.63312),
+    "overall": (0.81982, 0.02940, 2.29041),
+}
+PARETO_FRONT_PR_RANGE = (1.0, 20.0)  # 1-10 fitted, 10-20 projected
+
+
+def pareto_front_efficiency(pressure_ratio: float, basis: str = "isentropic") -> float:
+    """Best published compressor efficiency at ``pressure_ratio``.
+
+    ``basis`` is "isentropic" (shaft) or "overall" (electrical input). PR below
+    1 is treated as 1. The fit uses data to PR 10; 10-20 is a projection of the
+    same curve (the search limit), and beyond 20 it is an unsupported extrapolation.
+    """
+    eta_1, a, b = PARETO_FRONT_COEFFS[basis]
+    pr = max(float(pressure_ratio), 1.0)
+    return eta_1 - a * math.log(pr) ** b
 
 
 class Compressor:
@@ -45,6 +69,7 @@ class Compressor:
             ["Proportional", 0.7 / 0.96],  # Typical isentropic efficiency
             ["Polynomial"],  # Compressor model constants (Wang & Cleland, 2018)
             ["Brendel et al"],
+            ["Pareto front"],  # Best published eta_is vs PR (2026 survey)
         ]
         return available_model_coeffs[model_index]
 
@@ -69,6 +94,8 @@ class Compressor:
                 )
             else:
                 shaft_eff = 0.4
+        elif self.model_coeffs[0] == "Pareto front":
+            shaft_eff = pareto_front_efficiency(self.pressure_ratio, "isentropic")
         return min(max(shaft_eff, 0.4), 1.0)
 
     def get_compressor_power(self) -> float:

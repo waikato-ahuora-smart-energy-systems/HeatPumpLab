@@ -8,8 +8,9 @@ from typing import Any
 import numpy as np
 
 # BO replaces the staged outer search; invalidate prior completed signatures.
-OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v24-split-0.4-0.6"
-DEFAULT_MAX_STAGE_PRESSURE_RATIO = 10.0
+OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v25-pareto-front-compressor-pr20"
+# Raised from 10 with compressor model 4, whose efficiency falls with PR (0.69 at 10, 0.51 at 20).
+DEFAULT_MAX_STAGE_PRESSURE_RATIO = 20.0
 
 BASE_VARIABLE_NAMES = (
     "dT_rhx1_cold",
@@ -44,7 +45,9 @@ DEFAULT_BASE_CASE = {
     "comp2_power_frac": 0.5,
     "comp3_power_frac": 0.0,
     "comp_PR_uniform": False,
-    "comp_model_index": 1,
+    # 4 = Pareto front of published isentropic efficiency vs stage PR (components/compressor.py);
+    # 1 = constant 0.729 isentropic (0.70 overall with motor_eff 0.96), used up to v24.
+    "comp_model_index": 4,
     "n_comp": 2,
     "ihx_on": True,
     "motor_eff": 0.96,

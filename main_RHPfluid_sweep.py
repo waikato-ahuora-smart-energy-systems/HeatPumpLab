@@ -4,7 +4,7 @@ Runs main_RHPfixed_mobo.py as one subprocess per mixture, --slots at a time (eac
 REFPROP workers). Completed mixtures are skipped and interrupted ones resume, so the sweep can simply
 be restarted. Touch <output>/PAUSE to stop launching new mixtures (running ones also pause cleanly).
 
-  .venv/bin/python main_RHPfluid_sweep.py --output results/RHPfixed200_v24 --slots 3
+  .venv/bin/python main_RHPfluid_sweep.py --output results/RHPfixed200_v25 --slots 3
 
 Phase 1: all mixtures, seed 20260915, 1,000 evaluations, ordered ternaries -> binaries -> CO2 mixtures.
 Phase 2: the --top best by COP at VHC >= 3 MJ/m3, rerun with seed 20260916 in <output>_seed2.
@@ -109,7 +109,7 @@ def sweep(output, mixes, seed, budget, batch_size, slots):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--output', default='results/RHPfixed200_v24')
+    parser.add_argument('--output', default='results/RHPfixed200_v25')
     parser.add_argument('--slots', type=int, default=3, help='Mixtures run in parallel')
     parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--budget', type=int, default=1000)
