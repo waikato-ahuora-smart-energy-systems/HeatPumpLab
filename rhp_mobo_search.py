@@ -72,11 +72,16 @@ class ParetoBOSearch:
     """Optimise RHX1, RHX2, compressor split and mixture composition together.
 
     Encoded design u = (RHX1/100, RHX2/100, [split], z_1 .. z_{n-1}) for an n-component
-    mixture; z are the first n-1 mass fractions and z_n = 1 - sum(z). Constraints: the
+    mixture; z are the first n-1 encoded fractions and z_n = 1 - sum(z). Constraints: the
     combined lift limit and, for n >= 3, sum(z) <= 1.
+
+    ``min_fraction`` m sets a minimum mass fraction for every component: the mass fractions
+    are w_i = m + (1 - n*m) * z_i, so the encoded simplex (including its vertices and edges,
+    which the anchors and boundary proposals use) maps onto w_i >= m. m = 0 is the original
+    search.
     """
 
-    def __init__(self, max_lift, seed=20260910, *, fixed_comp_frac=None, components=2):
+    def __init__(self, max_lift, seed=20260910, *, fixed_comp_frac=None, components=2, min_fraction=0.):
         torch.set_num_threads(1)
         if fixed_comp_frac is not None and (not np.isfinite(fixed_comp_frac) or not .1 <= fixed_comp_frac <= .9):
             raise ValueError('fixed_comp_frac must be finite and between 0.1 and 0.9')
@@ -84,6 +89,9 @@ class ParetoBOSearch:
         if int(components) not in ANCHOR_COMPOSITIONS:
             raise ValueError('Binary and ternary mixtures are supported')
         self.components = int(components)
+        self.min_fraction = float(min_fraction)
+        if not 0. <= self.min_fraction < 1./self.components:
+            raise ValueError(f'min_fraction must be in [0, 1/{self.components})')
         self.dimension = (3 if self.fixed_comp_frac is None else 2)+self.components-1
         self.comp = np.arange(self.dimension-self.components+1, self.dimension)
         self.max_lift = float(max_lift)
@@ -129,8 +137,11 @@ class ParetoBOSearch:
         return out
 
     def composition(self, z):
+        """Mass fractions from the encoded fractions z (first n-1 of the encoded simplex)."""
         z = [float(v) for v in z]
-        return z+[max(0., 1.-sum(z))]
+        full = z+[max(0., 1.-sum(z))]
+        m = self.min_fraction
+        return full if m == 0. else [m+(1.-self.components*m)*v for v in full]
 
     def decode(self, u):
         u = np.asarray(u, dtype=float)
@@ -143,7 +154,8 @@ class ParetoBOSearch:
     def encode(self, x):
         if len(x) != 3+self.components:
             raise ValueError(f'Expected {3+self.components} design values')
-        z = list(x[3:3+self.components-1])
+        m = self.min_fraction
+        z = [(float(v)-m)/(1.-self.components*m) for v in x[3:3+self.components-1]]
         if self.fixed_comp_frac is not None:
             if not np.isclose(x[2], self.fixed_comp_frac, rtol=0, atol=1e-12):
                 raise ValueError('Observation does not match fixed_comp_frac')

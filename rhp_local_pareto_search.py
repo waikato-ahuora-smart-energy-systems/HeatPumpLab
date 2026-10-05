@@ -45,7 +45,8 @@ def restore_search(result):
     search = LocalParetoSearch(baseline, 128, seed=phase['seed'] + 104729 * (epoch-start),
                               fixed_comp_frac=result.get('metadata', {}).get('fixed_comp_frac'),
                               max_lift=max_lift_for(result.get('metadata', {})),
-                              components=len(result.get('metadata', {}).get('components') or [0, 0]))
+                              components=len(result.get('metadata', {}).get('components') or [0, 0]),
+                              min_fraction=result.get('metadata', {}).get('min_component_fraction', 0.))
     for record in result['records'][epoch:]:
         search.tell(record['x'], record['COP'], record['VHC_MJ_per_m3'],
                     record['success'] and not record.get('validation_rejected'),
@@ -161,10 +162,11 @@ class LocalParetoSearch(ParetoBOSearch):
     """
 
     def __init__(self, baseline, subset_size, seed=20260911, radius=.05, *, fixed_comp_frac=None,
-                 max_lift=None, components=2):
+                 max_lift=None, components=2, min_fraction=0.):
         if max_lift is None:
             max_lift = max_lift_for({})
-        super().__init__(max_lift, seed, fixed_comp_frac=fixed_comp_frac, components=components)
+        super().__init__(max_lift, seed, fixed_comp_frac=fixed_comp_frac, components=components,
+                         min_fraction=min_fraction)
         self.subset_size = subset_size
         self.radius = radius
         self.anchor_indices = choose_anchors(baseline['records'])

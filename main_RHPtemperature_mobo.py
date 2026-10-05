@@ -74,13 +74,17 @@ def finite(value):
 
 
 def exact_evaluation(partner, x, temperature, output, *, first='Propane', min_discharge_superheat_K=0.0,
-                     components=None):
-    """Solve one design; ``components`` (e.g. a ternary) overrides the first/partner binary."""
+                     components=None, base_case=None):
+    """Solve one design; ``components`` (e.g. a ternary) overrides the first/partner binary.
+
+    ``base_case`` replaces DEFAULT_BASE_CASE (e.g. another compressor model); T_air_tar is set from
+    ``temperature`` either way.
+    """
     from rhp_temperature_mobo import usable
     names = list(components) if components else [first, partner]
     objective = _OuterDesignObjective(max_evals=1,
         refrigerant=';'.join(names)+'|'+';'.join([f'{1/len(names):.12g}']*len(names))+'|mass',
-        base_case=dict(DEFAULT_BASE_CASE, T_air_tar=float(temperature)),
+        base_case=dict(base_case or DEFAULT_BASE_CASE, T_air_tar=float(temperature)),
         exact_evaluation_timeout_seconds=180, exact_evaluation_timeout_retries=0,
         exact_evaluation_worker_max_tasks=1, results_dir=str(output/'oracle'),
         min_discharge_superheat_K=min_discharge_superheat_K)

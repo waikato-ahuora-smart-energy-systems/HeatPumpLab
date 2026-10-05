@@ -13,10 +13,13 @@ from rhp_frontier_stability import assess, frontier, render
 
 ROOT = Path(__file__).resolve().parent
 PARTNERS = ('Propane', 'Butane', 'Isobutane', 'Pentane', 'Isopentane', 'Neopentane', 'CO2')
+# Every component at least 1 wt% (user decision, 5 Oct 2026); pass 0 to allow pure fluids.
+DEFAULT_MIN_COMPONENT_FRACTION = 0.01
 
 
 def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
-             batch_size=4, ridge_seed=False, third=None):
+             batch_size=4, ridge_seed=False, third=None, comp_model_index=None, motor_eff=None,
+             min_component_fraction=None):
     from importlib.metadata import version
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
         DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO)
@@ -26,6 +29,8 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
         digest.update(str(path.relative_to(ROOT)).encode())
         digest.update(path.read_bytes())
     components = [first, partner]+([third] if third else [])
+    if min_component_fraction is None:
+        min_component_fraction = DEFAULT_MIN_COMPONENT_FRACTION
     return dict(partner=partner, first=first, components=components,
                 budget=budget, seed=seed, temperature_C=200,
                 max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
@@ -33,7 +38,10 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
                 min_discharge_superheat_K=float(min_discharge_superheat_K),
                 constraint_model='GP on discharge/suction superheat and PR margins; distance penalty for numerical failures only',
                 search_dimensions=(3 if fixed_comp_frac is None else 2)+len(components)-1,
-                base_case=dict(DEFAULT_BASE_CASE, T_air_tar=200.), check_interval=100,
+                base_case=base_case(comp_model_index, motor_eff), check_interval=100,
+                **({'min_component_fraction': float(min_component_fraction),
+                    'composition_mapping': 'w_i = m + (1 - n*m) z_i on the encoded simplex; ridge seeds mapped the same way'}
+                   if min_component_fraction else {}),
                 relative_tolerance=2e-4, consecutive_stable_blocks=3, earliest_stop=400,
                 stop_rule='hypervolume only; curve and extent changes reported, not required',
                 batch_size=int(batch_size),
@@ -53,6 +61,17 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
                 versions={k: version(k) for k in ('numpy', 'scipy', 'botorch', 'torch', 'gpytorch', 'ctREFPROP')})
 
 
+def base_case(comp_model_index=None, motor_eff=None):
+    """DEFAULT_BASE_CASE at 200 C, optionally with another compressor model / motor efficiency."""
+    from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import DEFAULT_BASE_CASE
+    case = dict(DEFAULT_BASE_CASE, T_air_tar=200.)
+    if comp_model_index is not None:
+        case['comp_model_index'] = int(comp_model_index)
+    if motor_eff is not None:
+        case['motor_eff'] = float(motor_eff)
+    return case
+
+
 def pause_requested(output):
     return (output/'PAUSE').exists() or (output.parent/'PAUSE').exists()
 
@@ -64,7 +83,8 @@ def restore(result):
         return restore_search(result)
     search = ParetoBOSearch(max_lift_for(result['metadata']), result['metadata']['seed'],
                            fixed_comp_frac=result['metadata'].get('fixed_comp_frac'),
-                           components=len(result['metadata'].get('components') or [0, 0]))
+                           components=len(result['metadata'].get('components') or [0, 0]),
+                           min_fraction=result['metadata'].get('min_component_fraction', 0.))
     for r in result['records']:
         search.tell(r['x'], r['COP'], r['VHC_MJ_per_m3'], r['success'], r.get('constraint_margins'))
     search.offset = seed_count(result)
@@ -110,7 +130,8 @@ def validate(result, output):
                 return False
             checked = exact_evaluation(result['metadata']['partner'], original['x'], 200., output,
                                        first=result['metadata']['first'], components=result['metadata']['components'],
-                                       min_discharge_superheat_K=result['metadata'].get('min_discharge_superheat_K', 0.0))
+                                       min_discharge_superheat_K=result['metadata'].get('min_discharge_superheat_K', 0.0),
+                                       base_case=result['metadata']['base_case'])
             matches = checked['success'] and all(
                 checked.get(k) is not None and original.get(k) is not None
                 and np.isclose(checked[k], original[k], rtol=1e-6, atol=1e-9)
@@ -123,10 +144,13 @@ RIDGE_SEED_MIN_BUDGET = 200
 
 
 def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
-               batch_size=4, ridge_seed=True, third=None):
+               batch_size=4, ridge_seed=True, third=None, comp_model_index=None, motor_eff=None,
+               min_component_fraction=None):
     from concurrent.futures import ThreadPoolExecutor
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
     components = [first, partner]+([third] if third else [])
+    if min_component_fraction is None:
+        min_component_fraction = DEFAULT_MIN_COMPONENT_FRACTION
     if any(c not in PARTNERS for c in components) or len(set(components)) != len(components):
         raise ValueError('Choose distinct components from the paper primary pool')
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import COMP2_POWER_FRAC_BOUNDS as SPLIT
@@ -141,7 +165,8 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
     with (output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         meta = settings(partner, budget, seed, first, fixed_comp_frac, min_discharge_superheat_K, batch_size,
-                        ridge_seed, third)
+                        ridge_seed, third, comp_model_index, motor_eff, min_component_fraction)
+        case = meta['base_case']
         path = output/'result.json'
         result = json.loads(path.read_text()) if path.exists() else dict(metadata=meta, records=[], checks=[])
         if result['metadata'] != meta:
@@ -194,8 +219,12 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
                 raise ValueError('Ridge seeding must run before any other evaluation')
 
             def seed_evaluation(x):
+                if min_component_fraction:
+                    # Same mapping as ParetoBOSearch.composition: ridge fractions 0..1 -> m..1-(n-1)m.
+                    x = np.asarray(x, dtype=float).copy()
+                    x[3:] = min_component_fraction+(1.-len(components)*min_component_fraction)*x[3:]
                 item = exact_evaluation(partner, x, 200., output, first=first, components=components,
-                                        min_discharge_superheat_K=min_discharge_superheat_K)
+                                        min_discharge_superheat_K=min_discharge_superheat_K, base_case=case)
                 item.update(method='ridge_seed', proposal_seconds=0., batch_size=1)
                 return item
             started = time.perf_counter()
@@ -264,7 +293,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
             with ThreadPoolExecutor(len(batch)) as pool_:
                 items = list(pool_.map(lambda b: exact_evaluation(
                     partner, b[0], 200., output, first=first, components=components,
-                    min_discharge_superheat_K=min_discharge_superheat_K), batch))
+                    min_discharge_superheat_K=min_discharge_superheat_K, base_case=case), batch))
             for (x, method, timing), item in zip(batch, items):
                 item.update(proposal_seconds=proposal_seconds, method=method, batch_size=len(batch),
                             proposal_timing=timing)
@@ -301,7 +330,16 @@ def main():
                         help='Candidates proposed and evaluated in parallel per step')
     parser.add_argument('--min-discharge-superheat', type=float, default=0.0,
                         help='Required compressor discharge superheat in K (supercritical discharge exempt)')
+    parser.add_argument('--comp-model', type=int, default=None,
+                        help='Compressor efficiency model index (components/compressor.py); default from DEFAULT_BASE_CASE')
+    parser.add_argument('--motor-eff', type=float, default=None,
+                        help='Motor efficiency (shaft to electrical); default from DEFAULT_BASE_CASE')
+    parser.add_argument('--min-fraction', type=float, default=DEFAULT_MIN_COMPONENT_FRACTION,
+                        help=f'Minimum mass fraction of every component (default {DEFAULT_MIN_COMPONENT_FRACTION}; '
+                             '0 allows pure fluids)')
     args = parser.parse_args()
+    if not 0 <= args.min_fraction < 1/(3 if args.third else 2):
+        parser.error('min-fraction must be at least 0 and below 1/(number of components)')
     if not 1 <= args.budget <= 5000:
         parser.error('Budget must be between 1 and 5000')
     if len({args.first, args.partner, args.third or args.first}) != (3 if args.third else 2):
@@ -311,7 +349,9 @@ def main():
         parser.error(f'comp-frac must be finite and between {SPLIT[0]} and {SPLIT[1]}')
     run_family(args.partner, args.budget, args.seed, args.output, first=args.first,
                fixed_comp_frac=args.comp_frac, min_discharge_superheat_K=args.min_discharge_superheat,
-               batch_size=args.batch_size, ridge_seed=args.ridge_seed, third=args.third)
+               batch_size=args.batch_size, ridge_seed=args.ridge_seed, third=args.third,
+               comp_model_index=args.comp_model, motor_eff=args.motor_eff,
+               min_component_fraction=args.min_fraction)
 
 
 if __name__ == '__main__':

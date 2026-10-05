@@ -46,7 +46,7 @@ def complete(output, mix):
         return False
 
 
-def run(output, mix, seed, budget, batch_size):
+def run(output, mix, seed, budget, batch_size, extra=()):
     out = folder(output, mix)
     out.mkdir(parents=True, exist_ok=True)
     if complete(output, mix):
@@ -57,6 +57,7 @@ def run(output, mix, seed, budget, batch_size):
             '--budget', str(budget), '--seed', str(seed), '--batch-size', str(batch_size), '--output', str(output)]
     if len(mix) == 3:
         args += ['--third', mix[2]]
+    args += list(extra)
     env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1')
     started = time.time()
     with (Path(output)/f"{'_'.join(mix)}.log").open('a') as log:
@@ -100,11 +101,11 @@ def summarise(output, mixes, title):
     return rows
 
 
-def sweep(output, mixes, seed, budget, batch_size, slots):
+def sweep(output, mixes, seed, budget, batch_size, slots, extra=()):
     pending = [m for m in mixes if not complete(output, m)]
     print(f'{len(mixes)-len(pending)} complete, {len(pending)} to run, {slots} at a time', flush=True)
     with ThreadPoolExecutor(slots) as pool:
-        return list(pool.map(lambda m: run(output, m, seed, budget, batch_size), pending))
+        return list(pool.map(lambda m: run(output, m, seed, budget, batch_size, extra), pending))
 
 
 def main():
@@ -115,22 +116,34 @@ def main():
     parser.add_argument('--budget', type=int, default=1000)
     parser.add_argument('--top', type=int, default=5, help='Mixtures rerun with a second seed (0 to skip)')
     parser.add_argument('--list', action='store_true', help='Print the mixtures and their status, then exit')
+    parser.add_argument('--mixtures', nargs='+', default=None,
+                        help='Run only these mixtures, e.g. Propane/Butane/Isopentane (default: the full pool)')
+    parser.add_argument('--comp-model', type=int, default=None, help='Passed to main_RHPfixed_mobo.py')
+    parser.add_argument('--motor-eff', type=float, default=None, help='Passed to main_RHPfixed_mobo.py')
+    parser.add_argument('--min-fraction', type=float, default=None,
+                        help='Passed to main_RHPfixed_mobo.py (its default: 0.01; 0 allows pure fluids)')
     args = parser.parse_args()
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
-    mixes = mixtures()
+    mixes = [m.split('/') for m in args.mixtures] if args.mixtures else mixtures()
+    for m in mixes:
+        if len(m) not in (2, 3) or any(c not in PARTNERS for c in m) or len(set(m)) != len(m):
+            parser.error(f"Bad mixture {'/'.join(m)}: 2-3 distinct components from {', '.join(PARTNERS)}")
+    extra = ((['--comp-model', str(args.comp_model)] if args.comp_model is not None else [])
+             + (['--motor-eff', str(args.motor_eff)] if args.motor_eff is not None else [])
+             + (['--min-fraction', str(args.min_fraction)] if args.min_fraction is not None else []))
     if args.list:
         for m in mixes:
             print('done ' if complete(output, m) else 'to run', '/'.join(m))
         return
-    sweep(output, mixes, 20260915, args.budget, args.batch_size, args.slots)
+    sweep(output, mixes, 20260915, args.budget, args.batch_size, args.slots, extra)
     rows = summarise(output, mixes, 'Fluid sweep at 200 C, seed 20260915')
     if args.top and not (output/'PAUSE').exists():
         best = [r['mixture'].split('/') for r in rows if r['COP_VHC_ge_3'] is not None][:args.top]
         second = Path(f'{output}_seed2')
         second.mkdir(parents=True, exist_ok=True)
         print('Second seed for:', ', '.join('/'.join(m) for m in best), flush=True)
-        sweep(second, best, 20260916, args.budget, args.batch_size, args.slots)
+        sweep(second, best, 20260916, args.budget, args.batch_size, args.slots, extra)
         summarise(second, best, 'Top mixtures, second seed 20260916')
     print('SWEEP DONE', flush=True)
 
