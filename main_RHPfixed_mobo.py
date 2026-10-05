@@ -1,4 +1,4 @@
-"""Fixed 200 C Pareto BO: assess every 500, stop when stable, cap at 5,000."""
+"""Fixed-temperature Pareto BO (default 200 C, --temperature for others): assess every 100, stop when stable, cap at 5,000."""
 import argparse
 import fcntl
 import hashlib
@@ -19,7 +19,7 @@ DEFAULT_MIN_COMPONENT_FRACTION = 0.01
 
 def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
              batch_size=4, ridge_seed=False, third=None, comp_model_index=None, motor_eff=None,
-             min_component_fraction=None):
+             min_component_fraction=None, temperature_C=200.):
     from importlib.metadata import version
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
         DEFAULT_BASE_CASE, DEFAULT_MAX_STAGE_PRESSURE_RATIO)
@@ -32,13 +32,13 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
     if min_component_fraction is None:
         min_component_fraction = DEFAULT_MIN_COMPONENT_FRACTION
     return dict(partner=partner, first=first, components=components,
-                budget=budget, seed=seed, temperature_C=200,
+                budget=budget, seed=seed, temperature_C=float(temperature_C),
                 max_stage_pressure_ratio=DEFAULT_MAX_STAGE_PRESSURE_RATIO,
                 compressor_gas_only=True, fixed_comp_frac=fixed_comp_frac,
                 min_discharge_superheat_K=float(min_discharge_superheat_K),
                 constraint_model='GP on discharge/suction superheat and PR margins; distance penalty for numerical failures only',
                 search_dimensions=(3 if fixed_comp_frac is None else 2)+len(components)-1,
-                base_case=base_case(comp_model_index, motor_eff), check_interval=100,
+                base_case=base_case(comp_model_index, motor_eff, temperature_C), check_interval=100,
                 **({'min_component_fraction': float(min_component_fraction),
                     'composition_mapping': 'w_i = m + (1 - n*m) z_i on the encoded simplex; ridge seeds mapped the same way'}
                    if min_component_fraction else {}),
@@ -61,10 +61,10 @@ def settings(partner, budget, seed, first='Propane', fixed_comp_frac=None, min_d
                 versions={k: version(k) for k in ('numpy', 'scipy', 'botorch', 'torch', 'gpytorch', 'ctREFPROP')})
 
 
-def base_case(comp_model_index=None, motor_eff=None):
-    """DEFAULT_BASE_CASE at 200 C, optionally with another compressor model / motor efficiency."""
+def base_case(comp_model_index=None, motor_eff=None, temperature_C=200.):
+    """DEFAULT_BASE_CASE at the delivery temperature, optionally with another compressor model / motor efficiency."""
     from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import DEFAULT_BASE_CASE
-    case = dict(DEFAULT_BASE_CASE, T_air_tar=200.)
+    case = dict(DEFAULT_BASE_CASE, T_air_tar=float(temperature_C))
     if comp_model_index is not None:
         case['comp_model_index'] = int(comp_model_index)
     if motor_eff is not None:
@@ -128,7 +128,7 @@ def validate(result, output):
         for original in pending:
             if pause_requested(output):
                 return False
-            checked = exact_evaluation(result['metadata']['partner'], original['x'], 200., output,
+            checked = exact_evaluation(result['metadata']['partner'], original['x'], result['metadata']['temperature_C'], output,
                                        first=result['metadata']['first'], components=result['metadata']['components'],
                                        min_discharge_superheat_K=result['metadata'].get('min_discharge_superheat_K', 0.0),
                                        base_case=result['metadata']['base_case'])
@@ -145,7 +145,7 @@ RIDGE_SEED_MIN_BUDGET = 200
 
 def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=None, min_discharge_superheat_K=0.0,
                batch_size=4, ridge_seed=True, third=None, comp_model_index=None, motor_eff=None,
-               min_component_fraction=None):
+               min_component_fraction=None, temperature_C=200.):
     from concurrent.futures import ThreadPoolExecutor
     from rhp_local_pareto_search import choose_anchors, restore_search, REFRESH_EVERY
     components = [first, partner]+([third] if third else [])
@@ -165,8 +165,9 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
     with (output/'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         meta = settings(partner, budget, seed, first, fixed_comp_frac, min_discharge_superheat_K, batch_size,
-                        ridge_seed, third, comp_model_index, motor_eff, min_component_fraction)
+                        ridge_seed, third, comp_model_index, motor_eff, min_component_fraction, temperature_C)
         case = meta['base_case']
+        T = meta['temperature_C']
         path = output/'result.json'
         result = json.loads(path.read_text()) if path.exists() else dict(metadata=meta, records=[], checks=[])
         if result['metadata'] != meta:
@@ -223,7 +224,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
                     # Same mapping as ParetoBOSearch.composition: ridge fractions 0..1 -> m..1-(n-1)m.
                     x = np.asarray(x, dtype=float).copy()
                     x[3:] = min_component_fraction+(1.-len(components)*min_component_fraction)*x[3:]
-                item = exact_evaluation(partner, x, 200., output, first=first, components=components,
+                item = exact_evaluation(partner, x, T, output, first=first, components=components,
                                         min_discharge_superheat_K=min_discharge_superheat_K, base_case=case)
                 item.update(method='ridge_seed', proposal_seconds=0., batch_size=1)
                 return item
@@ -292,7 +293,7 @@ def run_family(partner, budget, seed, output, first='Propane', fixed_comp_frac=N
             proposal_seconds = (time.perf_counter()-started)/len(batch)
             with ThreadPoolExecutor(len(batch)) as pool_:
                 items = list(pool_.map(lambda b: exact_evaluation(
-                    partner, b[0], 200., output, first=first, components=components,
+                    partner, b[0], T, output, first=first, components=components,
                     min_discharge_superheat_K=min_discharge_superheat_K, base_case=case), batch))
             for (x, method, timing), item in zip(batch, items):
                 item.update(proposal_seconds=proposal_seconds, method=method, batch_size=len(batch),
@@ -318,6 +319,8 @@ def main():
     parser.add_argument('--first', choices=PARTNERS, default='Propane')
     parser.add_argument('--third', choices=PARTNERS, default=None,
                         help='Optional third component: search the ternary first/partner/third mixture')
+    parser.add_argument('--temperature', type=float, default=200.,
+                        help='Delivery (air target) temperature in C; default 200')
     parser.add_argument('--budget', type=int, default=5000)
     parser.add_argument('--seed', type=int, default=20260915)
     parser.add_argument('--output', required=True)
@@ -351,7 +354,7 @@ def main():
                fixed_comp_frac=args.comp_frac, min_discharge_superheat_K=args.min_discharge_superheat,
                batch_size=args.batch_size, ridge_seed=args.ridge_seed, third=args.third,
                comp_model_index=args.comp_model, motor_eff=args.motor_eff,
-               min_component_fraction=args.min_fraction)
+               min_component_fraction=args.min_fraction, temperature_C=args.temperature)
 
 
 if __name__ == '__main__':

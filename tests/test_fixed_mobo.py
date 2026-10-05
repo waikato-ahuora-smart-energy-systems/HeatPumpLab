@@ -132,3 +132,21 @@ def test_local_checkpoint_resume_reproduces_next_proposal():
     restored, restored_epoch = runner.restore(result)
     assert restored_epoch == epoch
     np.testing.assert_allclose(search.ask(), restored.ask(), rtol=0, atol=1e-10)
+
+
+def test_delivery_temperature_reaches_search_and_replays(tmp_path, monkeypatch):
+    temperatures, cases = [], []
+
+    def evaluate(partner, x, temperature, output, **kwargs):
+        temperatures.append(temperature)
+        cases.append(kwargs['base_case']['T_air_tar'])
+        return record(0, x=list(x), COP=3.-x[3], VHC_MJ_per_m3=1.+x[3])
+
+    monkeypatch.setattr(runner, 'exact_evaluation', evaluate)
+    monkeypatch.setattr(runner, 'render', lambda *args, **kwargs: None)
+    runner.run_family('Butane', 6, 25, tmp_path, batch_size=2, ridge_seed=False, temperature_C=160.)
+    result = json.loads((tmp_path/'Propane_Butane'/'result.json').read_text())
+    assert result['complete'] and result['metadata']['temperature_C'] == 160.
+    assert result['metadata']['base_case']['T_air_tar'] == 160.
+    assert len(temperatures) > 6 and set(temperatures) == set(cases) == {160.}
+    assert runner.base_case(temperature_C=150.)['T_air_tar'] == 150.

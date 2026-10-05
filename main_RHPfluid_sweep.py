@@ -1,4 +1,4 @@
-"""Weekend sweep: every binary and ternary from the fluid pool at 200 C, then a second seed for the top mixtures.
+"""Weekend sweep: every binary and ternary from the fluid pool at 200 C (or --temperature), then a second seed for the top mixtures.
 
 Runs main_RHPfixed_mobo.py as one subprocess per mixture, --slots at a time (each uses --batch-size
 REFPROP workers). Completed mixtures are skipped and interrupted ones resume, so the sweep can simply
@@ -114,6 +114,8 @@ def main():
     parser.add_argument('--slots', type=int, default=3, help='Mixtures run in parallel')
     parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--budget', type=int, default=1000)
+    parser.add_argument('--temperature', type=float, default=200.,
+                        help='Delivery temperature in C, passed to main_RHPfixed_mobo.py')
     parser.add_argument('--top', type=int, default=5, help='Mixtures rerun with a second seed (0 to skip)')
     parser.add_argument('--list', action='store_true', help='Print the mixtures and their status, then exit')
     parser.add_argument('--mixtures', nargs='+', default=None,
@@ -131,13 +133,14 @@ def main():
             parser.error(f"Bad mixture {'/'.join(m)}: 2-3 distinct components from {', '.join(PARTNERS)}")
     extra = ((['--comp-model', str(args.comp_model)] if args.comp_model is not None else [])
              + (['--motor-eff', str(args.motor_eff)] if args.motor_eff is not None else [])
-             + (['--min-fraction', str(args.min_fraction)] if args.min_fraction is not None else []))
+             + (['--min-fraction', str(args.min_fraction)] if args.min_fraction is not None else [])
+             + (['--temperature', f'{args.temperature:g}'] if args.temperature != 200 else []))
     if args.list:
         for m in mixes:
             print('done ' if complete(output, m) else 'to run', '/'.join(m))
         return
     sweep(output, mixes, 20260915, args.budget, args.batch_size, args.slots, extra)
-    rows = summarise(output, mixes, 'Fluid sweep at 200 C, seed 20260915')
+    rows = summarise(output, mixes, f'Fluid sweep at {args.temperature:g} C, seed 20260915')
     if args.top and not (output/'PAUSE').exists():
         best = [r['mixture'].split('/') for r in rows if r['COP_VHC_ge_3'] is not None][:args.top]
         second = Path(f'{output}_seed2')
