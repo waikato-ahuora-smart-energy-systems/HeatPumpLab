@@ -104,11 +104,24 @@ def choose_anchors(records, count=6):
     lowers final hypervolume for every pair tested (Propane/Pentane, Propane/Butane,
     Isobutane/Pentane; 3 seeds with ridge seeding), because regions moved to that
     one-dimensional edge are taken from the mixed-fluid front.
+
+    If fewer than `count` mixed designs are on the overall front, the next
+    nondominated layers of the mixed designs fill the shortfall. A ValueError
+    is raised only when there are fewer than `count` successful mixed designs.
     """
     values = np.asarray([[r['COP'], r['VHC_MJ_per_m3']] if r['success'] and
                          not r.get('validation_rejected') else [0., 0.] for r in records])
     mixed = np.array([max(r['x'][3:]) <= .99 for r in records])
     front = [i for i in front_indices(values) if mixed[i]]
+    if len(front) < count:
+        # Pure-fluid designs can dominate all but a few mixed designs (e.g. Neopentane
+        # ternaries, where one evaluation removed five mixed front points at a refresh).
+        # Top up from successive nondominated layers of the mixed designs alone.
+        remaining = [i for i in range(len(records)) if mixed[i] and values[i, 0] > 0 and i not in front]
+        while len(front) < count and remaining:
+            layer = [remaining[k] for k in front_indices(values[remaining])]
+            front += layer
+            remaining = [i for i in remaining if i not in layer]
     if len(front) < count:
         raise ValueError('Too few mixed-fluid Pareto designs for the planned regions')
     scale = np.maximum(np.ptp(values[front], axis=0), 1e-12)
