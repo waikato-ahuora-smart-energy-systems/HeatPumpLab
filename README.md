@@ -6,6 +6,10 @@ The [v14 solver notes](HeatPumpLab/cycles/RecuperativeHeatPump/V14_SOLVER_FIXES.
 describe the pressure-targeting fixes, guarded flash recovery, remaining failed
 candidates, and the historical 400-call optimiser comparisons.
 
+The `main_*.py` runner scripts and their tests live in `local_scripts/` (gitignored, not part of
+the package). Run them from the repository root, e.g. `.venv/bin/python local_scripts/main_RHPopt.py`;
+their tests run with `.venv/bin/python -m pytest local_scripts/tests`.
+
 ## Recuperative heat pump model for high temperature glide heating
 
 The idea of heat recuperation within vapour-compression and transcritical heat pump cycles is not new. Internal heat exchangers (IHXs) are widely used to reduce flash gas generation after expansion, preheat suction gas, provide greater superheat after compression, and enable slightly lower high-side pressures (e.g. when producing hot water). In conventional cycles, the IHX transfers heat from the warm refrigerant immediately before expansion to the evaporator pressure. Pinch analysis states that heat is in excess below the pinch temperature and in deficit above it. A heat pump should ideally absorb heat below the pinch and reject upgraded heat above it. Applying this logic to the heat pump cycle itself suggests that repositioned IHXs could deliver thermodynamic benefits. This model calculates heat pump performance for alternate IHX placements. To distinguish a conventional IHX from a repositioned one, this study uses the term recuperative heat exchanger (RHX). If you wish to learn more, we refer you to the paper below.
@@ -16,7 +20,7 @@ Contact: Tim Walmsley, tim.walmsley@waikato.ac.nz
 
 ## Production Bayesian optimisation
 
-`main_RHPopt.py` and the public `optimise_recuperative_heat_pump` API now use
+`local_scripts/main_RHPopt.py` and the public `optimise_recuperative_heat_pump` API now use
 joint BoTorch LogEI (v18). Run `uv sync` to install the core dependencies.
 
 ```python
@@ -55,7 +59,7 @@ for settings and numerical limitations.
 
 ## Fixed-composition refrigerant analysis
 
-Run `.venv/bin/python main_RHPcomposition.py` to compare R600 (butane) with
+Run `.venv/bin/python local_scripts/main_RHPcomposition.py` to compare R600 (butane) with
 R290/R600, R290/R601A (isopentane), R290/R601 (pentane), and R290/R600A
 (isobutane) at a 200°C sink
 target. Each binary uses 0–100% R290 by mass in 10 percentage-point increments.
@@ -82,15 +86,15 @@ for two compressors. It is converted from the model's kJ/m³ to MJ/m³ for plott
 
 ## Experimental optimiser comparison
 
-`main_RHPoptimiser_benchmark.py` compares joint RBF, Gaussian-process expected
+`local_scripts/main_RHPoptimiser_benchmark.py` compares joint RBF, Gaussian-process expected
 improvement (Bayesian optimisation), and space-filling searches on three fixed
 mixtures at 200°C. All use the same 24 initial designs and a 64-evaluation
 budget, without seeding from the previous sweep. It requires the existing
 fixed-composition results as comparators. Run with the repository environment:
 
 ```sh
-MPLBACKEND=Agg OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python main_RHPoptimiser_benchmark.py --n-cpu 6
-.venv/bin/python main_RHPoptimiser_benchmark.py --report-only
+MPLBACKEND=Agg OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python local_scripts/main_RHPoptimiser_benchmark.py --n-cpu 6
+.venv/bin/python local_scripts/main_RHPoptimiser_benchmark.py --report-only
 ```
 
 Historical local-polish results remain readable, but that diagnostic is no longer executable.
@@ -103,12 +107,12 @@ the original composition sweep. See the
 [investigation](HeatPumpLab/cycles/RecuperativeHeatPump/OPTIMISER_COMPARISON.md)
 for findings and limitations.
 
-The repeated origin-start comparison is available in `main_RHPorigin_benchmark.py`:
+The repeated origin-start comparison is available in `local_scripts/main_RHPorigin_benchmark.py`:
 
 ```sh
 uv sync --group benchmark
-MPLBACKEND=Agg OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python main_RHPorigin_benchmark.py --n-cpu 6
-.venv/bin/python main_RHPorigin_benchmark.py --report-only
+MPLBACKEND=Agg OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python local_scripts/main_RHPorigin_benchmark.py --n-cpu 6
+.venv/bin/python local_scripts/main_RHPorigin_benchmark.py --report-only
 ```
 
 This runs BO, RBF and official pycma CMA-ES from `(0 K, 0 K, 0.5)` on the three
@@ -125,7 +129,7 @@ pressure initialisation, which limits interpretation of the nominal COP peaks.
 
 ## Tests and archived experiments
 
-**Ternary mixtures.** `main_RHPfixed_mobo.py --third <fluid>` searches the
+**Ternary mixtures.** `local_scripts/main_RHPfixed_mobo.py --third <fluid>` searches the
 three-component mixture `--first`/`--partner`/`--third` (e.g. Propane/Isobutane/Isopentane):
 the composition is encoded as the first two mass fractions with their sum at most 1,
 initial and boundary designs cover the triangle's vertices, edges and centroid, and ridge
@@ -148,7 +152,7 @@ repair. The cycle model itself still solves 0.1-0.9. Earlier results (up to
 optimiser version v23) used 0.1-0.9; designs outside the new range should be
 excluded when they are compared with new runs.
 
-The fixed-200°C Pareto runner `main_RHPfixed_mobo.py` accepts `--comp-frac 0.5`
+The fixed-200°C Pareto runner `local_scripts/main_RHPfixed_mobo.py` accepts `--comp-frac 0.5`
 to fix the two-stage pressure allocation. Both global BO and local-128 BO then
 search only the two recuperator lifts and composition, with three-dimensional
 GP inputs. The fixed setting is recorded in checkpoints and retained during
@@ -165,7 +169,7 @@ budget, but cannot become successful incumbents or Pareto points. Historical
 results produced without this constraint require re-evaluation; the optimiser
 version and run source signatures prevent silent reuse under the new settings.
 
-`main_RHPfixed_mobo.py` seeds each run with pinch-balance ridge solves by default
+`local_scripts/main_RHPfixed_mobo.py` seeds each run with pinch-balance ridge solves by default
 (`rhp_ridge.py`; disable with `--no-ridge-seed`). At a fixed lift share
 theta = RHX1/(RHX1+RHX2), COP peaks where two adjacent gas coolers are pinched at
 once; each solve reports the per-gas-cooler minimum approaches (`gc_approaches`),
@@ -177,7 +181,7 @@ ridge points (for Propane/Pentane, 5/6 propane, near the 80% ridge-B design). In
 the front in every seed (2 of 3 without it). `run_family()` defaults to seeding and
 needs a budget of at least 200 with it.
 
-The temperature runner `main_RHPtemperature_mobo.py` finds the COP-VHC front at
+The temperature runner `local_scripts/main_RHPtemperature_mobo.py` finds the COP-VHC front at
 each delivery temperature on the 100:5:220 °C grid. Temperature is a condition,
 not an objective: quality is the mean of the 25 per-temperature 2D hypervolumes
 (COP/4, VHC/10 against the origin). One GP (five inputs including temperature, two
@@ -199,7 +203,7 @@ evaluations, not before 5,000; `--no-stop-rule`). Up to v24 temperature was a
 third objective, which concentrated BO at 220 °C (454 of 645 steps in a
 2,000-evaluation trial); each run version needs a fresh output directory.
 
-`main_RHPehvi_speed_check.py` reports whether BoTorch's fused qLogEHVI C++ kernel
+`local_scripts/main_RHPehvi_speed_check.py` reports whether BoTorch's fused qLogEHVI C++ kernel
 loaded (it needs the `ninja` package and a C++ compiler) and times it against the
 pure-Python path.
 
@@ -210,7 +214,7 @@ The searches fit a GP to these margins and multiply the acquisition by the
 probability that all are non-negative; the old distance penalty now applies
 only to numerical failures, which report no margins. Set
 `OuterDesignOptimisationConfig.min_discharge_superheat_K` (or
-`main_RHPfixed_mobo.py --min-discharge-superheat`) to require a discharge
+`local_scripts/main_RHPfixed_mobo.py --min-discharge-superheat`) to require a discharge
 superheat margin; supercritical discharge is exempt. The default, 0 K, keeps
 the previous acceptance rule.
 

@@ -22,3 +22,6 @@ htmlcov/
 /paper/
 /experiments/
 /outputs/
+
+# Local runner scripts and their tests (not tracked)
+/local_scripts/

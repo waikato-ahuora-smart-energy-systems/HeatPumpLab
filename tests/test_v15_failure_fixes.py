@@ -171,10 +171,7 @@ def test_objective_retains_native_failure_context():
     assert record.report["property_failure_context"] == hp.property_failure_context
     assert record.report["solve_failure_kind"] == "native_property"
     assert record.report["solve_error_stage"] == "discharge_pressure_search"
-    from main_RHPoptimiser_benchmark import serialise
-    saved = serialise(record)
-    assert saved["property_failure_context"] == hp.property_failure_context
-    assert saved["solve_error_stage"] == hp.solve_error_stage
+    # serialisation by local_scripts/main_RHPoptimiser_benchmark.py: local_scripts/tests/test_optimiser_benchmark_serialise.py
 
 
 @pytest.mark.parametrize("pressure,temperature", [(2.7002492339609954, 133.4524442395218),
