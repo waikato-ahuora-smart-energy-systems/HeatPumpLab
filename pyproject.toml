@@ -26,3 +26,7 @@ dev = [
 [tool.pytest.ini_options]
 # Frozen experiment copies have duplicate module names and run separately.
 testpaths = ["tests"]
+filterwarnings = [
+    # linear_operator's import-time @torch.jit.script (see HeatPumpLab/__init__.py)
+    "ignore:`torch\\.jit\\.script` is deprecated:FutureWarning",
+]
