@@ -90,15 +90,21 @@ def _analyse_RHP_case_once(
         0.0 if "dT_gc_out_min_offset" not in case else case["dT_gc_out_min_offset"]
     )
 
+    # Optional hard floor on the offset (absent or 0 keeps the original behaviour). The case
+    # "dT_gc_out_min_offset" stays an initial guess; "dT_gc_out_min_offset_floor" holds the gas
+    # cooler outlet at least this far above T_air_inlet + dT_GC_min_tar, e.g. so the IHX can
+    # superheat the stage-1 suction gas.
+    offset_floor = max(0.0, float(case.get("dT_gc_out_min_offset_floor", 0.0) or 0.0))
+    dT_gc_out_min_offset = max(float(dT_gc_out_min_offset), offset_floor)
     vars_input = {
-        "dT_gc_out_min_offset": {"xi": dT_gc_out_min_offset, "bnds": (0.0, 40.0)}
+        "dT_gc_out_min_offset": {"xi": dT_gc_out_min_offset, "bnds": (offset_floor, 40.0)}
     }
     case["additional_data"] = {"vars_input": vars_input}
     objective_case = case
     using_fast_objective = False
     seed_hp = None
     seed_dt = None
-    minimum_feasible_offset = 0.0
+    minimum_feasible_offset = offset_floor
 
     if use_fast_objective:
         objective_case, dt, using_fast_objective, seed_hp = _get_fast_objective_case(

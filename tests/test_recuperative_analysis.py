@@ -192,6 +192,38 @@ def test_analyse_rhp_case_skips_optimisation_when_boundary_gradient_is_not_posit
     assert solved_args[0]["dT_gc_out_min_offset"] == pytest.approx(0.0)
 
 
+def test_analyse_rhp_case_offset_floor_is_a_hard_lower_bound(monkeypatch):
+    hp = FakeHeatPump(sec=1.3)
+    solved_args = []
+
+    monkeypatch.setattr(
+        rhp_analysis, "get_fprime", lambda *args, **kwargs: (-0.1, 0.2)
+    )
+    monkeypatch.setattr(
+        rhp_analysis,
+        "get_local_optimum",
+        lambda *args, **kwargs: pytest.fail("optimisation should not run"),
+    )
+    monkeypatch.setattr(rhp_analysis, "_get_dQdW", lambda solved_hp: 0.0)
+    monkeypatch.setattr(rhp_analysis, "get_results_report", lambda **kwargs: None)
+
+    def solve_single_case(hp_cls, args):
+        solved_args.append(args)
+        return hp, 0.4
+
+    monkeypatch.setattr(rhp_analysis, "solve_single_case_with_timer", solve_single_case)
+
+    case = {
+        "refrigerant": "Butane",
+        "dT_gc_out_min_offset": 3.0,
+        "dT_gc_out_min_offset_floor": 15.0,
+    }
+    rhp_analysis.analyse_RHP_case(FakeHeatPump, case, use_fast_objective=False)
+
+    assert solved_args[0]["dT_gc_out_min_offset"] == pytest.approx(15.0)
+    assert all(args["dT_gc_out_min_offset"] >= 15.0 - 1e-9 for args in solved_args)
+
+
 def test_analyse_rhp_case_can_skip_candidate_result_persistence(monkeypatch):
     hp = FakeHeatPump(sec=1.3)
     solved_args = []
