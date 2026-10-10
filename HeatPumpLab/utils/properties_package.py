@@ -659,11 +659,44 @@ class PropertyPackage:
             500,
             self.fld_composition,
         )
-        self._check_result(result, "REFPROPdll(critical)")
-        values = result.Output[0:4]
-        if not all(isfinite(value) for value in values):
-            raise RefpropError("REFPROPdll returned nonfinite critical properties.")
+        try:
+            self._check_result(result, "REFPROPdll(critical)")
+            values = result.Output[0:4]
+            if not all(isfinite(value) for value in values):
+                raise RefpropError("REFPROPdll returned nonfinite critical properties.")
+        except RefpropError:
+            # Mixtures without critical-line coefficients (e.g. estimated binaries such as
+            # propane/cyclopentane, CRTHMX error 313) fall back to the true critical point.
+            if self.n_components < 2:
+                raise
+            return self._get_true_critical_properties()
         return values
+
+    def _get_true_critical_properties(self):
+        """Solve the mixture's true critical point with CRTPNTdll (Michelsen's method).
+
+        Initial guesses are mole-fraction averages of the pure-component critical points.
+        Returns (M, Pc, Tc, Dc) in the package units (SI with C: MPa, C, kg/m3).
+        """
+        z = list(self.fld_composition)
+        guesses = [self.RP.INFOdll(i + 1) for i in range(self.n_components)]
+        t_guess = sum(x * info.Tc for x, info in zip(z, guesses))  # K
+        p_guess = sum(x * info.Pc for x, info in zip(z, guesses))  # kPa
+        critical = self.RP.CRTPNTdll(z, t_guess, p_guess)
+        self._check_result(critical, "CRTPNTdll")
+        molar_mass_g = float(self.RP.WMOLdll(z))  # g/mol
+        if not all(isfinite(v) and v > 0 for v in (critical.Tc, critical.Pc, critical.Dc, molar_mass_g)):
+            raise RefpropError("CRTPNTdll returned nonfinite critical properties.")
+        molar = self.RP.REFPROPdll(
+            self.fld_name, "", "M", self.UNITS, self.iMass, self.iFlag, 0.0, 0.0, z
+        )
+        self._check_result(molar, "REFPROPdll(M)")
+        return [
+            molar.Output[0],
+            critical.Pc / 1000.0,              # kPa -> MPa
+            critical.Tc - self.TC_to_K,        # K -> C
+            critical.Dc * molar_mass_g,        # mol/L * g/mol = kg/m3
+        ]
 
     def _get_mole_fractions(self, composition):
         """Return mole fractions for REFPROP low-level flash routines."""

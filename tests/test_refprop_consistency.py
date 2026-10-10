@@ -286,3 +286,46 @@ def test_near_zero_rhx2_gap_is_feasible(solve_recuperative_case, assert_successf
     assert hp.gc_minimum_approach >= 19.95
     if lift > 0:
         assert hp.rhx2.duty >= -1e-6
+
+
+def test_mixture_without_critical_line_falls_back_to_true_critical_point(monkeypatch):
+    class CriticalStub:
+        def REFPROPdll(self, fld, hin, hout, *args):
+            if hout == "M":
+                return SimpleNamespace(ierr=0, herr="", Output=[60.0])
+            return SimpleNamespace(ierr=313, herr="[CRTHMX error 313] no coefficients",
+                                   Output=[-9999990.0] * 4)
+
+        def INFOdll(self, icomp):
+            return SimpleNamespace(Tc=(370.0, 511.7)[icomp - 1], Pc=(4250.0, 4570.0)[icomp - 1])
+
+        def CRTPNTdll(self, z, t_guess, p_guess):
+            assert 370.0 < t_guess < 511.7 and 4250.0 < p_guess < 4570.0
+            return SimpleNamespace(Tc=450.0, Pc=5000.0, Dc=3.0, ierr=0, herr="")
+
+        def WMOLdll(self, z):
+            return 60.0
+
+    pp = package(CriticalStub(), composition=(.4, .6))
+    pp.n_components = 2
+    monkeypatch.setattr(pp, "_ensure_refprop_context", lambda comp: None)
+
+    M, Pc, Tc, Dc = pp._get_critical_properties()
+
+    assert M == pytest.approx(60.0)
+    assert Pc == pytest.approx(5.0)
+    assert Tc == pytest.approx(450.0 - 273.15)
+    assert Dc == pytest.approx(180.0)
+
+
+def test_pure_fluid_critical_failure_is_not_masked(monkeypatch):
+    class FailingStub:
+        def REFPROPdll(self, *args):
+            return SimpleNamespace(ierr=313, herr="failed", Output=[float("nan")] * 4)
+
+    pp = package(FailingStub(), composition=(1.0,))
+    pp.n_components = 1
+    monkeypatch.setattr(pp, "_ensure_refprop_context", lambda comp: None)
+
+    with pytest.raises(RefpropError):
+        pp._get_critical_properties()
