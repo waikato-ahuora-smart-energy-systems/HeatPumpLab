@@ -127,6 +127,57 @@ See the [origin-start study](HeatPumpLab/cycles/RecuperativeHeatPump/ORIGIN_OPTI
 for the repeated-trial results and the inner solver's sensitivity to numerical
 pressure initialisation, which limits interpretation of the nominal COP peaks.
 
+## Conventional heat pump (rating model)
+
+`HeatPumpLab/cycles/ConventionalHeatPump` is a standalone single-stage cycle: evaporator,
+compressor, condenser, subcooler and expansion valve. Inputs are the evaporating and condensing
+temperatures (dew point by default; `"bubble"` or `"mean"` for zeotropes), suction superheat,
+subcooling, a compressor curve and a compressor heat loss Q = UA (T_wall - T_ambient), with
+T_wall the mean of the suction and discharge temperatures (or the discharge temperature). The
+discharge state solves the compressor energy balance with that loss.
+
+Defaults: n-butane on the manufacturer Recip-M (R600a efficiency fits read on a suction/condensing density
+basis, electrical-input basis, 56.25 m3/h at 50 Hz), a 55 C heat source (evaporator dew point 5 K below),
+120 C steam (condenser bubble point 5 K above), hot water 80 -> 95 C through the subcooler (5 K minimum
+approach, flow from the duty), 15 K suction superheat from an internal heat exchanger after the subcooler,
+15 C ambient and a compressor heat loss UA of 15 W/K. `T_evap`, `T_cond` and `dT_subcool` override the
+source, steam and hot-water specification; `dT_discharge_superheat` fixes the discharge instead of the UA.
+Optional: condenser, subcooler and evaporator heat losses (`loss_UA_cond_kWK`, `loss_UA_subcool_kWK`,
+`loss_UA_evap_kWK`) and `preheat_subcool_share` (condenser-exit subcooling that preheats the steam
+generator feedwater). The report includes the steam raised from hot water bled at the subcooler outlet
+(`m_steam_kgs`, IAPWS-95 water table in `water_steam.py`).
+
+Compressor curves: `EfficiencyMap` (isentropic and volumetric efficiency in to, tc), with the
+manufacturer R600a fits for Recip-S, Recip-M and Recip-L in `compressor_data.py`;
+`EfficiencyCurve` (efficiency vs pressure ratio, including the lab's Pareto fronts); and
+`EN12900Curve` / `MapCurve` (manufacturer mass-flow and power polynomials).
+
+```python
+from HeatPumpLab.cycles.ConventionalHeatPump import ConventionalHeatPump, ConventionalHPConfig
+
+res = ConventionalHeatPump(ConventionalHPConfig()).solve()            # the defaults above
+res = ConventionalHeatPump(ConventionalHPConfig(T_evap=40.0, T_cond=110.0)).solve()
+print(res.COP, res.report["Q_heat_kW"], res.report["UA_loss_kWK"], res.report["T_discharge"])
+```
+
+`local_scripts/main_SGHP_rating.py` runs one point (`one`) or a rating map over the envelope (`map`).
+`local_scripts/main_SGHP_dashboard.py` writes the SGHP (Steam-Generating Heat Pump) dashboard (refrigerant
+switch, compressor Hz/rpm slider, cycle diagrams, energy flows, COP and compressor maps) to
+`results/SGHP_dashboard/SGHP_dashboard.html`; `--fluid` is repeatable for comparing refrigerants and
+mixtures, e.g. `--fluid Butane --fluid "Propane;Isopentane|0.2;0.8|mass"`. Compressor speed:
+`compressor_Hz` scales the swept volume (56.25 m3/h and 1450 rpm at 50 Hz); the efficiency maps
+are held at their 50 Hz values.
+
+### Property backends: REFPROP or CoolProp
+
+REFPROP is the default. CoolProp 8 is an optional stand-in (`uv sync --group coolprop`):
+`HeatPumpLab/utils/coolprop_properties.py` provides `CoolPropPackage`, with the same fluid
+strings, units, phase labels and IIR reference state as `PropertyPackage`. Select it per model
+(`ConventionalHPConfig(property_backend="coolprop")`), per script (`--backend coolprop`) or for a
+whole run (`HEATPUMPLAB_PROPERTY_BACKEND=coolprop`). REFPROP now loads on first use, so the package
+imports on machines without it. CoolProp's mixture interaction parameters and two-phase mixture
+flashes differ from REFPROP's: check mixture results against REFPROP.
+
 ## Tests and archived experiments
 
 **Ternary mixtures.** `local_scripts/main_RHPfixed_mobo.py --third <fluid>` searches the

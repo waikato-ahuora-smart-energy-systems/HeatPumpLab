@@ -15,6 +15,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+coolprop = [
+    "coolprop>=8.0",
+]
 benchmark = [
     "cma>=4.4.4",
 ]

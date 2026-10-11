@@ -1,6 +1,13 @@
-"""Wrapper around REFPROP for thermodynamic property evaluation."""
+"""Wrapper around REFPROP for thermodynamic property evaluation.
 
-from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
+The REFPROP libraries load on the first ``PropertyPackage(...)``, not at import, so HeatPumpLab
+imports on machines without REFPROP (e.g. with the CoolProp backend, utils/coolprop_properties.py).
+"""
+
+try:
+    from ctREFPROP.ctREFPROP import REFPROPFunctionLibrary
+except ImportError:  # pragma: no cover - REFPROP wrapper not installed (CoolProp-only machines)
+    REFPROPFunctionLibrary = None
 from collections.abc import Callable
 from math import isfinite, log
 from numbers import Real
@@ -67,9 +74,13 @@ def _get_refprop_paths(platform_name: str) -> tuple[str, str, str, str]:
 
 def _load_refprop_libraries(
     platform_name: str,
-    library_factory=REFPROPFunctionLibrary,
+    library_factory=None,
 ) -> tuple[REFPROPFunctionLibrary, REFPROPFunctionLibrary, REFPROPFunctionLibrary]:
     """Load REFPROP libraries for default, source, and sink property contexts."""
+    if library_factory is None:
+        library_factory = REFPROPFunctionLibrary
+    if library_factory is None:
+        raise RefpropError("ctREFPROP is not installed; use the CoolProp backend or install REFPROP")
     ref_path, src_path, snk_path, refprop_root = _get_refprop_paths(platform_name)
     rp_ref = library_factory(ref_path)
     rp_src = library_factory(src_path)
@@ -123,7 +134,8 @@ class PropertyPackage:
     RP_ref: REFPROPFunctionLibrary
     RP_src: REFPROPFunctionLibrary
     RP_snk: REFPROPFunctionLibrary
-    RP_ref, RP_src, RP_snk = _load_refprop_libraries(platform)
+    # Loaded on first use (_ensure_refprop_libraries), shared by all instances.
+    RP_ref = RP_src = RP_snk = None
 
     # REFPROPdll's spline flag, NOT ABFLSHdll's phase/units flag.
     iFlag: int = 1
@@ -132,7 +144,7 @@ class PropertyPackage:
     # Native contexts are shared by streams. Switching fluids or composition
     # invalidates the phase envelope for every package using that library.
     _library_contexts: dict[object, tuple[str, tuple[float, ...] | None]] = {}
-    UNITS: int = RP_ref.GETENUMdll(0, "SI with C").iEnum
+    UNITS: int | None = None
     iMass: int = 0
     P_crit: float
     P_max: float
@@ -147,8 +159,23 @@ class PropertyPackage:
     TC_to_K: float = 273.15
     DEFAULT_VAL: float = -9999990.0
 
+    @classmethod
+    def _ensure_refprop_libraries(cls) -> None:
+        """Load the REFPROP libraries once per process (raises RefpropError if unavailable)."""
+        if PropertyPackage.RP_ref is None:
+            try:
+                libs = _load_refprop_libraries(platform)
+            except RefpropError:
+                raise
+            except Exception as exc:  # missing shared library, wrong platform, ...
+                raise RefpropError(f"REFPROP libraries could not be loaded: {exc}") from exc
+            PropertyPackage.RP_ref, PropertyPackage.RP_src, PropertyPackage.RP_snk = libs
+        if PropertyPackage.UNITS is None:
+            PropertyPackage.UNITS = PropertyPackage.RP_ref.GETENUMdll(0, "SI with C").iEnum
+
     def __init__(self, fld_name: str = None, pp_instance: str = "") -> None:
         """Initialise an instance bound to a particular fluid definition."""
+        self._ensure_refprop_libraries()
         (
             self.fld_name,
             self.fld_composition,
