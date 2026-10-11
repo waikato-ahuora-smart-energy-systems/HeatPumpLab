@@ -27,7 +27,8 @@ def run_cases_js(script):
 
 INPUTS = dict(comps=[["Propane", 20], ["Isopentane", 80]], basis="mass", compressor="Recip-L", T_source=50, T_steam=115,
               T_water_in=80, T_water_out=95, compressor_Hz=45, dTmin_source=5, dTmin_steam=5, dTmin_water=5,
-              dT_superheat=15, dTmin_ihx=5, T_ambient=15, UA_W_K=15, UA_cond_W_K=20, UA_subcool_W_K=10, UA_evap_W_K=5, preheat_subcool_pct=50)
+              dT_superheat=15, dTmin_ihx=5, T_ambient=15, UA_W_K=15, UA_cond_W_K=20, UA_subcool_W_K=10, UA_evap_W_K=5, preheat_subcool_pct=50,
+              dPK_cond=0.05, dPK_subcool=0.5, dPK_evap=0.02)
 
 
 def test_link_round_trip():
@@ -40,9 +41,10 @@ def test_link_round_trip():
     assert o["back"]["n"] == "Propane/isopentane · 115 °C — test"            # non-ASCII names survive
     assert o["clean"] == INPUTS and o["back"]["v"] == 1
     assert o["label"] == "Propane/Isopentane 20/80 (mass)"
-    old = {k: v for k, v in INPUTS.items() if not k.startswith(("UA_cond", "UA_subcool", "UA_evap", "preheat_subcool_pct"))}   # saved before the exchanger losses
+    old = {k: v for k, v in INPUTS.items() if not k.startswith(("UA_cond", "UA_subcool", "UA_evap", "preheat_subcool_pct", "dPK_"))}   # saved before the exchanger losses
     o2 = run_cases_js(f"console.log(JSON.stringify(cleanInputs({json.dumps(old)})));")
     assert (o2["UA_cond_W_K"], o2["UA_subcool_W_K"], o2["UA_evap_W_K"], o2["preheat_subcool_pct"]) == (0, 0, 0, 0)
+    assert (o2["dPK_cond"], o2["dPK_subcool"], o2["dPK_evap"]) == (0, 0, 0)
 
 
 def test_untrusted_inputs_are_cleaned():
@@ -67,7 +69,7 @@ def test_summary_and_rows():
                      " colors: CASE_COLORS, sweeps: Object.keys(SWEEPS)}));")
     s = o["s"]
     assert s["ok"] and s["m_dot_kgh"] == pytest.approx(504) and s["m_water_kgh"] == pytest.approx(1008) and s["in_envelope"]
-    assert set(o["keys"]) <= set(s) and o["max"] == 5 and len(o["colors"]) == 5
+    assert set(o["keys"]) <= set(s) and o["max"] == 4 and len(o["colors"]) == 4
     assert o["sweeps"] == ["T_steam", "T_source", "compressor_Hz"]
 
 
@@ -80,7 +82,7 @@ def test_page_wiring(tmp_path):
                    'id="sweep-x"', 'id="sweep-y"', 'id="cmp-inputs"', 'id="cmp-ts"', 'id="cmp-ph"',
                    "boot();\ncasesBoot();", 'claude.use("db")', 'collection("cases")', "function setCompressor(name)",
                    'if (typeof casesOnRender === "function") casesOnRender();',
-                   'id="cmp-side"', "function sideBySide(cs)", "dialSVG(r.P_cond_bar, pTop,",
+                   'id="cmp-side"', "function sideBySide(cs)", "dialSVG(r.P_discharge_bar ?? r.P_cond_bar, pTop,", 'id="dPK_cond"', "dP_K_cond: inp.dPK_cond",
                    ".side-kv dd.win,.win-chip{", "function startDrag(ev, col)", "function moveCompare(id, to)",
                    "const caseColor = id =>", ".grip{cursor:grab;touch-action:none",
                    "const base = okRs[0];", 'r => r.rho_suction_kgm3', '["Discharge flow, m³/h", r => r.V_discharge_m3h, 1, -1]', '["Suction flow, m³/h", r => r.V_suction_m3h, 1, -1]', 'id="case-all"', 'id="case-none"', "function selectAll()", 'id="case-del-sel"', "async function deleteSelected()"):
@@ -93,7 +95,25 @@ def test_page_wiring(tmp_path):
     for needle in ():
         assert needle in html, needle
     assert "<select" not in html                                          # buttons only (embedded viewers)
+    assert 'id="cmp-order"' in html and 'id="cmp-order-list"' in html and "function applyOrder(cs)" in html
     assert "localStorage.setItem(LOCAL_KEY" in html                       # works without the shared store
     # an automatic case name follows the inputs (refrigerant, temperatures...) until someone types one
     assert "if (CS.nameAuto && document.activeElement !== $(\"case-name\")) $(\"case-name\").value = \"\";" in html
     assert "CS.nameAuto = !name || name === suggestName(inp);" in html
+
+
+def test_order_by():
+    """The comparison can be kept sorted: by name, or by a result best first (lower first where lower is better,
+    higher first otherwise); cases without a result go last in their current order."""
+    o = run_cases_js(
+        "const cs = [{id: 'a', name: 'Case 10'}, {id: 'b', name: 'Case 2'}, {id: 'c', name: 'Base'}, {id: 'd', name: 'Failed'}];"
+        "const val = {COP: {a: 3.5, b: 3.9, c: 3.7, d: null}, P_discharge_bar: {a: 24, b: 30, c: 20, d: null}, m_dot_kgh: {a: 500, b: 400, c: 600, d: null}};"
+        "const by = k => sortedCompare(cs, k, c => val[k][c.id]);"
+        "console.log(JSON.stringify({none: sortedCompare(cs, '', null), name: sortedCompare(cs, 'name', null), cop: by('COP'),"
+        " p: by('P_discharge_bar'), m: by('m_dot_kgh'), opts: orderOptions().map(o => o[0])}));")
+    assert o["none"] == ["a", "b", "c", "d"]
+    assert o["name"] == ["c", "b", "a", "d"]                 # numeric-aware: Case 2 before Case 10
+    assert o["cop"] == ["b", "c", "a", "d"]                  # highest COP first
+    assert o["p"] == ["c", "a", "b", "d"]                    # lowest max pressure first
+    assert o["m"] == ["c", "a", "b", "d"]                    # neither better: highest first
+    assert o["opts"][:3] == ["", "name", "COP"] and "P_discharge_bar" in o["opts"]

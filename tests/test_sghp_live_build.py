@@ -74,7 +74,10 @@ def test_page_controls_and_headline(build_mod, tmp_path):
     assert ".pickrow.wide{grid-template-columns:minmax(0,1fr)" in html
     # five evenly spaced headline results; dials 1.25x the original 150 px; COP number sized to the stars
     assert ".headline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr))" in html     # COP + four gauges
-    assert 'dialSVG(pmax, dialTop(pmax, rm.P_cond_bar), "--s6", "bar maximum pressure")' in html and "Max pressure, bar" in html
+    assert 'dialSVG(pmax, dialTop(pmax, rm.P_discharge_bar ?? rm.P_cond_bar), "--s6", "bar maximum pressure")' in html and "Max pressure, bar" in html
+    # refrigerant pressure-loss coefficients sit in Approaches and losses, before the ambient (last)
+    i = [html.index(f'id="{k}"') for k in ("UA_evap", "dPK_cond", "dPK_subcool", "dPK_evap", "T_ambient")]
+    assert i == sorted(i) and "dP_K_cond: Math.max(0, v(\"dPK_cond\") || 0)" in html
     assert ".headline > .dial{width:100%;max-width:188px}" in html
     assert "function fitCop()" in html
     assert ".hl-cop{padding-right:28px;border-right" not in html                # no vertical divider
@@ -102,10 +105,11 @@ def test_page_controls_and_headline(build_mod, tmp_path):
     assert html.index('id="chips"') < html.index('class="controls"')                       # warnings above the inputs
     # fixed UA of 15 W/K; no UA calibration anywhere in the page
     assert 'id="preheat_sub" min="0" max="100" step="5" value="100"' in html and 'id="btn-design"' not in html
-    pair = html.index('<div class="temps pair">')
-    assert pair < html.index('id="preheat_sub"') < html.index('id="hz"') < html.index('</div>', html.index('id="hz-out"') + 40)
+    pair = html.index('<div class="temps pair">')                             # preheat and suction superheat side by side
+    assert pair < html.index('id="preheat_sub"') < html.index('id="dT_superheat"') < html.index('id="hz"')
+    assert '<input type="range" id="dT_superheat" min="0" max="40" step="1" value="15">' in html
     assert 'id="dT_subcool_cond"' not in html                                  # a share of the preheat, not K
-    assert '>Suction superheat, K<input type="number" id="dT_superheat"' in html and ">Superheat, K<" not in html
+    assert 'for="dT_superheat" title=' in html and ">Superheat, K<" not in html and 'type="number" id="dT_superheat"' not in html
     assert '>Compressor heat loss UA, W/K<input type="number" id="UA_manual" value="15"' in html and "Shell UA" not in html
     for k in ("UA_cond", "UA_subcool", "UA_evap"):                      # exchanger heat losses, 0 W/K by default
         assert f'<input type="number" id="{k}" value="0" step="1" min="0">' in html, k

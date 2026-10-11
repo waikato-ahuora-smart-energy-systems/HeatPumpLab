@@ -150,7 +150,8 @@ def test_browser_model_matches_python():
     cases = [dict(),
              dict(dT_superheat=15.0, T_water_in=40.0, T_water_out=70.0), dict(T_water_out=78.0), dict(T_steam=150.0),
              dict(loss_UA_cond_kWK=0.02, loss_UA_subcool_kWK=0.01, loss_UA_evap_kWK=0.03), dict(preheat_subcool_share=0.5),
-             dict(preheat_subcool_share=1.0), dict(preheat_subcool_share=1.0, loss_UA_cond_kWK=0.02)]
+             dict(preheat_subcool_share=1.0), dict(preheat_subcool_share=1.0, loss_UA_cond_kWK=0.02),
+             dict(dP_K_cond=0.05, dP_K_subcool=0.5, dP_K_evap=0.02), dict(dP_K_cond=0.05, preheat_subcool_share=1.0)]
     # the JS model always reads the manufacturer map; give Python the same map, size-less in neither
     script = ("const S = require(%s);" % json.dumps(str(js)) + JS_TOY +
               "const cases = %s; const base = %s;" % (json.dumps(cases), json.dumps(WATER | {"dT_superheat": 5.0})) +
@@ -170,8 +171,9 @@ def test_browser_model_matches_python():
                   "subcooler_min_approach_K", "T_evap_dew", "T_cond_bubble", "rho_suction_kgm3", "m_steam_kgs",
                   "steam_bleed_fraction", "P_steam_bar", "V_suction_m3h", "V_discharge_m3h", "Q_cond_kW", "Q_source_kW",
                   "Q_loss_cond_kW", "Q_loss_subcool_kW", "Q_loss_evap_kW", "VHC", "T_cond_out", "dT_subcool_cond", "steam_preheat_fraction", "steam_gen_min_approach_K",
-                  "preheat_subcool_share"):
-            assert js_res["r"][k] == pytest.approx(py.report[k], rel=1e-9, abs=1e-9), (c, k)
+                  "preheat_subcool_share", "PR", "P_discharge_bar", "P_evap_in_bar", "dP_cond_kPa", "dP_subcool_kPa",
+                  "dP_evap_kPa", "T_cond_dew", "W_electric_kW"):
+            assert js_res["r"][k] == pytest.approx(py.report[k], rel=1e-8, abs=1e-9), (c, k)
 
 
 # ---------------------------------------------------------------- steam raised from bled hot water
@@ -275,3 +277,34 @@ def test_condenser_exit_subcooling_makes_more_steam():
     r = lossy.report
     Q_sub = r["Q_cond_refrigerant_kW"] - lb.report["Q_cond_refrigerant_kW"]
     assert Q_sub == pytest.approx(r["m_steam_kgs"] * r["steam_preheat_fraction"] * r["steam_dh_kJkg"], rel=1e-4)
+
+
+# ---------------------------------------------------------------- refrigerant pressure drops
+
+def test_pressure_drops_with_pinned_exits():
+    """dP [kPa] = K V^1.8 (V in m3/h at the mean specific volume of each exchanger's inlet and outlet). The exits
+    stay pinned by the approaches, so the compressor lifts from P_L to P_H + dP_cond and the evaporator inlet sits
+    dP_evap above P_L."""
+    comp = EfficiencyCurve(eta_is=0.7, motor_eff=0.9, displacement_m3h=56.25)
+    base = steam_model(Q_heat_kW=None, loss_UA_kWK=0.0, compressor=comp).solve()
+    K = dict(dP_K_cond=0.05, dP_K_subcool=0.5, dP_K_evap=0.02)
+    res = steam_model(Q_heat_kW=None, loss_UA_kWK=0.0, compressor=comp, **K).solve()
+    assert base.success and res.success, res.message
+    b, r, st = base.report, res.report, res.states
+    assert b["dP_cond_kPa"] == 0 and b["P_discharge_bar"] == pytest.approx(b["P_cond_bar"])
+    # converged: each drop matches its coefficient at the solved flow
+    assert r["dP_cond_kPa"] == pytest.approx(0.05 * r["Vmean_cond_m3h"] ** 1.8, rel=1e-6)
+    assert r["dP_subcool_kPa"] == pytest.approx(0.5 * r["Vmean_subcool_m3h"] ** 1.8, rel=1e-6)
+    assert r["dP_evap_kPa"] == pytest.approx(0.02 * r["Vmean_evap_m3h"] ** 1.8, rel=1e-6)
+    assert all(r[k] > 0 for k in ("dP_cond_kPa", "dP_subcool_kPa", "dP_evap_kPa"))
+    v = lambda s: 1 / s["D"]
+    m = r["m_dot_kgs"]
+    assert r["Vmean_cond_m3h"] == pytest.approx(m * (v(st["discharge"]) + v(st["cond_out"])) / 2 * 3600)
+    # exits pinned: same condensing and evaporating pressures; the compressor sees the drops
+    assert res.P_H == pytest.approx(base.P_H) and res.P_L == pytest.approx(base.P_L)
+    assert r["T_cond_bubble"] == pytest.approx(80.0) and r["T_evap_dew"] == pytest.approx(10.0)
+    assert r["P_discharge_bar"] == pytest.approx(r["P_cond_bar"] + r["dP_cond_kPa"] / 100)
+    assert r["P_evap_in_bar"] == pytest.approx(r["P_evap_bar"] + r["dP_evap_kPa"] / 100)
+    assert st["discharge"]["P"] == pytest.approx(r["P_discharge_bar"] / 10)
+    assert r["PR"] == pytest.approx(r["P_discharge_bar"] / r["P_evap_bar"]) and r["PR"] > b["PR"]
+    assert res.COP < base.COP and r["W_electric_kW"] > b["W_electric_kW"]

@@ -21,7 +21,9 @@ temperatures, the suction superheat and a compressor curve (see ``compressor_cur
 ``compressor_data``). The heat source is taken as isothermal: the evaporator outlet (dew point)
 sits ``dTmin_source`` below it, which fixes the evaporating pressure. The condenser (with its desuperheater) raises steam: the refrigerant bubble
 point at the condenser outlet sits ``dTmin_steam`` above the steam temperature, which fixes the
-condensing pressure. The subcooler heats water from ``T_water_in`` to ``T_water_out`` counter-
+condensing pressure. At or above the critical temperature there is no bubble point: the gas-cooler exit sits at
+T_steam + dTmin_steam on the critical isochore (rho = rho_crit), which sets the high pressure, and the compressor map
+reads the critical-isochore state at the discharge pressure (``critical_isochore``). The subcooler heats water from ``T_water_in`` to ``T_water_out`` counter-
 currently: the refrigerant is subcooled as far as the minimum approach ``dTmin_water`` allows (for a
 liquid whose heat capacity rises with temperature the pinch is at the cold end, so the liquid leaves
 at T_water_in + dTmin_water), and the water flow follows from the duty (constant water heat
@@ -72,6 +74,26 @@ from .water_steam import steam_from_feedwater
 
 GAS_PHASES = frozenset({"saturated_vapour", "superheated_vapour", "supercritical"})
 LIQUID_PHASES = frozenset({"liquid", "saturated_liquid"})
+DENSE_PHASES = LIQUID_PHASES | {"supercritical"}     # liquid-like states on a supercritical high side
+
+
+def critical_isochore(pr, P: float) -> dict:
+    """State on the critical isochore (rho = rho_crit) at pressure P >= P_crit: the continuation of the high-side
+    saturation line above the critical point (supercritical gas cooler)."""
+    from scipy.optimize import brentq
+    rc = getattr(pr, "rho_crit", float("nan"))
+    if not rc > 0:
+        raise ValueError("critical density not available for this refrigerant")
+
+    def g(T):
+        return pr.ref_TD(T, rc)["P"] - P
+    lo, hi = pr.T_crit - 0.5, pr.T_crit + 20.0
+    for _ in range(12):
+        if g(hi) >= 0:
+            break
+        hi += 40.0
+    T = brentq(g, lo, hi, xtol=1e-9)
+    return dict(pr.ref_TD(T, rc)) | dict(P=P, phase="supercritical", q=-1.0)
 
 
 # ----------------------------------------------------------------------------------------
@@ -123,6 +145,12 @@ class ConventionalHPConfig:
     subcooler_heat_useful: bool = True   # count the subcooler duty as delivered heat
     Q_heat_kW: float | None = None   # scale a size-less cycle to this heat output
     dP_crit_min: float = 0.0         # MPa, minimum clearance of P_H below the critical pressure
+    # Refrigerant pressure-loss coefficients: dP [kPa] = K (V [m3/h])^1.8, V at the mean specific volume of each
+    # exchanger's inlet and outlet. Exits are pinned (condenser bubble point, evaporator dew point), so the
+    # compressor discharges at P_H + dP_cond and the valve feeds the evaporator at P_L + dP_evap.
+    dP_K_cond: float = 0.0
+    dP_K_subcool: float = 0.0
+    dP_K_evap: float = 0.0
     property_backend: str | None = None  # "refprop" | "coolprop"; None -> $HEATPUMPLAB_PROPERTY_BACKEND or REFPROP
     compressor_Hz: float | None = None   # compressor supply frequency; None keeps the curve's own (50 Hz)
 
@@ -145,6 +173,9 @@ class FluidProperties:
         self.ref = make_property_package(refrigerant, backend=self.backend)
         self.P_crit = float(self.ref.P_crit)
         self.T_crit = float(self.ref.T_crit)
+        # critical density, kg/m3 (REFPROP reports it per mole: mol/dm3 x g/mol = kg/m3)
+        D_crit = float(getattr(self.ref, "D_crit", float("nan")))
+        self.rho_crit = D_crit * float(self.ref.molar_mass) if self.backend == "refprop" else D_crit
 
     def _r(self, pair, a, b):
         return self.ref.get_std_properties(pair, a, b, self.ref.fld_composition)
@@ -163,6 +194,9 @@ class FluidProperties:
 
     def ref_TQ(self, T, q):
         return self._r("TQ", T, q)
+
+    def ref_TD(self, T, D):
+        return self._r("TD", T, D)
 
 
 class RefpropProperties(FluidProperties):
@@ -290,7 +324,7 @@ class ConventionalHeatPump:
             from scipy.optimize import brentq
             T_out = brentq(lambda T: approach(T) - dT, T_out, T_in - 1e-6, xtol=1e-6)
         out = pr.ref_PT(P_H, T_out)
-        if out.get("phase") not in LIQUID_PHASES:
+        if out.get("phase") not in DENSE_PHASES:
             return None, f"subcooler outlet not liquid ({out.get('phase')})"
         return out, dict(min_approach=approach(T_out))
 
@@ -363,7 +397,26 @@ class ConventionalHeatPump:
         return self._solve()
 
     def _solve(self) -> ConventionalHPResult:
+        c = self.c
+        K = (c.dP_K_cond or 0.0, c.dP_K_subcool or 0.0, c.dP_K_evap or 0.0)
+        dP = (0.0, 0.0, 0.0)
+        res = self._solve_once(dP)
+        if not any(K) or not res.success or res.report.get("Vmean_cond_m3h") is None:
+            return res
+        for _ in range(15):                     # the drops depend on the flow: re-solve until they settle
+            r = res.report
+            nxt = tuple(k * v ** 1.8 / 1000.0 for k, v in
+                        zip(K, (r["Vmean_cond_m3h"], r["Vmean_subcool_m3h"], r["Vmean_evap_m3h"])))   # MPa
+            err = sum(abs(a - b) for a, b in zip(nxt, dP))
+            dP = nxt
+            res = self._solve_once(dP)
+            if not res.success or err < 1e-7:
+                break
+        return res
+
+    def _solve_once(self, dP) -> ConventionalHPResult:
         c, pr = self.c, self.props
+        dP_cond, dP_sub, dP_evap = dP
         warnings: list[str] = []
         try:
             if (c.dT_subcool is not None and c.dT_subcool < 0) or c.dT_superheat < 0:
@@ -372,14 +425,22 @@ class ConventionalHeatPump:
                 return ConventionalHPResult(False, "hot water outlet must be above its inlet")
             T_crit = getattr(pr, "T_crit", None)
             T_hot_set = c.T_cond if c.T_cond is not None else c.T_steam + c.dTmin_steam
-            if T_crit is not None and math.isfinite(T_crit) and T_hot_set >= T_crit:
+            # at or above the critical temperature the high side is supercritical: the gas-cooler exit (where the
+            # bubble point would be) at T_hot_set on the critical isochore sets the pressure
+            sc = T_crit is not None and math.isfinite(T_crit) and T_hot_set >= T_crit
+            if sc and not getattr(pr, "rho_crit", float("nan")) > 0:
                 return ConventionalHPResult(False, f"condensing at {T_hot_set:.1f} C is at or above the critical "
-                                                   f"temperature of this refrigerant ({T_crit:.1f} C)")
+                                                   f"temperature of this refrigerant ({T_crit:.1f} C), and its "
+                                                   f"critical density is not available")
+            liquid_ok = DENSE_PHASES if sc else LIQUID_PHASES
             if c.T_evap is not None:
                 P_L = self.saturation_pressure(c.T_evap, c.evap_basis)
             else:                                   # evaporator outlet (dew) dTmin_source below the source
                 P_L = self.saturation_pressure(c.T_source - c.dTmin_source, "dew")
-            if c.T_cond is not None:
+            if sc:
+                gc_out = pr.ref_TD(T_hot_set, pr.rho_crit)
+                P_H = gc_out["P"]
+            elif c.T_cond is not None:
                 P_H = self.saturation_pressure(c.T_cond, c.cond_basis)
             else:                                   # condenser outlet (bubble) dTmin_steam above the steam
                 P_H = self.saturation_pressure(c.T_steam + c.dTmin_steam, "bubble")
@@ -387,13 +448,28 @@ class ConventionalHeatPump:
                 return ConventionalHPResult(False, "condensing pressure not above evaporating pressure",
                                             P_H=P_H, P_L=P_L)
             P_crit = getattr(pr, "P_crit", None)
-            if P_crit is not None and P_H > P_crit - c.dP_crit_min:
+            if not sc and P_crit is not None and P_H > P_crit - c.dP_crit_min:
                 return ConventionalHPResult(
                     False, f"condensing pressure {P_H * 10:.2f} bar within {c.dP_crit_min * 10:g} bar "
                            f"of the critical pressure {P_crit * 10:.2f} bar", P_H=P_H, P_L=P_L)
 
+            # pressure drops (exits pinned): compressor discharge and evaporator inlet pressures
+            P_dis, P_evin, P_valve = P_H + dP_cond, P_L + dP_evap, P_H - dP_sub
+            if not sc and dP_cond and P_crit is not None and P_dis > P_crit - c.dP_crit_min:
+                return ConventionalHPResult(
+                    False, f"discharge pressure {P_dis * 10:.2f} bar (with the condenser pressure drop) is above "
+                           f"the critical pressure {P_crit * 10:.2f} bar", P_H=P_H, P_L=P_L)
+            if not P_valve > P_evin:
+                return ConventionalHPResult(False, "pressure drops leave no pressure difference across the valve",
+                                            P_H=P_H, P_L=P_L)
             evap_dew, evap_bub = pr.ref_PQ(P_L, 1.0), pr.ref_PQ(P_L, 0.0)
-            cond_dew, cond_bub = pr.ref_PQ(P_H, 1.0), pr.ref_PQ(P_H, 0.0)
+            # cond_dew: the dew point at the condenser inlet (compressor discharge pressure); supercritical: the
+            # critical-isochore states at the discharge pressure and at the gas-cooler exit (T_hot_set)
+            if sc:
+                cond_dew = critical_isochore(pr, P_dis)
+                cond_bub = dict(gc_out) | dict(P=P_H, phase="supercritical", q=-1.0)
+            else:
+                cond_dew, cond_bub = pr.ref_PQ(P_dis, 1.0), pr.ref_PQ(P_H, 0.0)
             cond_out = cond_bub                     # 3 condenser exit (subcooled below, after the compressor)
             share = min(max(c.preheat_subcool_share, 0.0), 1.0)
             steam_mode = c.T_cond is None and c.T_water_out is not None and c.T_water_out < c.T_steam
@@ -407,15 +483,15 @@ class ConventionalHeatPump:
             ihx = c.dT_superheat > 0
 
             # 2 compressor
-            isentropic = pr.ref_PS(P_H, suction["s"])
+            isentropic = pr.ref_PS(P_dis, suction["s"])
             h_is = isentropic["h"]
 
             def rated_suction(T):
                 st = dict(pr.ref_PT(P_L, T))
-                st["h_isentropic"] = pr.ref_PS(P_H, st["s"])["h"]
+                st["h_isentropic"] = pr.ref_PS(P_dis, st["s"])["h"]
                 return st
 
-            inlet = CompressorInlet(suction=suction, P_discharge=P_H, h_isentropic=h_is,
+            inlet = CompressorInlet(suction=suction, P_discharge=P_dis, h_isentropic=h_is,
                                     T_evap_dew=evap_dew["T"], T_cond_dew=cond_dew["T"],
                                     rated_suction=rated_suction,
                                     rho_evap_dew=evap_dew.get("D"), rho_cond_dew=cond_dew.get("D"))
@@ -434,10 +510,10 @@ class ConventionalHeatPump:
                     return ConventionalHPResult(False, "UA heat loss needs a sized compressor (displacement)",
                                                 P_H=P_H, P_L=P_L, warnings=warnings)
                 UA = self.loss_UA()
-                discharge = self._ua_discharge(P_H, suction, comp.w_electric, comp.m_dot)
+                discharge = self._ua_discharge(P_dis, suction, comp.w_electric, comp.m_dot)
                 q_loss = 0.0 if UA == 0.0 else comp.w_electric - (discharge["h"] - suction["h"])
             elif mode == "discharge_superheat":
-                discharge = pr.ref_PT(P_H, cond_dew["T"] + c.dT_discharge_superheat)
+                discharge = pr.ref_PT(P_dis, cond_dew["T"] + c.dT_discharge_superheat)
                 q_loss = comp.w_electric - (discharge["h"] - suction["h"])
                 if q_loss < 0:
                     return ConventionalHPResult(
@@ -445,7 +521,7 @@ class ConventionalHeatPump:
                                f"{-q_loss:.1f} kJ/kg more than the compressor's electrical input",
                         P_H=P_H, P_L=P_L, warnings=warnings)
             else:
-                discharge = pr.ref_PH(P_H, comp.h_discharge)
+                discharge = pr.ref_PH(P_dis, comp.h_discharge)
                 q_loss = comp.w_electric - (comp.h_discharge - suction["h"])
             if discharge.get("phase") not in GAS_PHASES:
                 return ConventionalHPResult(False, f"wet compression (discharge {discharge.get('phase')})",
@@ -463,7 +539,7 @@ class ConventionalHeatPump:
                            if comp.m_dot else 0.0)
                     q_x = share * fp * (q_c0 - l_c) / (1 - share * fp)
                     cond_out = pr.ref_PH(P_H, cond_bub["h"] - q_x)
-                if cond_out.get("phase") not in LIQUID_PHASES:
+                if cond_out.get("phase") not in liquid_ok:
                     return ConventionalHPResult(False, f"condenser exit not liquid ({cond_out.get('phase')})",
                                                 P_H=P_H, P_L=P_L, warnings=warnings)
             elif share > 0:
@@ -473,7 +549,7 @@ class ConventionalHeatPump:
             water = None
             if c.dT_subcool is not None:
                 sc_out = pr.ref_PT(P_H, cond_out["T"] - c.dT_subcool) if c.dT_subcool > 0 else cond_out
-                if c.dT_subcool > 0 and sc_out.get("phase") not in LIQUID_PHASES:
+                if c.dT_subcool > 0 and sc_out.get("phase") not in liquid_ok:
                     return ConventionalHPResult(False, f"subcooler outlet not liquid ({sc_out.get('phase')})",
                                                 P_H=P_H, P_L=P_L, warnings=warnings)
             else:
@@ -499,7 +575,7 @@ class ConventionalHeatPump:
                         P_H=P_H, P_L=P_L, warnings=warnings)
 
             # 5 valve outlet
-            evap_in = pr.ref_PH(P_L, h_valve)
+            evap_in = pr.ref_PH(P_evin, h_valve)
 
             q_desuperheat = h2 - cond_dew["h"]
             q_cond = h2 - h3
@@ -536,7 +612,13 @@ class ConventionalHeatPump:
                 subcooler_min_approach_K=None if water is None else water["min_approach"],
                 COP=cop, COP_cooling=cop_c, SEC=1 / cop, VHC=vhc, rho_suction_kgm3=suction["D"],
                 COP_carnot=(T_hot + 273.15) / (T_hot - T_low) if T_hot > T_low else None,
-                P_evap_bar=P_L * 10, P_cond_bar=P_H * 10, PR=P_H / P_L,
+                P_evap_bar=P_L * 10, P_cond_bar=P_H * 10, PR=P_dis / P_L,
+                supercritical=sc, rho_crit_kgm3=pr.rho_crit if sc else None,
+                P_discharge_bar=P_dis * 10, P_evap_in_bar=P_evin * 10, P_valve_in_bar=P_valve * 10,
+                dP_cond_kPa=dP_cond * 1000, dP_subcool_kPa=dP_sub * 1000, dP_evap_kPa=dP_evap * 1000,
+                Vmean_cond_m3h=None if m_dot is None else m_dot * (1 / discharge["D"] + 1 / cond_out["D"]) / 2 * 3600,
+                Vmean_subcool_m3h=None if m_dot is None else m_dot * (1 / cond_out["D"] + 1 / sc_out["D"]) / 2 * 3600,
+                Vmean_evap_m3h=None if m_dot is None else m_dot * (1 / evap_in["D"] + 1 / evap_out["D"]) / 2 * 3600,
                 T_source=None if c.T_evap is not None else c.T_source,
                 T_evap=T_low, T_cond=T_hot, evap_basis=c.evap_basis if c.T_evap is not None else "dew",
                 cond_basis=c.cond_basis if c.T_cond is not None else "bubble",
@@ -595,7 +677,7 @@ class ConventionalHeatPump:
                     fp = report["steam_preheat_fraction"]
                     mn = math.inf
                     for f in sorted([i / 40 for i in range(41)] + [fp]):
-                        Tr = pr.ref_PH(P_H, h3 + (h2 - h3) * f)["T"]
+                        Tr = pr.ref_PH(P_H + dP_cond * f, h3 + (h2 - h3) * f)["T"]
                         Tw = c.T_water_out + (c.T_steam - c.T_water_out) * f / fp if f < fp else c.T_steam
                         mn = min(mn, Tr - Tw)
                     report["steam_gen_min_approach_K"] = mn
@@ -604,6 +686,7 @@ class ConventionalHeatPump:
                             False, f"preheat from subcooling leaves the steam generator approach at {mn:.1f} K, below "
                                    f"{c.dTmin_steam:g} K", P_H=P_H, P_L=P_L, warnings=warnings)
             states = dict(suction=_state(suction), discharge=_state(discharge), cond_dew=_state(cond_dew),
+                          cond_bub=_state(cond_bub),
                           cond_out=_state(cond_out), subcool_out=_state(sc_out), evap_in=_state(evap_in),
                           evap_dew=_state(evap_dew), evap_out=_state(evap_out), ihx_out=_state(ihx_out))
             states["isentropic_discharge"] = _state(isentropic)
