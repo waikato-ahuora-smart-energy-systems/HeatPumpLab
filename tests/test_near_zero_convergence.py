@@ -100,7 +100,7 @@ def test_final_pressure_rejects_invalid_pinch_despite_component_convergence(
 
 def test_pinch_refresh_converts_relative_location_to_duty(monkeypatch):
     gc = SimpleNamespace(duty=200.0)
-    hp = SimpleNamespace(gas_coolers=[gc])
+    hp = SimpleNamespace(gas_coolers=[gc], gas_cooler1=gc)
     monkeypatch.setattr(
         pinch_solver,
         "get_all_gc_pinch_candidates",
@@ -115,6 +115,24 @@ def test_pinch_refresh_converts_relative_location_to_duty(monkeypatch):
 
     assert duties == [50.0]
     assert hp.gc_minimum_approach == pytest.approx(19.97)
+    assert hp.gc_pinch_active == "gc1_internal"
+
+
+def test_active_pinch_label_uses_the_gas_cooler_number(monkeypatch):
+    # hp.gas_coolers runs hot to cold: position 0 here is gas_cooler2
+    gc1, gc2 = SimpleNamespace(duty=100.0), SimpleNamespace(duty=100.0)
+    hp = SimpleNamespace(gas_coolers=[gc2, gc1], gas_cooler1=gc1, gas_cooler2=gc2)
+    monkeypatch.setattr(
+        pinch_solver,
+        "get_all_gc_pinch_candidates",
+        lambda p, hp: [(19.0, 1.0, True), (25.0, 0.5, True), (30.0, 0.0, True),
+                       (40.0, 1.0, True), (35.0, 0.5, True), (30.0, 0.0, True)],
+    )
+    monkeypatch.setattr(pinch_solver, "_set_pinch_properties", lambda duty, gc: None)
+
+    pinch_solver.update_gc_pinch_properties(4.3, hp)
+
+    assert hp.gc_pinch_active == "gc2_hot"
 
 
 @pytest.mark.parametrize("minimum", [19.95, 20.0, 25.0])

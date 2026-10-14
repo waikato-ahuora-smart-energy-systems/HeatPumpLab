@@ -787,3 +787,15 @@ def test_heatmap_results_comparison_uses_cli_defaults_and_writes_files(
     )
 
     assert (output_dir / "COP" / "Butane" / "comp2_0p5" / "heatmap.png").exists()
+
+
+def test_heatmap_and_summary_agree_on_metric_directions():
+    heat = dict(heatmap.DEFAULT_METRICS_AND_OBJ_PAIRS)
+    best = dict(summary.DEFAULT_METRICS)
+    assert {m: heat[m] for m in heat.keys() & best.keys()} == {m: best[m] for m in heat.keys() & best.keys()}
+    assert best["LMTD_gcs"] == "min"
+
+
+def test_vhc_label_matches_the_report_unit():
+    # the report's VHC is kW per m3/s of suction, i.e. kJ/m3
+    assert "kJ/m" in heatmap.AXIS_LABELS["VHC"]

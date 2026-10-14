@@ -89,6 +89,19 @@ def test_rhp_structure_reduces_unused_compressor_stages(
     assert hp.n_comp == expected_n_comp
     assert hp.comp2_on == (1 if expected_n_comp > 1 else 0)
     assert hp.comp3_on == (1 if expected_n_comp > 2 else 0)
+    # an inactive stage keeps no RHX lift
+    assert hp.dT_rhx2_cold == (10.0 if expected_n_comp > 1 else 0.0)
+    assert hp.dT_rhx3_cold == (10.0 if expected_n_comp > 2 else 0.0)
+
+
+def test_inactive_stage_lift_does_not_make_a_single_stage_case_infeasible():
+    # 2/3 of the 50 K air rise is 33.3 K: RHX1's 10 K fits, the unused RHX2's 30 K must not count
+    hp = hp_args(T_air_tar=65.0, comp2_power_frac=0.0, dT_rhx1_cold=10.0, dT_rhx2_cold=30.0)
+
+    rhp_helpers._get_RecuperativeHP_structure(hp)
+
+    assert hp.n_comp == 1 and hp.dT_rhx2_cold == 0.0
+    assert rhp_helpers._check_input_param_feasibility(hp)
 
 
 class FakeRelationship:

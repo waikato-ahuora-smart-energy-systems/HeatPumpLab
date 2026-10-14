@@ -17,6 +17,10 @@ __all__ = [
 
 ScalarEvaluator = Callable[[float], float]
 
+# A sample that fails like this is unknown and skipped; any other exception is a defect and propagates.
+# RefpropError is a ValueError.
+_SAMPLE_FAILURES = (ValueError, RuntimeError, ArithmeticError)
+
 
 @dataclass(frozen=True)
 class ScalarSearchResult:
@@ -89,7 +93,7 @@ def find_sampled_log_target(
     for value in values:
         try:
             residual = float(evaluate(float(value)))
-        except Exception:
+        except _SAMPLE_FAILURES:
             continue
         if np.isfinite(residual):
             samples.append((float(value), residual))
@@ -110,7 +114,8 @@ def find_sampled_log_target(
                     x_tolerance,
                 )
                 residual = float(evaluate(value))
-            candidates.append((value, abs(residual)))
+            if abs(residual) <= target_tolerance:
+                candidates.append((value, abs(residual)))
 
     for left, right in zip(samples, samples[1:]):
         if left[1] * right[1] >= 0.0:
@@ -126,7 +131,10 @@ def find_sampled_log_target(
         except (ValueError, RuntimeError):
             continue
         if result.converged:
-            candidates.append((float(result.root), abs(float(evaluate(result.root)))))
+            # a sign change across a discontinuity "converges" on the jump: keep only roots in the band
+            residual = abs(float(evaluate(result.root)))
+            if residual <= target_tolerance:
+                candidates.append((float(result.root), residual))
 
     for index in range(1, len(samples) - 1):
         left, centre, right = samples[index - 1 : index + 2]
@@ -151,7 +159,9 @@ def find_sampled_log_target(
                     target_tolerance,
                     x_tolerance,
                 )
-            candidates.append((value, abs(float(evaluate(value)))))
+            residual = abs(float(evaluate(value)))
+            if residual <= target_tolerance:
+                candidates.append((value, residual))
 
     if candidates:
         value, residual = min(candidates, key=lambda candidate: candidate[0])

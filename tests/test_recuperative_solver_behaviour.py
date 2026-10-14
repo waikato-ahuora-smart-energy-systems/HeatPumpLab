@@ -448,7 +448,7 @@ def test_gas_cooler_midpoint_search_skips_nonpositive_duty():
     assert approach == (np.inf, 0.0, False)
 
 
-def test_gas_cooler_midpoint_search_uses_bounded_duty_resolution(monkeypatch):
+def test_gas_cooler_midpoint_search_refines_around_the_smallest_sample(monkeypatch):
     observed = {}
     gas_cooler = SimpleNamespace(
         duty=100.0,
@@ -460,26 +460,24 @@ def test_gas_cooler_midpoint_search_uses_bounded_duty_resolution(monkeypatch):
 
     def fake_minimize(evaluate, *, method, bounds, options):
         observed.update(method=method, bounds=bounds, options=options)
-        return SimpleNamespace(fun=evaluate(50.0), x=50.0, success=True)
+        x = 0.5 * (bounds[0] + bounds[1])
+        return SimpleNamespace(fun=evaluate(x), x=x, success=True)
 
     monkeypatch.setattr(gas_cooler_pinch, "minimize_scalar", fake_minimize)
+    # two local minima: a shallow one near 20 % and the real pinch near 80 % of the duty
     monkeypatch.setattr(
         gas_cooler_pinch,
         "_pinch_temperature_difference",
-        lambda duty, solved_gas_cooler: 2.0,
+        lambda duty, solved_gas_cooler: min(25.0 + abs(duty - 20.0) * 0.1, 21.0 + abs(duty - 80.0) * 0.2),
     )
 
     approach = gas_cooler_pinch.find_internal_gc_approach(gas_cooler)
 
-    assert approach == pytest.approx((2.0, 0.5, True))
-    assert observed == {
-        "method": "bounded",
-        "bounds": pytest.approx((0.1, 99.9)),
-        "options": {
-            "xatol": pytest.approx(0.3),
-            "maxiter": 40,
-        },
-    }
+    lo, hi = observed["bounds"]
+    assert lo < 80.0 < hi and hi - lo < 25.0
+    assert observed["method"] == "bounded"
+    assert observed["options"] == {"xatol": pytest.approx(0.02), "maxiter": 40}
+    assert approach[0] < 21.0 + 0.2 * (hi - lo) / 2 + 1e-9 and approach[2]
 
 
 def test_gas_cooler_sink_temperatures_follow_total_cycle_duty():

@@ -162,3 +162,18 @@ def test_supercritical_point_flags_the_pressure_rating(propane):
     assert "P_dis" in f and f["P_dis"]["value"] == pytest.approx(res.report["P_discharge_bar"]) and f["P_dis"]["limit"] == 28.4
     assert "T_dis" in f                                         # 177 C discharge
     assert res.report["window_edge"] is not None
+
+
+@pytest.mark.parametrize("backend", ["refprop", "coolprop"])
+def test_supercritical_solves_on_each_property_backend(backend):
+    """rho_crit is kg/m3 on both backends (REFPROP's per-mole value was once scaled twice and every flash failed)."""
+    from HeatPumpLab.cycles.ConventionalHeatPump.conventional_hp import FluidProperties
+    try:
+        props = FluidProperties("Propane", backend)
+    except Exception as exc:                                   # backend not installed here
+        pytest.skip(f"{backend} unavailable: {exc}")
+    assert 215 < props.rho_crit < 225
+    cfg = ConventionalHPConfig(refrigerant="Propane", compressor=recip_r600a("Recip-M"), **BASE)
+    res = ConventionalHeatPump(cfg, props=props).solve()
+    assert res.success, res.message
+    assert res.report["supercritical"] and res.report["rho_crit_kgm3"] == pytest.approx(props.rho_crit)

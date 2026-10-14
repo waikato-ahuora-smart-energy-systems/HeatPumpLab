@@ -45,18 +45,7 @@ def print_result_to_csv(
     try:
         file_name = _get_results_path(file_name, file_ext, suffix, results_dir)
         file_name.parent.mkdir(parents=True, exist_ok=True)
-        file_exists = os.path.isfile(file_name)
-        if file_exists:
-            with open(file_name, "a", newline="") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=output.keys())
-                writer.writerow(output)
-
-        else:
-            with open(file_name, "w", newline="") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=output.keys())
-                writer.writeheader()
-                writer.writerow(output)
-
+        _append_rows(file_name, [output])
     except (OSError, csv.Error) as exc:
         print(f"Failed to append result to CSV file: {exc}")
 
@@ -68,18 +57,14 @@ def transfer_temp_files_to_results(
     results_path = Path(results_dir)
     output_path = _get_results_path(file_name, ".csv", "", results_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    csv_file_list = glob(str(results_path / "temp" / "*.csv"))
-    header_saved = output_path.exists() and output_path.stat().st_size > 0
-    with open(output_path, "a") as fout:
-        for f in reversed(csv_file_list):
-            with open(f) as fin:
-                header = next(fin)
-                if not header_saved:
-                    fout.write(header)
-                    header_saved = True
-                for line in fin:
-                    fout.write(line)
-            os.remove(f)
+    output_path.touch(exist_ok=True)
+    # each temp file has its own header (e.g. per-stage columns differ with n_comp): merge by column name
+    for f in sorted(glob(str(results_path / "temp" / "*.csv"))):
+        with open(f, newline="") as fin:
+            rows = list(csv.DictReader(fin))
+        if rows:
+            _append_rows(output_path, rows)
+        os.remove(f)
 
 
 def read_csv_to_results(
@@ -101,6 +86,30 @@ def read_csv_to_results(
     except (OSError, csv.Error) as e:
         print(f"Failed to read CSV file '{file_path}': {e}")
         return []
+
+
+def _append_rows(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Append rows by column name. Rows with columns the file lacks widen the header (the file is
+    rewritten with the union of columns); missing columns are left empty."""
+    header: list[str] = []
+    if os.path.isfile(path) and os.path.getsize(path) > 0:
+        with open(path, newline="") as fin:
+            header = next(csv.reader(fin), [])
+    new = [k for row in rows for k in row if k not in header]
+    new = list(dict.fromkeys(new))
+    if header and not new:
+        with open(path, "a", newline="") as fout:
+            csv.DictWriter(fout, fieldnames=header, restval="").writerows(rows)
+        return
+    existing = []
+    if header:
+        with open(path, newline="") as fin:
+            existing = list(csv.DictReader(fin))
+    fieldnames = header + new
+    with open(path, "w", newline="") as fout:
+        writer = csv.DictWriter(fout, fieldnames=fieldnames, restval="")
+        writer.writeheader()
+        writer.writerows(existing + rows)
 
 
 def _get_results_path(

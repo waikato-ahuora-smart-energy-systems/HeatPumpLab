@@ -529,3 +529,28 @@ def test_parameter_sweep_accepts_omitted_parameter_kwargs(tmp_path):
 
     assert generated == [{"file_name": "sweep", "results_dir": tmp_path}]
     assert (tmp_path / "sweep.csv").exists()
+
+
+def test_csv_writer_widens_the_header_for_new_columns(tmp_path):
+    from HeatPumpLab.utils.readWriteOutput import print_result_to_csv, read_csv_to_results
+    print_result_to_csv({"n_comp": 2, "Comp_1_PR": 3.0, "Comp_2_PR": 2.0}, file_name="R", results_dir=tmp_path)
+    print_result_to_csv({"n_comp": 3, "Comp_1_PR": 2.0, "Comp_2_PR": 2.0, "Comp_3_PR": 1.5}, file_name="R",
+                        results_dir=tmp_path)
+    print_result_to_csv({"Comp_1_PR": 4.0, "n_comp": 1}, file_name="R", results_dir=tmp_path)   # other order
+
+    rows = read_csv_to_results("R", results_dir=tmp_path)
+    assert [r["n_comp"] for r in rows] == ["2", "3", "1"]
+    assert [r["Comp_3_PR"] for r in rows] == ["", "1.5", ""]
+    assert rows[2]["Comp_1_PR"] == "4.0" and None not in rows[1]
+
+
+def test_temporary_result_merge_aligns_differing_headers(tmp_path):
+    from HeatPumpLab.utils.readWriteOutput import print_result_to_csv, read_csv_to_results, transfer_temp_files_to_results
+    print_result_to_csv({"case": "a", "x": 1}, file_name="temp/R", suffix="-a", results_dir=tmp_path)
+    print_result_to_csv({"case": "b", "y": 2, "x": 3}, file_name="temp/R", suffix="-b", results_dir=tmp_path)
+
+    transfer_temp_files_to_results("all", results_dir=tmp_path)
+
+    rows = read_csv_to_results("all", results_dir=tmp_path)
+    assert {r["case"]: (r["x"], r["y"]) for r in rows} == {"a": ("1", ""), "b": ("3", "2")}
+    assert not list((tmp_path / "temp").glob("*.csv"))

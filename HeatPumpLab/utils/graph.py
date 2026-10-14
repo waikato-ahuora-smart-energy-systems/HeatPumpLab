@@ -1,10 +1,18 @@
-"""Plotting helpers for heat pump cycle outputs."""
+"""Plotting helpers for heat pump cycle outputs.
 
-import matplotlib.pyplot as plt
-import numpy as np
-import plotly.express as px
-import pandas as pd
+matplotlib, pandas and plotly are imported where they are used, so importing HeatPumpLab (in every
+worker process) does not load them or select a matplotlib backend.
+"""
+
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+if TYPE_CHECKING:
+    import matplotlib.pyplot as plt
 
 __all__ = [
     "plot_cycle",
@@ -54,6 +62,8 @@ def plot_cycle(
     cycle_obj = cycle_obj + [cycle_obj[0]]
     fig: plt.Figure
     ax: plt.Axes
+
+    import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
     fig.set_dpi(DEFAULT_DPI)
@@ -155,6 +165,8 @@ def plot_driving_force(
     fig: plt.Figure
     ax: plt.Axes
 
+    import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
     fig.set_dpi(DEFAULT_DPI)
     plotted_labels: set[str] = set()
@@ -222,6 +234,8 @@ def plot_heat_exchanger_profiles(
     """Plot source and sink temperature profiles for heat exchangers."""
     fig: plt.Figure
     ax: plt.Axes
+
+    import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
     fig.set_dpi(DEFAULT_DPI)
@@ -299,6 +313,8 @@ def plot_simple_xy(
     fig: plt.Figure
     ax: plt.Axes
 
+    import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
     fig.set_dpi(DEFAULT_DPI)
 
@@ -325,6 +341,9 @@ def plot_simple_xy(
 
 def plot_heat_map(title, x_val, x_label, y_val, y_label, z_val, z_label, show=True):
     """Render a heat map using Plotly and return the figure."""
+    import pandas as pd
+    import plotly.express as px
+
     df = pd.DataFrame({"x": x_val, "y": y_val, "z": z_val})
     fig = px.density_heatmap(
         df, x="x", y="y", z="z", nbinsx=20, nbinsy=20, color_continuous_scale="Viridis"

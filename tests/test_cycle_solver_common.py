@@ -115,3 +115,26 @@ def test_sampled_log_target_skips_failed_evaluations_and_reports_shortfall():
     assert result.success is False
     assert result.value == pytest.approx(4.0)
     assert result.residual == pytest.approx(0.75)
+
+
+def test_sampled_log_target_rejects_a_root_on_a_discontinuity():
+    # the residual jumps from -5 to +5 at 2.0 (no root there) and enters the band properly near 6.0
+    def residual(value):
+        if value < 2.0:
+            return -5.0
+        if value < 5.0:
+            return 5.0
+        return 0.02 * (value - 6.0)
+
+    result = find_sampled_log_target(residual, (1.0, 10.0), 4.0, target_tolerance=0.05, x_tolerance=1e-6)
+
+    assert result.success is True
+    assert result.value > 4.9 and result.residual <= 0.05
+
+
+def test_sampled_log_target_propagates_programming_errors():
+    def residual(value):
+        raise TypeError("bad call")
+
+    with pytest.raises(TypeError):
+        find_sampled_log_target(residual, (1.0, 10.0), 4.0, target_tolerance=0.05, x_tolerance=1e-6)

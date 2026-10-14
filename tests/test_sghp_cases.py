@@ -73,6 +73,7 @@ def test_summary_and_rows():
     assert o["sweeps"] == ["T_steam", "T_source", "compressor_Hz"]
 
 
+@pytest.mark.skipif(not (LIVE / "build_sghp_live.py").exists(), reason="local_scripts/sghp_live not present (gitignored)")
 def test_page_wiring(tmp_path):
     spec = importlib.util.spec_from_file_location("build_sghp_live", LIVE / "build_sghp_live.py")
     mod = importlib.util.module_from_spec(spec)

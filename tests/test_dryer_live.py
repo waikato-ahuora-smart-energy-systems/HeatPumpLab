@@ -46,6 +46,8 @@ SLTHP = [
 
 @pytest.fixture(scope="module")
 def build_mod():
+    if not (LIVE / "build_dryer_live.py").exists():
+        pytest.skip("local_scripts/dryer_live not present (gitignored)")
     spec = importlib.util.spec_from_file_location("build_dryer_live", LIVE / "build_dryer_live.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

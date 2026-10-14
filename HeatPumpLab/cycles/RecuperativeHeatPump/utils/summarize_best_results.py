@@ -19,7 +19,7 @@ DEFAULT_METRICS: Tuple[Tuple[str, str], ...] = (
     ("eDTL", "min"),
     ("SLE", "min"),
     ("dQ_per_dW", "max"),
-    ("LMTD_gcs", "max"),
+    ("LMTD_gcs", "min"),
     ("Pmax", "min"),
     ("COP_pct_increase_vs_base", "max"),
     ("Pmax_reduction_vs_base", "max"),

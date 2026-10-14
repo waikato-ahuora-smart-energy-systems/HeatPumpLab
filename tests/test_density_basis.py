@@ -272,6 +272,8 @@ def test_envelope_moves_with_the_density():
         assert (a, b) == (pytest.approx(x + 5.0, abs=1e-8), pytest.approx(y, abs=1e-8))
 
 
+@pytest.mark.skipif(not (ROOT / "local_scripts" / "main_SGHP_dashboard.py").exists(),
+                    reason="local_scripts/main_SGHP_dashboard.py not present (gitignored)")
 def test_dashboard_map_reads_the_fluid_densities():
     import sys
     sys.path.insert(0, str(ROOT / "local_scripts"))

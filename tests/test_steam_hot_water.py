@@ -310,3 +310,29 @@ def test_pressure_drops_with_pinned_exits():
     assert st["discharge"]["P"] == pytest.approx(r["P_discharge_bar"] / 10)
     assert r["PR"] == pytest.approx(r["P_discharge_bar"] / r["P_evap_bar"]) and r["PR"] > b["PR"]
     assert res.COP < base.COP and r["W_electric_kW"] > b["W_electric_kW"]
+
+
+def test_preheat_share_with_loss_when_sized_by_heat_output():
+    """Sized by Q_heat_kW the mass flow is found after the cycle; the share still holds with a condenser loss."""
+    UA = dict(loss_UA_cond_kWK=0.02)
+    for share in (0.5, 1.0):
+        lossy = steam_model(Q_heat_kW=30.0, preheat_subcool_share=share, **UA).solve()
+        base = steam_model(Q_heat_kW=30.0, **UA).solve()
+        assert lossy.success and base.success and lossy.report["sized_by"] == "Q_heat_kW"
+        r = lossy.report
+        q_sub = r["Q_cond_refrigerant_kW"] / r["m_dot_kgs"] - base.report["Q_cond_refrigerant_kW"] / base.report["m_dot_kgs"]
+        preheat = r["m_steam_kgs"] * r["steam_preheat_fraction"] * r["steam_dh_kJkg"]
+        assert r["m_dot_kgs"] * q_sub == pytest.approx(share * preheat, rel=1e-6)
+
+
+def test_preheat_share_needs_the_hot_water_subcooler():
+    res = steam_model(dT_subcool=5.0, preheat_subcool_share=0.5).solve()
+    assert res.success and res.report["preheat_subcool_share"] == 0.0
+    assert res.report["dT_subcool_cond"] == pytest.approx(0.0, abs=1e-9)
+    assert any("preheat from subcooling needs" in w for w in res.warnings)
+
+
+def test_subcooler_loss_larger_than_its_duty_fails():
+    comp = EfficiencyCurve(eta_is=0.7, motor_eff=0.9, displacement_m3h=56.25)
+    res = steam_model(Q_heat_kW=None, loss_UA_kWK=0.0, compressor=comp, loss_UA_subcool_kWK=0.5).solve()
+    assert not res.success and "no hot water" in res.message

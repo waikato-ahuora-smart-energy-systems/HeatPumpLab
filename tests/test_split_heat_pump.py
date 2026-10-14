@@ -82,5 +82,5 @@ def test_zero_lift_has_no_rhx1_branch(solved):
 
 def test_lmtd_floor_is_respected(solved):
     res = solved(rhx1_lmtd_min=25.0)
-    if res.success:
-        assert res.report["rhx1_LMTD_K"] >= 25.0 - 1e-6
+    assert res.success, res.message
+    assert res.report["rhx1_LMTD_K"] >= 25.0 - 1e-6

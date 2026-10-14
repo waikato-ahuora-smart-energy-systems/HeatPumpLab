@@ -56,15 +56,6 @@ def _check_input_param_feasibility(hp: RecuperativeHP):
 
 def _get_RecuperativeHP_structure(hp: RecuperativeHP) -> RecuperativeHP:
     """Derive binary on/off flags for compressors and recuperators."""
-    # Check the PHE combo
-    hp.dT_rhx1_cold = hp.dT_rhx1_cold if hp.dT_rhx1_cold > 0.0 else 0.0
-    hp.dT_rhx2_cold = (
-        hp.dT_rhx2_cold if hp.n_comp > 1 and hp.dT_rhx2_cold > 0.0 else 0.0
-    )
-    hp.dT_rhx3_cold = (
-        hp.dT_rhx3_cold if hp.n_comp > 2 and hp.dT_rhx3_cold > 0.0 else 0.0
-    )
-
     # Check the compressor combo
     if hp.comp_PR_uniform or hp.comp2_power_frac + hp.comp3_power_frac >= 1.0:
         hp.comp2_power_frac = 1 / hp.n_comp if hp.n_comp > 1 else 0.0
@@ -83,6 +74,15 @@ def _get_RecuperativeHP_structure(hp: RecuperativeHP) -> RecuperativeHP:
         hp.n_comp = 1
 
     hp.comp1_power_frac = 1 - (hp.comp2_power_frac + hp.comp3_power_frac)
+
+    # Check the PHE combo, after n_comp drops for zero power fractions: an inactive stage has no RHX lift
+    hp.dT_rhx1_cold = hp.dT_rhx1_cold if hp.dT_rhx1_cold > 0.0 else 0.0
+    hp.dT_rhx2_cold = (
+        hp.dT_rhx2_cold if hp.n_comp > 1 and hp.dT_rhx2_cold > 0.0 else 0.0
+    )
+    hp.dT_rhx3_cold = (
+        hp.dT_rhx3_cold if hp.n_comp > 2 and hp.dT_rhx3_cold > 0.0 else 0.0
+    )
 
     # Binary variables for the heat pump structure
     hp.comp2_on = 1 if hp.n_comp > 1 else 0

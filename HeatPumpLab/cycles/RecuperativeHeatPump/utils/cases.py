@@ -195,7 +195,24 @@ def _analysis_case_signature(data: dict) -> tuple | None:
     float_parts = tuple(
         _round_float(data.get(field)) for field in _ANALYSIS_FLOAT_FIELDS
     )
-    return (refrigerant, n_comp) + float_parts
+    # Model settings that change the result: without them, a sweep over any of these would
+    # treat its cases as already solved. The IHX flag is the effective one, as the solved
+    # model reports it (off when the source is not below the gas-cooler outlet).
+    T_gc_out = sum(
+        _round_float(data.get(field)) or 0.0
+        for field in ("T_air_inlet", "dT_GC_min_tar", "dT_gc_out_min_offset")
+    )
+    T_source = _round_float(data.get("T_source_in"))
+    ihx_on = _flag(data.get("ihx_on")) and T_source is not None and T_source < T_gc_out
+    settings = (
+        ihx_on,
+        _flag(data.get("comp_PR_uniform")),
+        _round_float(data.get("motor_eff")),
+        _round_float(data.get("comp_model_index")),
+        _normalize_str(data.get("sink")),
+        _normalize_str(data.get("source")),
+    )
+    return (refrigerant, n_comp) + float_parts + settings
 
 
 #######################################################################################################
@@ -206,6 +223,11 @@ def _analysis_case_signature(data: dict) -> tuple | None:
 def _normalize_str(value: object) -> str:
     """Normalise strings for consistent signature generation."""
     return str(value).strip().lower()
+
+
+def _flag(value: object) -> bool:
+    """Booleans from Python values or their CSV text ("True", "1", "1.0")."""
+    return str(value).strip().lower() in {"1", "1.0", "true", "yes"}
 
 
 def _round_float(value: object, ndigits: int = 4) -> float | None:

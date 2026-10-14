@@ -30,6 +30,13 @@ def default_case(**overrides):
         "dT_rhx3_cold": 0.0,
         "comp2_power_frac": 0.5,
         "comp3_power_frac": 0.0,
+        # model settings as the solved report writes them (the IHX is off: 40 C source above the 35 C outlet)
+        "ihx_on": 0,
+        "comp_PR_uniform": False,
+        "motor_eff": 0.96,
+        "comp_model_index": 1,
+        "sink": "Air",
+        "source": "water",
     }
     return case | overrides
 
@@ -187,3 +194,25 @@ def test_unsolved_case_resolution_removes_cases_that_now_have_results(tmp_path):
 
     assert len(remaining) == 1
     assert remaining[0]["refrigerant"] == "Propane"
+
+
+def test_rhp_case_generation_keeps_cases_that_differ_only_in_model_settings(tmp_path):
+    write_rows(tmp_path / "cases.csv", [default_case()])
+
+    cases = case_utils._remove_completed_cases_from_list(
+        cases=case_utils._get_all_analysis_case_list(motor_eff_ls=[0.96, 0.9], comp_model_index_ls=[1, 2]),
+        file_name="cases",
+        results_dir=tmp_path,
+        f_comparison=case_utils._check_if_analysis_cases_are_identical,
+        f_signature=case_utils._analysis_case_signature,
+    )
+
+    assert sorted((c["motor_eff"], c["comp_model_index"]) for c in cases) == [(0.9, 1), (0.9, 2), (0.96, 2)]
+
+
+def test_case_signature_uses_the_effective_ihx_flag():
+    # the IHX is only on when the source is below the gas-cooler outlet (35 C here)
+    sig = case_utils._analysis_case_signature
+    assert sig(default_case(ihx_on=True)) == sig(default_case(ihx_on="0"))
+    assert sig(default_case(ihx_on=True, T_source_in=30.0)) != sig(default_case(ihx_on=False, T_source_in=30.0))
+    assert sig(default_case(ihx_on="True", T_source_in=30.0)) == sig(default_case(ihx_on=1, T_source_in=30.0))

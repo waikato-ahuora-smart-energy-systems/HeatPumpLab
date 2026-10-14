@@ -174,9 +174,8 @@ class FluidProperties:
         self.ref = make_property_package(refrigerant, backend=self.backend)
         self.P_crit = float(self.ref.P_crit)
         self.T_crit = float(self.ref.T_crit)
-        # critical density, kg/m3 (REFPROP reports it per mole: mol/dm3 x g/mol = kg/m3)
-        D_crit = float(getattr(self.ref, "D_crit", float("nan")))
-        self.rho_crit = D_crit * float(self.ref.molar_mass) if self.backend == "refprop" else D_crit
+        # critical density, kg/m3 on both backends (PropertyPackage converts REFPROP's mol/dm3)
+        self.rho_crit = float(getattr(self.ref, "D_crit", float("nan")))
 
     def _r(self, pair, a, b):
         return self.ref.get_std_properties(pair, a, b, self.ref.fld_composition)
@@ -398,6 +397,24 @@ class ConventionalHeatPump:
         return self._solve()
 
     def _solve(self) -> ConventionalHPResult:
+        # Sized by Q_heat_kW, the mass flow is only known after the cycle; the preheat share's condenser loss
+        # per kg needs it, so re-solve with the last mass flow until it settles.
+        self._m_dot_hint = None
+        res = self._solve_dp()
+        c = self.c
+        if not (c.loss_UA_cond_kWK and c.preheat_subcool_share > 0):
+            return res
+        for _ in range(20):
+            if not res.success or res.report.get("sized_by") != "Q_heat_kW":
+                break
+            m = res.report["m_dot_kgs"]
+            if self._m_dot_hint is not None and abs(m - self._m_dot_hint) <= 1e-10 * m:
+                break
+            self._m_dot_hint = m
+            res = self._solve_dp()
+        return res
+
+    def _solve_dp(self) -> ConventionalHPResult:
         c = self.c
         K = (c.dP_K_cond or 0.0, c.dP_K_subcool or 0.0, c.dP_K_evap or 0.0)
         dP = (0.0, 0.0, 0.0)
@@ -473,7 +490,9 @@ class ConventionalHeatPump:
                 cond_dew, cond_bub = pr.ref_PQ(P_dis, 1.0), pr.ref_PQ(P_H, 0.0)
             cond_out = cond_bub                     # 3 condenser exit (subcooled below, after the compressor)
             share = min(max(c.preheat_subcool_share, 0.0), 1.0)
-            steam_mode = c.T_cond is None and c.T_water_out is not None and c.T_water_out < c.T_steam
+            # steam from bled hot water: needs the hot-water subcooler (dT_subcool None), as the steam bookkeeping does
+            steam_mode = (c.T_cond is None and c.dT_subcool is None and c.T_water_out is not None
+                          and c.T_water_out < c.T_steam)
 
             # 1 suction (IHX vapour outlet), 1e evaporator outlet
             suction = pr.ref_PT(P_L, evap_dew["T"] + c.dT_superheat) if c.dT_superheat > 0 else evap_dew
@@ -535,9 +554,11 @@ class ConventionalHeatPump:
                 fp = steam_from_feedwater(1.0, c.T_steam, c.T_water_out)
                 fp = fp["preheat_kJkg"] / fp["dh_kJkg"]
                 q_c0, q_x = discharge["h"] - cond_bub["h"], 0.0
+                # mass flow from the compressor, or (sized by Q_heat_kW) from the previous pass of _solve
+                m_c = comp.m_dot or getattr(self, "_m_dot_hint", None)
                 for _ in range(4):                 # the condenser loss depends a little on the exit temperature
-                    l_c = (c.loss_UA_cond_kWK * ((discharge["T"] + cond_out["T"]) / 2 - c.T_ambient) / comp.m_dot
-                           if comp.m_dot else 0.0)
+                    l_c = (c.loss_UA_cond_kWK * ((discharge["T"] + cond_out["T"]) / 2 - c.T_ambient) / m_c
+                           if m_c else 0.0)
                     q_x = share * fp * (q_c0 - l_c) / (1 - share * fp)
                     cond_out = pr.ref_PH(P_H, cond_bub["h"] - q_x)
                 if cond_out.get("phase") not in liquid_ok:
@@ -702,6 +723,14 @@ class ConventionalHeatPump:
                         return ConventionalHPResult(
                             False, f"preheat from subcooling leaves the steam generator approach at {mn:.1f} K, below "
                                    f"{c.dTmin_steam:g} K", P_H=P_H, P_L=P_L, warnings=warnings)
+            if report.get("m_water_kgs") is not None and report["m_water_kgs"] <= 0.0:
+                return ConventionalHPResult(
+                    False, f"the subcooler delivers no hot water ({report['Q_subcool_kW']:.1f} kW net of its heat loss)",
+                    P_H=P_H, P_L=P_L, warnings=warnings)
+            if report["m_steam_kgs"] is not None and report["m_steam_kgs"] > report["m_water_kgs"]:
+                return ConventionalHPResult(
+                    False, f"steam {report['m_steam_kgs']:.3f} kg/s needs more feedwater than the subcooler heats "
+                           f"({report['m_water_kgs']:.3f} kg/s)", P_H=P_H, P_L=P_L, warnings=warnings)
             states = dict(suction=_state(suction), discharge=_state(discharge), cond_dew=_state(cond_dew),
                           cond_bub=_state(cond_bub),
                           cond_out=_state(cond_out), subcool_out=_state(sc_out), evap_in=_state(evap_in),
