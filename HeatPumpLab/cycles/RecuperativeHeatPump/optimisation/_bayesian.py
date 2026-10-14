@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import torch
 from botorch.acquisition import AcquisitionFunction, LogExpectedImprovement
-from botorch.exceptions.errors import ModelFittingError
+from botorch.exceptions.errors import BotorchError, ModelFittingError
 from botorch.fit import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
 from botorch.models.utils.gpytorch_modules import get_covar_module_with_dim_scaled_prior
@@ -16,6 +16,10 @@ from scipy.stats import qmc
 
 from ._constraint_model import ConstraintModel, aggregate_margins
 from ._types import DEFAULT_BOUNDS
+
+# GP fitting and acquisition failures that fall back to the space-filling pool. BotorchError covers
+# CandidateGenerationError (e.g. every acquisition restart ends infeasible) and UnsupportedError.
+_BO_FAILURES = (ModelFittingError, BotorchError, RuntimeError, ValueError)
 
 
 class DesignDomain:
@@ -302,7 +306,7 @@ class BayesianDesignSearch:
                 constraint = ConstraintModel(
                     np.asarray(self.x)[known], [self.margins[i] for i in known]
                 )
-            except (ModelFittingError, RuntimeError, ValueError) as exc:
+            except _BO_FAILURES as exc:
                 self.diagnostics.append(
                     dict(evaluation=len(self.x) + 1, stage="constraint GP", message=str(exc))
                 )
@@ -395,7 +399,7 @@ class BayesianDesignSearch:
                         scores = self._scores(acquisition, proposals)
                         if np.isfinite(scores).any() and np.nanmax(scores) > score:
                             chosen = proposals[np.nanargmax(scores)]
-                except (ModelFittingError, RuntimeError, ValueError) as exc:
+                except _BO_FAILURES as exc:
                     self.diagnostics.append(
                         dict(
                             evaluation=len(self.x) + 1,
@@ -403,7 +407,7 @@ class BayesianDesignSearch:
                             message=str(exc),
                         )
                     )
-            except (ModelFittingError, RuntimeError, ValueError) as exc:
+            except _BO_FAILURES as exc:
                 self.diagnostics.append(
                     dict(
                         evaluation=len(self.x) + 1,

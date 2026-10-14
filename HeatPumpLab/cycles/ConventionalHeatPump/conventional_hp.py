@@ -70,6 +70,7 @@ from typing import Iterable
 
 from .compressor_curves import CompressorInlet
 from .compressor_data import recip_r600a
+from .compressor_window import limit_flags
 from .water_steam import steam_from_feedwater
 
 GAS_PHASES = frozenset({"saturated_vapour", "superheated_vapour", "supercritical"})
@@ -645,6 +646,22 @@ class ConventionalHeatPump:
                 energy_balance_residual_kJkg=balance, v_suction_m3kg=v1,
                 in_envelope=not any("envelope" in w for w in warnings),
             )
+            # beyond the window: where the maps were read, the density ratio and how far past a ratio limit it is
+            win = getattr(comp, "window", None)
+            report.update(
+                window_edge=None if win is None or win["inside"] else win["edge_name"],
+                window_edge_kind=None if win is None or win["inside"] else win["edge_kind"],
+                to_read=None if win is None else win["read"][0], tc_read=None if win is None else win["read"][1],
+                density_ratio=None if win is None else win["ratio"],
+                density_ratio_beyond=0.0 if win is None or win["inside"] else win["ratio_beyond"])
+            swept = getattr(compressor, "swept_volume_m3h", None)
+            report["w_swept_kJm3"] = (comp.m_dot * w_el / (swept / 3600.0)
+                                      if comp.m_dot is not None and swept else None)
+            # mechanical limits (seals, materials, motor) on the real cycle: flagged, not enforced
+            disp, rpm0 = getattr(compressor, "displacement_m3h", None), getattr(compressor, "rated_rpm", None)
+            report["limit_flags"] = limit_flags(getattr(compressor, "limits", None), P_dis * 10, discharge["T"],
+                                                report["w_swept_kJm3"], P_L * 10,
+                                                disp / (rpm0 * 60.0) if disp and rpm0 else None, w_sh / w_el)
             if m_dot is not None:
                 report.update(
                     sized_by=("Q_heat_kW" if scaled else "compressor"),

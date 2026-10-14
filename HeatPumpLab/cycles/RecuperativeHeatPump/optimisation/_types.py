@@ -280,6 +280,14 @@ class OuterDesignOptimisationResult:
                 historical_model_drift_pct=None,
                 SEC_change_vs_incumbent_pct=None,
             )
+        # failed cases keep the best_* columns (empty) so every row shares one CSV schema
+        output.update(
+            dict.fromkeys(
+                ["best_objective", "best_phase", "best_success", "best_message",
+                 "best_mass_fractions", "best_refrigerant",
+                 *(f"best_{k}" for k in BASE_VARIABLE_NAMES)]
+            )
+        )
         if self.best is not None:
             output.update(
                 best_objective=self.best.objective,

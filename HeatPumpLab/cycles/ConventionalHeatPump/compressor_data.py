@@ -24,10 +24,14 @@ Basis and assumptions:
 from __future__ import annotations
 
 from .compressor_curves import EfficiencyMap, bicubic_polynomial
+from .compressor_window import R600A_EDGE_KINDS, R600A_LIMITS, EnvelopeExtension
 from .density_basis import R600A_SAT_VAPOUR, R600A_SUCTION_15K
 
 # Estimated application envelope (to, tc) degC, R600a.
 R600A_ENVELOPE = ((-10.0, 30.0), (27.0, 42.0), (48.0, 70.0), (48.0, 120.0), (6.0, 120.0), (-10.0, 97.0))
+
+# Beyond the window (compressor_window): edge kinds, efficiency falloff past the ratio edges.
+R600A_EXTENSION = EnvelopeExtension(R600A_ENVELOPE, R600A_EDGE_KINDS)
 
 # Swept volume at 50 Hz (m3/h), where known.
 DISPLACEMENT_50HZ_M3H = {"Recip-S": 13.42, "Recip-M": 56.25, "Recip-L": 151.6}
@@ -97,9 +101,12 @@ def recip_r600a(model: str = "Recip-M", displacement_m3h: float | None | str = "
         displacement_m3h = DISPLACEMENT_50HZ_M3H.get(model)
     if basis not in ("density", "saturated", "temperature"):
         raise ValueError("basis must be 'density', 'saturated' or 'temperature'")
-    options = dict(envelope=R600A_ENVELOPE, name=model,
+    options = dict(envelope=R600A_ENVELOPE, name=model, extension=R600A_EXTENSION, limits=dict(R600A_LIMITS[model]),
                    density_reference=None if basis == "temperature" else R600A_SAT_VAPOUR,
                    suction_reference=R600A_SUCTION_15K if basis == "density" else None) | kwargs
+    if "envelope" in kwargs and "extension" not in kwargs:
+        # the extension's edge kinds belong to the R600a window; another envelope has none unless given
+        options["extension"] = None
     return EfficiencyMap(eta_is=bicubic_polynomial(c["isentropic"]),
                          eta_vol=bicubic_polynomial(c["volumetric"]),
                          displacement_m3h=displacement_m3h, **options)

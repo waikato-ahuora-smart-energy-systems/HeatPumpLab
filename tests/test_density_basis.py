@@ -124,14 +124,21 @@ def test_bad_tables_are_rejected():
 # ---------------------------------------------------------------- recomputed maps at a point
 
 
+def expected_map(comp, to, tc):
+    """The original maps inside the window; outside, the extension at the R600a density ratio."""
+    if in_envelope(to, tc, R600A_ENVELOPE):
+        return ETA_IS(to, tc), ETA_VOL(to, tc)
+    w = comp.extension.efficiencies(ETA_IS, ETA_VOL, to, tc, R.rho_dew(tc) / S.rho_dew(to))
+    return w["eta_is"], w["eta_vol"]
+
+
 def test_r600a_at_15k_recovers_the_original_map():
     comp = recip_r600a("Recip-M")
     assert comp.density_reference is R and comp.suction_reference is S
     for to, tc in GRID:
         e = comp.efficiencies(to, tc, **r600a_point(to, tc))
         assert e["to_map"] == pytest.approx(to, abs=1e-9) and e["tc_map"] == pytest.approx(tc, abs=1e-9)
-        assert e["eta_is"] == pytest.approx(ETA_IS(to, tc), abs=1e-10)
-        assert e["eta_vol"] == pytest.approx(ETA_VOL(to, tc), abs=1e-10)
+        assert (e["eta_is"], e["eta_vol"]) == pytest.approx(expected_map(comp, to, tc), abs=1e-10)
         assert e["in_envelope"] == in_envelope(to, tc, R600A_ENVELOPE)
         assert not e["warnings"]
 
@@ -154,8 +161,7 @@ def test_shifted_fluid_reads_the_shifted_map():
         e = comp.efficiencies(to, tc, rho_evap_dew=None, rho_cond_dew=R.rho_dew(tc - 12.0), rho_suction=S.rho_dew(to - 12.0))
         assert e["to_map"] == pytest.approx(to - 12.0, abs=1e-9)
         assert e["tc_map"] == pytest.approx(tc - 12.0, abs=1e-9)
-        assert e["eta_is"] == pytest.approx(ETA_IS(to - 12.0, tc - 12.0), abs=1e-10)
-        assert e["eta_vol"] == pytest.approx(ETA_VOL(to - 12.0, tc - 12.0), abs=1e-10)
+        assert (e["eta_is"], e["eta_vol"]) == pytest.approx(expected_map(comp, to - 12.0, tc - 12.0), abs=1e-10)
         assert e["in_envelope"] == in_envelope(to - 12.0, tc - 12.0, R600A_ENVELOPE)
 
 
@@ -214,9 +220,11 @@ def test_fluid_grid_on_r600a_at_15k_is_the_original_map():
     assert g["to_map"] == pytest.approx(to_ax, abs=1e-9) and g["tc_map"] == pytest.approx(tc_ax, abs=1e-9)
     for j, tc in enumerate(tc_ax):
         for i, to in enumerate(to_ax):
-            assert g["eta_is"][j][i] == pytest.approx(ETA_IS(to, tc), abs=1e-10)
-            assert g["eta_vol"][j][i] == pytest.approx(ETA_VOL(to, tc), abs=1e-10)
-            assert g["in_env"][j][i] == in_envelope(to, tc, R600A_ENVELOPE)
+            inside = in_envelope(to, tc, R600A_ENVELOPE)
+            assert g["in_env"][j][i] == inside
+            if inside:          # outside, the cells show the extension beyond the window (test_compressor_window)
+                assert g["eta_is"][j][i] == pytest.approx(ETA_IS(to, tc), abs=1e-10)
+                assert g["eta_vol"][j][i] == pytest.approx(ETA_VOL(to, tc), abs=1e-10)
 
 
 def test_fluid_grid_on_a_shifted_fluid_is_the_shifted_map():
@@ -228,8 +236,9 @@ def test_fluid_grid_on_a_shifted_fluid_is_the_shifted_map():
             if not (R.T_range[0] <= to - 12.0 and tc - 12.0 <= R.T_range[1]) or tc > sat.T_range[1]:
                 continue
             assert g["to_map"][i] == pytest.approx(to - 12.0, abs=1e-9)
-            assert g["eta_is"][j][i] == pytest.approx(ETA_IS(to - 12.0, tc - 12.0), abs=1e-10)
             assert g["in_env"][j][i] == in_envelope(to - 12.0, tc - 12.0, R600A_ENVELOPE)
+            if g["in_env"][j][i]:          # outside: the extension beyond the window
+                assert g["eta_is"][j][i] == pytest.approx(ETA_IS(to - 12.0, tc - 12.0), abs=1e-10)
     assert g["tc_map"][-1] is None and g["eta_is"][-1][0] is None                # beyond the fluid table
     with pytest.raises(ValueError):
         recip_r600a("Recip-M").fluid_grid(to_ax, tc_ax, sat)                  # needs the suction curve
@@ -280,7 +289,8 @@ def test_dashboard_map_reads_the_fluid_densities():
                 dew = toy.ref_TQ(to, 1.0)
                 assert S.rho_dew(a) == pytest.approx(toy.ref_PT(dew["P"], to + sh)["D"], rel=1e-4)   # rounded to 4 dp
                 assert R.rho_dew(b) == pytest.approx(toy.ref_TQ(tc, 1.0)["D"], rel=1e-4)
-                assert e["eta_is"][j][i] == pytest.approx(ETA_IS(a, b), abs=2e-4)
+                if e["in_env"][j][i]:
+                    assert e["eta_is"][j][i] == pytest.approx(ETA_IS(a, b), abs=2e-4)
 
 
 # ---------------------------------------------------------------- in the cycle (toy n-butane)
@@ -449,5 +459,5 @@ def test_browser_fluid_grid_matches_python():
     assert out["g"]["in_env"] == py["in_env"]
     env_py = envelope_in_fluid(R600A_ENVELOPE, R, sat, 2.0, S, suc)
     assert len(out["env"]) == len(env_py)
-    for (a, b), (x, y) in zip(out["env"], env_py):
+    for (a, b, *_), (x, y) in zip(out["env"], env_py):          # the browser also tags each point's edge
         assert a == pytest.approx(x, abs=1e-9) and b == pytest.approx(y, abs=1e-9)

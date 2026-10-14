@@ -172,8 +172,10 @@ def test_browser_model_matches_python():
                   "steam_bleed_fraction", "P_steam_bar", "V_suction_m3h", "V_discharge_m3h", "Q_cond_kW", "Q_source_kW",
                   "Q_loss_cond_kW", "Q_loss_subcool_kW", "Q_loss_evap_kW", "VHC", "T_cond_out", "dT_subcool_cond", "steam_preheat_fraction", "steam_gen_min_approach_K",
                   "preheat_subcool_share", "PR", "P_discharge_bar", "P_evap_in_bar", "dP_cond_kPa", "dP_subcool_kPa",
-                  "dP_evap_kPa", "T_cond_dew", "W_electric_kW"):
+                  "dP_evap_kPa", "T_cond_dew", "W_electric_kW", "density_ratio", "density_ratio_beyond", "to_read",
+                  "tc_read", "w_swept_kJm3"):
             assert js_res["r"][k] == pytest.approx(py.report[k], rel=1e-8, abs=1e-9), (c, k)
+        assert js_res["r"]["limit_flags"] == py.report["limit_flags"] and js_res["r"]["window_edge"] == py.report["window_edge"]
 
 
 # ---------------------------------------------------------------- steam raised from bled hot water

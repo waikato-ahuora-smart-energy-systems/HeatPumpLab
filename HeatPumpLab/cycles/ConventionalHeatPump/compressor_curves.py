@@ -70,6 +70,7 @@ class CompressorPoint:
     warnings: list = field(default_factory=list)
     to_map: float | None = None     # degC, evaporating temperature the map was read at
     tc_map: float | None = None     # degC, condensing temperature the map was read at
+    window: dict | None = None      # beyond the window: where the maps were read, the density ratio (compressor_window)
 
     @property
     def W_electric(self) -> float | None:
@@ -178,6 +179,26 @@ class EfficiencyMap:
     eta_vol_bounds: tuple[float, float] = (0.0, 1.1)
     density_reference: SaturatedVapourDensity | None = None
     suction_reference: SaturatedVapourDensity | None = None
+    extension: object = None        # compressor_window.EnvelopeExtension: efficiency beyond the window
+    limits: dict | None = None      # mechanical limits checked on the cycle (compressor_window.limit_flags)
+
+    def __post_init__(self):
+        if self.extension is not None and tuple(self.extension.envelope) != tuple(self.envelope or ()):
+            raise ValueError("the extension must be built on the map's envelope")
+
+    def extension_ratio(self, to: float, tc: float, rho_cond_dew: float | None = None,
+                        rho_suction: float | None = None) -> float:
+        """Density ratio for the extension at map point (to, tc).
+
+        The ratio lines are R600a's (condensing saturated vapour over the 15 K-superheat suction), so the
+        ratio is measured the same way: on the density basis it is the working fluid's own (equal to the
+        map point's R600a ratio, and still growing beyond R600a's tables); on the other bases it is the map
+        point's R600a ratio, which keeps the falloff continuous at the window edge.
+        """
+        from .compressor_window import map_density_ratio
+        if self.suction_reference is not None and rho_cond_dew and rho_suction:
+            return rho_cond_dew / rho_suction
+        return map_density_ratio(to, tc)
 
     @property
     def rpm(self) -> float:
@@ -207,7 +228,13 @@ class EfficiencyMap:
                      rho_cond_dew: float | None = None, rho_suction: float | None = None) -> dict:
         """Map values for a working-fluid point: eta_is, eta_vol (unclipped), the map point and envelope."""
         tm, tcm, warnings = self.map_point(to, tc, rho_evap_dew, rho_cond_dew, rho_suction)
-        return dict(eta_is=self.eta_is(tm, tcm), eta_vol=None if self.eta_vol is None else self.eta_vol(tm, tcm),
+        if self.extension is not None:
+            w = self.extension.efficiencies(self.eta_is, self.eta_vol, tm, tcm,
+                                            self.extension_ratio(tm, tcm, rho_cond_dew, rho_suction))
+            eta_is, eta_vol = w["eta_is"], w["eta_vol"]
+        else:
+            eta_is, eta_vol = self.eta_is(tm, tcm), None if self.eta_vol is None else self.eta_vol(tm, tcm)
+        return dict(eta_is=eta_is, eta_vol=eta_vol,
                     to_map=tm, tc_map=tcm, warnings=warnings,
                     in_envelope=self.envelope is None or in_envelope(tm, tcm, self.envelope))
 
@@ -235,10 +262,24 @@ class EfficiencyMap:
                 to_map = [to_reference(curve, self.density_reference, t)[0] for t in to_axis]
             tc_map = [to_reference(curve, self.density_reference, t)[0] for t in tc_axis]
         cell = lambda f, a, b: None if a is None or b is None or f is None else f(a, b)
+        if self.extension is not None:
+            # outside the window the cells show the extension, with the ratio evaluate() uses
+            def ratio(i, j):
+                if self.suction_reference is not None:
+                    return self.extension_ratio(to_map[i], tc_map[j], curve.rho_dew(tc_axis[j]),
+                                                suction_curve.rho_dew(to_axis[i]))
+                return self.extension_ratio(to_map[i], tc_map[j])
+            ext = [[None if a is None or b is None else
+                    self.extension.efficiencies(self.eta_is, self.eta_vol, a, b, ratio(i, j))
+                    for i, a in enumerate(to_map)] for j, b in enumerate(tc_map)]
+            eis = [[None if e is None else e["eta_is"] for e in row] for row in ext]
+            evol = [[None if e is None else e["eta_vol"] for e in row] for row in ext]
+        else:
+            eis = [[cell(self.eta_is, a, b) for a in to_map] for b in tc_map]
+            evol = [[cell(self.eta_vol, a, b) for a in to_map] for b in tc_map]
         return dict(
             to=list(to_axis), tc=list(tc_axis), to_map=to_map, tc_map=tc_map,
-            eta_is=[[cell(self.eta_is, a, b) for a in to_map] for b in tc_map],
-            eta_vol=[[cell(self.eta_vol, a, b) for a in to_map] for b in tc_map],
+            eta_is=eis, eta_vol=evol,
             in_env=[[None if a is None or b is None else (self.envelope is None or in_envelope(a, b, self.envelope))
                      for a in to_map] for b in tc_map],
         )
@@ -246,11 +287,32 @@ class EfficiencyMap:
     def evaluate(self, inlet: CompressorInlet) -> CompressorPoint:
         to, tc, warnings = self.map_point(inlet.T_evap_dew, inlet.T_cond_dew, inlet.rho_evap_dew, inlet.rho_cond_dew,
                                           inlet.suction.get("D"))
+        window = None
+        if self.extension is not None:
+            # condensing saturated vapour (critical isochore when supercritical) over the suction
+            r = self.extension_ratio(to, tc, inlet.rho_cond_dew, inlet.suction.get("D"))
+            window = self.extension.efficiencies(self.eta_is, self.eta_vol, to, tc, r)
+            eta_is_raw, eta_vol_raw = window["eta_is"], window["eta_vol"]
+        else:
+            eta_is_raw, eta_vol_raw = self.eta_is(to, tc), None if self.eta_vol is None else self.eta_vol(to, tc)
         if self.envelope is not None and not in_envelope(to, tc, self.envelope):
             where = (f"to {to:.1f} C, tc {tc:.1f} C" if self.density_reference is None else
                      f"{self.density_reference.fluid}-equivalent to {to:.1f} C, tc {tc:.1f} C")
-            warnings.append(f"outside the {self.name or 'compressor'} envelope ({where})")
-        eta = _clip(self.eta_is(to, tc), self.eta_is_bounds, "eta_is", warnings)
+            if window is not None:
+                b = window["ratio_beyond"]
+                tail = (f"; density ratio {window['ratio']:.2f}, {100 * b:.0f} % above the high-ratio limit: "
+                        f"efficiency falls off" if b > 0 else
+                        f"; density ratio {window['ratio']:.2f}, {-100 * b:.0f} % below the low-ratio limit: "
+                        f"efficiency falls off" if b < 0 else "")
+                warnings.append(f"outside the {self.name or 'compressor'} envelope ({where}): read at the nearest "
+                                f"window point, beyond the {window['edge_name']} edge{tail}")
+            else:
+                warnings.append(f"outside the {self.name or 'compressor'} envelope ({where})")
+        bounds = self.eta_is_bounds
+        if window is not None and not window["inside"]:
+            # beyond the window the extension's falloff (down to its own floor) replaces the lower guard rail
+            bounds = (min(bounds[0], self.extension.eta_is_floor), bounds[1])
+        eta = _clip(eta_is_raw, bounds, "eta_is", warnings)
         h_in = inlet.suction["h"]
         dh_is = inlet.h_isentropic - h_in
         if self.efficiency_basis == "electrical":
@@ -265,7 +327,7 @@ class EfficiencyMap:
             raise ValueError("efficiency_basis must be 'electrical' or 'shaft'")
         m_dot = eta_vol = None
         if self.eta_vol is not None:
-            eta_vol = _clip(self.eta_vol(to, tc), self.eta_vol_bounds, "eta_vol", warnings)
+            eta_vol = _clip(eta_vol_raw, self.eta_vol_bounds, "eta_vol", warnings)
         if self.displacement_m3h is not None:
             if eta_vol is None:
                 raise ValueError("a displacement needs a volumetric efficiency map")
@@ -273,7 +335,7 @@ class EfficiencyMap:
         return CompressorPoint(h_discharge=h_in + to_gas, w_shaft=w_sh, w_electric=w_el,
                                eta_is=dh_is / w_sh, m_dot=m_dot, eta_vol=eta_vol,
                                q_loss=(w_el if self.efficiency_basis == "electrical" else w_sh) - to_gas,
-                               warnings=warnings, to_map=to, tc_map=tc)
+                               warnings=warnings, to_map=to, tc_map=tc, window=window)
 
 
 def _clip(value: float, bounds: tuple[float, float], name: str, warnings: list) -> float:

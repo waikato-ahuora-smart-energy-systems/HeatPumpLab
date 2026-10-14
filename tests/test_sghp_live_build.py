@@ -115,7 +115,7 @@ def test_page_controls_and_headline(build_mod, tmp_path):
         assert f'<input type="number" id="{k}" value="0" step="1" min="0">' in html, k
     assert '["Total heat loss", fmt(totalLoss(r), 2), "kW"' in html and '"Shell heat loss"' not in html
     assert "calibrat" not in html.lower() and 'id="ua-mode"' not in html
-    assert ">Steam-Generating Heat Pump | Ahuora Centre</h1>" in html
+    assert ">Steam-generating heat pump | Ahuora Centre</h1>" in html
     # headline: COP stars and three dials, no split bar
     assert "function copStars(cop) { return Math.max(0, Math.min(5, cop)); }" in html   # 1 star = 1 COP from 0, partial, no rounding
     assert "/5</small>" not in html and "% of Carnot · " not in html          # stars only, no score or subtext

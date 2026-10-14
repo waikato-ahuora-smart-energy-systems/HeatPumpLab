@@ -475,8 +475,9 @@ class BaseHeatExchanger:
         for i in range(div):
             LMTD_seg.append(
                 _get_LMTD(
-                    Thin=data["source"][div - i].temperature,
-                    Thout=data["source"][div - 1 - i].temperature,
+                    # counterflow: sink segment i (sink[i] -> sink[i+1]) faces source[div-1-i] -> source[div-i]
+                    Thin=data["source"][div - 1 - i].temperature,
+                    Thout=data["source"][div - i].temperature,
                     Tcin=data["sink"][i].temperature,
                     Tcout=data["sink"][i + 1].temperature,
                 )

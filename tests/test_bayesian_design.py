@@ -117,6 +117,27 @@ def test_gp_fitting_failure_returns_distinct_feasible_candidate(monkeypatch):
     assert search.diagnostics[-1]["stage"] == "GP fallback"
 
 
+def test_acquisition_candidate_failure_falls_back_to_pool(monkeypatch):
+    from botorch.exceptions.errors import CandidateGenerationError
+
+    from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import _bayesian
+
+    config = Config(initial_evaluations=4, candidate_pool_size=32)
+    search = BayesianDesignSearch(DesignDomain([1.0], 123.0, config), config)
+    for _ in range(4):
+        x = search.ask()
+        search.tell(x, sum(x[:2]) + 1, True)
+
+    def fail(*args, **kwargs):
+        raise CandidateGenerationError("all restarts infeasible")
+
+    monkeypatch.setattr(_bayesian, "optimize_acqf", fail)
+    x = search.ask()
+    assert not search.observed(x)
+    assert search.domain.contains(search.domain.encode(x))
+    assert any(d["stage"] == "acquisition" for d in search.diagnostics)
+
+
 @pytest.mark.parametrize(
     "budget,fail", [(0, False), (1, False), (12, False), (12, True)]
 )

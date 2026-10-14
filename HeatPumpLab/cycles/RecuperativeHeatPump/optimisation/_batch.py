@@ -224,6 +224,11 @@ def _result_row(case: OptimisationCase, result) -> dict[str, Any]:
             "batch_message": None if result.best is None else result.best.message,
         }
     )
+    row.update(
+        dict.fromkeys(
+            ["best_SEC", "best_COP", "best_Pmax", "best_refrigerant", "best_composition", "best_mass_fractions"]
+        )
+    )
     if result.best is not None:
         best_spec = normalise_refrigerant_input(result.best.refrigerant)
         row.update(

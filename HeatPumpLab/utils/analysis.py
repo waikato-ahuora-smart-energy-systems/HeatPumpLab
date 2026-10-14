@@ -2,7 +2,6 @@
 
 import math
 import numpy as np
-import os
 
 from typing import TYPE_CHECKING
 from scipy.optimize import minimize as loc_min, approx_fprime
@@ -36,7 +35,7 @@ def get_parameter_sweep(
     HP_fn,
     filename: str = "HP_results",
     param_kwargs: dict = None,
-    n_cpu: int = os.cpu_count() - 1,
+    n_cpu: int | None = None,
     results_dir: str = "results",
 ) -> None:
     """Solve a batch of cases concurrently and persist intermediate results."""

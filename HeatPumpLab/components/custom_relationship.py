@@ -92,7 +92,7 @@ class CustomRelationship:
                         fluid=gc.source_in.fluid,
                         pp_instance=gc.source_in.pp_instance,
                         pressure=P_ave,
-                        temperature=h_ref,
+                        enthalpy=h_ref,
                     )
                     return (
                         mcp_air[0] - gc.source_in.mass_flow * source_in_i.heat_capacity

@@ -1163,3 +1163,19 @@ def test_custom_relationship_rejects_unknown_relation_id(hpl):
 
     with pytest.raises(ValueError):
         relationship.solve()
+
+
+def test_lmtd_average_pairs_counterflow_segment_ends():
+    """Equal-capacity counterflow with a uniform 1 K approach: every segment's LMTD is 1 K, with no false cross."""
+    from HeatPumpLab.components.common.base_heat_exchanger import BaseHeatExchanger
+
+    def profile(temps):
+        return [SimpleNamespace(temperature=t) for t in temps]
+
+    exchanger = BaseHeatExchanger.__new__(BaseHeatExchanger)
+    # source 100 -> 50 C (inlet to outlet), sink 49 -> 99 C, both linear in duty
+    exchanger.get_graph_data = lambda: dict(
+        source=profile([100.0 - 2.0 * i for i in range(26)]),
+        sink=profile([49.0 + 2.0 * i for i in range(26)]),
+    )
+    assert exchanger.get_LMTD_ave() == pytest.approx(1.0)

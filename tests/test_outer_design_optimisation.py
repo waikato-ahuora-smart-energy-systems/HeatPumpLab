@@ -1344,3 +1344,44 @@ def _fake_batch_result():
             "best_mass_fractions": "0.5;0.5",
         },
     )
+
+
+def test_failed_and_successful_result_rows_share_one_csv_schema():
+    from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._types import (
+        OuterDesignOptimisationResult,
+    )
+
+    case = case_helpers._build_optimisation_case(
+        base_case=None,
+        refrigerant=["Propane", "Butane"],
+    )
+    best = SimpleNamespace(
+        objective=0.5,
+        phase="bo",
+        success=True,
+        message="success",
+        sec=0.5,
+        cop=2.0,
+        pmax=1234.0,
+        x=(0.0, 0.0, 0.5, 0.5, 0.5),
+        refrigerant="Propane;Butane|0.5;0.5|mass",
+    )
+
+    def result(best):
+        return OuterDesignOptimisationResult(
+            optimiser_version=outer_opt.OPTIMISER_VERSION,
+            config=case.config,
+            initial_x=(0.0, 0.0, 0.5, 0.5, 0.5),
+            incumbent_replays=(),
+            best=best,
+            evaluations=(),
+            elapsed_seconds=1.0,
+            exact_evaluations=1,
+            failed_evaluations=0 if best else 1,
+        )
+
+    succeeded = batch_helpers._result_row(case, result(best))
+    failed = batch_helpers._result_row(case, result(None))
+
+    assert list(failed) == list(succeeded)
+    assert failed["best_SEC"] is None and failed["batch_success"] is False

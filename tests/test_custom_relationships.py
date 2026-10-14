@@ -388,3 +388,40 @@ def test_economiser_expansion_valve_relationship_solves_subcritical_temperature_
     assert expansion_valve.flow_in.temperature - expansion_valve.flow_out.temperature == (
         pytest.approx(10.0)
     )
+
+
+def test_air_mass_flow_flashes_pinch_candidates_by_enthalpy(monkeypatch):
+    """The pinch search varies the refrigerant enthalpy; each candidate state is flashed from (P, h)."""
+    flashes = []
+
+    class RecordingStream(LinearHeatCapacityStream):
+        def __init__(self, fluid=None, temperature=None, enthalpy=None, **kwargs):
+            if fluid == "Butane":
+                flashes.append(dict(temperature=temperature, enthalpy=enthalpy))
+            super().__init__(fluid=fluid, temperature=temperature, enthalpy=enthalpy, **kwargs)
+
+    def stream(fluid, pressure, temperature, enthalpy=None, mass_flow=0.0):
+        return LinearHeatCapacityStream(fluid=fluid, pressure=pressure, temperature=temperature,
+                                        enthalpy=enthalpy, mass_flow=mass_flow)
+
+    gas_cooler = SimpleNamespace(
+        duty=8000.0,
+        dTmin=20.0,
+        source_in=stream("Butane", 50.0, 120.0, 120.0, 1.0),
+        source_out=stream("Butane", 40.0, 80.0, 80.0, 1.0),
+        sink_in=stream("Air", 1.0, 20.0, 20.0),
+        sink_out=LinearHeatCapacityStream(fluid="Air", pressure=1.0, enthalpy=0.0, mass_flow=0.0),
+    )
+    gas_cooler.source_in.heat_capacity = 50.0
+    gas_cooler.source_out.heat_capacity = 150.0
+    target = SimpleNamespace(
+        sink_in=stream("Air", 1.0, 20.0, 20.0),
+        sink_out=LinearHeatCapacityStream(fluid="Air", pressure=1.0, enthalpy=0.0),
+        source_in=gas_cooler.source_in,
+        source_out=gas_cooler.source_out,
+    )
+    monkeypatch.setattr(custom_relationship_module, "Stream", RecordingStream)
+
+    CustomRelationship(source_obj=[gas_cooler], target_obj=[target], relation=2).solve()
+
+    assert flashes and all(f["temperature"] is None for f in flashes)

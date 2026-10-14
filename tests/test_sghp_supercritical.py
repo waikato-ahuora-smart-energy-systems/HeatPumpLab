@@ -125,7 +125,8 @@ def test_browser_model_matches_python_supercritical(propane):
     fl = propane
     keys = ("COP", "P_cond_bar", "P_discharge_bar", "T_cond_dew", "T_cond_bubble", "T_discharge", "m_steam_kgs",
             "Q_cond_kW", "Q_subcool_kW", "W_electric_kW", "m_dot_kgs", "dT_subcool_cond", "T_subcool_out",
-            "steam_gen_min_approach_K", "rho_crit_kgm3")
+            "steam_gen_min_approach_K", "rho_crit_kgm3", "density_ratio", "density_ratio_beyond", "to_read", "tc_read",
+            "w_swept_kJm3")
     for over in (dict(), dict(preheat_subcool_share=0.0), dict(dP_K_cond=0.2, dP_K_evap=0.05), dict(T_steam=100.0)):
         py = py_solve(fl, **over)
         js = fl.call(dict(op="solve", cfg=BASE | over, UA=0.015))
@@ -133,6 +134,8 @@ def test_browser_model_matches_python_supercritical(propane):
         assert js["report"]["supercritical"] is True and py.report["supercritical"] is True
         for k in keys:
             assert js["report"][k] == pytest.approx(py.report[k], rel=1e-6, abs=1e-6), (over, k)
+        assert [f["key"] for f in js["report"]["limit_flags"]] == [f["key"] for f in py.report["limit_flags"]]
+        assert js["report"]["window_edge"] == py.report["window_edge"]
 
 
 def test_continuous_through_the_critical_point(propane):
@@ -149,3 +152,13 @@ def test_continuous_through_the_critical_point(propane):
     # further up, the pressure keeps rising and the cycle still solves
     far = py_solve(fl, T_steam=110.0, **kw)
     assert far.success and far.P_H > hi.P_H
+
+
+def test_supercritical_point_flags_the_pressure_rating(propane):
+    """65 bar on a compressor rated (with R600a) to 28.4 bar: solved, with a red flag; the compressor map is
+    read past its window (the critical density is beyond the R600a table)."""
+    res = py_solve(propane)
+    f = {x["key"]: x for x in res.report["limit_flags"]}
+    assert "P_dis" in f and f["P_dis"]["value"] == pytest.approx(res.report["P_discharge_bar"]) and f["P_dis"]["limit"] == 28.4
+    assert "T_dis" in f                                         # 177 C discharge
+    assert res.report["window_edge"] is not None
