@@ -515,8 +515,8 @@ def test_objective_records_isolated_exact_evaluation_timeout(monkeypatch):
 
 def test_isolated_evaluator_replaces_worker_after_timeout(monkeypatch):
     class FakeConnection:
-        def __init__(self, response):
-            self.response = response
+        def __init__(self, responses):
+            self.responses = list(responses)
             self.sent = []
             self.closed = False
 
@@ -525,10 +525,10 @@ def test_isolated_evaluator_replaces_worker_after_timeout(monkeypatch):
 
         def poll(self, timeout):
             del timeout
-            return self.response is not None
+            return bool(self.responses) and self.responses[0] is not None
 
         def recv(self):
-            return self.response
+            return self.responses.pop(0)
 
         def close(self):
             self.closed = True
@@ -560,12 +560,15 @@ def test_isolated_evaluator_replaces_worker_after_timeout(monkeypatch):
 
     class FakeContext:
         def __init__(self):
-            self.responses = [None, ("ok", "recovered")]
+            self.responses = [
+                [("ready", None), None],
+                [("ready", None), ("ok", "recovered")],
+            ]
             self.processes = []
 
         def Pipe(self, duplex):
             assert duplex is True
-            return FakeConnection(self.responses.pop(0)), FakeConnection(None)
+            return FakeConnection(self.responses.pop(0)), FakeConnection([])
 
         def Process(self, **kwargs):
             assert kwargs["target"] is isolated_helpers._exact_evaluation_worker
@@ -588,6 +591,60 @@ def test_isolated_evaluator_replaces_worker_after_timeout(monkeypatch):
     assert len(context.processes) == 2
     assert context.processes[0].terminated is True
     evaluator.close()
+
+
+def _slow_starting_echo_worker(connection):
+    """Spawnable stand-in worker whose start-up is much slower than its tasks."""
+    import time
+
+    time.sleep(1.5)
+    connection.send(("ready", None))
+    while True:
+        request = connection.recv()
+        if request is None:
+            connection.close()
+            return
+        connection.send(("ok", request["candidate"]))
+
+
+def _never_ready_worker(connection):
+    import time
+
+    time.sleep(30.0)
+    connection.close()
+
+
+def test_isolated_evaluator_solve_timeout_excludes_worker_startup():
+    evaluator = isolated_helpers.IsolatedExactEvaluator(
+        timeout_seconds=0.5,
+        max_tasks=1,
+        startup_timeout_seconds=120.0,
+        worker_target=_slow_starting_echo_worker,
+    )
+    try:
+        # Each task gets a fresh worker (max_tasks=1) that takes >= 1.5 s to start,
+        # well past the 0.5 s solve timeout; neither task may time out.
+        assert evaluator.evaluate({"candidate": 1}) == 1
+        assert evaluator.evaluate({"candidate": 2}) == 2
+    finally:
+        evaluator.close()
+
+
+def test_isolated_evaluator_reports_worker_that_never_starts():
+    evaluator = isolated_helpers.IsolatedExactEvaluator(
+        timeout_seconds=60.0,
+        max_tasks=1,
+        startup_timeout_seconds=0.5,
+        worker_target=_never_ready_worker,
+    )
+    try:
+        with pytest.raises(
+            isolated_helpers.ExactEvaluationWorkerError, match="did not start within"
+        ):
+            evaluator.evaluate({"candidate": 1})
+        assert evaluator._process is None
+    finally:
+        evaluator.close()
 
 
 def test_objective_penalty_uses_squared_physical_constraint_errors():
