@@ -35,17 +35,17 @@ import math
 from dataclasses import dataclass, replace
 
 from ...utils.property_cache import active_property_call_cache, property_call_cache
-from ..common.dryer_loops import (
+from ..common.dryer import (
     DEFAULT_MOTOR_EFF,
     AirModel,
-    LoopFluid,
+    Fluid,
     LoopResult,
     air_profile,
     comp_path,
     compass_search,
     dry_air,
-    exp_el,
-    exp_warn,
+    expander_electric,
+    expander_warning,
     expand_to,
     humid_air,
     iso_path,
@@ -105,17 +105,17 @@ def _fail(message: str, **extra) -> LoopResult:
 class TTCascadeHeatPump:
     """TT CO2 cascade (Kong TT-4); see the module docstring."""
 
-    def __init__(self, config: TTCascadeConfig | None = None, bottom: LoopFluid | None = None,
-                 top: LoopFluid | None = None, air: AirModel | None = None):
+    def __init__(self, config: TTCascadeConfig | None = None, bottom: Fluid | None = None,
+                 top: Fluid | None = None, air: AirModel | None = None):
         self.c = config if config is not None else TTCascadeConfig()
         c = self.c
-        self.bottom = bottom if bottom is not None else LoopFluid(c.bottom_fluid, c.property_backend)
+        self.bottom = bottom if bottom is not None else Fluid(c.bottom_fluid, c.property_backend)
         if top is not None:
             self.top = top
         elif c.top_fluid == c.bottom_fluid:
             self.top = self.bottom
         else:
-            self.top = LoopFluid(c.top_fluid, c.property_backend)
+            self.top = Fluid(c.top_fluid, c.property_backend)
         if air is None:
             air = humid_air(c.T_air_inlet, c.air_RH, c.P_air_kPa) if c.air_RH > 0 else \
                 dry_air(c.P_air_kPa, c.property_backend)
@@ -186,7 +186,7 @@ class TTCascadeHeatPump:
                 qib = ihx(fb, Peb, eb, c.P_b, Tb, c.dT_ihx_b)
                 cbIn = fb.PH(Peb, eb["h"] + qib)
                 cb = stg(fb, Peb, cbIn, c.P_b)
-                cg = max_duty(fb, c.P_b, cb["out"]["h"], r, ft, Pet, ctIn["h"], c.dT_cgc)
+                cg = {"q": max_duty(fb, c.P_b, cb["out"]["h"], r, ft, Pet, ctIn["h"], c.dT_cgc)}
                 hbo = cb["out"]["h"] - cg["q"] / r
                 return dict(qib=qib, cbIn=cbIn, cb=cb, cg=cg, hbo=hbo, f=fb.Tph(c.P_b, hbo) - Tb)
 
@@ -310,11 +310,11 @@ class TTCascadeHeatPump:
             qPri = mP * (air.h(c.T_air_tar) - air.h(Tain))
             qSec = phi * mP * (air.h(T_mt) - air.h(Tain))
             w = ctp["w"] + r * cb["w"]
-            wEl = exp_el(w, wx, c.motor_eff)
+            wEl = expander_electric(w, wx, c.motor_eff)
             cop = qAir / wEl
             qEt, qEb = et["h"] - het, r * (eb["h"] - heb)
-            xq = [exp_warn(self.top, Pet, het, warnings, "top expander"),
-                  exp_warn(self.bottom, Peb, heb, warnings, "bottom expander")] if c.expander_eta else None
+            xq = [expander_warning(self.top, Pet, het, warnings, "top expander"),
+                  expander_warning(self.bottom, Peb, heb, warnings, "bottom expander")] if c.expander_eta else None
             if cg["q"] <= 1e-6:
                 warnings.append("the cascade gas cooler carries no heat: the bottom discharge is too cold for the top "
                                 "suction")
@@ -464,7 +464,8 @@ class TTCascadeHeatPump:
                     if o["y"] > bg["y"]:
                         bg, xg = o, z
         x, best, converged = compass_search(f, [(x0, b0), (xg, bg)], lo, hi, [1.0, 1.0, 0.25, 8.0],
-                                            [0.002, 0.002, 0.002, 0.05], state, max_eval)
+                                            [0.002, 0.002, 0.002, 0.05], [False] * 4, state, max_eval,
+                                            score=lambda o: o["y"], empty={"y": -math.inf})
         if x is None:
             return _fail("no feasible design found within the bounds", report=dict(optimiser=dict(nEval=state["nEval"])))
         # the optimum often sits on the edge of feasibility (the HT gas-cooler approach): round as the app shows the

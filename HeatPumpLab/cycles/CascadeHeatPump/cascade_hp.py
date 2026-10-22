@@ -31,18 +31,18 @@ import math
 from dataclasses import dataclass, field, replace
 
 from ...utils.property_cache import active_property_call_cache, property_call_cache
-from ..common.dryer_loops import (
+from ..common.dryer import (
     DEFAULT_MOTOR_EFF,
     AirModel,
-    LoopFluid,
+    Fluid,
     LoopResult,
     air_profile,
     air_secondary,
     comp_path,
     compass_search,
     dry_air,
-    exp_el,
-    exp_warn,
+    expander_electric,
+    expander_warning,
     expand_to,
     humid_air,
     iso_path,
@@ -106,7 +106,7 @@ class CascadeHeatPump:
             fluids = []
             for name in c.fluids[:max(c.n, 0)]:
                 if name not in made:
-                    made[name] = LoopFluid(name, c.property_backend)
+                    made[name] = Fluid(name, c.property_backend)
                 fluids.append(made[name])
         self.fluids = fluids
         if air is None:
@@ -322,10 +322,10 @@ class CascadeHeatPump:
                     warnings.append(f"level {k + 1}: its IHX needs more liquid subcooling than is left")
             w = sum(m[k] * l["cp"]["w"] for k, l in enumerate(L))
             wx = sum(m[k] * (l["hv"] - l["he"]) for k, l in enumerate(L))
-            wEl = exp_el(w, wx, c.motor_eff)
+            wEl = expander_electric(w, wx, c.motor_eff)
             qAir = sum(Q)
             cop = qAir / wEl
-            xq = [exp_warn(fls[k], l["Pe"], l["he"], warnings, f"level {k + 1} expander") for k, l in enumerate(L)] \
+            xq = [expander_warning(fls[k], l["Pe"], l["he"], warnings, f"level {k + 1} expander") for k, l in enumerate(L)] \
                 if c.expander_eta else None
             paths, exchangers = {}, []
             hamb = air.h(Tain)
@@ -476,8 +476,8 @@ class CascadeHeatPump:
             o = f(z)
             if o["y"] > bg["y"]:
                 bg, xg = o, z
-        x, best, converged = compass_search(f, [(x0, b0), (xg, bg)], lo, hi, [8.0] * dim, [0.05] * dim, state,
-                                            max_eval)
+        x, best, converged = compass_search(f, [(x0, b0), (xg, bg)], lo, hi, [8.0] * dim, [0.05] * dim, [False] * dim,
+                                            state, max_eval, score=lambda o: o["y"], empty={"y": -math.inf})
         if x is None:
             return _fail("no design within the bounds keeps every approach",
                          report=dict(optimiser=dict(nEval=state["nEval"])))

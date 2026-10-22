@@ -6,7 +6,7 @@ from dryer_cascade_reference import close, compare_result, compare_scalars, cool
 coolprop_or_skip()
 
 from HeatPumpLab.cycles.CascadeHeatPump import CascadeConfig, CascadeHeatPump  # noqa: E402
-from HeatPumpLab.cycles.common.dryer_loops import LoopFluid  # noqa: E402
+from HeatPumpLab.cycles.common.dryer import Fluid  # noqa: E402
 
 CASES = reference_cases("cascade")
 _FLUIDS: dict = {}
@@ -17,7 +17,7 @@ def model(**over) -> CascadeHeatPump:
     fluids = []
     for name in cfg.fluids[:cfg.n]:
         if name not in _FLUIDS:
-            _FLUIDS[name] = LoopFluid(name, "coolprop")
+            _FLUIDS[name] = Fluid(name, "coolprop")
         fluids.append(_FLUIDS[name])
     return CascadeHeatPump(cfg, fluids=fluids)
 
@@ -84,7 +84,7 @@ def test_failures(over, msg):
 
 
 def test_missing_fluid():
-    m = CascadeHeatPump(CascadeConfig(property_backend="coolprop", n=3), fluids=[LoopFluid("Isobutane", "coolprop")])
+    m = CascadeHeatPump(CascadeConfig(property_backend="coolprop", n=3), fluids=[Fluid("Isobutane", "coolprop")])
     res = m.solve()
     assert not res.success and res.message == "a refrigerant is needed for every level"
 
