@@ -169,7 +169,6 @@ HeatPumpLab/
   utils/           property packages (CoolProp, REFPROP), caching, parallel solving, plotting
 tests/             test suite
 rhp_*.py           research search scripts for the recuperative heat pump (Pareto, MOBO, trust region)
-experiments/       frozen copies of earlier optimisation experiments, kept for provenance
 ```
 
 ## Tests
