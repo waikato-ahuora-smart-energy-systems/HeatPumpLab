@@ -6,7 +6,7 @@ import numpy as np
 from typing import TYPE_CHECKING
 from scipy.optimize import minimize as loc_min, approx_fprime
 
-from .properties_package import PropertyPackage
+from .coolprop_properties import make_property_package
 from .parallel_solving import solve_in_parallel
 from .readWriteOutput import (
     transfer_temp_files_to_results,
@@ -201,8 +201,10 @@ def get_unique_f_suffix(param, fld_only=False) -> str:
     """Build a unique filename suffix encoding refrigerant and key inputs."""
     suffix: str = "-"
 
-    r = PropertyPackage(param["refrigerant"])
-    fld_comp = r.fld_name.replace(".FLD", "").split("*")
+    r = make_property_package(param["refrigerant"])
+    # REFPROP names components "A.FLD*B.FLD"; CoolProp keeps them in .names: same suffix either way
+    names = getattr(r, "names", None)
+    fld_comp = list(names) if names and len(names) > 1 else r.fld_name.replace(".FLD", "").split("*")
     if len(fld_comp) == 1:
         suffix = "-" + param["refrigerant"]
     else:

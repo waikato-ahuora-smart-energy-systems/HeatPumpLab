@@ -1,6 +1,6 @@
 """Thermodynamic stream wrapper providing property calculations."""
 
-from ..utils.properties_package import PropertyPackage
+from ..utils.coolprop_properties import make_property_package
 
 
 class Stream:
@@ -56,7 +56,7 @@ class Stream:
 
     def set_fluid(self, fluid: str, pp_instance: str) -> None:
         """Attach a property package describing the working fluid."""
-        self.PP = PropertyPackage(fluid, pp_instance)
+        self.PP = make_property_package(fluid, pp_instance)
         self.P_crit = self.PP.P_crit
         self.P_max = self.PP.P_max
         self.T_crit = self.PP.T_crit

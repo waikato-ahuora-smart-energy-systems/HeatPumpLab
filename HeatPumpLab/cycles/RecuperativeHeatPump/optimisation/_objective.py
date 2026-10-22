@@ -15,8 +15,9 @@ from HeatPumpLab.cycles.RecuperativeHeatPump._refrigerant import (
     convert_composition,
     normalise_refrigerant_input,
 )
+from HeatPumpLab.utils.coolprop_properties import make_property_package
 from HeatPumpLab.utils.properties_package import (
-    COMPRESSOR_GAS_PHASES, PropertyPackage, phase_from_refprop_quality,
+    COMPRESSOR_GAS_PHASES, phase_from_refprop_quality,
 )
 
 from ._isolated_evaluation import (
@@ -416,7 +417,7 @@ class _OuterDesignObjective:
         if supplied is not None:
             masses = tuple(float(value) for value in supplied)
         elif self.refrigerant_spec.basis == "mol":
-            masses = PropertyPackage(self.input_refrigerant).get_component_molar_masses()
+            masses = make_property_package(self.input_refrigerant).get_component_molar_masses()
         else:
             masses = tuple(1.0 for _ in self.refrigerant_spec.components)
         if len(masses) != self.refrigerant_spec.component_count:

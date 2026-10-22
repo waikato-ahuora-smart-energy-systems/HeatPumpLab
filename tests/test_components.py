@@ -306,8 +306,9 @@ def test_stream_state_pairs_recreate_the_same_thermodynamic_state(hpl):
 
     for recreated in (recreated_from_enthalpy, recreated_from_entropy):
         assert recreated.pressure == pytest.approx(reference.pressure)
-        assert recreated.temperature == pytest.approx(reference.temperature, abs=1e-8)
-        assert recreated.enthalpy == pytest.approx(reference.enthalpy, abs=1e-8)
+        # 1e-6 K: CoolProp's inverse flashes are converged less tightly than REFPROP's
+        assert recreated.temperature == pytest.approx(reference.temperature, abs=1e-6)
+        assert recreated.enthalpy == pytest.approx(reference.enthalpy, abs=1e-6)
         assert recreated.entropy == pytest.approx(reference.entropy, abs=1e-8)
         assert recreated.heat_flow == pytest.approx(
             reference.enthalpy * reference.mass_flow

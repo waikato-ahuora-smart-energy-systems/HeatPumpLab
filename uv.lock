@@ -317,7 +317,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "botorch" },
-    { name = "ctrefprop" },
+    { name = "coolprop" },
     { name = "gpytorch" },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -327,12 +327,14 @@ dependencies = [
     { name = "torch" },
 ]
 
+[package.optional-dependencies]
+refprop = [
+    { name = "ctrefprop" },
+]
+
 [package.dev-dependencies]
 benchmark = [
     { name = "cma" },
-]
-coolprop = [
-    { name = "coolprop" },
 ]
 dev = [
     { name = "pytest" },
@@ -342,7 +344,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "botorch", specifier = ">=0.18.1" },
-    { name = "ctrefprop", specifier = ">=0.10.5" },
+    { name = "coolprop", specifier = ">=8.0" },
+    { name = "ctrefprop", marker = "extra == 'refprop'", specifier = ">=0.10.5" },
     { name = "gpytorch", specifier = ">=1.15.2" },
     { name = "matplotlib", specifier = ">=3.10.9" },
     { name = "numpy", specifier = ">=2.4.6" },
@@ -351,10 +354,10 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.17.1" },
     { name = "torch", specifier = ">=2.14.0" },
 ]
+provides-extras = ["refprop"]
 
 [package.metadata.requires-dev]
 benchmark = [{ name = "cma", specifier = ">=4.4.4" }]
-coolprop = [{ name = "coolprop", specifier = ">=8.0" }]
 dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "ruff", specifier = ">=0.15.14" },

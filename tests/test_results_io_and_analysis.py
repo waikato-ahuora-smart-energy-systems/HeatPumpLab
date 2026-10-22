@@ -431,7 +431,7 @@ def test_get_results_report_adds_optimisation_metadata_and_weight(monkeypatch):
 def test_get_unique_suffix_uses_refrigerant_name_for_pure_fluid(monkeypatch):
     monkeypatch.setattr(
         analysis,
-        "PropertyPackage",
+        "make_property_package",
         lambda refrigerant: SimpleNamespace(
             fld_name=refrigerant,
             fld_composition=[1.0],
@@ -446,7 +446,7 @@ def test_get_unique_suffix_includes_mixture_components_and_optional_parameters(
 ):
     monkeypatch.setattr(
         analysis,
-        "PropertyPackage",
+        "make_property_package",
         lambda refrigerant: SimpleNamespace(
             fld_name="Propane.FLD*Butane.FLD",
             fld_composition=[0.4, 0.6],

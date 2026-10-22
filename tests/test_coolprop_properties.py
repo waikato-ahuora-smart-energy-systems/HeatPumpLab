@@ -91,10 +91,10 @@ def test_fluid_strings_and_names():
 
 def test_backend_switch(monkeypatch):
     monkeypatch.delenv(cpp.ENV_VAR, raising=False)
+    assert cpp.property_backend() == "coolprop"                   # the default
+    monkeypatch.setenv(cpp.ENV_VAR, "REFPROP")
     assert cpp.property_backend() == "refprop"
-    monkeypatch.setenv(cpp.ENV_VAR, "CoolProp")
-    assert cpp.property_backend() == "coolprop"
-    assert cpp.property_backend("refprop") == "refprop"          # an explicit choice wins
+    assert cpp.property_backend("coolprop") == "coolprop"        # an explicit choice wins
     with pytest.raises(ValueError):
         cpp.property_backend("nist")
 

@@ -35,7 +35,8 @@ from typing import Callable
 import numpy as np
 
 from ...components.compressor import pareto_front_efficiency
-from ...utils.properties_package import COMPRESSOR_GAS_PHASES, PropertyPackage, RefpropError
+from ...utils.properties_package import COMPRESSOR_GAS_PHASES, RefpropError
+from ...utils.coolprop_properties import make_property_package
 from ...utils.property_cache import active_property_call_cache, property_call_cache
 
 # ----------------------------------------------------------------------------------------
@@ -75,11 +76,11 @@ class SplitHPConfig:
 
 
 class RefpropProperties:
-    """Thin wrapper over HeatPumpLab's PropertyPackage for one refrigerant and air."""
+    """Thin wrapper over HeatPumpLab's property package (CoolProp by default) for one refrigerant and air."""
 
     def __init__(self, refrigerant: str, sink: str = "Air"):
-        self.ref = PropertyPackage(refrigerant)
-        self.air = PropertyPackage(sink, "snk")
+        self.ref = make_property_package(refrigerant)
+        self.air = make_property_package(sink, "snk")
 
     def _r(self, pair, a, b):
         return self.ref.get_std_properties(pair, a, b, self.ref.fld_composition)

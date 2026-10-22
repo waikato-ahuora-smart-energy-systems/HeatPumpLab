@@ -152,7 +152,7 @@ class ConventionalHPConfig:
     dP_K_cond: float = 0.0
     dP_K_subcool: float = 0.0
     dP_K_evap: float = 0.0
-    property_backend: str | None = None  # "refprop" | "coolprop"; None -> $HEATPUMPLAB_PROPERTY_BACKEND or REFPROP
+    property_backend: str | None = None  # "refprop" | "coolprop"; None -> $HEATPUMPLAB_PROPERTY_BACKEND or CoolProp
     compressor_Hz: float | None = None   # compressor supply frequency; None keeps the curve's own (50 Hz)
 
 

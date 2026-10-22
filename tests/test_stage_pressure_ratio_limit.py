@@ -63,8 +63,16 @@ def test_invalid_limits_are_rejected(limit):
 
 
 @pytest.mark.parametrize('limit,success', [(10., True), (8., False)])
-def test_native_isolated_evaluation_propagates_limit(tmp_path, limit, success):
-    # Previously solved best-COP Propane/Neopentane point: stage PRs 1.2693 and 8.5533.
+def test_native_isolated_evaluation_propagates_limit(tmp_path, monkeypatch, limit, success):
+    # Previously solved best-COP Propane/Neopentane point: stage PRs 1.2693 and 8.5533. The stored point is
+    # a REFPROP solution (CoolProp's propane/neopentane parameters differ), so evaluate it on REFPROP.
+    from HeatPumpLab.utils.coolprop_properties import ENV_VAR
+    from HeatPumpLab.utils.properties_package import PropertyPackage
+    try:
+        PropertyPackage("Propane")
+    except Exception as exc:
+        pytest.skip(f"REFPROP is unavailable: {exc}")
+    monkeypatch.setenv(ENV_VAR, "refprop")          # inherited by the isolated worker process
     objective = _OuterDesignObjective(max_evals=1, refrigerant='Propane;Neopentane|0.5;0.5|mass', bounds=MODEL_RANGE, base_case=MODEL1_CASE,
         results_dir=tmp_path, max_stage_pressure_ratio=limit,
         exact_evaluation_timeout_seconds=90, exact_evaluation_timeout_retries=0,

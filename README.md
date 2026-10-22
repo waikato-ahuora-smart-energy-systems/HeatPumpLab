@@ -1,295 +1,220 @@
 # The Heat Pump Lab
 
-The Heat Pump Lab by the Ahuora Centre is a digital experimentation package for constructing and analysing high temperature heat pump cycles. At present, the lab contains one new heat pump cycle, the Recuperative Heat Pump, which is described below.
+The Heat Pump Lab, from the Ahuora Centre at the University of Waikato,
+is a Python package for building and analysing high-temperature heat pump cycles. It solves
+steady-state cycle designs with real-fluid properties, including zeotropic refrigerant mixtures
+and transcritical and supercritical operation, and reports COP, pressures, compressor duties and heat-exchanger
+approaches.
 
-The [v14 solver notes](HeatPumpLab/cycles/RecuperativeHeatPump/V14_SOLVER_FIXES.md)
-describe the pressure-targeting fixes, guarded flash recovery, remaining failed
-candidates, and the historical 400-call optimiser comparisons.
+The package contains seven cycle models. Each is a module under `HeatPumpLab.cycles`:
 
-The `main_*.py` runner scripts and their tests live in `local_scripts/` (gitignored, not part of
-the package). Run them from the repository root, e.g. `.venv/bin/python local_scripts/main_RHPopt.py`;
-their tests run with `.venv/bin/python -m pytest local_scripts/tests`.
+| Cycle | Module | What it models | Reference |
+| --- | --- | --- | --- |
+| Recuperative heat pump (RHP) | `RecuperativeHeatPump` | One or two compressors with up to three recuperative heat exchangers (RHX) placed between the gas coolers, for high-temperature glide heating. Includes Bayesian optimisation of the design. | [1] |
+| Split-stream heat pump (SLTHP) | `SplitHeatPump` | Two-stage cycle with RHX1 in parallel with the low-temperature gas cooler. | [1] |
+| Conventional heat pump | `ConventionalHeatPump` | Single-stage rating model with compressor maps, heat losses and steam raising (the steam-generating heat pump). | — |
+| Transcritical–transcritical CO₂ cascade | `TTCascadeHeatPump` | The bottom cycle gives its heat to the top cycle's suction gas in a cascade gas cooler; the top cycle heats the air in two gas coolers, with optional secondary air. IHXs in both cycles, optional expanders. | [2] |
+| n-level cascade | `CascadeHeatPump` | Two to four levels heating the air in series through each level's subcooler and its share of condenser heat. Optional IHX per level and expanders. | [3] |
+| Heat pump with MVR steam | `MVRHeatPump` | A vapour-compression cycle heats the air and raises low-pressure steam, which a chain of mechanical vapour recompression fans, with water injection and splits to the process, lifts to heat the air to the target. | — |
+| sCO₂ reverse Brayton heat pump | `BraytonHeatPump` | Supercritical CO₂ cycle with split compression, a preheater, an IHX and a turbine expander, architectures 1 and 2. | [4] |
 
-## Recuperative heat pump model for high temperature glide heating
+The air-drying cycles (all but the conventional one) are also available in the Advanced dryer heat
+pumps web app, and the conventional cycle in the Steam-generating heat pump web app, from the Ahuora
+Centre; the Python models reproduce the apps' results.
 
-The idea of heat recuperation within vapour-compression and transcritical heat pump cycles is not new. Internal heat exchangers (IHXs) are widely used to reduce flash gas generation after expansion, preheat suction gas, provide greater superheat after compression, and enable slightly lower high-side pressures (e.g. when producing hot water). In conventional cycles, the IHX transfers heat from the warm refrigerant immediately before expansion to the evaporator pressure. Pinch analysis states that heat is in excess below the pinch temperature and in deficit above it. A heat pump should ideally absorb heat below the pinch and reject upgraded heat above it. Applying this logic to the heat pump cycle itself suggests that repositioned IHXs could deliver thermodynamic benefits. This model calculates heat pump performance for alternate IHX placements. To distinguish a conventional IHX from a repositioned one, this study uses the term recuperative heat exchanger (RHX). If you wish to learn more, we refer you to the paper below.
+## Background
 
-Cite: T.G. Walmsley, K.-M. Adamson, C. Arpagaus, F. Schlosser, Recuperative heat pump cycle concept for high-temperature glide process heating applications, Applied Thermal Engineering 301 (2026) 131660. https://doi.org/10.1016/j.applthermaleng.2026.131660.
+Internal heat exchangers (IHXs) are widely used in vapour-compression and transcritical heat
+pumps. They transfer heat from the warm refrigerant just before expansion to the suction gas.
+Pinch analysis suggests a heat pump should absorb heat below the pinch and reject upgraded heat
+above it. Applied to the cycle itself, this means recuperators placed between the gas coolers
+can raise the compressor discharge temperature to the level a high-temperature process needs,
+at a lower pressure. To distinguish them from a conventional IHX, the model calls these
+recuperative heat exchangers (RHX). The concept and its results are described in:
 
-Contact: Tim Walmsley, tim.walmsley@waikato.ac.nz
+> T.G. Walmsley, K.-M. Adamson, C. Arpagaus, F. Schlosser, Recuperative heat pump cycle concept
+> for high-temperature glide process heating applications, *Applied Thermal Engineering* 301
+> (2026) 131660. https://doi.org/10.1016/j.applthermaleng.2026.131660
 
-## Production Bayesian optimisation
+See [ABOUT.md](HeatPumpLab/cycles/RecuperativeHeatPump/ABOUT.md) for the cycle variants.
 
-`local_scripts/main_RHPopt.py` and the public `optimise_recuperative_heat_pump` API now use
-joint BoTorch LogEI (v18). Run `uv sync` to install the core dependencies.
+## Requirements
+
+- Python 3.12 or later, and [uv](https://docs.astral.sh/uv/) (recommended) or pip.
+- Fluid properties come from [CoolProp](http://www.coolprop.org) (free, installed with the
+  package) by default, for every cycle. Mixtures use phase-imposed flashes with cached bubble and
+  dew points, plus a phase-envelope fallback near the critical point, so zeotropic blends solve
+  robustly and quickly.
+- **NIST REFPROP 10** (optional) can be used instead. REFPROP is commercial software and is not
+  included; you need your own licence. HeatPumpLab looks for it at:
+  - macOS: `/Library/REFPROP/` (`librefprop.dylib`, `librefprop-source.dylib`, `librefprop-sink.dylib`)
+  - Windows: `C:/Program Files (x86)/REFPROP/` (`REFPROP.DLL`, `REFPROP-source.DLL`, `REFPROP-sink.DLL`)
+
+  The three library files are copies of the same REFPROP library, so the refrigerant, source and
+  sink fluids can be loaded at the same time.
+
+## Installation
+
+```sh
+git clone https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab.git
+cd HeatPumpLab
+uv sync                      # core dependencies (including CoolProp), and the package itself
+uv sync --extra refprop      # optional: the REFPROP backend (needs a REFPROP installation)
+uv sync --group dev          # optional: pytest and ruff
+```
+
+To use REFPROP, set `HEATPUMPLAB_PROPERTY_BACKEND=refprop`, or pass `property_backend="refprop"`
+to the conventional cycle's configuration. The two backends agree closely; mixture results can
+differ slightly where their binary interaction parameters differ, and absolute enthalpies and
+entropies of some mixtures differ by a constant (reference state), which does not affect cycle
+results. The fluid property overview table (`get_fluid_prop_overview_table`) uses REFPROP-only
+outputs such as ODP and GWP.
+
+Run the examples below with `uv run python your_script.py` from the repository root.
+
+## Quick start
+
+### Recuperative heat pump
+
+```python
+from HeatPumpLab.cycles.RecuperativeHeatPump import RecuperativeHP
+
+hp = RecuperativeHP(
+    refrigerant="Propane;Isopentane|0.2;0.8|mass",  # components; fractions; basis
+    T_source_in=40.0,       # heat source (water) inlet, °C
+    Tref_evap_inlet=10.0,   # refrigerant entering the evaporator, °C
+    T_air_inlet=15.0,       # sink (air) inlet, °C
+    T_air_tar=200.0,        # sink outlet target, °C
+    dT_GC_min_tar=20.0,     # gas-cooler minimum approach, K
+    dTmin_rhx=5.0,          # recuperator minimum approach, K
+    n_comp=2,               # compression stages
+    dT_rhx1_cold=60.0,      # RHX1 lift on the stage-1 suction, K
+    dT_rhx2_cold=0.0,       # RHX2 lift before stage 2, K
+    comp2_power_frac=0.5,   # pressure-ratio allocation to stage 2
+    sink="Air",
+    source="water",
+).solve()
+
+print(hp.converged, hp.COP)              # True 2.59
+print(hp.get_report()["Pmax"])           # maximum pressure, kPa
+```
+
+### Design optimisation
+
+`optimise_recuperative_heat_pump` searches the RHX lifts, stage allocation and, optionally, the
+mixture composition with Bayesian optimisation (BoTorch). Solves run in worker processes, so
+call it from a script with a main guard:
 
 ```python
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation import (
     OuterDesignOptimisationConfig, optimise_recuperative_heat_pump,
 )
 
-result = optimise_recuperative_heat_pump(
-    refrigerant="Propane;Butane|0.3;0.7|mass",
-    config=OuterDesignOptimisationConfig(
-        max_exact_evaluations=200, seed=20260910,
-        vary_composition=False, preserve_incumbent=False,
-    ),
-)
+if __name__ == "__main__":
+    result = optimise_recuperative_heat_pump(
+        refrigerant="Propane;Butane|0.3;0.7|mass",
+        config=OuterDesignOptimisationConfig(
+            max_exact_evaluations=200, seed=20260910,
+            vary_composition=False, preserve_incumbent=False,
+        ),
+    )
+    print(result.best.cop, result.best.x)
 ```
 
-The origin is `(0 K, 0 K, 0.5)` for free cycle coordinates; fixed settings stay
-fixed. The legacy field `comp2_power_frac` represents logarithmic pressure-ratio
-allocation in the current model. Both lifts, stage allocation and all enabled
-independent mass fractions are searched jointly. Fixed variables are removed
-from the GP; variable mixtures use an explicit simplex for any component count.
+A 200-evaluation search takes roughly ten to fifteen minutes on a laptop. See the
+[optimisation protocol](HeatPumpLab/cycles/RecuperativeHeatPump/BAYESIAN_OPTIMISATION.md) for
+the settings and their limits.
 
-One shared 200-candidate budget includes initial observations, failures and any
-current-solver historical replays. The default bootstrap has 16 observations,
-with boundary-aware sampling and periodic maximin exploration. Failed penalties
-never enter the response GP. Batch cases run in parallel; selection within a
-case is sequential. The edge/split/feedback searches and pattern-search polish,
-their configuration fields and their executable benchmark have been removed.
+### Split-stream heat pump
 
-New signatures and `*_bo_v18` output filenames prevent old completed searches
-from being mistaken for BO results. The manuscript methods and diagrams are in
-`paper/article_outline.tex`; its existing v11 result archive still needs a BO
-rerun before the rankings can be attributed to the new method. See
-[the production BO protocol](HeatPumpLab/cycles/RecuperativeHeatPump/BAYESIAN_OPTIMISATION.md)
-for settings and numerical limitations.
+```python
+from HeatPumpLab.cycles.SplitHeatPump import SplitHeatPump, SplitHPConfig
 
-## Fixed-composition refrigerant analysis
-
-Run `.venv/bin/python local_scripts/main_RHPcomposition.py` to compare R600 (butane) with
-R290/R600, R290/R601A (isopentane), R290/R601 (pentane), and R290/R600A
-(isobutane) at a 200°C sink
-target. Each binary uses 0–100% R290 by mass in 10 percentage-point increments.
-Composition stays fixed throughout optimisation; recuperator temperature lifts
-and compressor-stage allocation remain free. Other cycle inputs retain the standard
-defaults (40°C source inlet, 10°C evaporator inlet, 15°C sink inlet).
-
-The sweep solves 41 unique cases, reusing pure-fluid endpoints, and saves
-resumable results under `results/RHPcomposition/`. Historical incumbent replay
-is disabled for this independent sweep. Use `--dry-run` to inspect the grid,
-`--n-cpu 6` to select the worker count, or `--target 180` to change the sink target.
-On completion, a comparison CSV and plots are written to `analysis_200C/`
-inside the results directory. Use `--report-only` to regenerate them.
-Power savings compare electricity at equal delivered heat duty; the separate
-SEC column uses the model definition `W / (Q_hot - W)`.
-
-The COP–VHC plot labels R290 mass percentages and highlights designs that are
-non-dominated when maximising both metrics. It compares the highest-COP design
-found at each sampled composition, rather than performing multi-objective design
-optimisation. Fresh isolated replays supply paired COP and VHC values, cached
-by case signature and model version. Total VHC is heating duty divided by the
-sum of active compressor suction volume flows: `Q_H_total / (V_suc_1 + V_suc_2)`
-for two compressors. It is converted from the model's kJ/m³ to MJ/m³ for plotting.
-
-## Experimental optimiser comparison
-
-`local_scripts/main_RHPoptimiser_benchmark.py` compares joint RBF, Gaussian-process expected
-improvement (Bayesian optimisation), and space-filling searches on three fixed
-mixtures at 200°C. All use the same 24 initial designs and a 64-evaluation
-budget, without seeding from the previous sweep. It requires the existing
-fixed-composition results as comparators. Run with the repository environment:
-
-```sh
-MPLBACKEND=Agg OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python local_scripts/main_RHPoptimiser_benchmark.py --n-cpu 6
-.venv/bin/python local_scripts/main_RHPoptimiser_benchmark.py --report-only
+res = SplitHeatPump(SplitHPConfig(
+    refrigerant="Propane;Isopentane|0.2;0.8|mass",
+    dT_rhx1_cold=80.0,          # RHX1 lift, K
+)).solve()
+print(res.success, res.COP, res.P_H)    # gas-cooler pressure, MPa
 ```
 
-Historical local-polish results remain readable, but that diagnostic is no longer executable.
-Results, evaluation checkpoints, fresh-process winner replays and
-convergence plots are saved under `results/RHPcomposition/optimiser_investigation/`.
-Use `--seed`, `--refrigerant`, `--method` and `--output` for further trials. Cold
-searches resume matching checkpoints; a changed budget requires a new output
-directory. These experiments do not change the production optimiser or replace
-the original composition sweep. See the
-[investigation](HeatPumpLab/cycles/RecuperativeHeatPump/OPTIMISER_COMPARISON.md)
-for findings and limitations.
-
-The repeated origin-start comparison is available in `local_scripts/main_RHPorigin_benchmark.py`:
-
-```sh
-uv sync --group benchmark
-MPLBACKEND=Agg OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python local_scripts/main_RHPorigin_benchmark.py --n-cpu 6
-.venv/bin/python local_scripts/main_RHPorigin_benchmark.py --report-only
-```
-
-This runs BO, RBF and official pycma CMA-ES from `(0 K, 0 K, 0.5)` on the three
-pilot compositions, using three seeds and 200 candidate evaluations per run.
-Initialisation counts against the budget; no historical designs seed the search.
-Composition remains fixed. Results and replays are checkpointed under
-`results/RHPcomposition/origin_200/`. Use `--seed`, `--method`, `--refrigerant`
-and `--output` to select further trials. Resume requires matching settings and
-search-code hashes. The report validates complete budgets, origin, composition,
-unique candidates and winner replays before aggregating the repeats.
-See the [origin-start study](HeatPumpLab/cycles/RecuperativeHeatPump/ORIGIN_OPTIMISER_COMPARISON.md)
-for the repeated-trial results and the inner solver's sensitivity to numerical
-pressure initialisation, which limits interpretation of the nominal COP peaks.
-
-## Conventional heat pump (rating model)
-
-`HeatPumpLab/cycles/ConventionalHeatPump` is a standalone single-stage cycle: evaporator,
-compressor, condenser, subcooler and expansion valve. Inputs are the evaporating and condensing
-temperatures (dew point by default; `"bubble"` or `"mean"` for zeotropes), suction superheat,
-subcooling, a compressor curve and a compressor heat loss Q = UA (T_wall - T_ambient), with
-T_wall the mean of the suction and discharge temperatures (or the discharge temperature). The
-discharge state solves the compressor energy balance with that loss.
-
-Defaults: n-butane on the manufacturer Recip-M (R600a efficiency fits read on a suction/condensing density
-basis, electrical-input basis, 56.25 m3/h at 50 Hz), a 55 C heat source (evaporator dew point 5 K below),
-120 C steam (condenser bubble point 5 K above), hot water 80 -> 95 C through the subcooler (5 K minimum
-approach, flow from the duty), 15 K suction superheat from an internal heat exchanger after the subcooler,
-15 C ambient and a compressor heat loss UA of 15 W/K. `T_evap`, `T_cond` and `dT_subcool` override the
-source, steam and hot-water specification; `dT_discharge_superheat` fixes the discharge instead of the UA.
-Optional: condenser, subcooler and evaporator heat losses (`loss_UA_cond_kWK`, `loss_UA_subcool_kWK`,
-`loss_UA_evap_kWK`) and `preheat_subcool_share` (condenser-exit subcooling that preheats the steam
-generator feedwater). The report includes the steam raised from hot water bled at the subcooler outlet
-(`m_steam_kgs`, IAPWS-95 water table in `water_steam.py`).
-
-Compressor curves: `EfficiencyMap` (isentropic and volumetric efficiency in to, tc), with the
-manufacturer R600a fits for Recip-S, Recip-M and Recip-L in `compressor_data.py`;
-`EfficiencyCurve` (efficiency vs pressure ratio, including the lab's Pareto fronts); and
-`EN12900Curve` / `MapCurve` (manufacturer mass-flow and power polynomials).
+### Conventional heat pump
 
 ```python
 from HeatPumpLab.cycles.ConventionalHeatPump import ConventionalHeatPump, ConventionalHPConfig
 
-res = ConventionalHeatPump(ConventionalHPConfig()).solve()            # the defaults above
+res = ConventionalHeatPump(ConventionalHPConfig()).solve()       # n-butane, manufacturer Recip-M
 res = ConventionalHeatPump(ConventionalHPConfig(T_evap=40.0, T_cond=110.0)).solve()
-print(res.COP, res.report["Q_heat_kW"], res.report["UA_loss_kWK"], res.report["T_discharge"])
+print(res.COP, res.report["Q_heat_kW"], res.report["T_discharge"])
+
+# REFPROP instead of CoolProp (needs `uv sync --extra refprop` and a REFPROP installation)
+res = ConventionalHeatPump(ConventionalHPConfig(property_backend="refprop")).solve()
 ```
 
-`local_scripts/main_SGHP_rating.py` runs one point (`one`) or a rating map over the envelope (`map`).
-`local_scripts/main_SGHP_dashboard.py` writes the SGHP (Steam-Generating Heat Pump) dashboard (refrigerant
-switch, compressor Hz/rpm slider, cycle diagrams, energy flows, COP and compressor maps) to
-`results/SGHP_dashboard/SGHP_dashboard.html`; `--fluid` is repeatable for comparing refrigerants and
-mixtures, e.g. `--fluid Butane --fluid "Propane;Isopentane|0.2;0.8|mass"`. Compressor speed:
-`compressor_Hz` scales the swept volume (56.25 m3/h and 1450 rpm at 50 Hz); the efficiency maps
-are held at their 50 Hz values.
+The defaults model n-butane on a manufacturer Recip-M compressor, raising 120 °C steam from a 55 °C
+heat source, with hot water from the subcooler. Compressors can be described by efficiency maps,
+efficiency against pressure ratio, or EN 12900 polynomials (`compressor_curves.py`).
 
-### Property backends: REFPROP or CoolProp
+## Refrigerants
 
-REFPROP is the default. CoolProp 8 is an optional stand-in (`uv sync --group coolprop`):
-`HeatPumpLab/utils/coolprop_properties.py` provides `CoolPropPackage`, with the same fluid
-strings, units, phase labels and IIR reference state as `PropertyPackage`. Select it per model
-(`ConventionalHPConfig(property_backend="coolprop")`), per script (`--backend coolprop`) or for a
-whole run (`HEATPUMPLAB_PROPERTY_BACKEND=coolprop`). REFPROP now loads on first use, so the package
-imports on machines without it. CoolProp's mixture interaction parameters and two-phase mixture
-flashes differ from REFPROP's: check mixture results against REFPROP.
+Fluids use REFPROP-style names (`Propane`, `Butane`, `Isopentane`, ...), which are mapped to
+CoolProp's names automatically. A mixture is written as `"Fluid1;Fluid2|x1;x2|basis"` with basis `mass`
+or `mol`, for example `"Propane;Isopentane|0.2;0.8|mass"`. Ternary mixtures use the same form.
 
-## Tests and archived experiments
+## Repository layout
 
-**Ternary mixtures.** `local_scripts/main_RHPfixed_mobo.py --third <fluid>` searches the
-three-component mixture `--first`/`--partner`/`--third` (e.g. Propane/Isobutane/Isopentane):
-the composition is encoded as the first two mass fractions with their sum at most 1,
-initial and boundary designs cover the triangle's vertices, edges and centroid, and ridge
-seeding solves lines at the vertices, edge midpoints and centroid (about 210 evaluations,
-no refinement lines). Binary runs are unchanged.
+```
+HeatPumpLab/
+  components/      compressors, heat exchangers, valves, streams and solver relationships
+  cycles/          one module per cycle (see the table above), and shared helpers in common/
+  utils/           property packages (CoolProp, REFPROP), caching, parallel solving, plotting
+tests/             test suite
+rhp_*.py           research search scripts for the recuperative heat pump (Pareto, MOBO, trust region)
+experiments/       frozen copies of earlier optimisation experiments, kept for provenance
+```
 
-**Compressor efficiency.** From optimiser version v25 the production base case uses
-`comp_model_index = 4`: each stage's isentropic efficiency follows the Pareto front of
-published efficiency against pressure ratio, eta_is(PR) = 0.87096 - 0.01991 (ln PR)^2.63312
-(`pareto_front_efficiency` in `components/compressor.py`; about 0.86 at PR 2, 0.80 at PR 5,
-0.69 at PR 10, projected to 0.51 at PR 20 beyond the fitted data), with a 96% motor efficiency. Up to v24 the constant model 1 was used
-(0.729 isentropic, 0.70 overall). Results from the two are not comparable.
+## Tests
 
-**Compressor power split constraint.** Every optimisation search limits the
-compressor-2 share of total compressor power to 0.4-0.6
-(`COMP2_POWER_FRAC_BOUNDS` in `optimisation/_types.py`, which also sets
-`DEFAULT_BOUNDS`): the production BO, the fixed-split and temperature Pareto
-runners, the surrogate and trust-region searches, and the objective's design
-repair. The cycle model itself still solves 0.1-0.9. Earlier results (up to
-optimiser version v23) used 0.1-0.9; designs outside the new range should be
-excluded when they are compared with new runs.
+```sh
+uv sync --group dev
+uv run pytest
+```
 
-The fixed-200°C Pareto runner `local_scripts/main_RHPfixed_mobo.py` accepts `--comp-frac 0.5`
-to fix the two-stage pressure allocation. Both global BO and local-128 BO then
-search only the two recuperator lifts and composition, with three-dimensional
-GP inputs. The fixed setting is recorded in checkpoints and retained during
-resume and final replay. At zero pressure loss, 0.5 gives equal stage pressure
-ratios. Use a fresh output directory when changing this setting.
+Tests that check the REFPROP backend skip automatically when it is not installed.
 
-Optimisation enforces a maximum pressure ratio of 20 per active compressor stage (10 up to
-optimiser v24; raised with compressor model 4, whose efficiency falls with PR)
-by default (`OuterDesignOptimisationConfig.max_stage_pressure_ratio`). This check
-uses the solved stage ratios, including during isolated-worker evaluations and
-historical-candidate replays. Missing or invalid active-stage ratios fail the
-constraint. Rejected candidates retain their report and consume their evaluation
-budget, but cannot become successful incumbents or Pareto points. Historical
-results produced without this constraint require re-evaluation; the optimiser
-version and run source signatures prevent silent reuse under the new settings.
+## Further documentation
 
-`local_scripts/main_RHPfixed_mobo.py` seeds each run with pinch-balance ridge solves by default
-(`rhp_ridge.py`; disable with `--no-ridge-seed`). At a fixed lift share
-theta = RHX1/(RHX1+RHX2), COP peaks where two adjacent gas coolers are pinched at
-once; each solve reports the per-gas-cooler minimum approaches (`gc_approaches`),
-and the seeding solves A[k+1] = A[k] along 12 composition/theta lines (about 130
-evaluations) before BO starts. A second pass adds one line per theta at the
-composition midway across the widest COP-VHC gap between neighbouring solved
-ridge points (for Propane/Pentane, 5/6 propane, near the 80% ridge-B design). In a
-3-seed Propane/Pentane benchmark the first pass alone found the RHX2 = 0 branch of
-the front in every seed (2 of 3 without it). `run_family()` defaults to seeding and
-needs a budget of at least 200 with it.
+Detailed notes on the recuperative heat pump solver and optimiser are in
+[`HeatPumpLab/cycles/RecuperativeHeatPump/`](HeatPumpLab/cycles/RecuperativeHeatPump/), including:
 
-The temperature runner `local_scripts/main_RHPtemperature_mobo.py` finds the COP-VHC front at
-each delivery temperature on the 100:5:220 °C grid. Temperature is a condition,
-not an objective: quality is the mean of the 25 per-temperature 2D hypervolumes
-(COP/4, VHC/10 against the origin). One GP (five inputs including temperature, two
-outputs) is shared across temperatures; each proposal targets one temperature on a
-fixed rotation (adaptive step k takes level 7k mod 25) and uses qLogEHVI against
-that temperature's front. Each temperature has four local centres along its front
-(borrowed from neighbouring temperatures while a front is sparse) plus, as in the
-fixed-split runner, one face-restricted region per zero-lift face (RHX1 = 0,
-RHX2 = 0); every candidate pool also includes points on each design bound. `--split-bounds` can narrow
-the compressor-2 power fraction further within the global limit below. Without
-the face regions (v25), the 200 °C front of a 23,000-evaluation Propane/Pentane run
-missed the RHX2 = 0 branch and trailed the fixed-200 °C searches by 1-4% in COP. It uses the same machinery as
-the fixed-split runner: batches of `--batch-size` proposals (default 4) with a
-pending-point penalty, the constraint-margin GP with the distance penalty for
-numerical failures only, `--min-discharge-superheat`, ridge seeding at 100, 120,
-..., 220 °C (`--no-ridge-seed`; budget at least 2,000), and a stop rule on the
-mean hypervolume (relative change below 2e-4 over three blocks of 1,000
-evaluations, not before 5,000; `--no-stop-rule`). Up to v24 temperature was a
-third objective, which concentrated BO at 220 °C (454 of 645 steps in a
-2,000-evaluation trial); each run version needs a fresh output directory.
+- [ABOUT.md](HeatPumpLab/cycles/RecuperativeHeatPump/ABOUT.md): the cycle variants
+- [BAYESIAN_OPTIMISATION.md](HeatPumpLab/cycles/RecuperativeHeatPump/BAYESIAN_OPTIMISATION.md): the production optimiser
+- [OPTIMISER_COMPARISON.md](HeatPumpLab/cycles/RecuperativeHeatPump/OPTIMISER_COMPARISON.md) and
+  [ORIGIN_OPTIMISER_COMPARISON.md](HeatPumpLab/cycles/RecuperativeHeatPump/ORIGIN_OPTIMISER_COMPARISON.md): optimiser benchmarks
+- `V14_SOLVER_FIXES.md`, `V15_SOLVER_FIXES.md` and the other investigation notes: solver development history
 
-`local_scripts/main_RHPehvi_speed_check.py` reports whether BoTorch's fused qLogEHVI C++ kernel
-loaded (it needs the `ninja` package and a C++ compiler) and times it against the
-pure-Python path.
+## References
 
-Each solved design also reports continuous constraint margins
-(`report["constraint_margins"]`): per-stage discharge and suction superheat,
-`T − T_dew(P)` in K (negative when wet), and pressure-ratio headroom `10 − PR`.
-The searches fit a GP to these margins and multiply the acquisition by the
-probability that all are non-negative; the old distance penalty now applies
-only to numerical failures, which report no margins. Set
-`OuterDesignOptimisationConfig.min_discharge_superheat_K` (or
-`local_scripts/main_RHPfixed_mobo.py --min-discharge-superheat`) to require a discharge
-superheat margin; supercritical discharge is exempt. The default, 0 K, keeps
-the previous acceptance rule.
+1. T.G. Walmsley, K.-M. Adamson, C. Arpagaus, F. Schlosser, Recuperative heat pump cycle concept
+   for high-temperature glide process heating applications, *Applied Thermal Engineering* 301
+   (2026) 131660. https://doi.org/10.1016/j.applthermaleng.2026.131660
+2. Kong (2026), PhD thesis, University of Waikato: cycle TT-4 with the additional gas cooler.
+   [full reference to be added]
+3. Hoang et al. [full reference to be added]
+4. V. Dalal, S. Klöppel, C. Rose, T.G. Walmsley, Evaluating sCO₂ heat pump architectures for
+   large-scale industrial air drying above 150 °C, European sCO₂ Conference (Euro sCO₂ 2027).
+   [details to be confirmed]
 
-Every active compressor's suction and actual discharge must also be dry vapour
-or single-phase supercritical fluid. Saturated vapour (`q=1`) is accepted without
-an added superheat margin; any liquid fraction, liquid state, or missing phase
-evidence rejects the candidate. The property wrapper preserves REFPROP's native
-molar quality/phase flags separately from its legacy quality sentinel. Reports
-include `Comp_<stage>_q_refprop_<in|out>` and `Comp_<stage>_phase_<in|out>`;
-supercritical fluid is labelled explicitly, since its vapour quality is undefined.
-These checks apply to the final solved states, so intermediate iteration states
-do not prematurely terminate convergence. Previous results need fresh evaluation.
+## Citing
 
-Run the maintained test suite from the repository root with
-`.venv/bin/python -m pytest`. The `experiments/` directory is optional: maintained
-search modules, reporting entry points and tests import the root source and
-`HeatPumpLab/` package directly. Local Pareto continuation checkpoints are
-restored by `restore_search` in `rhp_local_pareto_search.py`.
+If you use HeatPumpLab in published work, please cite reference [1], and the reference for any
+other cycle you use.
 
-Archived experiment runners retain their frozen implementations for historical
-reproduction. Run any archive-specific tests in a separate process from that
-archive's directory; they are not dependencies of the maintained test suite.
+## Licence
 
-The two historical paper-figure audits run only when the local figure generator
-under `paper/figures/` and the saved v11 dataset under `results/RHPopt/` are
-available. They explicitly skip otherwise, so a source checkout does not require
-those ignored research artifacts to collect or run the suite.
+Copyright 2021–2026 The University of Waikato.
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+
+## Contact
+
+Tim Walmsley, Ahuora Centre, University of Waikato: tim.walmsley@waikato.ac.nz
