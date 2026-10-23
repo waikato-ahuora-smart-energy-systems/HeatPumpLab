@@ -1,7 +1,7 @@
 [project]
 name = "heatpumplab"
 version = "0.1.0"
-description = "Digital lab for simulation of heat pumps"
+description = "Models of high-temperature heat pump cycles for industrial process heat, with CoolProp or REFPROP properties"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -10,6 +10,10 @@ authors = [
     { name = "Keri Adamson" },
 ]
 requires-python = ">=3.12"
+keywords = [
+    "heat pump", "high-temperature heat pump", "thermodynamics", "process heat",
+    "industrial decarbonisation", "CoolProp", "REFPROP",
+]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Intended Audience :: Science/Research",
@@ -29,7 +33,10 @@ dependencies = [
 ]
 
 [project.urls]
+Homepage = "https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/"
 Repository = "https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab"
+Documentation = "https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab#readme"
+Issues = "https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/issues"
 
 [build-system]
 requires = ["hatchling"]
