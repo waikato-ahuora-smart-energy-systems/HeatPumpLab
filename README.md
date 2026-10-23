@@ -12,7 +12,7 @@ The package contains seven cycle models. Each is a module under `HeatPumpLab.cyc
 | --- | --- | --- | --- |
 | Recuperative heat pump (RHP) | `RecuperativeHeatPump` | One or two compressors with up to three recuperative heat exchangers (RHX) placed between the gas coolers, for high-temperature glide heating. Includes Bayesian optimisation of the design. | [1] |
 | Split-stream heat pump (SLTHP) | `SplitHeatPump` | Two-stage cycle with RHX1 in parallel with the low-temperature gas cooler. | [1] |
-| Conventional heat pump | `ConventionalHeatPump` | Single-stage rating model with compressor maps, heat losses and steam raising (the steam-generating heat pump). | [2] |
+| Steam-generating heat pump | `ConventionalHeatPump` | Single-stage rating model with compressor maps, heat losses and steam raising (the steam-generating heat pump). | [2] |
 | Transcritical–transcritical CO₂ cascade | `TTCascadeHeatPump` | The bottom cycle gives its heat to the top cycle's suction gas in a cascade gas cooler; the top cycle heats the air in two gas coolers, with optional secondary air. IHXs in both cycles, optional expanders. | [3–5] |
 | n-level cascade | `CascadeHeatPump` | Two to four levels heating the air in series through each level's subcooler and its share of condenser heat. Optional IHX per level and expanders. | [6] |
 | Heat pump with MVR steam | `MVRHeatPump` | A vapour-compression cycle heats the air and raises low-pressure steam, which a chain of mechanical vapour recompression fans, with water injection and splits to the process, lifts to heat the air to the target. | [2] |
@@ -36,22 +36,6 @@ python3 -m http.server 8000 --directory apps
 ```
 
 Then open <http://localhost:8000>. The Python models reproduce the apps' results.
-
-## Background
-
-Internal heat exchangers (IHXs) are widely used in vapour-compression and transcritical heat
-pumps. They transfer heat from the warm refrigerant just before expansion to the suction gas.
-Pinch analysis suggests a heat pump should absorb heat below the pinch and reject upgraded heat
-above it. Applied to the cycle itself, this means recuperators placed between the gas coolers
-can raise the compressor discharge temperature to the level a high-temperature process needs,
-at a lower pressure. To distinguish them from a conventional IHX, the model calls these
-recuperative heat exchangers (RHX). The concept and its results are described in:
-
-> T.G. Walmsley, K.-M. Adamson, C. Arpagaus, F. Schlosser, Recuperative heat pump cycle concept
-> for high-temperature glide process heating applications, *Applied Thermal Engineering* 301
-> (2026) 131660. https://doi.org/10.1016/j.applthermaleng.2026.131660
-
-See [ABOUT.md](HeatPumpLab/cycles/RecuperativeHeatPump/ABOUT.md) for the cycle variants.
 
 ## Requirements
 
