@@ -1,5 +1,6 @@
-"""n-level cascade heat pump for air drying, after Hoang et al.: 2 to 4 vapour-compression levels, level 1 evaporating
-on the source water and level k+1 in level k's cascade condenser. A port of ``DRYCASC.cascade`` and
+"""n-level cascade heat pump for air drying, after Hoang et al. (Applied Thermal Engineering 279 (2025)
+127901): 2 to 4 vapour-compression levels, level 1 evaporating on the source water and level k+1 in level k's
+cascade condenser. A port of ``DRYCASC.cascade`` and
 ``cascadeOptimise`` from the "Advanced dryer heat pumps" web app.
 
 Flow path of level k::
