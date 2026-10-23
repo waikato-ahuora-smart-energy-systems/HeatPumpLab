@@ -6,7 +6,8 @@ import pytest
 
 from HeatPumpLab.components.stream import Stream
 from HeatPumpLab.cycles.RecuperativeHeatPump.optimisation._objective import _OuterDesignObjective
-from HeatPumpLab.utils.properties_package import PropertyPackage, phase_from_refprop_quality
+from HeatPumpLab.utils.coolprop_properties import make_property_package
+from HeatPumpLab.utils.properties_package import phase_from_refprop_quality
 from tests.test_outer_design_optimisation import FakeHeatPump
 
 
@@ -67,7 +68,7 @@ def test_each_active_compressor_end(n_comp, stage, end, quality, success):
     ('PT', 5., 150., 'supercritical'),
 ])
 def test_native_phase_survives_property_conversion_stream_update_and_copy(pair, a, b, phase):
-    pp = PropertyPackage('Propane')
+    pp = make_property_package('Propane')   # the selected backend: CoolProp by default, REFPROP if set
     props = pp.get_std_properties(pair, a, b, pp.fld_composition)
     assert props['phase'] == phase
     assert phase_from_refprop_quality(props['q_refprop']) == phase
