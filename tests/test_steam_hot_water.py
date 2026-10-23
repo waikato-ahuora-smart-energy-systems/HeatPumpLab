@@ -8,7 +8,6 @@ exchanger), the water flow, the failure messages, the equivalence with the direc
 dT_subcool specification, and the browser model against Python.
 """
 import json
-import math
 import shutil
 import subprocess
 from pathlib import Path
@@ -262,7 +261,7 @@ def test_condenser_exit_subcooling_makes_more_steam():
     for share in (0.5, 1.0):
         sub = steam_model(Q_heat_kW=None, loss_UA_kWK=0.0, compressor=comp, preheat_subcool_share=share).solve()
         assert sub.success, sub.message
-        b, r, st = base.report, sub.report, sub.states
+        b, r = base.report, sub.report
         assert sub.P_H == pytest.approx(base.P_H) and r["T_cond_bubble"] == pytest.approx(80.0)    # same pressure
         assert r["preheat_subcool_share"] == share and r["dT_subcool_cond"] > 0
         # the subcooling heat is that share of the steam's preheat duty

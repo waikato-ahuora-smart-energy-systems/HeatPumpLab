@@ -1,5 +1,5 @@
 {
- "source": "Advanced dryer heat pumps web app (claude.ai artifact JVR7gXG2EEYADm5ribDttf, version 1792578914-d233): DRYCASC.kong / kongOptimise / cascade / cascadeOptimise run in Node over CoolProp 8.0.0 (WebAssembly) through the page's CoolPropFluid adapter; air from DRYER.airModel (humid air: HAPropsSI at the inlet humidity ratio; dry air: CoolProp HEOS Air).",
+ "source": "Advanced dryer heat pumps web app (apps/dryer): DRYCASC.kong / kongOptimise / cascade / cascadeOptimise run in Node over CoolProp 8.0.0 (WebAssembly) through the page's CoolPropFluid adapter; air from DRYER.airModel (humid air: HAPropsSI at the inlet humidity ratio; dry air: CoolProp HEOS Air).",
  "cases": [
   {
    "name": "tt_app_default",

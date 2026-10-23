@@ -37,7 +37,7 @@ def test_link_round_trip():
                      "const code = link.split('#case=')[1];"
                      "const back = JSON.parse(unb64url(code));"
                      "console.log(JSON.stringify({link, back, clean: cleanInputs(back.i), label: fluidLabel(inp), urlsafe: /^[A-Za-z0-9_-]+$/.test(code)}));")
-    assert o["link"].startswith("https://claude.ai/artifact/XRmpeFAnSi9hiGVwXLRtfh#case=") and o["urlsafe"]
+    assert o["link"].startswith("https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/steam/#case=") and o["urlsafe"]
     assert o["back"]["n"] == "Propane/isopentane · 115 °C — test"            # non-ASCII names survive
     assert o["clean"] == INPUTS and o["back"]["v"] == 1
     assert o["label"] == "Propane/Isopentane 20/80 (mass)"
