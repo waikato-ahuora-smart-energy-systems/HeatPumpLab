@@ -1,0 +1,34 @@
+# Lint and run the test suite on the CoolProp backend for every pull request (REFPROP is commercial and
+# not available here; its tests skip themselves).
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HEATPUMPLAB_PROPERTY_BACKEND: coolprop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked --group dev
+      - name: Lint
+        run: uv run ruff check --select F HeatPumpLab tests
+      - name: Tests
+        run: uv run pytest -q -p no:cacheprovider
