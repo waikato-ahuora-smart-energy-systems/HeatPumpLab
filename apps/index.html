@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HeatPumpLab</title>
+<meta name="description" content="Heat pump models for industrial process heat from the Ahuora Centre, University of Waikato: steam-generating and dryer heat pumps solved in the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* One column of app cards; each card carries a temperature-lift strip on a shared 0–220 °C scale.
+   Palette and type follow the two apps so they read as one family. */
+:root{
+  --bg:#f6f7f8; --surface:#ffffff; --ink:#14181c; --ink-2:#4c545c; --ink-3:#7d868f;
+  --rule:#dde1e5; --track:#eceff2; --accent:#1f5f8b;
+  --cold:#2a78d6; --hot:#eb6834; --steam:#1baf7a;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121417; --surface:#1a1d21; --ink:#f2f4f6; --ink-2:#b9c0c7; --ink-3:#88919a;
+  --rule:#2e3339; --track:#252a2f; --accent:#7fb6e0;
+  --cold:#3987e5; --hot:#d95926; --steam:#199e70; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121417; --surface:#1a1d21; --ink:#f2f4f6; --ink-2:#b9c0c7; --ink-3:#88919a;
+  --rule:#2e3339; --track:#252a2f; --accent:#7fb6e0;
+  --cold:#3987e5; --hot:#d95926; --steam:#199e70; color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.55}
+a{color:var(--accent)}
+.wrap{max-width:1040px;margin:0 auto;padding-inline:16px;padding-block:40px 56px;display:grid;gap:40px}
+h1,h2,h3{font-family:var(--f-display);font-weight:600;margin:0;text-wrap:balance;letter-spacing:.005em}
+header{display:grid;gap:10px}
+.eyebrow{font-family:var(--f-data);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+h1{font-size:clamp(40px,7vw,60px);line-height:1;font-weight:700}
+.lede{max-width:62ch;color:var(--ink-2);margin:0;font-size:17px}
+section{display:grid;gap:16px}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px;border-bottom:1px solid var(--rule);padding-bottom:8px}
+h2{font-size:24px}
+.sec-head p{margin:0;color:var(--ink-3);font-size:14px}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:20px 20px 18px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px 28px;min-width:0}
+.card .body{display:grid;gap:12px;align-content:start;min-width:0}
+.kind{font-family:var(--f-data);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+h3{font-size:22px;line-height:1.15}
+.card p{margin:0;color:var(--ink-2)}
+dl{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:0;font-size:14px}
+dt{color:var(--ink-3)}
+dd{margin:0;font-family:var(--f-data);font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink);min-width:0}
+.open{justify-self:start;display:inline-flex;align-items:center;gap:8px;font-weight:600;color:var(--surface);background:var(--accent);text-decoration:none;border-radius:6px;padding:8px 14px;font-size:15px}
+.open:hover{filter:brightness(1.1)}
+.open:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.open span{transition:transform .15s}
+.open:hover span{transform:translateX(3px)}
+/* temperature-lift strip on a shared 0-220 C scale */
+.lift{display:grid;gap:4px}
+.lift-label{font-family:var(--f-data);font-size:12px;color:var(--ink-3)}
+.bar{position:relative;height:18px;background:var(--track);border-radius:3px}
+.band{position:absolute;top:0;bottom:0;border-radius:3px}
+.band.cold{background:var(--cold)}
+.band.hot{background:var(--hot)}
+.band.steam{background:var(--steam)}
+.span{position:absolute;top:50%;height:2px;background:var(--ink-3);transform:translateY(-50%)}
+.ticks{position:relative;height:14px;font-family:var(--f-data);font-size:10.5px;color:var(--ink-3)}
+.ticks span{position:absolute;transform:translateX(-50%)}
+.ticks span:first-child{transform:none}
+.ticks span:last-child{transform:translateX(-100%)}
+.key{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--ink-2)}
+.key i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.pkg{background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:20px;display:grid;gap:10px}
+.pkg p{margin:0;color:var(--ink-2);max-width:75ch}
+code{font-family:var(--f-data);font-size:13.5px;background:var(--track);border-radius:4px;padding:1px 5px}
+footer{color:var(--ink-3);font-size:14px;border-top:1px solid var(--rule);padding-top:14px;display:grid;gap:6px}
+footer p{margin:0;max-width:75ch}
+@media (max-width:720px){.card{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.open span{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Ahuora Centre · University of Waikato</div>
+    <h1>HeatPumpLab</h1>
+    <p class="lede">Heat pump models for industrial process heat: steam raised from low-grade waste heat, and air heated to 150–200 °C for drying. Both apps solve the cycles in your browser with CoolProp.</p>
+    <div class="key" aria-label="Temperature strip key">
+      <span><i style="background:var(--cold)"></i>Heat source</span>
+      <span><i style="background:var(--steam)"></i>Steam</span>
+      <span><i style="background:var(--hot)"></i>Delivered heat (air or hot water)</span>
+      <span>Strips share one 0–220 °C scale</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="h-steam">
+    <div class="sec-head"><h2 id="h-steam">Steam generation</h2><p>Live model, solved in your browser</p></div>
+    <article class="card">
+      <div class="body">
+        <div class="kind">Live model</div>
+        <h3>Steam-generating heat pump</h3>
+        <p>Single-stage cycle with an internal heat exchanger and a hot-water subcooler. The condenser raises steam from bled hot water. Set the source, steam and hot-water temperatures, the refrigerant mix and compressor speed, and the cycle re-solves with CoolProp. Save cases, compare up to four side by side, and run sweeps.</p>
+        <div class="lift" role="img" aria-label="Heat source 20 to 80 °C, steam 90 to 140 °C, hot water 80 to 95 °C">
+          <div class="lift-label">Source 20–80 °C → steam 90–140 °C, hot water 80→95 °C</div>
+          <div class="bar">
+            <div class="band cold" style="left:9.09%;width:27.27%"></div>
+            <div class="band hot" style="left:36.36%;width:6.82%;opacity:.75"></div>
+            <div class="band steam" style="left:40.91%;width:22.73%"></div>
+          </div>
+          <div class="ticks"><span style="left:0">0</span><span style="left:22.73%">50</span><span style="left:45.45%">100</span><span style="left:68.18%">150</span><span style="left:100%">220 °C</span></div>
+        </div>
+      </div>
+      <div class="body">
+        <dl>
+          <dt>Compressors</dt><dd>Reciprocating R600a maps: Recip-S · Recip-M · Recip-L</dd>
+          <dt>Swept, 50 Hz</dt><dd>13.42 · 56.25 · 151.6 m³/h</dd>
+          <dt>Speed</dt><dd>30–70 Hz</dd>
+          <dt>Refrigerants</dt><dd>n-butane default; up to 3-component mixtures</dd>
+          <dt>Losses</dt><dd>UA heat loss, ΔP = K·V̇^1.8</dd>
+          <dt>Limits</dt><dd>Supercritical gas cooling; flags beyond the compressor window</dd>
+        </dl>
+        <a class="open" href="steam/">Open model <span aria-hidden="true">→</span></a>
+      </div>
+    </article>
+  </section>
+
+  <section aria-labelledby="h-dry">
+    <div class="sec-head"><h2 id="h-dry">Dryer air heating, 150–200 °C</h2><p>Recuperated, cascade, MVR and Brayton cycles</p></div>
+    <article class="card">
+      <div class="body">
+        <div class="kind">Live model · study</div>
+        <h3>Advanced dryer heat pumps</h3>
+        <p>Design and compare heat pumps that heat drying air: the recuperative and split-stream cycles, CO₂ and n-level cascades, a heat pump with MVR steam and an sCO₂ reverse Brayton cycle, solved live with CoolProp. A study mode shows the results of the REFPROP design study.</p>
+        <div class="lift" role="img" aria-label="Source 40 °C, water or air; air heated from 15 to 150–200 °C">
+          <div class="lift-label">Source 40 °C (water or air) → air 15→150–200 °C</div>
+          <div class="bar">
+            <div class="band cold" style="left:17.73%;width:1.2%"></div>
+            <div class="span" style="left:6.82%;width:61.36%"></div>
+            <div class="band hot" style="left:68.18%;width:22.73%"></div>
+          </div>
+          <div class="ticks"><span style="left:0">0</span><span style="left:22.73%">50</span><span style="left:45.45%">100</span><span style="left:68.18%">150</span><span style="left:100%">220 °C</span></div>
+        </div>
+      </div>
+      <div class="body">
+        <dl>
+          <dt>Cycles</dt><dd>RHP · SLTHP · CO₂ cascade · n-level cascade · HP + MVR · sCO₂ Brayton</dd>
+          <dt>Source</dt><dd>Water or air</dd>
+          <dt>Options</dt><dd>Expanders, max pressure limit, sweeps, saved cases</dd>
+        </dl>
+        <a class="open" href="dryer/">Open model <span aria-hidden="true">→</span></a>
+      </div>
+    </article>
+  </section>
+
+  <section aria-labelledby="h-pkg">
+    <div class="sec-head"><h2 id="h-pkg">Python package</h2><p>Open source, Apache-2.0</p></div>
+    <div class="pkg">
+      <p>The apps are ports of the cycle models in the HeatPumpLab Python package, which adds design optimisation, REFPROP support and the full test suite. Install it from the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab">GitHub repository</a> with <code>uv sync</code>.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>The live models use CoolProp compiled to WebAssembly and run entirely in your browser; nothing you enter is sent anywhere.</p>
+    <p>© 2021–2026 The University of Waikato. Licensed under the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/LICENSE">Apache License 2.0</a>.</p>
+  </footer>
+</div>
+</body>
+</html>

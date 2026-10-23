@@ -12,12 +12,13 @@ class CustomRelationship:
     converged: bool = False
     r: bool = False
 
-    def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9):
+    def __init__(self, source_obj=0, target_obj=0, relation=0, tol=1e-9, var=0.0):
         """Wire up source/target objects and relationship identifier."""
         self.tol = tol
         self.source_obj = source_obj
         self.target_obj = target_obj
         self.relation = relation
+        self.var = var
 
     def solve(self):
         """Execute the configured relationship enforcing logic."""
@@ -31,6 +32,8 @@ class CustomRelationship:
             r = self.Airsource_Mass_Flow()
         elif self.relation == 4:
             r = self.Determine_EV_sm_outlet()
+        else:
+            raise ValueError(f"Unknown custom relationship: {self.relation}")
         self.converged = True
         return r
 
@@ -89,7 +92,7 @@ class CustomRelationship:
                         fluid=gc.source_in.fluid,
                         pp_instance=gc.source_in.pp_instance,
                         pressure=P_ave,
-                        temperature=h_ref,
+                        enthalpy=h_ref,
                     )
                     return (
                         mcp_air[0] - gc.source_in.mass_flow * source_in_i.heat_capacity
@@ -178,7 +181,7 @@ class CustomRelationship:
                     """Derive the air mass flow that satisfies the pinch constraint."""
                     m_air = 0
                     bnds = get_bounds_for_mid_pinch_point(mcp_air)
-                    if bnds != False:
+                    if bnds:
                         h_ref, e = get_mid_pinch_point(
                             mcp_air=mcp_air, method="brentq", bnds=bnds
                         )
@@ -349,4 +352,4 @@ class CustomRelationship:
         SP.flow_in.enthalpy = EV.flow_in.enthalpy
         SP.flow_in.props_in_mPH()
 
-        pass
+        return True

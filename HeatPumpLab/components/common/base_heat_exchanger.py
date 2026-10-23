@@ -4,6 +4,14 @@ from math import log
 from ..stream import Stream
 
 
+class TemperatureCrossError(ValueError):
+    """Report a non-positive heat-exchanger temperature approach."""
+
+    def __init__(self, approach_violation: float) -> None:
+        self.approach_violation = max(0.0, float(approach_violation))
+        super().__init__("LMTD is undefined because a temperature cross occurs.")
+
+
 class BaseHeatExchanger:
     """Shared heat-exchanger behaviour extended by concrete component models."""
 
@@ -57,18 +65,24 @@ class BaseHeatExchanger:
         if self.bypassed:
             self.source_out = self.source_in
             self.sink_out = self.sink_in
+            self.converged = True
         else:
             if (
                 self.source_in.mass_flow <= self.tol
                 or self.sink_in.mass_flow <= self.tol
             ):
                 self.source_out.copy_fld_props(fld=self.source_in)
+                self.source_out.set_flows(self.source_in.mass_flow)
                 self.sink_out.copy_fld_props(fld=self.sink_in)
+                self.sink_out.set_flows(self.sink_in.mass_flow)
+                self.converged = True
 
             else:
                 self.get_performance()
 
         self.duty = self.sink_out.heat_flow - self.sink_in.heat_flow
+        if self._has_active_heat_transfer():
+            self.converged = self.converged and self._has_valid_heat_transfer_direction()
         self.delta_entropy_src = (
             abs(self.source_in.entropy - self.source_out.entropy)
             * self.source_out.mass_flow
@@ -76,7 +90,22 @@ class BaseHeatExchanger:
         self.delta_entropy_snk = (
             abs(self.sink_in.entropy - self.sink_out.entropy) * self.sink_out.mass_flow
         )
-        self.converged = True
+
+    def _has_active_heat_transfer(self) -> bool:
+        """Return whether the exchanger should enforce heat-flow direction."""
+        return (
+            not self.bypassed
+            and self.source_in.mass_flow > self.tol
+            and self.sink_in.mass_flow > self.tol
+        )
+
+    def _has_valid_heat_transfer_direction(self) -> bool:
+        """Return whether heat flows from the source side to the sink side."""
+        return (
+            self.duty >= -self.tol
+            and self.source_out.temperature <= self.source_in.temperature + self.tol
+            and self.sink_out.temperature >= self.sink_in.temperature - self.tol
+        )
 
     def get_performance(self):
         """Dispatch to the underlying heat exchanger formulation."""
@@ -116,6 +145,18 @@ class BaseHeatExchanger:
         else:
             raise ValueError("No heat exchanger model selected.")
 
+    def _preserve_negligible_duty_states(self):
+        """Keep unchanged states when heat is below the absolute duty tolerance."""
+        if not (0 <= self.duty <= self.tol and self.dP_h == 0 and self.dP_c == 0):
+            return False
+        self.source_out.copy_fld_props(self.source_in)
+        self.source_out.set_flows(self.source_in.mass_flow)
+        self.sink_out.copy_fld_props(self.sink_in)
+        self.sink_out.set_flows(self.sink_in.mass_flow)
+        self.duty = 0.0
+        self.converged = self.source_in.temperature >= self.sink_in.temperature
+        return True
+
     def get_dTmin_terminal_model(self):
         """Solve for the duty limited by the specified terminal delta T."""
         try:
@@ -137,6 +178,14 @@ class BaseHeatExchanger:
 
             self.duty = min(self.dH_h_max, self.dH_c_max)
 
+            if self._preserve_negligible_duty_states():
+                # Below the component's absolute duty tolerance, preserve both
+                # inlet states. Reflashing can introduce a larger enthalpy error
+                # than the heat being transferred. Zero duty conserves energy
+                # exactly on both sides; never apply this to pressure drops or
+                # negative requested duty.
+                return
+
             self.source_out.enthalpy = (
                 self.source_in.enthalpy - self.duty / self.source_in.mass_flow
             )
@@ -145,10 +194,10 @@ class BaseHeatExchanger:
                 self.sink_in.enthalpy + self.duty / self.sink_in.mass_flow
             )
             self.sink_out.props_in_mPH()
-        except:
+        except Exception as exc:
             raise ValueError(
                 "Warning: Phase change occuring in heat exchanger " + self.name
-            )
+            ) from exc
 
         self.converged = (
             True
@@ -167,9 +216,9 @@ class BaseHeatExchanger:
             self.source_out_max.temperature = (
                 self.sink_in.temperature + self.dT_max * self.HX_Eff
             )
-            self.source_out_max.props_in_mPH()
+            self.source_out_max.props_in_mPT()
             self.dH_h_max = self.source_in.mass_flow * (
-                self.source_in.enthalpy - self.source_out_max
+                self.source_in.enthalpy - self.source_out_max.enthalpy
             )
 
             self.sink_out.pressure = self.sink_in.pressure - self.dP_c
@@ -177,7 +226,7 @@ class BaseHeatExchanger:
             self.sink_out_max.temperature = (
                 self.source_in.temperature - self.dT_max * self.HX_Eff
             )
-            self.sink_out_max.props_in_mPH()
+            self.sink_out_max.props_in_mPT()
             self.dH_c_max = self.sink_in.mass_flow * (
                 self.sink_out_max.enthalpy - self.sink_in.enthalpy
             )
@@ -189,14 +238,14 @@ class BaseHeatExchanger:
             )
             self.source_out.props_in_mPH()
             self.sink_out.enthalpy = (
-                self.sink_in.enthalpy - self.duty / self.sink_in.mass_flow
+                self.sink_in.enthalpy + self.duty / self.sink_in.mass_flow
             )
             self.sink_out.props_in_mPH()
 
-        except:
+        except Exception as exc:
             raise ValueError(
                 "Warning: Phase change occuring in heat exchanger " + self.name
-            )
+            ) from exc
 
         self.converged = (
             True
@@ -217,9 +266,6 @@ class BaseHeatExchanger:
         )
         self.source_out.props_in_mPH()
 
-        # if self.source_out.temperature < self.sink_in.temperature or self.source_in.temperature < self.sink_out.temperature:
-        #      print('temperature cross occuring in the heat exchanger: ' + self.name)
-
         self.converged = (
             True
             if self.source_out.temperature > self.sink_in.temperature
@@ -234,6 +280,9 @@ class BaseHeatExchanger:
         self.source_out.props_in_mPH()
 
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c
+        self.sink_out.enthalpy = (
+            self.sink_in.enthalpy + self.duty / self.sink_in.mass_flow
+        )
         self.sink_out.props_in_mPH()
 
         self.converged = (
@@ -307,6 +356,9 @@ class BaseHeatExchanger:
         self.sink_out.props_in_mPT()
         self.duty = self.sink_out.heat_flow - self.sink_in.heat_flow
 
+        if 0 <= self.dT_c <= self.tol and self._preserve_negligible_duty_states():
+            return
+
         self.source_out.pressure = self.source_in.pressure - self.dP_h
         self.source_out.enthalpy = (
             self.source_in.enthalpy - self.duty / self.source_out.mass_flow
@@ -326,6 +378,9 @@ class BaseHeatExchanger:
         self.source_out.temperature = self.source_in.temperature - self.dT_h
         self.source_out.props_in_mPT()
         self.duty = self.source_in.heat_flow - self.source_out.heat_flow
+
+        if 0 <= self.dT_h <= self.tol and self._preserve_negligible_duty_states():
+            return
 
         self.sink_out.pressure = self.sink_in.pressure - self.dP_c
         self.sink_out.enthalpy = (
@@ -374,6 +429,28 @@ class BaseHeatExchanger:
             dh_tot = s_in.enthalpy - s_out.enthalpy
 
             for i in range(divisions + 1):
+                if i == 0:
+                    m_str = Stream(
+                        name="source i",
+                        fluid=s_in.fluid,
+                        pp_instance=s_in.pp_instance,
+                        mass_flow=s_in.mass_flow,
+                    )
+                    m_str.copy_fld_props(s_in)
+                    m_str.set_flows(s_in.mass_flow)
+                    ls.append(m_str)
+                    continue
+                if i == divisions:
+                    m_str = Stream(
+                        name="source i",
+                        fluid=s_out.fluid,
+                        pp_instance=s_out.pp_instance,
+                        mass_flow=s_out.mass_flow,
+                    )
+                    m_str.copy_fld_props(s_out)
+                    m_str.set_flows(s_out.mass_flow)
+                    ls.append(m_str)
+                    continue
                 m_str = Stream(
                     name="source i",
                     fluid=s_in.fluid,
@@ -398,8 +475,9 @@ class BaseHeatExchanger:
         for i in range(div):
             LMTD_seg.append(
                 _get_LMTD(
-                    Thin=data["source"][div - i].temperature,
-                    Thout=data["source"][div - 1 - i].temperature,
+                    # counterflow: sink segment i (sink[i] -> sink[i+1]) faces source[div-1-i] -> source[div-i]
+                    Thin=data["source"][div - 1 - i].temperature,
+                    Thout=data["source"][div - i].temperature,
                     Tcin=data["sink"][i].temperature,
                     Tcout=data["sink"][i + 1].temperature,
                 )
@@ -409,7 +487,10 @@ class BaseHeatExchanger:
 
 def _get_LMTD(Thin, Thout, Tcin, Tcout):
     """Compute log mean temperature difference for a segment."""
-    if (Thin - Thout) == (Tcout - Tcin):
-        return Thin - Thout
-    else:
-        return ((Thin - Tcout) - (Thout - Tcin)) / log((Thin - Tcout) / (Thout - Tcin))
+    dt_hot = Thin - Tcout
+    dt_cold = Thout - Tcin
+    if dt_hot <= 0.0 or dt_cold <= 0.0:
+        raise TemperatureCrossError(-min(dt_hot, dt_cold))
+    if dt_hot == dt_cold:
+        return dt_hot
+    return (dt_hot - dt_cold) / log(dt_hot / dt_cold)

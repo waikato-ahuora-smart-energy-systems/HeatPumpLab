@@ -4,7 +4,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import numpy as np
 from scipy.optimize import root_scalar
-from ...components import *
+from ...components import (
+    Compressor,
+    CustomRelationship,
+    Evaporator,
+    ExpansionValve,
+    GasCooler,
+    PlateHeatExchanger,
+    SetRelationship,
+    Stream,
+)
 
 if TYPE_CHECKING:
     from ...cycles import RecuperativeHP
@@ -19,7 +28,7 @@ __all__ = ["set_rhp_model"]
 def set_rhp_model(hp: RecuperativeHP) -> RecuperativeHP:
     """Populate the heat pump instance with components, streams, and logic."""
     hp = _get_RecuperativeHP_structure(hp)
-    if _check_input_param_feasibility(hp) == True:
+    if _check_input_param_feasibility(hp):
         hp.feasible = True
         hp = _get_RecuperativeHP_components(hp)
         hp = _get_RecuperativeHP_streams(hp)
@@ -38,28 +47,15 @@ def set_rhp_model(hp: RecuperativeHP) -> RecuperativeHP:
 def _check_input_param_feasibility(hp: RecuperativeHP):
     """Return True when the provided design knobs represent a feasible case."""
     return (
-        True
-        if (
-            (hp.T_air_tar - hp.T_air_inlet) * 2 / 3
-            >= hp.dT_rhx1_cold + hp.dT_rhx2_cold + hp.dT_rhx3_cold
-            and 0.0 <= hp.dT_gc_out_min_offset <= 50.0
-            and hp.comp2_power_frac + hp.comp3_power_frac <= 1.0
-        )
-        else False
+        (hp.T_air_tar - hp.T_air_inlet) * 2 / 3
+        >= hp.dT_rhx1_cold + hp.dT_rhx2_cold + hp.dT_rhx3_cold
+        and 0.0 <= hp.dT_gc_out_min_offset <= 50.0
+        and hp.comp2_power_frac + hp.comp3_power_frac <= 1.0
     )
 
 
 def _get_RecuperativeHP_structure(hp: RecuperativeHP) -> RecuperativeHP:
     """Derive binary on/off flags for compressors and recuperators."""
-    # Check the PHE combo
-    hp.dT_rhx1_cold = hp.dT_rhx1_cold if hp.dT_rhx1_cold > 0.0 else 0.0
-    hp.dT_rhx2_cold = (
-        hp.dT_rhx2_cold if hp.n_comp > 1 and hp.dT_rhx2_cold > 0.0 else 0.0
-    )
-    hp.dT_rhx3_cold = (
-        hp.dT_rhx3_cold if hp.n_comp > 2 and hp.dT_rhx3_cold > 0.0 else 0.0
-    )
-
     # Check the compressor combo
     if hp.comp_PR_uniform or hp.comp2_power_frac + hp.comp3_power_frac >= 1.0:
         hp.comp2_power_frac = 1 / hp.n_comp if hp.n_comp > 1 else 0.0
@@ -78,6 +74,15 @@ def _get_RecuperativeHP_structure(hp: RecuperativeHP) -> RecuperativeHP:
         hp.n_comp = 1
 
     hp.comp1_power_frac = 1 - (hp.comp2_power_frac + hp.comp3_power_frac)
+
+    # Check the PHE combo, after n_comp drops for zero power fractions: an inactive stage has no RHX lift
+    hp.dT_rhx1_cold = hp.dT_rhx1_cold if hp.dT_rhx1_cold > 0.0 else 0.0
+    hp.dT_rhx2_cold = (
+        hp.dT_rhx2_cold if hp.n_comp > 1 and hp.dT_rhx2_cold > 0.0 else 0.0
+    )
+    hp.dT_rhx3_cold = (
+        hp.dT_rhx3_cold if hp.n_comp > 2 and hp.dT_rhx3_cold > 0.0 else 0.0
+    )
 
     # Binary variables for the heat pump structure
     hp.comp2_on = 1 if hp.n_comp > 1 else 0
@@ -215,7 +220,7 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
         name="Source out",
         pp_instance="src",
     )
-    hp.Tref_evap_outlet = hp.Tref_evap_inlet
+    hp.Tref_evap_outlet = getattr(hp, "Tref_evap_outlet", hp.Tref_evap_inlet)
     hp.evap_sup.sink_in.props_in_ab(
         input_str="TQ",
         prop1=hp.Tref_evap_outlet,
@@ -322,11 +327,11 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
                         if r.converged:
                             P_H = stream_pinch.pressure
                             break
-                    except:
+                    except Exception:
                         pass
                 if P_H <= P_L:
                     P_H = min(20, P_L * 36)
-            except:
+            except Exception:
                 try:
                     # Assume the high pressure = critical pressure
                     # Determine the minimum discharge temperature
@@ -355,7 +360,7 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
                             pass
                         else:
                             P_H = 20
-                except:
+                except Exception:
                     P_H = 20
 
         return (P_H / P_L) ** (1 / n_comp)
@@ -633,10 +638,13 @@ def _get_RecuperativeHP_streams(hp: RecuperativeHP) -> RecuperativeHP:
         name="Evaporator source inlet",
         pp_instance="src",
     )
+    # Seed from the known source state: the unaligned refrigerant temperature
+    # can put water below freezing. The evaporator solve sets the actual outlet
+    # enthalpy from its duty and source mass flow.
     hp.evaporator.source_out.props_in_ab(
         input_str="PT",
         prop1=0.5,
-        prop2=min(hp.evaporator.sink_in.temperature + hp.dTmin_rhx, hp.T_source_in),
+        prop2=hp.T_source_in,
         mass_flow=1e6,
         name="Evaporator source outlet",
         pp_instance="src",

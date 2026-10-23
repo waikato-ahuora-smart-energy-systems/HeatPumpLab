@@ -46,7 +46,7 @@ AXIS_LABELS: dict[str, str] = {
     "dT_rhx2_cold": r"$\Delta T_{\mathrm{RHX2,sink}}$ [K]",
     "COP": "COP",
     "SEC": "SEC",
-    "VHC": r"VHC [MJ/m$^3$]",
+    "VHC": r"VHC [kJ/m$^3$]",          # report VHC: kW per m3/s of suction
     "eDTL": r"ETL [K]",
     "SLE": r"SLE [kJ$_e$/(kJ$_h$K)]",
     "dQ/dW": r"$\Delta Q/\Delta W$",
@@ -117,7 +117,7 @@ def _parse_args(
         dest="log_pmax",
         action="store_true",
         default=False,
-        help="Render Pmax heatmaps with a logarithmic colour scale (default: on).",
+        help="Render Pmax heatmaps with a logarithmic colour scale (default: off).",
     )
     parser.add_argument(
         "--no-log-pmax",
@@ -125,7 +125,7 @@ def _parse_args(
         action="store_false",
         help="Disable logarithmic colour scaling for Pmax heatmaps.",
     )
-    return parser._parse_args()
+    return parser.parse_args()
 
 
 def _load_results(
@@ -358,8 +358,6 @@ def _create_heatmaps(
                 comp2_value,
             )
             subset = df.loc[comp_mask]
-            if subset.empty:
-                continue
 
             for refrigerant in refrigerants:
                 refrigerant_slice = subset[subset["refrigerant"] == refrigerant]

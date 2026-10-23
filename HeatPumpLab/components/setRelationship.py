@@ -42,6 +42,9 @@ class SetRelationship:
         elif self.prop == "Mass Flow":
             self.set_mass_flow()
 
+        else:
+            raise ValueError("Set relationship failed: " + self.name)
+
         self.converged = True
 
     def set_temperature(self):

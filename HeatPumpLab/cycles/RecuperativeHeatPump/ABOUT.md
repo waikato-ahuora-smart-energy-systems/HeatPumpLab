@@ -5,7 +5,7 @@ Written by Tim Walmsley and Keri Adamson, University of Waikato, 2021-2025 (tim.
 ## Introduction
 The idea of heat recuperation within vapour-compression and transcritical heat pump cycles is not new. Internal heat exchangers (IHXs) are widely used to reduce flash gas generation after expansion, preheat suction gas, provide greater superheat after compression, and enable slightly lower high-side pressures (e.g. when producing hot water). In conventional cycles, the IHX transfers heat from the warm refrigerant immediately before expansion to the evaporator pressure. Pinch analysis states that heat is in excess below the pinch temperature and in deficit above it. A heat pump should ideally absorb heat below the pinch and reject upgraded heat above it. Applying this logic to the heat pump cycle itself suggests that repositioned IHXs could deliver thermodynamic benefits.
 
-This model calculates heat pump perfromance for alternate IHX placements. To distinguish a conventional IHX from a repositioned one, this study uses the term recuperative heat exchanger (RHX). Below is a comparsion of four cycles that can be analysed using this model. 
+This model calculates heat pump performance for alternate IHX placements. To distinguish a conventional IHX from a repositioned one, this study uses the term recuperative heat exchanger (RHX). Below is a comparison of four cycles that can be analysed using this model.
 
 <img width="452" height="514" alt="image" src="https://github.com/user-attachments/assets/cff96d29-63b3-4fed-af2a-3db739343726" />
 

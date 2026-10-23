@@ -1,6 +1,6 @@
 """Thermodynamic stream wrapper providing property calculations."""
 
-from ..utils.properties_package import PropertyPackage
+from ..utils.coolprop_properties import make_property_package
 
 
 class Stream:
@@ -11,6 +11,7 @@ class Stream:
     pp_instance: str
     mass_flow: float
     vol_flow: float
+    P_max: float
     pressure: float
     temperature: float
     enthalpy: float
@@ -46,6 +47,8 @@ class Stream:
         self.enthalpy = enthalpy
         self.entropy = entropy
         self.quality = quality
+        self.refprop_quality = None
+        self.phase = "unknown"
         self.specific_volume = specific_volume
         if fluid is not None:
             self.set_fluid(fluid, pp_instance)
@@ -53,8 +56,9 @@ class Stream:
 
     def set_fluid(self, fluid: str, pp_instance: str) -> None:
         """Attach a property package describing the working fluid."""
-        self.PP = PropertyPackage(fluid, pp_instance)
+        self.PP = make_property_package(fluid, pp_instance)
         self.P_crit = self.PP.P_crit
+        self.P_max = self.PP.P_max
         self.T_crit = self.PP.T_crit
         self.D_crit = self.PP.D_crit
         self.molar_mass = self.PP.molar_mass
@@ -62,17 +66,17 @@ class Stream:
 
     def auto_calc_props(self) -> None:
         """Populate missing properties based on whichever state variables are set."""
-        if self.pressure != None and self.enthalpy != None:
+        if self.pressure is not None and self.enthalpy is not None:
             self.props_in_mPH()
-        elif self.pressure != None and self.temperature != None:
+        elif self.pressure is not None and self.temperature is not None:
             self.props_in_mPT()
-        elif self.pressure != None and self.quality != None:
+        elif self.pressure is not None and self.quality is not None:
             self.props_in_mPQ()
-        elif self.temperature != None and self.quality != None:
+        elif self.temperature is not None and self.quality is not None:
             self.props_in_mTQ()
-        elif self.pressure != None and self.entropy != None:
+        elif self.pressure is not None and self.entropy is not None:
             self.props_in_mPS()
-        elif self.temperature != None and self.entropy != None:
+        elif self.temperature is not None and self.entropy is not None:
             self.props_in_mTS()
         else:
             None
@@ -150,7 +154,7 @@ class Stream:
         """Update state using temperature and entropy."""
         self._update_props(
             self.PP.get_std_properties(
-                "TQ", self.temperature, self.entropy, self.fld_composition
+                "TS", self.temperature, self.entropy, self.fld_composition
             )
         )
 
@@ -159,6 +163,8 @@ class Stream:
         self.pressure = props["P"]
         self.enthalpy = props["h"]
         self.quality = props["q"]
+        self.refprop_quality = props.get("q_refprop")
+        self.phase = props.get("phase", "unknown")
         self.temperature = props["T"]
         self.entropy = props["s"]
         self.heat_capacity = props["Cp"]
@@ -211,6 +217,8 @@ class Stream:
         self.entropy = fld.entropy
         self.heat_capacity = fld.heat_capacity
         self.quality = fld.quality
+        self.refprop_quality = fld.refprop_quality
+        self.phase = fld.phase
         self.density = fld.density
         self.specific_volume = fld.specific_volume
 

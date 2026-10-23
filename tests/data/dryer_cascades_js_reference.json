@@ -1,0 +1,1204 @@
+{
+ "source": "Advanced dryer heat pumps web app (claude.ai artifact JVR7gXG2EEYADm5ribDttf, version 1792578914-d233): DRYCASC.kong / kongOptimise / cascade / cascadeOptimise run in Node over CoolProp 8.0.0 (WebAssembly) through the page's CoolPropFluid adapter; air from DRYER.airModel (humid air: HAPropsSI at the inlet humidity ratio; dry air: CoolProp HEOS Air).",
+ "cases": [
+  {
+   "name": "tt_app_default",
+   "model": "tt",
+   "config": {},
+   "optimise": null,
+   "js_ms": 129,
+   "expected": {
+    "success": true,
+    "message": "success",
+    "COP": 2.5799896735608185,
+    "VHC": 20.329281878686988,
+    "Pmax_bar": 150,
+    "T_dis_max": 235.2824916913396,
+    "q_air": 338.09203889670164,
+    "w_shaft": 121.8708739015891,
+    "q_source": 216.21148314938563,
+    "warnings": [],
+    "report": {
+     "COP": 2.5799896735608185,
+     "VHC": 20.329281878686988,
+     "P_top_bar": 150,
+     "P_bot_bar": 150,
+     "P_evap_top_bar": 57.29052581475148,
+     "P_evap_bot_bar": 45.021829141077745,
+     "PR_top": 2.6182339552096967,
+     "PR_bot": 3.33171714392076,
+     "eta_top": 0.8454870607421889,
+     "eta_bot": 0.8360785158635211,
+     "T_dis_top": 235.2824916913396,
+     "T_dis_bot": 162.91967261982563,
+     "T_suc_top": 130.82462607948366,
+     "q_cgc": 103.84466701829238,
+     "q_HT": 169.63968436870857,
+     "q_MT": 168.4523545279931,
+     "q_primary": 338.09203889670164,
+     "q_secondary": 0,
+     "share_sec": 0,
+     "q_ihx_top": 60.024288407394636,
+     "q_ihx_bot": 26.47272228784379,
+     "gap_HT": 21.559397539660168,
+     "gap_MT": 19.99751581349811,
+     "T_gc_mid": 114.05939753966017,
+     "T_gc_out": 52.19965817125416,
+     "T_bot_cgc_out": 53.10321091729407,
+     "T_water_mid": 33.197559427078275,
+     "gap_evap_top": 13.197559427078275,
+     "gap_evap_bot": 20,
+     "q_evap_top": 147.0765765306963,
+     "q_evap_bot": 69.13490661868936,
+     "gc_off": 0,
+     "T_bot_valve": 30.82585543308599,
+     "primary_per_top": 2.1313120342550134,
+     "bottom_supercritical": true,
+     "w_el_kJkg": 131.04395043181623,
+     "r": 0.43,
+     "air_ratio": 0,
+     "expander": false,
+     "w_exp_kJkg": 0
+    },
+    "states": {
+     "top": {
+      "evap_out": {
+       "T": 19.999999999999886,
+       "P": 5.729052581475148,
+       "h": 407.86539237291606,
+       "s": 1.7062262257661949
+      },
+      "ihx_cold_out": {
+       "T": 47.20512140302162,
+       "P": 5.729052581439147,
+       "h": 467.8981228269439,
+       "s": 1.9034509304344953
+      },
+      "suction": {
+       "T": 130.8246260791741,
+       "P": 5.729052581561543,
+       "h": 571.7427898441997,
+       "s": 2.193120304911255
+      },
+      "discharge": {
+       "T": 235.2824916913396,
+       "P": 15.000000102934377,
+       "h": 658.905143146316,
+       "s": 2.2198961662685393
+      },
+      "htgc_out": {
+       "T": 114.05928058419329,
+       "P": 15.000000000000005,
+       "h": 489.2654589271274,
+       "s": 1.8356390953017339
+      },
+      "gc_out": {
+       "T": 52.200061334750785,
+       "P": 14.999999998371846,
+       "h": 320.8131042496146,
+       "s": 1.3567271252596969
+      },
+      "valve_in": {
+       "T": 30.284354873078712,
+       "P": 14.999999999999966,
+       "h": 260.7888158419188,
+       "s": 1.1660194642337367
+      },
+      "valve_out": {
+       "T": 19.999999999999886,
+       "P": 5.729052581475148,
+       "h": 260.7888158422198,
+       "s": 1.2045152364068354
+      }
+     },
+     "bot": {
+      "evap_out": {
+       "T": 9.999999999999602,
+       "P": 4.502182914107775,
+       "h": 422.88400016461014,
+       "s": 1.784683559952974
+      },
+      "suction": {
+       "T": 48.10546875002257,
+       "P": 4.5021829141059735,
+       "h": 484.4513538567692,
+       "s": 1.9900463863279694
+      },
+      "discharge": {
+       "T": 162.91967261982563,
+       "P": 15.000000000000004,
+       "h": 565.1688436237888,
+       "s": 2.020720864738373
+      },
+      "cgc_out": {
+       "T": 53.10347992878911,
+       "P": 14.999999998535477,
+       "h": 323.669617999853,
+       "s": 1.3654947499361036
+      },
+      "valve_in": {
+       "T": 30.826108301341492,
+       "P": 14.99999999999995,
+       "h": 262.10514756300716,
+       "s": 1.170353703470983
+      },
+      "valve_out": {
+       "T": 9.999999999999602,
+       "P": 4.502182914107775,
+       "h": 262.105147563007,
+       "s": 1.216861371707863
+      }
+     },
+     "r": 0.43,
+     "air_primary": 2.1313120342550134,
+     "air_secondary": 0
+    }
+   }
+  },
+  {
+   "name": "tt_kong_reference",
+   "model": "tt",
+   "config": {
+    "T_air_tar": 200.0,
+    "air_ratio": 0.5,
+    "T_mt": 102.0,
+    "eta": 0.7,
+    "T_source_out": 20.0,
+    "dT_ev": 2.0,
+    "P_b": 14.62,
+    "P_t": 15.0,
+    "r": 0.437,
+    "air_RH": 0.0
+   },
+   "optimise": null,
+   "js_ms": 88,
+   "expected": {
+    "success": true,
+    "message": "success",
+    "COP": 2.386669813523493,
+    "VHC": 22.48982327808258,
+    "Pmax_bar": 150,
+    "T_dis_max": 251.20571643296557,
+    "q_air": 373.30751427786697,
+    "w_shaft": 145.46460776066579,
+    "q_source": 227.82612735190514,
+    "warnings": [],
+    "report": {
+     "COP": 2.386669813523493,
+     "VHC": 22.48982327808258,
+     "P_top_bar": 150,
+     "P_bot_bar": 146.2,
+     "P_evap_top_bar": 57.29052581475148,
+     "P_evap_bot_bar": 45.021829141077745,
+     "PR_top": 2.6182339552096967,
+     "PR_bot": 3.247313642941434,
+     "eta_top": 0.7,
+     "eta_bot": 0.7,
+     "T_dis_top": 251.20571643296557,
+     "T_dis_bot": 164.684680256315,
+     "T_suc_top": 131.79536313671156,
+     "q_cgc": 113.1689070205709,
+     "q_HT": 160.95361239233642,
+     "q_MT": 212.35390188553052,
+     "q_primary": 302.5228803160234,
+     "q_secondary": 70.78463396184351,
+     "share_sec": 0.18961481152815965,
+     "q_ihx_top": 51.78057588944779,
+     "q_ihx_bot": 24.157077338028316,
+     "gap_HT": 28.741688321741464,
+     "gap_MT": 20.01679708350467,
+     "T_gc_mid": 130.74168832174146,
+     "T_gc_out": 47.040799231770784,
+     "T_bot_cgc_out": 48.25509861820789,
+     "T_water_mid": 26.438351783035564,
+     "gap_evap_top": 6.438351783035564,
+     "gap_evap_bot": 10,
+     "q_evap_top": 154.48488968899386,
+     "q_evap_bot": 73.34123766291128,
+     "gc_off": 0,
+     "T_bot_valve": 27.690585051256747,
+     "primary_per_top": 1.6140123399409656,
+     "bottom_supercritical": true,
+     "w_el_kJkg": 156.4135567318987,
+     "r": 0.437,
+     "air_ratio": 0.5,
+     "expander": false,
+     "w_exp_kJkg": 0
+    },
+    "states": {
+     "top": {
+      "evap_out": {
+       "T": 19.999999999999886,
+       "P": 5.729052581475148,
+       "h": 407.86539237291606,
+       "s": 1.7062262257661949
+      },
+      "ihx_cold_out": {
+       "T": 42.050324479520384,
+       "P": 5.729052581239043,
+       "h": 459.6617473912449,
+       "s": 1.8775292603182003
+      },
+      "suction": {
+       "T": 131.79536313640529,
+       "P": 5.729052581561136,
+       "h": 572.8306544086205,
+       "s": 2.1958099782929374
+      },
+      "discharge": {
+       "T": 251.20571643296557,
+       "P": 15.000000073830504,
+       "h": 678.468592851237,
+       "s": 2.257784951448372
+      },
+      "htgc_out": {
+       "T": 130.74150140534402,
+       "P": 15,
+       "h": 517.5149804589005,
+       "s": 1.9070987444801242
+      },
+      "gc_out": {
+       "T": 47.04092879815579,
+       "P": 14.999999999730093,
+       "h": 305.1610784603704,
+       "s": 1.3082379723208775
+      },
+      "valve_in": {
+       "T": 27.187661499050705,
+       "P": 14.999999999998938,
+       "h": 253.38050268389182,
+       "s": 1.1414796909041678
+      },
+      "valve_out": {
+       "T": 19.399706926277815,
+       "P": 5.729052581475125,
+       "h": 253.38050268392286,
+       "s": 1.1792352072053234
+      }
+     },
+     "bot": {
+      "evap_out": {
+       "T": 9.999999999999602,
+       "P": 4.502182914107775,
+       "h": 422.88400016461014,
+       "s": 1.784683559952974
+      },
+      "suction": {
+       "T": 43.25683593757083,
+       "P": 4.5021829141023195,
+       "h": 478.16564175980756,
+       "s": 1.9703303703047454
+      },
+      "discharge": {
+       "T": 164.68468025631495,
+       "P": 14.619999999999997,
+       "h": 569.3021848229349,
+       "s": 2.0342113688950976
+      },
+      "cgc_out": {
+       "T": 48.2555754456439,
+       "P": 14.619999998809295,
+       "h": 310.3344342037796,
+       "s": 1.326019078069837
+      },
+      "valve_in": {
+       "T": 27.690839474758604,
+       "P": 14.619999999999816,
+       "h": 255.05508102736997,
+       "s": 1.148519806585481
+      },
+      "valve_out": {
+       "T": 9.999999999999602,
+       "P": 4.502182914107775,
+       "h": 255.05508102751338,
+       "s": 1.1919626730128474
+      }
+     },
+     "r": 0.437,
+     "air_primary": 1.6140123399409656,
+     "air_secondary": 0.8070061699704828
+    }
+   }
+  },
+  {
+   "name": "tt_subcritical_bottom_expander",
+   "model": "tt",
+   "config": {
+    "P_b": 7.0,
+    "r": 2.5,
+    "gc_off": 5.0,
+    "expander_eta": 0.75
+   },
+   "optimise": null,
+   "js_ms": 94,
+   "expected": {
+    "success": true,
+    "message": "success",
+    "COP": 2.191768102626869,
+    "VHC": 7.255713297679031,
+    "Pmax_bar": 150,
+    "T_dis_max": 247.42926638816402,
+    "q_air": 346.80800482289084,
+    "w_shaft": 175.80460005732107,
+    "q_source": 204.11506804207986,
+    "warnings": [
+     "two-phase expansion: the bottom expander outlet is 90 % vapour (10.0 C); two-phase expanders are less proven than gas turbines and their efficiency is uncertain"
+    ],
+    "report": {
+     "COP": 2.191768102626869,
+     "VHC": 7.255713297679031,
+     "P_top_bar": 150,
+     "P_bot_bar": 70,
+     "P_evap_top_bar": 57.29052581475148,
+     "P_evap_bot_bar": 45.021829141077745,
+     "PR_top": 2.6182339552096967,
+     "PR_bot": 1.554801333829688,
+     "eta_top": 0.8454870607421889,
+     "eta_bot": 0.8619063303936499,
+     "T_dis_top": 247.42926638816402,
+     "T_dis_bot": 146.35761717242156,
+     "T_suc_top": 141.34775044873322,
+     "q_cgc": 112.6025542295956,
+     "q_HT": 174.0129719312084,
+     "q_MT": 172.79503289168244,
+     "q_primary": 346.80800482289084,
+     "q_secondary": 0,
+     "share_sec": 0,
+     "q_ihx_top": 63.01253860031511,
+     "q_ihx_bot": 314.09221126265976,
+     "gap_HT": 27.559670757527144,
+     "gap_MT": 24.332382777307842,
+     "T_gc_mid": 120.05967075752714,
+     "T_gc_out": 54.155308157017814,
+     "T_bot_cgc_out": 108.27479253010252,
+     "T_water_mid": 32.534287020280615,
+     "gap_evap_top": 12.534287020280615,
+     "gap_evap_bot": 20,
+     "q_evap_top": 152.38645128380608,
+     "q_evap_bot": 51.72861675827377,
+     "gc_off": 5,
+     "T_bot_valve": 33.59242541568272,
+     "primary_per_top": 2.1862569632431796,
+     "bottom_supercritical": false,
+     "w_el_kJkg": 158.2320704490753,
+     "r": 2.5,
+     "air_ratio": 0,
+     "expander": true,
+     "w_exp_kJkg": 33.12379990713495
+    },
+    "states": {
+     "top": {
+      "evap_out": {
+       "T": 19.999999999999886,
+       "P": 5.729052581475148,
+       "h": 407.86539237291606,
+       "s": 1.7062262257661949
+      },
+      "ihx_cold_out": {
+       "T": 49.160479704322995,
+       "P": 5.729052581471448,
+       "h": 470.88574675473734,
+       "s": 1.9127486640672193
+      },
+      "suction": {
+       "T": 141.34775044845776,
+       "P": 5.729052581556457,
+       "h": 583.4883009836866,
+       "s": 2.2218234674805872
+      },
+      "discharge": {
+       "T": 247.42926638816402,
+       "P": 15.000000079762794,
+       "h": 673.8474715021345,
+       "s": 2.2489400990721102
+      },
+      "htgc_out": {
+       "T": 120.05956962679102,
+       "P": 14.999999999999998,
+       "h": 499.8344995981262,
+       "s": 1.8627269250315055
+      },
+      "gc_out": {
+       "T": 54.15564872080722,
+       "P": 14.999999998864887,
+       "h": 327.0394666792433,
+       "s": 1.3758070204452508
+      },
+      "valve_in": {
+       "T": 31.61235353956488,
+       "P": 15.000000001119432,
+       "h": 264.02692807892845,
+       "s": 1.1766676749530505
+      },
+      "valve_out": {
+       "T": 19.90820464031549,
+       "P": 5.729052548417997,
+       "h": 255.47894114971848,
+       "s": 1.1864018624317958
+      }
+     },
+     "bot": {
+      "evap_out": {
+       "T": 9.999999999999602,
+       "P": 4.502182914107775,
+       "h": 422.88400016461014,
+       "s": 1.784683559952974
+      },
+      "suction": {
+       "T": 103.27636719018273,
+       "P": 4.502182914113558,
+       "h": 548.5226130132004,
+       "s": 2.17445532787143
+      },
+      "discharge": {
+       "T": 146.35761717044795,
+       "P": 7.000000000610348,
+       "h": 582.700784822859,
+       "s": 2.185761405636452
+      },
+      "cgc_out": {
+       "T": 108.2747105948012,
+       "P": 7.00000000095156,
+       "h": 537.6597631290575,
+       "s": 2.0731475766962046
+      },
+      "valve_in": {
+       "T": 33.590422971819066,
+       "P": 6.999999999999996,
+       "h": 412.02287862822027,
+       "s": 1.7000350635413486
+      },
+      "valve_out": {
+       "T": 9.999999999999602,
+       "P": 4.502182914107775,
+       "h": 402.1925534613006,
+       "s": 1.7116076401108073
+      }
+     },
+     "r": 2.5,
+     "air_primary": 2.1862569632431796,
+     "air_secondary": 0
+    }
+   }
+  },
+  {
+   "name": "tt_secondary_air_dT_ht",
+   "model": "tt",
+   "config": {
+    "T_air_tar": 180.0,
+    "dT_ht": 15.0,
+    "air_ratio": 0.3,
+    "T_mt": 90.0,
+    "P_t": 14.0,
+    "P_b": 12.0,
+    "r": 0.5
+   },
+   "optimise": null,
+   "js_ms": 100,
+   "expected": {
+    "success": true,
+    "message": "success",
+    "COP": 2.5680985054788232,
+    "VHC": 17.693651968516487,
+    "Pmax_bar": 140,
+    "T_dis_max": 215.64323999394185,
+    "q_air": 303.1918635481027,
+    "w_shaft": 109.79658003701161,
+    "q_source": 193.38437842518815,
+    "warnings": [],
+    "report": {
+     "COP": 2.5680985054788232,
+     "VHC": 17.693651968516487,
+     "P_top_bar": 140,
+     "P_bot_bar": 120,
+     "P_evap_top_bar": 57.29052581475148,
+     "P_evap_bot_bar": 45.021829141077745,
+     "PR_top": 2.4436850248623836,
+     "PR_bot": 2.665373715136608,
+     "eta_top": 0.8479863368034164,
+     "eta_bot": 0.8448261682803779,
+     "T_dis_top": 215.64323999394185,
+     "T_dis_bot": 146.11835332801098,
+     "T_suc_top": 120.83608120014583,
+     "q_cgc": 89.22819674945997,
+     "q_HT": 146.1105840808657,
+     "q_MT": 157.08127946723695,
+     "q_primary": 266.9423375172018,
+     "q_secondary": 36.24952603090083,
+     "share_sec": 0.11955969268663996,
+     "q_ihx_top": 63.38325374720074,
+     "q_ihx_bot": 34.22542211189207,
+     "gap_HT": 20.794255981031696,
+     "gap_MT": 19.972851131999604,
+     "T_gc_mid": 111.29647257162999,
+     "T_gc_out": 54.40092242579656,
+     "T_bot_cgc_out": 58.57704155131093,
+     "T_water_mid": 32.925140826860066,
+     "gap_evap_top": 12.925140826860066,
+     "gap_evap_bot": 20,
+     "q_evap_top": 136.8167243643407,
+     "q_evap_bot": 56.567654060847445,
+     "gc_off": 0,
+     "T_bot_valve": 43.767474085389644,
+     "primary_per_top": 1.5798967061878229,
+     "bottom_supercritical": true,
+     "w_el_kJkg": 118.06083874947484,
+     "r": 0.5,
+     "air_ratio": 0.3,
+     "expander": false,
+     "w_exp_kJkg": 0
+    },
+    "states": {
+     "top": {
+      "evap_out": {
+       "T": 19.999999999999886,
+       "P": 5.729052581475148,
+       "h": 407.86539237291606,
+       "s": 1.7062262257661949
+      },
+      "ihx_cold_out": {
+       "T": 49.407309676335785,
+       "P": 5.729052581474675,
+       "h": 471.25827354724834,
+       "s": 1.9139040229802644
+      },
+      "suction": {
+       "T": 120.83608119980613,
+       "P": 5.729052581564881,
+       "h": 560.4864702959344,
+       "s": 2.1649054843259434
+      },
+      "discharge": {
+       "T": 215.64323999397243,
+       "P": 14.000000095828321,
+       "h": 637.6237853039167,
+       "s": 2.1891292101450253
+      },
+      "htgc_out": {
+       "T": 111.29620110937674,
+       "P": 13.999999999999993,
+       "h": 491.5132013268771,
+       "s": 1.8506173310510245
+      },
+      "gc_out": {
+       "T": 54.40122151706248,
+       "P": 13.999999999064274,
+       "h": 334.4319217557756,
+       "s": 1.4031264553933904
+      },
+      "valve_in": {
+       "T": 33.687257199506234,
+       "P": 14.000000000000453,
+       "h": 271.04866800857576,
+       "s": 1.2035959670683367
+      },
+      "valve_out": {
+       "T": 19.999999999999886,
+       "P": 5.729052581475148,
+       "h": 271.0486680085754,
+       "s": 1.239513879307588
+      }
+     },
+     "bot": {
+      "evap_out": {
+       "T": 9.999999999999602,
+       "P": 4.502182914107775,
+       "h": 422.88400016461014,
+       "s": 1.784683559952974
+      },
+      "suction": {
+       "T": 53.57910156249898,
+       "P": 4.50218291410786,
+       "h": 491.33739970663896,
+       "s": 2.0113014946389525
+      },
+      "discharge": {
+       "T": 146.11835332801098,
+       "P": 12.00000000000001,
+       "h": 556.6559297656194,
+       "s": 2.0356940501821508
+      },
+      "cgc_out": {
+       "T": 58.57652941614322,
+       "P": 11.999999999999998,
+       "h": 378.1995365905304,
+       "s": 1.5469942052393508
+      },
+      "valve_in": {
+       "T": 43.76849950083323,
+       "P": 11.999999943625431,
+       "h": 309.74869204289905,
+       "s": 1.336072832075806
+      },
+      "valve_out": {
+       "T": 9.999999999999602,
+       "P": 4.502182914107775,
+       "h": 309.74869204291525,
+       "s": 1.3851239338830643
+      }
+     },
+     "r": 0.5,
+     "air_primary": 1.5798967061878229,
+     "air_secondary": 0.4739690118563468
+    }
+   }
+  },
+  {
+   "name": "tt_fail_bottom_heat",
+   "model": "tt",
+   "config": {
+    "r": 5.0
+   },
+   "optimise": null,
+   "js_ms": 159,
+   "expected": {
+    "success": false,
+    "message": "the bottom cycle brings more heat than the cascade gas cooler can pass to the top suction (lower the bottom/top mass flow or the bottom pressure)",
+    "COP": null,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null
+   }
+  },
+  {
+   "name": "tt_fail_pressure",
+   "model": "tt",
+   "config": {
+    "P_t": 5.0
+   },
+   "optimise": null,
+   "js_ms": 0,
+   "expected": {
+    "success": false,
+    "message": "discharge pressure below the evaporating pressure",
+    "COP": null,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null
+   }
+  },
+  {
+   "name": "tt_fail_secondary_target",
+   "model": "tt",
+   "config": {
+    "air_ratio": 0.5,
+    "T_mt": 180.0
+   },
+   "optimise": null,
+   "js_ms": 0,
+   "expected": {
+    "success": false,
+    "message": "the secondary air target must lie between the air inlet (15 C) and the dryer inlet target (170 C)",
+    "COP": null,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null
+   }
+  },
+  {
+   "name": "tt_fail_air_target",
+   "model": "tt",
+   "config": {
+    "P_t": 8.0,
+    "r": 0.1
+   },
+   "optimise": null,
+   "js_ms": 20,
+   "expected": {
+    "success": false,
+    "message": "the top discharge (73 C) cannot heat the primary air to 170 C with a 20 K approach (raise the top pressure or the bottom/top mass flow)",
+    "COP": null,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null
+   }
+  },
+  {
+   "name": "tt_optimise",
+   "model": "tt",
+   "config": {},
+   "optimise": {
+    "max_eval": 120
+   },
+   "js_ms": 2716,
+   "expected": {
+    "success": true,
+    "message": null,
+    "COP": 2.5801926540266753,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null,
+    "optimiser": {
+     "P_b": 15,
+     "P_t": 15,
+     "r": 0.42499999999999993,
+     "gc_off": 0,
+     "nEval": 120,
+     "start": 2.5799896735608185,
+     "converged": true
+    }
+   }
+  },
+  {
+   "name": "casc_app_default",
+   "model": "cascade",
+   "config": {},
+   "optimise": null,
+   "js_ms": 34,
+   "expected": {
+    "success": true,
+    "message": "success",
+    "COP": 2.978191150499913,
+    "VHC": 2.384718913881997,
+    "Pmax_bar": 21.10144920921387,
+    "T_dis_max": 190.01521148832785,
+    "q_air": 448.64184787523516,
+    "w_shaft": 140.0974274112433,
+    "q_source": 308.54442014626636,
+    "warnings": [],
+    "report": {
+     "COP": 2.978191150499913,
+     "VHC": 2.384718913881997,
+     "levels": [
+      {
+       "Te": 25,
+       "Tc": 100.00000000000017,
+       "Pe_bar": 3.506696275675942,
+       "Pc_bar": 19.865210066940385,
+       "PR": 5.664936026748201,
+       "eta": 0.8116165166847792,
+       "Tdis": 105.02952833738527,
+       "flow": 1,
+       "q_air": 187.40289979783114,
+       "air_in": 15,
+       "superheat": 10.859375,
+       "q_ihx": 10.639502464359111,
+       "f_air": 0.09091746797729583
+      },
+      {
+       "Te": 95,
+       "Tc": 185.0078125,
+       "Pe_bar": 3.6955789552040965,
+       "Pc_bar": 21.10144920921387,
+       "PR": 5.709917029238115,
+       "eta": 0.8112046681712015,
+       "Tdis": 190.01521148832785,
+       "flow": 0.6279927583192304,
+       "q_air": 261.238948077404,
+       "air_in": 80.00013520336768,
+       "superheat": 22.421875,
+       "q_ihx": 29.200407530981863,
+       "f_air": 1
+      }
+     ],
+     "w_el_kJkg": 150.642395065853,
+     "T_cond_top": 185.0078125,
+     "expander": false,
+     "w_exp_kJkg": 0
+    }
+   }
+  },
+  {
+   "name": "casc_3level_ihx_dry_air",
+   "model": "cascade",
+   "config": {
+    "n": 3,
+    "T_cond": [
+     80.0,
+     130.0
+    ],
+    "ihx": [
+     false,
+     true,
+     true,
+     false
+    ],
+    "T_air_tar": 200.0,
+    "air_RH": 0.0
+   },
+   "optimise": null,
+   "js_ms": 49,
+   "expected": {
+    "success": true,
+    "message": "success",
+    "COP": 2.7115317707678708,
+    "VHC": 1.5755475801599732,
+    "Pmax_bar": 32.890874550263916,
+    "T_dis_max": 220.0050834091977,
+    "q_air": 471.4538634990878,
+    "w_shaft": 161.69904324225848,
+    "q_source": 309.75482023215824,
+    "warnings": [],
+    "report": {
+     "COP": 2.7115317707678708,
+     "VHC": 1.5755475801599732,
+     "levels": [
+      {
+       "Te": 25,
+       "Tc": 80.00000000000136,
+       "Pe_bar": 3.506696275675942,
+       "Pc_bar": 13.437881781625213,
+       "PR": 3.8320632085637247,
+       "eta": 0.8301494911861951,
+       "Tdis": 85.01728687750051,
+       "flow": 1,
+       "q_air": 113.96632569157694,
+       "air_in": 15,
+       "superheat": 9.4921875,
+       "q_ihx": 8.148320354109615,
+       "f_air": 0.01714476580135866
+      },
+      {
+       "Te": 75,
+       "Tc": 129.99999999999983,
+       "Pe_bar": 2.200334903225269,
+       "Pc_bar": 8.003599773465824,
+       "PR": 3.6374461731866736,
+       "eta": 0.832397934259641,
+       "Tdis": 149.88856191744816,
+       "flow": 0.76192868590051,
+       "q_air": 127.01668326383155,
+       "air_in": 60.00009292447324,
+       "superheat": 27.244748338146792,
+       "q_ihx": 34.782988611901715,
+       "f_air": 0.31995431549306064
+      },
+      {
+       "Te": 125,
+       "Tc": 214.91015625000034,
+       "Pe_bar": 7.231072889725871,
+       "Pc_bar": 32.890874550263916,
+       "PR": 4.548546951725002,
+       "eta": 0.8224113864086946,
+       "Tdis": 220.0050834091977,
+       "flow": 0.6209968978293381,
+       "q_air": 230.47085454367928,
+       "air_in": 110.00000120788768,
+       "superheat": 23.515627776996496,
+       "q_ihx": 34.77760044684322,
+       "f_air": 1
+      }
+     ],
+     "w_el_kJkg": 173.8699389701704,
+     "T_cond_top": 214.91015625,
+     "expander": false,
+     "w_exp_kJkg": 0
+    }
+   }
+  },
+  {
+   "name": "casc_4level_expander_secondary",
+   "model": "cascade",
+   "config": {
+    "n": 4,
+    "fluids": [
+     "Isobutane",
+     "Pentane",
+     "Cyclopentane",
+     "Cyclopentane"
+    ],
+    "T_cond": [
+     70.0,
+     110.0,
+     150.0
+    ],
+    "expander_eta": 0.7,
+    "air_ratio": 0.5,
+    "T_mt": 102.0
+   },
+   "optimise": null,
+   "js_ms": 30,
+   "expected": {
+    "success": true,
+    "message": "success",
+    "COP": 3.296021725747445,
+    "VHC": 1.477193631213605,
+    "Pmax_bar": 21.990590113098772,
+    "T_dis_max": 192.6863271940586,
+    "q_air": 433.75931507620237,
+    "w_shaft": 125.06121260782858,
+    "q_source": 311.7879472528076,
+    "warnings": [
+     "two-phase expansion: the level 1 expander outlet is 8 % vapour (25.0 C); two-phase expanders are less proven than gas turbines and their efficiency is uncertain",
+     "two-phase expansion: the level 2 expander outlet is 10 % vapour (65.0 C); two-phase expanders are less proven than gas turbines and their efficiency is uncertain",
+     "two-phase expansion: the level 3 expander outlet is 8 % vapour (105.0 C); two-phase expanders are less proven than gas turbines and their efficiency is uncertain",
+     "two-phase expansion: the level 4 expander outlet is 10 % vapour (145.0 C); two-phase expanders are less proven than gas turbines and their efficiency is uncertain"
+    ],
+    "report": {
+     "COP": 3.296021725747445,
+     "VHC": 1.477193631213605,
+     "levels": [
+      {
+       "Te": 25,
+       "Tc": 70.00000000000006,
+       "Pe_bar": 3.506696275675942,
+       "Pc_bar": 10.875376673352887,
+       "PR": 3.1013169714153754,
+       "eta": 0.838983623566303,
+       "Tdis": 75.01514811096166,
+       "flow": 1,
+       "q_air": 114.26248708622911,
+       "air_in": 15,
+       "superheat": 8.5546875,
+       "q_ihx": 6.443183256119028,
+       "f_air": 0.11013583071553384
+      },
+      {
+       "Te": 65,
+       "Tc": 109.99999999999983,
+       "Pe_bar": 2.472493897737256,
+       "Pc_bar": 7.378361109057491,
+       "PR": 2.9841776822219543,
+       "eta": 0.8405074130249393,
+       "Tdis": 115.02466584640905,
+       "flow": 0.8063639255861802,
+       "q_air": 130.86056925084077,
+       "air_in": 50.000724305128074,
+       "superheat": 17.2265625,
+       "q_ihx": 24.06404486116128,
+       "f_air": 0.33853903840293886
+      },
+      {
+       "Te": 105,
+       "Tc": 150,
+       "Pe_bar": 4.68197970254192,
+       "Pc_bar": 11.717635585418266,
+       "PR": 2.50270960787305,
+       "eta": 0.8471319225991867,
+       "Tdis": 155.00858174109248,
+       "flow": 0.4876537348707683,
+       "q_air": 100.66460920596485,
+       "air_in": 90.00111048026461,
+       "superheat": 13.9453125,
+       "q_ihx": 15.42107447105002,
+       "f_air": 0.4687351855851705
+      },
+      {
+       "Te": 145,
+       "Tc": 187.66406250000017,
+       "Pe_bar": 10.689733304029907,
+       "Pc_bar": 21.990590113098772,
+       "PR": 2.0571692003586817,
+       "eta": 0.8538174182279573,
+       "Tdis": 192.6863271940586,
+       "flow": 0.28097958474750573,
+       "q_air": 87.97164953316765,
+       "air_in": 130.0021971222752,
+       "superheat": 14.9609375,
+       "q_ihx": 20.100365867046435,
+       "f_air": 1
+      }
+     ],
+     "w_el_kJkg": 131.60086648938517,
+     "T_cond_top": 187.6640625,
+     "expander": true,
+     "w_exp_kJkg": 3.0898448059895545
+    }
+   }
+  },
+  {
+   "name": "casc_no_air_condensing",
+   "model": "cascade",
+   "config": {
+    "T_cond": [
+     110.0
+    ],
+    "cond_air": [
+     false
+    ],
+    "sub_air": [
+     false,
+     true
+    ],
+    "comp_model": 1
+   },
+   "optimise": null,
+   "js_ms": 21,
+   "expected": {
+    "success": true,
+    "message": "success",
+    "COP": 1.5497493270776603,
+    "VHC": 1.4897939617330762,
+    "Pmax_bar": 23.826180951193386,
+    "T_dis_max": 190.00860706793878,
+    "q_air": 253.93884403731272,
+    "w_shaft": 152.38795128243754,
+    "q_source": 101.55089275487495,
+    "warnings": [],
+    "report": {
+     "COP": 1.5497493270776603,
+     "VHC": 1.4897939617330762,
+     "levels": [
+      {
+       "Te": 25,
+       "Tc": 110.00000000000051,
+       "Pe_bar": 3.506696275675942,
+       "Pc_bar": 23.826180951193386,
+       "PR": 6.794480923957611,
+       "eta": 0.73,
+       "Tdis": 115.00111880493063,
+       "flow": 1,
+       "q_air": 0,
+       "air_in": 15,
+       "superheat": 7.2265625,
+       "q_ihx": 4.031801131515408,
+       "f_air": 0
+      },
+      {
+       "Te": 105,
+       "Tc": 185.0078125,
+       "Pe_bar": 4.68197970254192,
+       "Pc_bar": 21.10144920921387,
+       "PR": 4.506950168484833,
+       "eta": 0.73,
+       "Tdis": 190.00860706793878,
+       "flow": 0.6271551137807118,
+       "q_air": 253.93884403731272,
+       "air_in": 15,
+       "superheat": 17.109375,
+       "q_ihx": 20.94981135303044,
+       "f_air": 1
+      }
+     ],
+     "w_el_kJkg": 163.85801213165325,
+     "T_cond_top": 185.0078125,
+     "expander": false,
+     "w_exp_kJkg": 0
+    }
+   }
+  },
+  {
+   "name": "casc_fail_air_target",
+   "model": "cascade",
+   "config": {
+    "T_air_tar": 250.0
+   },
+   "optimise": null,
+   "js_ms": 32,
+   "expected": {
+    "success": false,
+    "message": "no top condensing temperature up to 238 C heats the air to 250 C with a 20 K approach",
+    "COP": null,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null
+   }
+  },
+  {
+   "name": "casc_fail_fluids",
+   "model": "cascade",
+   "config": {
+    "n": 3,
+    "fluids": [
+     "Isobutane",
+     "Cyclopentane"
+    ]
+   },
+   "optimise": null,
+   "js_ms": 0,
+   "expected": {
+    "success": false,
+    "message": "a refrigerant is needed for every level",
+    "COP": null,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null
+   }
+  },
+  {
+   "name": "casc_optimise",
+   "model": "cascade",
+   "config": {},
+   "optimise": {
+    "max_eval": 30
+   },
+   "js_ms": 979,
+   "expected": {
+    "success": true,
+    "message": null,
+    "COP": 3.055896299858938,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null,
+    "optimiser": {
+     "T_cond": [
+      123
+     ],
+     "T_cond_top": 186.09375,
+     "nEval": 25,
+     "start": 2.978191150499913,
+     "converged": true
+    }
+   }
+  },
+  {
+   "name": "casc_optimise_3level",
+   "model": "cascade",
+   "config": {
+    "n": 3,
+    "T_cond": [
+     80.0,
+     130.0
+    ]
+   },
+   "optimise": {
+    "max_eval": 25
+   },
+   "js_ms": 463,
+   "expected": {
+    "success": true,
+    "message": null,
+    "COP": 3.1167203923161373,
+    "VHC": null,
+    "Pmax_bar": null,
+    "T_dis_max": null,
+    "q_air": null,
+    "w_shaft": null,
+    "q_source": null,
+    "warnings": null,
+    "optimiser": {
+     "T_cond": [
+      120,
+      154
+     ],
+     "T_cond_top": 187.89453125,
+     "nEval": 26,
+     "start": 3.0637614249346816,
+     "converged": false
+    }
+   }
+  }
+ ]
+}

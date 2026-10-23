@@ -1,15 +1,39 @@
 """High-level Recuperative Heat Pump cycle definition."""
 
-from ...components import *
+from ...components import (
+    Compressor,
+    CustomRelationship,
+    Evaporator,
+    ExpansionValve,
+    GasCooler,
+    PlateHeatExchanger,
+    SetRelationship,
+    Stream,
+)
 from ..common.heatPump import BaseHeatPump
 
 from .rhp_helpers import set_rhp_model
-from .solver.cycle_solver import solve_heat_pump_cycle
+from ._refrigerant import normalise_refrigerant_input
+from .solver import solve_heat_pump_cycle
 from .utils import (
     analyse_RHP_case,
     get_RHP_case_list_to_solve,
     get_unsolved_RHP_case_list_to_resolve,
 )
+
+
+def _superheat_margin(stream) -> float | None:
+    """Return T minus the dew temperature at the stream pressure, in K.
+
+    Negative inside the two-phase region. Above the critical pressure the
+    stream's pseudo-saturation temperature (at critical density) is used, which
+    keeps the margin continuous. None when the property call fails.
+    """
+    try:
+        margin = float(stream.temperature) - float(stream.get_Tsat(1.0))
+    except Exception:
+        return None
+    return margin if margin == margin and abs(margin) != float("inf") else None
 
 
 class RecuperativeHP(BaseHeatPump):
@@ -59,6 +83,11 @@ class RecuperativeHP(BaseHeatPump):
 
     def __init__(self, **d_args):
         """Construct the heat pump, applying provided design parameters."""
+        d_args = dict(d_args)
+        if "refrigerant" in d_args:
+            d_args["refrigerant"] = normalise_refrigerant_input(
+                d_args["refrigerant"]
+            ).format()
         self.args = d_args
         for key, value in d_args.items():
             setattr(self, key, value)
@@ -75,6 +104,9 @@ class RecuperativeHP(BaseHeatPump):
         """Return a snapshot of decision variables defining the configuration."""
         return {
             "refrigerant": self.refrigerant,
+            "refrigerant_component_count": normalise_refrigerant_input(
+                self.refrigerant
+            ).component_count,
             "dT_GC_min_tar": self.dT_GC_min_tar,
             "T_air_tar": self.T_air_tar,
             "T_air_inlet": self.T_air_inlet,
@@ -100,10 +132,22 @@ class RecuperativeHP(BaseHeatPump):
             "SLE": self.SLE,
             "dQ_per_dW": self.dQdW,
             "LMTD_gcs": self.LMTD_gcs,
+            "metric_errors": getattr(self, "metric_errors", {}),
+            "numerical_retries": getattr(self, "numerical_retries", []),
+            "solve_error": getattr(self, "solve_error", None),
+            "solve_failure_kind": getattr(self, "solve_failure_kind", None),
+            "solve_error_stage": getattr(self, "solve_error_stage", None),
+            "property_failure_context": getattr(self, "property_failure_context", None),
             "Pmax": self.comp_discharge.pressure * 1000,
+            "gc_pinch_active": getattr(self, "gc_pinch_active", None),
+            "gc_minimum_approach": getattr(self, "gc_minimum_approach", None),
+            "gc_approaches": list(getattr(self, "gc_approaches", []) or []),
             "converged": self.converged,
             # Parameters
             "refrigerant": self.refrigerant,
+            "refrigerant_component_count": normalise_refrigerant_input(
+                self.refrigerant
+            ).component_count,
             "n_comp": self.n_comp,
             "T_source_in": self.T_source_in,
             "dT_GC_min_tar": self.dT_GC_min_tar,
@@ -151,11 +195,16 @@ class RecuperativeHP(BaseHeatPump):
             "n_is_1": self.comp1.isentropic_eff,
             "n_is_2": self.comp2.isentropic_eff if self.n_comp > 1 else 1.0,
             "n_is_3": self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,
-            "n_vol_1": self.comp1.isentropic_eff,
-            "n_vol_2": self.comp2.isentropic_eff if self.n_comp > 1 else 1.0,
-            "n_vol_3": self.comp3.isentropic_eff if self.n_comp > 2 else 1.0,
+            "n_vol_1": self.comp1.volume_eff,
+            "n_vol_2": self.comp2.volume_eff if self.n_comp > 1 else 1.0,
+            "n_vol_3": self.comp3.volume_eff if self.n_comp > 2 else 1.0,
             "Solve time": dt,
         }
+        for stage, compressor in enumerate(self.compressors, start=1):
+            for end, stream in (("in", compressor.flow_in), ("out", compressor.flow_out)):
+                self.output[f"Comp_{stage}_q_refprop_{end}"] = stream.refprop_quality
+                self.output[f"Comp_{stage}_phase_{end}"] = stream.phase
+                self.output[f"Comp_{stage}_dT_sh_{end}"] = _superheat_margin(stream)
         return self.output
 
     def get_components_sets_to_graph(self) -> list:

@@ -1,6 +1,35 @@
 """Compressor component model."""
 
+import math
+
 from .stream import Stream
+
+# Pareto front of design compressor efficiency vs pressure ratio (Oct 2026). One smooth formula,
+#   eta(PR) = eta_1 - a * ln(PR)**b - d / (1 + exp(-(ln(PR) - L0)/w)),
+# a gradual decline that starts flat at PR = 1 (b > 1) plus a logistic fall-off centred at
+# PR = exp(L0) (~19), with a transition width w >= 0.2 in ln(PR) so the curve stays smooth.
+# Fitted as a lower envelope (on or below at every PR from 1 to 20) of the design front: the
+# highest efficiency of any eligible source (manufacturer software and tables, measured or
+# peer-reviewed data, plus single-stage MVR fans at 0.86-0.87; suction superheat
+# <= 10 K; no claims), with dips between sources filled (the front never drops and recovers).
+# Shaft and electrical data are pooled with a motor efficiency of 0.93
+# (overall = 0.93 x isentropic).
+PARETO_FRONT_COEFFS = {  # (eta_1, a, b, d, L0, w)
+    "isentropic": (0.8695, 0.025392, 1.476, 0.29915, 2.9599, 0.2),  # shaft-power basis
+    "overall": (0.80859, 0.02366, 1.47491, 0.27829, 2.96035, 0.2),  # electrical input (= 0.93 x isentropic)
+}
+PARETO_FRONT_PR_RANGE = (1.0, 20.0)
+
+
+def pareto_front_efficiency(pressure_ratio: float, basis: str = "isentropic") -> float:
+    """Design compressor efficiency at ``pressure_ratio`` on the Pareto front (see above).
+
+    ``basis`` is "isentropic" (shaft) or "overall" (electrical input). PR below 1 is treated as 1.
+    """
+    pr = max(float(pressure_ratio), 1.0)
+    L = math.log(pr)
+    eta_1, a, b, d, L0, w = PARETO_FRONT_COEFFS[basis]
+    return eta_1 - a * L**b - d / (1.0 + math.exp(-(L - L0) / w))
 
 
 class Compressor:
@@ -42,10 +71,14 @@ class Compressor:
         """Return coefficient sets for the selected efficiency correlation."""
         available_model_coeffs = [
             ["Proportional", 1.0],  # Ideal compression
-            ["Proportional", 0.7],  # Typical isentropic efficiency
+            ["Proportional", 0.7 / 0.96],  # Typical isentropic efficiency
             ["Polynomial"],  # Compressor model constants (Wang & Cleland, 2018)
             ["Brendel et al"],
+            None,  # 4 was the first Pareto front (2026 survey), replaced by 5
+            ["Pareto front"],  # Design front, manufacturer software and plant data (2026)
         ]
+        if available_model_coeffs[model_index] is None:
+            raise ValueError("compressor model 4 (first Pareto front) was removed; use 5 (Pareto front)")
         return available_model_coeffs[model_index]
 
     def get_isentropic_efficiency(self) -> float:
@@ -58,7 +91,7 @@ class Compressor:
                 0.65
                 + 0.015 * self.pressure_ratio
                 + -0.0015 * pow(self.pressure_ratio, 2.0)
-            )
+            ) / 0.96
         elif self.model_coeffs[0] == "Brendel et al":
             if self.pressure_ratio > 1:
                 shaft_eff = (
@@ -69,7 +102,9 @@ class Compressor:
                 )
             else:
                 shaft_eff = 0.4
-        return min(max(shaft_eff, 0.4), 1.0) / self.motor_eff
+        elif self.model_coeffs[0] == "Pareto front":
+            shaft_eff = pareto_front_efficiency(self.pressure_ratio, "isentropic")
+        return min(max(shaft_eff, 0.4), 1.0)
 
     def get_compressor_power(self) -> float:
         """Return the mechanical power requirement for the current operating point."""

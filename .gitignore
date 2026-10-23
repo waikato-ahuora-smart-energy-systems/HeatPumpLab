@@ -1,4 +1,27 @@
-*.pyc
-*.pyc
-__pycache__
-results/*
+# Python environments and generated caches
+*.py[cod]
+__pycache__/
+/.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.ipynb_checkpoints/
+
+# Python packaging and coverage reports
+/build/
+/dist/
+*.egg-info/
+htmlcov/
+
+# macOS metadata
+.DS_Store
+
+# Local research outputs
+/results/
+/paper/
+/experiments/
+/outputs/
+
+# Local runner scripts and their tests (not tracked)
+/local_scripts/

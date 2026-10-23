@@ -1,0 +1,515 @@
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from HeatPumpLab.cycles.common import CycleFailure
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import cycle_solver
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import (
+    _cycle_analysis as cycle_analysis,
+)
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import (
+    _discharge_pressure as discharge_pressure,
+)
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import (
+    _evaporator_alignment as evaporator_alignment,
+)
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import (
+    _gas_cooler_pinch as gas_cooler_pinch,
+)
+from HeatPumpLab.cycles.RecuperativeHeatPump.solver import _metrics as metrics
+from HeatPumpLab.components.common import TemperatureCrossError
+from HeatPumpLab.utils.properties_package import RefpropError
+
+
+def test_native_failure_retries_with_fresh_state_once(monkeypatch):
+    class Model:
+        def __init__(self, **args):
+            self.args = args
+            self.refrigerant = "Propane;Pentane|0.6;0.4|mass"
+            self.Tref_evap_outlet = args.get("Tref_evap_outlet", 10.)
+            self.Tref_evap_inlet = 10.
+            self.evap_sup = SimpleNamespace(sink_out=SimpleNamespace(temperature=35.))
+            self.tol = 1e-6
+            self.debug = self.record_failed_solve = self.report_failed_solve = False
+            self.state = []
+    hp = Model()
+    attempts = []
+    def solve(model):
+        attempts.append(model.Tref_evap_outlet)
+        assert model.state == []
+        model.state.append("mutated")
+        if len(attempts) == 1:
+            raise RefpropError("PH [226]")
+        model.converged = True
+    monkeypatch.setattr(cycle_solver, "_solve_case", solve)
+    assert cycle_solver.solve_heat_pump_cycle(hp) is hp
+    assert attempts == [10., 34.9999]
+    assert hp.converged
+    assert hp.numerical_retries[0]["reason"] == "PH [226]"
+
+
+def test_native_retry_failure_is_not_retried_again(monkeypatch):
+    calls = []
+    def failed(hp):
+        calls.append(1)
+        raise RefpropError("native failure")
+    hp = SimpleNamespace(debug=False, record_failed_solve=False, report_failed_solve=False)
+    monkeypatch.setattr(cycle_solver, "_solve_case", failed)
+    monkeypatch.setattr(cycle_solver, "_retry_evaporator_seed", lambda hp, exc: failed(hp))
+    cycle_solver.solve_heat_pump_cycle(hp)
+    assert len(calls) == 2
+    assert not hp.converged
+
+
+@pytest.mark.parametrize("shortfall,expected_calls", [(1e-4, 2), (.007703, 2), (.05, 2), (.0501, 1), (.1, 1)])
+def test_only_small_final_pinch_shortfalls_retry_with_tighter_convergence(monkeypatch, shortfall, expected_calls):
+    class Model:
+        def __init__(self, **args):
+            self.args = args
+            self.tol = args.get('tol', 1e-6)
+            self.refrigerant = 'Propane;Pentane|0.6;0.4|mass'
+            self.debug = self.record_failed_solve = self.report_failed_solve = False
+    hp = Model()
+    calls = []
+    def solve(model):
+        calls.append(model.tol)
+        if model.tol > 1e-8:
+            return CycleFailure('Final gas-cooler pinch is below the required approach.',
+                                {'gas_cooler_pinch_shortfall': shortfall})
+        model.converged = True
+    monkeypatch.setattr(cycle_solver, '_solve_case', solve)
+    cycle_solver.solve_heat_pump_cycle(hp)
+    assert len(calls) == expected_calls
+    if expected_calls == 2:
+        assert calls == [1e-6, 1e-8] and hp.converged
+    else:
+        assert not hp.converged
+
+
+@pytest.mark.parametrize("suction_flows,expected_vhc", [((.5,), 6.), ((.5, .25), 4.), ((.5, .25, .25), 3.)])
+def test_optional_lmtd_native_failure_preserves_checked_cycle_metrics(monkeypatch, suction_flows, expected_vhc):
+    def failed():
+        raise RefpropError("PH [226]")
+    hp = SimpleNamespace(
+        gas_coolers=[SimpleNamespace(duty=3., delta_entropy_src=.01, get_LMTD_ave=failed)],
+        evaporators=[SimpleNamespace(duty=2., delta_entropy_snk=.01)],
+        compressors=[SimpleNamespace(power=1./len(suction_flows), flow_in=SimpleNamespace(vol_flow=flow))
+                     for flow in suction_flows],
+        comp_discharge=SimpleNamespace(pressure=5., P_crit=4.),
+    )
+    monkeypatch.setattr(metrics, "cycle_has_converged", lambda hp: True)
+    metrics.populate_full_metrics(hp)
+    assert hp.converged and hp.COP == pytest.approx(3.) and hp.VHC == pytest.approx(expected_vhc)
+    assert np.isnan(hp.LMTD_gcs)
+    assert hp.metric_errors == {"LMTD_gcs": "PH [226]"}
+
+
+def test_expected_failure_marks_case_infeasible_and_records_report(monkeypatch, capsys):
+    recorded = []
+
+    class FailedHeatPump:
+        debug = True
+        record_failed_solve = True
+
+        def __init__(self):
+            self.plots = []
+            self.output = {}
+
+        def get_cycle_plot(self, *args, **kwargs):
+            self.plots.append((args, kwargs))
+
+        def get_report(self):
+            self.output = {"case": "failed"}
+            return self.output
+
+    hp = FailedHeatPump()
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: CycleFailure("no root", {"pinch": 2.0}),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "print_result_to_csv",
+        lambda output, file_name: recorded.append((output, file_name)),
+    )
+
+    result = cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert result is hp
+    assert hp.feasible is False
+    assert hp.converged is False
+    assert hp.solve_error == "no root"
+    assert hp.constraint_errors == {"pinch": 2.0}
+    assert hp.plots == [((), {})]
+    assert recorded == [({"case": "failed"}, "Cases-Unsolved")]
+    assert "Heat pump solver failed." in capsys.readouterr().out
+
+
+def test_unexpected_exception_is_caught_without_physical_diagnostics(
+    monkeypatch,
+    capsys,
+):
+    hp = SimpleNamespace(debug=False, record_failed_solve=False)
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: (_ for _ in ()).throw(RuntimeError("property failure")),
+    )
+
+    result = cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert result.constraint_errors == {}
+    assert result.solve_error == "property failure"
+    assert "unexpected exception" in capsys.readouterr().out
+
+
+def test_expected_nonrecording_failure_can_be_silent(monkeypatch, capsys):
+    hp = SimpleNamespace(
+        debug=False,
+        record_failed_solve=False,
+        report_failed_solve=False,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: CycleFailure("trial point was infeasible", {}),
+    )
+
+    result = cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert result.feasible is False
+    assert result.converged is False
+    assert capsys.readouterr().out == ""
+
+
+def test_unexpected_nonrecording_failure_is_still_reported(monkeypatch, capsys):
+    hp = SimpleNamespace(
+        debug=False,
+        record_failed_solve=False,
+        report_failed_solve=False,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: (_ for _ in ()).throw(RuntimeError("property failure")),
+    )
+
+    cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert "unexpected exception" in capsys.readouterr().out
+
+
+def test_temperature_cross_is_expected_physical_failure_and_can_be_silent(
+    monkeypatch,
+    capsys,
+):
+    hp = SimpleNamespace(
+        debug=False,
+        record_failed_solve=False,
+        report_failed_solve=False,
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "_solve_case",
+        lambda solved_hp: (_ for _ in ()).throw(TemperatureCrossError(2.5)),
+    )
+
+    result = cycle_solver.solve_heat_pump_cycle(hp)
+
+    assert result.feasible is False
+    assert result.converged is False
+    assert result.solve_error == (
+        "LMTD is undefined because a temperature cross occurs."
+    )
+    assert result.constraint_errors == {
+        "heat_exchanger_temperature_cross": pytest.approx(2.5)
+    }
+    assert capsys.readouterr().out == ""
+
+
+def test_fixed_pressure_objective_uses_seed_and_objective_metrics(monkeypatch):
+    calls = []
+    hp = SimpleNamespace(
+        debug=True,
+        P_H_est=4.2,
+        fixed_discharge_pressure_objective=True,
+        get_cycle_plot=lambda: calls.append("plot"),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "solve_at_discharge_pressure",
+        lambda pressure, solved_hp, **kwargs: calls.append(("fixed", pressure, kwargs)),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "solve_at_minimum_discharge_pressure",
+        lambda solved_hp: pytest.fail("fixed objective must not search pressure"),
+    )
+    monkeypatch.setattr(
+        cycle_solver,
+        "populate_objective_metrics",
+        lambda solved_hp: calls.append("objective_metrics"),
+    )
+
+    assert cycle_solver.solve_heat_pump_cycle(hp) is hp
+    assert calls == [
+        ("fixed", 4.2, {"validate_pinch": False}),
+        "plot",
+        "objective_metrics",
+    ]
+
+
+def test_initial_evaporator_outlet_reports_superheater_reversal():
+    hp = SimpleNamespace(
+        tol=1e-6,
+        Tref_evap_outlet=36.0,
+        evap_sup=SimpleNamespace(sink_out=SimpleNamespace(temperature=35.0)),
+    )
+
+    failure = evaporator_alignment.validate_initial_evaporator_outlet(hp)
+
+    assert failure is not None
+    assert failure.constraint_errors == {
+        "superheater_temperature_reversal": pytest.approx(1.0)
+    }
+
+
+def test_objective_metrics_require_only_cycle_energy_inputs():
+    hp = SimpleNamespace(
+        feasible=True,
+        iteration_converged=True,
+        operations=[SimpleNamespace(converged=True)],
+        gas_coolers=[SimpleNamespace(duty=10.0)],
+        compressors=[SimpleNamespace(power=2.0)],
+    )
+
+    metrics.populate_objective_metrics(hp)
+
+    assert hp.COP == pytest.approx(5.0)
+    assert hp.SEC == pytest.approx(0.25)
+
+
+def test_sequential_cycle_analysis_reports_iteration_limit(monkeypatch):
+    compressor = SimpleNamespace(
+        power=1.0,
+        flow_in=SimpleNamespace(pressure=1.0, enthalpy=100.0, mass_flow=1.0),
+    )
+    operation = SimpleNamespace(converged=True)
+
+    def solve_operation():
+        compressor.power += 1.0
+
+    operation.solve = solve_operation
+    hp = SimpleNamespace(
+        tol=1e-6,
+        debug=False,
+        comp_discharge=SimpleNamespace(pressure=3.0),
+        exp_valve=SimpleNamespace(flow_in=SimpleNamespace(enthalpy=100.0)),
+        gas_cooler1=SimpleNamespace(source_out=SimpleNamespace(pressure=2.0)),
+        compressors=[compressor],
+        gas_coolers=[SimpleNamespace(duty=10.0)],
+        operations=[operation],
+    )
+    monkeypatch.setattr(
+        cycle_analysis,
+        "set_gas_cooler_sink_temperatures",
+        lambda solved_hp: solved_hp,
+    )
+
+    result = cycle_analysis.run_sequential_cycle_analysis(3.0, hp)
+
+    assert result.iteration_converged is False
+    assert result.converged is False
+
+
+def test_final_pressure_solution_returns_component_convergence_failure(monkeypatch):
+    hp = SimpleNamespace(
+        feasible=True,
+        iteration_converged=True,
+        compressors=[SimpleNamespace(power=1.0)],
+        operations=[SimpleNamespace(converged=False)],
+    )
+    monkeypatch.setattr(
+        discharge_pressure,
+        "run_sequential_cycle_analysis",
+        lambda pressure, solved_hp: solved_hp,
+    )
+    monkeypatch.setattr(
+        discharge_pressure,
+        "update_gc_pinch_properties",
+        lambda pressure, solved_hp: solved_hp,
+    )
+
+    failure = discharge_pressure.solve_at_discharge_pressure(3.0, hp)
+
+    assert failure is not None
+    assert failure.constraint_errors == {"component_convergence": 1.0}
+
+
+def test_evaporator_alignment_accepts_domain_temperature_tolerance(monkeypatch):
+    hp = SimpleNamespace(
+        tol=1e-6,
+        Tref_evap_inlet=10.0,
+        Tref_evap_outlet=0.0,
+        evaporator=SimpleNamespace(
+            sink_in=SimpleNamespace(temperature=10.00005),
+            sink_out=SimpleNamespace(temperature=21.0),
+        ),
+    )
+    monkeypatch.setattr(
+        evaporator_alignment,
+        "solve_at_minimum_discharge_pressure",
+        lambda solved_hp: pytest.fail("already aligned"),
+    )
+
+    failure = evaporator_alignment.align_evaporator_inlet_temperature(hp)
+
+    assert failure is None
+    assert hp.Tref_evap_outlet == pytest.approx(21.0)
+
+
+def test_evaporator_alignment_stops_at_superheater_limit(monkeypatch):
+    class SinkOutlet:
+        temperature = 20.0
+
+        def props_in_ab(self, input_pair, temperature, quality):
+            self.temperature = temperature
+
+    hp = SimpleNamespace(
+        tol=1e-6,
+        Tref_evap_outlet=20.0,
+        Tref_evap_inlet=10.0,
+        comp_discharge=SimpleNamespace(pressure_bnds=(1.0, 2.0)),
+        evaporator=SimpleNamespace(
+            sink_in=SimpleNamespace(temperature=0.0),
+            sink_out=SinkOutlet(),
+        ),
+        evap_sup=SimpleNamespace(sink_out=SimpleNamespace(temperature=25.0)),
+    )
+    searches = []
+    monkeypatch.setattr(
+        evaporator_alignment,
+        "solve_at_minimum_discharge_pressure",
+        lambda solved_hp: searches.append(solved_hp.Tref_evap_outlet),
+    )
+
+    failure = evaporator_alignment.align_evaporator_inlet_temperature(hp)
+
+    assert failure is None
+    assert hp.Tref_evap_outlet == pytest.approx(24.9999)
+    assert searches == pytest.approx([24.9999])
+
+
+def test_evaporator_alignment_exhaustion_returns_failure(monkeypatch):
+    class SinkOutlet:
+        temperature = 20.0
+
+        def props_in_ab(self, input_pair, temperature, quality):
+            self.temperature = temperature
+
+    hp = SimpleNamespace(
+        tol=1e-6,
+        Tref_evap_outlet=20.0,
+        Tref_evap_inlet=10.0,
+        comp_discharge=SimpleNamespace(pressure_bnds=(1.0, 2.0)),
+        evaporator=SimpleNamespace(
+            sink_in=SimpleNamespace(temperature=12.0),
+            sink_out=SinkOutlet(),
+        ),
+    )
+    monkeypatch.setattr(
+        evaporator_alignment,
+        "solve_at_minimum_discharge_pressure",
+        lambda solved_hp: None,
+    )
+
+    failure = evaporator_alignment.align_evaporator_inlet_temperature(hp)
+
+    assert failure is not None
+    assert failure.message == (
+        "Evaporator inlet temperature correction failed to converge."
+    )
+    assert failure.constraint_errors == {}
+
+
+def test_gas_cooler_midpoint_search_skips_nonpositive_duty():
+    gas_cooler = SimpleNamespace(
+        duty=0.0,
+        source_pinch=SimpleNamespace(),
+        source_out=SimpleNamespace(pressure=2.0),
+        sink_pinch=SimpleNamespace(),
+        sink_in=SimpleNamespace(pressure=1.0),
+    )
+
+    approach = gas_cooler_pinch.find_internal_gc_approach(gas_cooler)
+
+    assert approach == (np.inf, 0.0, False)
+
+
+def test_gas_cooler_midpoint_search_refines_around_the_smallest_sample(monkeypatch):
+    observed = {}
+    gas_cooler = SimpleNamespace(
+        duty=100.0,
+        source_pinch=SimpleNamespace(),
+        source_out=SimpleNamespace(pressure=2.0),
+        sink_pinch=SimpleNamespace(),
+        sink_in=SimpleNamespace(pressure=1.0),
+    )
+
+    def fake_minimize(evaluate, *, method, bounds, options):
+        observed.update(method=method, bounds=bounds, options=options)
+        x = 0.5 * (bounds[0] + bounds[1])
+        return SimpleNamespace(fun=evaluate(x), x=x, success=True)
+
+    monkeypatch.setattr(gas_cooler_pinch, "minimize_scalar", fake_minimize)
+    # two local minima: a shallow one near 20 % and the real pinch near 80 % of the duty
+    monkeypatch.setattr(
+        gas_cooler_pinch,
+        "_pinch_temperature_difference",
+        lambda duty, solved_gas_cooler: min(25.0 + abs(duty - 20.0) * 0.1, 21.0 + abs(duty - 80.0) * 0.2),
+    )
+
+    approach = gas_cooler_pinch.find_internal_gc_approach(gas_cooler)
+
+    lo, hi = observed["bounds"]
+    assert lo < 80.0 < hi and hi - lo < 25.0
+    assert observed["method"] == "bounded"
+    assert observed["options"] == {"xatol": pytest.approx(0.02), "maxiter": 40}
+    assert approach[0] < 21.0 + 0.2 * (hi - lo) / 2 + 1e-9 and approach[2]
+
+
+def test_gas_cooler_sink_temperatures_follow_total_cycle_duty():
+    class Stream:
+        def __init__(self, enthalpy):
+            self.enthalpy = enthalpy
+            self.temperature = 0.0
+            self.mass_flow = 0.0
+            self.heat_flow = 0.0
+
+        def props_in_mPT(self):
+            self.enthalpy = 220.0
+
+        def props_in_mPH(self):
+            pass
+
+    first = SimpleNamespace(
+        duty=20.0,
+        sink_out=Stream(220.0),
+        sink_in=Stream(200.0),
+        sink_pinch=Stream(0.0),
+    )
+    second = SimpleNamespace(
+        duty=30.0,
+        sink_out=first.sink_in,
+        sink_in=Stream(170.0),
+        sink_pinch=Stream(0.0),
+    )
+    hp = SimpleNamespace(T_air_tar=200.0, gas_coolers=[first, second])
+
+    cycle_analysis.set_gas_cooler_sink_temperatures(hp)
+
+    assert first.sink_out.mass_flow == pytest.approx(1.0)
+    assert first.sink_in.enthalpy == pytest.approx(200.0)
+    assert second.sink_in.enthalpy == pytest.approx(170.0)

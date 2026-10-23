@@ -270,15 +270,11 @@ def plot_metric_for_refrigerants(
         return
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-    best_direction = "max" if mode == "max" else "min"
     ylabel = METRIC_LABELS.get(metric, metric)
     plotted = False
 
     for refrigerant in refrigerants:
         subset = df[df["refrigerant"] == refrigerant]
-        if subset.empty:
-            continue
-
         subset = subset.copy()
         subset["comp2_power_frac"] = pd.to_numeric(
             subset["comp2_power_frac"],
@@ -294,9 +290,6 @@ def plot_metric_for_refrigerants(
             aggregated = grouped.max().sort_index()
         else:
             aggregated = grouped.min().sort_index()
-
-        if aggregated.empty:
-            continue
 
         (line,) = ax.plot(
             aggregated.index,
