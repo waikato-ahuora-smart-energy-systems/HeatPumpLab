@@ -3,7 +3,7 @@
 The window's edges are of two kinds:
 
 ratio edges
-    The pressure (or density) ratio is too high or too low and efficiency falls away fast. For the manufacturer R600a
+    The pressure (or density) ratio is too high or too low and efficiency falls away fast. For the R600a
     window: the high-ratio edge (6, 120) -> (-10, 97) sits at a density ratio of about 19 (condensing saturated
     vapour over the 15 K-superheat suction), where the volumetric efficiency is about 0.5; the low-ratio edge
     (27, 42) -> (48, 70) at a pressure ratio of about 1.5-1.7.

@@ -152,7 +152,7 @@ def test_browser_model_matches_python():
              dict(loss_UA_cond_kWK=0.02, loss_UA_subcool_kWK=0.01, loss_UA_evap_kWK=0.03), dict(preheat_subcool_share=0.5),
              dict(preheat_subcool_share=1.0), dict(preheat_subcool_share=1.0, loss_UA_cond_kWK=0.02),
              dict(dP_K_cond=0.05, dP_K_subcool=0.5, dP_K_evap=0.02), dict(dP_K_cond=0.05, preheat_subcool_share=1.0)]
-    # the JS model always reads the manufacturer map; give Python the same map, size-less in neither
+    # the JS model always reads the R600a map; give Python the same map, size-less in neither
     script = ("const S = require(%s);" % json.dumps(str(js)) + JS_TOY +
               "const cases = %s; const base = %s;" % (json.dumps(cases), json.dumps(WATER | {"dT_superheat": 5.0})) +
               "const comp = S.compressorMap('Recip-M', {map_basis: 'temperature'});"

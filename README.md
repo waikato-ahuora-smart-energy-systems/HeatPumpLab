@@ -142,7 +142,7 @@ print(res.success, res.COP, res.P_H)    # gas-cooler pressure, MPa
 ```python
 from HeatPumpLab.cycles.ConventionalHeatPump import ConventionalHeatPump, ConventionalHPConfig
 
-res = ConventionalHeatPump(ConventionalHPConfig()).solve()       # n-butane, manufacturer Recip-M
+res = ConventionalHeatPump(ConventionalHPConfig()).solve()       # n-butane, Recip-M compressor map
 res = ConventionalHeatPump(ConventionalHPConfig(T_evap=40.0, T_cond=110.0)).solve()
 print(res.COP, res.report["Q_heat_kW"], res.report["T_discharge"])
 
@@ -150,7 +150,7 @@ print(res.COP, res.report["Q_heat_kW"], res.report["T_discharge"])
 res = ConventionalHeatPump(ConventionalHPConfig(property_backend="refprop")).solve()
 ```
 
-The defaults model n-butane on a manufacturer Recip-M compressor, raising 120 °C steam from a 55 °C
+The defaults model n-butane on the Recip-M reciprocating compressor map, raising 120 °C steam from a 55 °C
 heat source, with hot water from the subcooler. Compressors can be described by efficiency maps,
 efficiency against pressure ratio, or EN 12900 polynomials (`compressor_curves.py`).
 

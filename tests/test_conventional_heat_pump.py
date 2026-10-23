@@ -347,7 +347,7 @@ def test_heat_duty_scaling(toy):
     assert r["Q_evap_kW"] + r["m_dot_kgs"] * r["w_to_gas_kJkg"] == pytest.approx(r["Q_cond_kW"] + r["Q_subcool_kW"])
 
 
-def test_manufacturer_map_sizes_the_cycle(toy):
+def test_recip_map_sizes_the_cycle(toy):
     comp = recip_r600a("Recip-M", displacement_m3h=60.0)
     res = model(toy, T_evap=20.0, T_cond=90.0, compressor=comp).solve()
     assert res.success, res.message
@@ -365,7 +365,7 @@ def test_manufacturer_map_sizes_the_cycle(toy):
     assert r["in_envelope"] and not res.warnings
 
 
-def test_manufacturer_map_warns_outside_envelope(toy):
+def test_recip_map_warns_outside_envelope(toy):
     res = model(toy, T_evap=40.0, T_cond=45.0, dT_superheat=0.0,       # no IHX: 5 K subcooling leaves the liquid too cold
                 compressor=recip_r600a("Recip-M", displacement_m3h=None)).solve()
     assert res.success

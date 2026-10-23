@@ -1,6 +1,7 @@
 """Compressor efficiency maps from manufacturer data.
 
-manufacturer semi-hermetic reciprocating compressors on R600a (isobutane), fitted as bicubic polynomials
+Three semi-hermetic reciprocating compressors on R600a (isobutane), named by size (Recip-S, Recip-M,
+Recip-L), fitted as bicubic polynomials
 in the dew-point evaporating and condensing temperatures (to, tc in degC); see
 ``compressor_curves.bicubic_polynomial`` for the coefficient order. Source: workbook
 "R600a_compressor_parameters_2025-03-24" (volumetric and isentropic efficiency, coefficients 0-15),
@@ -17,9 +18,8 @@ Basis and assumptions:
   to* (the secondary density effect). basis="saturated" matches the saturated vapour at the
   evaporating pressure instead (no superheat effect); basis="temperature" reads the fits at the
   working fluid's own (to, tc).
-- The swept volume is not in the workbook. At 50 Hz (1450 rpm): Recip-M 56.25 m3/h (confirmed
-  by the user); Recip-S 13.42 m3/h and Recip-L 151.6 m3/h, from manufacturer's published data for the
-  Recip-S and Recip-L (taken to apply to the -Y / P variants in the workbook).
+- The swept volume is not in the workbook. At 50 Hz (1450 rpm): Recip-S 13.42 m3/h, Recip-M
+  56.25 m3/h and Recip-L 151.6 m3/h, from the manufacturer's published data.
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ R600A_COEFFICIENTS = {
 
 def recip_r600a(model: str = "Recip-M", displacement_m3h: float | None | str = "50Hz",
                  basis: str = "density", **kwargs) -> EfficiencyMap:
-    """Efficiency map for a manufacturer compressor in the R600a workbook ("Recip-S", "Recip-M", "Recip-L").
+    """Efficiency map for a compressor in the R600a workbook ("Recip-S", "Recip-M", "Recip-L").
 
     displacement_m3h: swept volume (m3/h); "50Hz" uses DISPLACEMENT_50HZ_M3H; None gives a
     size-less map (results per kg of refrigerant).

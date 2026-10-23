@@ -6,7 +6,7 @@ compressor size, a mass flow and power. Three families are provided:
 ``EfficiencyMap``
     Isentropic and volumetric efficiency as functions of the dew-point evaporating and condensing
     temperatures (to, tc), e.g. the bicubic fits of manufacturer data in ``compressor_data.py``
-    (manufacturer Recip-S, Recip-M, Recip-L on R600a). Swept volume gives mass flow and power. With a
+    (Recip-S, Recip-M, Recip-L on R600a). Swept volume gives mass flow and power. With a
     ``density_reference`` the map is read at the reference-fluid point with the same saturated-vapour
     densities (see ``density_basis.py``), so it transfers to other refrigerants and mixtures.
 

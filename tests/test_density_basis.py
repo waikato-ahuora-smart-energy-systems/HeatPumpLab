@@ -1,4 +1,4 @@
-"""Density basis for the manufacturer R600a efficiency maps (HeatPumpLab/cycles/ConventionalHeatPump/density_basis.py).
+"""Density basis for the R600a efficiency maps (HeatPumpLab/cycles/ConventionalHeatPump/density_basis.py).
 
 The maps are fitted for R600a in its dew-point (to, tc), taken as rated at 15 K suction superheat.
 Another refrigerant (or another superheat) is read at the R600a point (to*, tc*) with

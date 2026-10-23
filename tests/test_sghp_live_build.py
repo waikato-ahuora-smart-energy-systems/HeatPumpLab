@@ -128,7 +128,7 @@ def test_page_controls_and_headline(build_mod, tmp_path):
     # heat exchange profiles: IHX drawn after the evaporator, shaded areas between the streams
     assert "const shift = pts => pts.map(p => [p[0] + xE, p[1]]);" in html and 'fill-opacity": 0.16' in html
     assert "`Dmolar|${ph}`" in html and "DmolarT_INPUTS" not in html   # phase-imposed (rho, T) calls: no stability analysis
-    # compressor picker: the three manufacturer maps as buttons; header follows the choice
+    # compressor picker: the three compressor maps as buttons; header follows the choice
     assert 'id="compressor-pick"' in html and "function compressorPick()" in html
     assert '<div class="eyebrow" id="eyebrow">Single-stage heat pump · solved in your browser with CoolProp</div>' in html
     assert "internal heat exchanger · solved" not in html

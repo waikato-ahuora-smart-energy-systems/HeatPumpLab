@@ -1,4 +1,4 @@
-"""The three manufacturer R600a compressor maps (Recip-S, Recip-M, Recip-L): swept volumes, the model list,
+"""The three R600a compressor maps (Recip-S, Recip-M, Recip-L): swept volumes, the model list,
 the browser copy of the fits, and the cycle on each compressor (Python and JavaScript agree)."""
 import json
 import shutil
@@ -35,7 +35,7 @@ def test_every_model_has_a_swept_volume():
         assert comp.name == m and comp.displacement_m3h == DISPLACEMENT_50HZ_M3H[m]
     assert recip_r600a("Recip-S", displacement_m3h=None).displacement_m3h is None   # size-less still possible
     with pytest.raises(KeyError, match="available"):
-        recip_r600a("4NES-20")
+        recip_r600a("Recip-XL")
 
 
 def test_browser_copy_of_the_fits():

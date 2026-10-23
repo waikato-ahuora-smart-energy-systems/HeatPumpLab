@@ -107,7 +107,7 @@ class ConventionalHPConfig:
     """Operating point. Temperatures in degC, temperature differences in K, pressures in MPa.
 
     Defaults: n-butane, 55 C heat source (evaporating dew point 50 C), 120 C steam (condenser outlet at 125 C), hot water 80 to
-    95 C (refrigerant leaves the subcooler at 85 C), 15 K suction superheat, manufacturer Recip-M R600a
+    95 C (refrigerant leaves the subcooler at 85 C), 15 K suction superheat, Recip-M R600a
     map (56.25 m3/h), compressor heat loss
     UA ((T_suction + T_discharge)/2 - T_ambient) with a fixed UA of 15 W/K.
     """
