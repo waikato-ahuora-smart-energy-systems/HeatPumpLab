@@ -1,6 +1,12 @@
 # The Heat Pump Lab
 
+[![Tests](https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/actions/workflows/tests.yml/badge.svg)](https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/actions/workflows/tests.yml)
+[![Release](https://img.shields.io/github/v/release/waikato-ahuora-smart-energy-systems/HeatPumpLab)](https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/releases/latest)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23604060.svg)](https://doi.org/10.5281/zenodo.23604060)
+[![Licence: Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Properties: CoolProp | REFPROP](https://img.shields.io/badge/properties-CoolProp%20%7C%20REFPROP-informational.svg)](http://www.coolprop.org)
+[![Web apps](https://img.shields.io/badge/web%20apps-live-brightgreen.svg)](https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/)
 
 The Heat Pump Lab, from the Ahuora Centre at the University of Waikato,
 is a Python package for building and analysing high-temperature heat pump cycles. It solves
@@ -170,7 +176,7 @@ HeatPumpLab/
   utils/           property packages (CoolProp, REFPROP), caching, parallel solving, plotting
 apps/              web apps: landing page, dryer/ and steam/ (published with GitHub Pages)
 tests/             test suite
-rhp_*.py           research search scripts for the recuperative heat pump (Pareto, MOBO, trust region)
+scripts/           research search scripts for the recuperative heat pump (Pareto, MOBO, trust region)
 ```
 
 ## Tests
