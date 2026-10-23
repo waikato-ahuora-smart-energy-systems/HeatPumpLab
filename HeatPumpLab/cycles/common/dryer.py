@@ -311,14 +311,14 @@ def comp_path(fl: Fluid, P0: float, h0: float, P1: float, h1: float, n: int = 8)
 # Compressors and expanders
 # ----------------------------------------------------------------------------------------
 
-COMP_MODELS = ("Ideal (1.0)", "Constant", "Polynomial (Wang & Cleland)", "Brendel et al.", "Pareto front v1",
-               "Pareto front v2")
+COMP_MODELS = ("Ideal (1.0)", "Constant", "Polynomial (Wang & Cleland)", "Brendel et al.", None,   # 4 removed
+               "Pareto front")
 
 
 def eta_model(model: int, eta_const: float, pressure_ratio: float, P_in: float | None = None) -> float:
     """Isentropic (shaft) efficiency of HeatPumpLab compressor model ``model`` (COMP_MODELS) at a stage pressure
     ratio, clipped to 0.4-1.0: 0 ideal, 1 constant ``eta_const``, 2 polynomial (Wang & Cleland 2018), 3 Brendel
-    et al. (suction pressure P_in, MPa), 4 Pareto front v1, 5 Pareto front v2 (the default)."""
+    et al. (suction pressure P_in, MPa), 5 Pareto front (the default; 4, the first Pareto front, was removed)."""
     pr = max(pressure_ratio, 1.0)
     m = int(model)
     if m == 0:
@@ -330,15 +330,17 @@ def eta_model(model: int, eta_const: float, pressure_ratio: float, P_in: float |
     elif m == 3:
         P = 0.2 if P_in is None else P_in
         e = 0.66981 - 0.6 / (pr - 0.01466) ** (8.38 * P) - 0.00102 * pr ** 1.8 if pr > 1 else 0.4
+    elif m == 5:
+        e = pareto_front_efficiency(pr, "isentropic")
     elif m == 4:
-        e = pareto_front_efficiency(pr, "isentropic", version=1)
+        raise ValueError("compressor model 4 (first Pareto front) was removed; use 5 (Pareto front)")
     else:
-        e = pareto_front_efficiency(pr, "isentropic", version=2)
+        raise ValueError(f"unknown compressor model {model}")
     return min(max(e, 0.4), 1.0)
 
 
 def eta_is(pr: float, model: int = 5, eta_const: float = 0.7 / 0.96, P_in: float | None = None) -> float:
-    """``eta_model`` with the pressure ratio first (model 5, Pareto front v2, by default)."""
+    """``eta_model`` with the pressure ratio first (model 5, the Pareto front, by default)."""
     return eta_model(model, eta_const, pr, P_in)
 
 

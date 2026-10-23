@@ -9,7 +9,7 @@ import numpy as np
 
 # BO replaces the staged outer search; invalidate prior completed signatures.
 OPTIMISER_VERSION = "isolated-refprop-botorch-logei-v25-pareto-front-compressor-pr20"
-# Raised from 10 with compressor model 4, whose efficiency falls with PR (0.69 at 10, 0.51 at 20).
+# Raised from 10 with the Pareto front compressor model, whose efficiency falls with PR (0.578 at 20).
 DEFAULT_MAX_STAGE_PRESSURE_RATIO = 20.0
 
 BASE_VARIABLE_NAMES = (
@@ -45,9 +45,10 @@ DEFAULT_BASE_CASE = {
     "comp2_power_frac": 0.5,
     "comp3_power_frac": 0.0,
     "comp_PR_uniform": False,
-    # 4 = Pareto front of published isentropic efficiency vs stage PR (components/compressor.py);
-    # 1 = constant 0.729 isentropic (0.70 overall with motor_eff 0.96), used up to v24.
-    "comp_model_index": 4,
+    # 5 = Pareto front of design isentropic efficiency vs stage PR (components/compressor.py);
+    # 4 = the first Pareto front (removed); 1 = constant 0.729 isentropic (0.70 overall with
+    # motor_eff 0.96), used up to v24.
+    "comp_model_index": 5,
     "n_comp": 2,
     "ihx_on": True,
     "motor_eff": 0.96,

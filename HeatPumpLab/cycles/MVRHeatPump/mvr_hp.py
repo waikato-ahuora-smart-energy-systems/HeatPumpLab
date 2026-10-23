@@ -68,7 +68,7 @@ class MVRHPConfig:
     sub_air: bool = True             # subcool the liquid into the air (to T_air_inlet + dT_GC_min)
     ihx: bool = False                # bottom IHX: liquid heats the suction to its temperature less dT_ihx
     dT_ihx: float = 5.0
-    comp_model: int = 5              # bottom compressor: 0 ideal, 1 constant, 2 polynomial, 3 Brendel, 4/5 Pareto v1/v2
+    comp_model: int = 5              # bottom compressor: 0 ideal, 1 constant, 2 polynomial, 3 Brendel, 5 Pareto front
     comp_eta: float = 0.73           # isentropic efficiency for the constant model
     motor_eff: float = MOTOR
     fan_model: int | None = 5        # MVR fans' efficiency model (None: the compressor's)

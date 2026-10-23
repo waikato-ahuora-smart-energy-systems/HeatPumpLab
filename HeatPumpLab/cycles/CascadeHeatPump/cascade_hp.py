@@ -79,7 +79,7 @@ class CascadeConfig:
     dT_src: float = 5.0               # level-1 evaporating temperature below the source water outlet
     air_ratio: float = 0.0            # secondary / primary air (heated with the primary from the inlet to T_mt)
     T_mt: float = 102.0               # secondary air target
-    comp_model: int = 5               # 0 ideal, 1 constant eta_const, 2 polynomial, 3 Brendel, 4/5 Pareto front v1/v2
+    comp_model: int = 5               # 0 ideal, 1 constant eta_const, 2 polynomial, 3 Brendel, 5 Pareto front
     eta_const: float = 0.73
     motor_eff: float = DEFAULT_MOTOR_EFF
     expander_eta: float | None = None     # expanders in place of the valves (isentropic efficiency), None: valves

@@ -364,10 +364,9 @@ def _as_function(spec, name: str) -> Callable[[float], float]:
         return lambda pr: value
     if isinstance(spec, str):
         key = spec.lower()
-        if key in ("pareto", "pareto_v2", "pareto_v1"):
+        if key in ("pareto", "pareto_v2"):
             from ...components.compressor import pareto_front_efficiency
-            version = 1 if key == "pareto_v1" else 2
-            return lambda pr: pareto_front_efficiency(pr, "isentropic", version=version)
+            return lambda pr: pareto_front_efficiency(pr, "isentropic")
         if key == "brendel":
             return brendel_volumetric_efficiency
         raise ValueError(f"unknown {name} correlation '{spec}'")
@@ -382,14 +381,14 @@ class EfficiencyCurve:
     """Isentropic (and optionally volumetric) efficiency versus pressure ratio.
 
     eta_is:  float, coefficients [c0, c1, c2, ...] of a polynomial in PR, callable(PR), or
-             "pareto_v2" / "pareto_v1" (HeatPumpLab compressor Pareto fronts, shaft basis).
+             "pareto" (the HeatPumpLab compressor Pareto front, shaft basis; "pareto_v2" is an alias).
     eta_vol: as above, or "brendel"; only used when ``displacement_m3h`` is given.
     displacement_m3h: swept volume flow (m3/h). Gives mass flow = eta_vol * V * rho_suction.
     motor_eff: electrical-to-shaft efficiency.
     heat_loss_fraction: share of shaft work lost from the shell instead of entering the gas.
     """
 
-    eta_is: object = "pareto_v2"
+    eta_is: object = "pareto"
     motor_eff: float = 0.93
     displacement_m3h: float | None = None
     eta_vol: object = "brendel"

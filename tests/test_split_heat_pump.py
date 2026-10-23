@@ -23,7 +23,7 @@ def test_counterflow_min_approach_finds_internal_pinch():
 def test_compressor_efficiency_matches_shared_correlation():
     sh = split_module()
     for pr in (1.5, 3.0, 9.5):
-        assert sh.isentropic_efficiency(pr, 5) == pytest.approx(pareto_front_efficiency(pr, "isentropic", version=2))
+        assert sh.isentropic_efficiency(pr, 5) == pytest.approx(pareto_front_efficiency(pr, "isentropic"))
     assert sh.isentropic_efficiency(3.0, 1) == pytest.approx(0.7 / 0.96)
     assert sh.volumetric_efficiency(1.0) == pytest.approx(1.0)
 

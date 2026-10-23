@@ -85,7 +85,7 @@ class TTCascadeConfig:
     dT_ev: float = 5.0               # evaporator approach to the water leaving it (checked)
     gc_off: float = 0.0              # top gas-cooler outlet raised above its coldest feasible value, K
     eta: float | None = None         # fixed isentropic efficiency of both compressors (None: comp_model)
-    comp_model: int = 5              # 0 ideal, 1 constant eta_const, 2 polynomial, 3 Brendel, 4/5 Pareto front v1/v2
+    comp_model: int = 5              # 0 ideal, 1 constant eta_const, 2 polynomial, 3 Brendel, 5 Pareto front
     eta_const: float = 0.73
     motor_eff: float = DEFAULT_MOTOR_EFF
     expander_eta: float | None = None    # expanders in place of both valves (isentropic efficiency), None: valves

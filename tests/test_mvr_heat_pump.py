@@ -3,7 +3,7 @@
 The reference values are the page's JavaScript model (DRYCASC.booster and boosterOptimise, artifact version
 1792578914-d233) run in Node over CoolProp 8.0.0 (WebAssembly), with the page's inputs: humid dryer air
 (15 C, 60 % RH, 101.325 kPa), source water 40 -> 30 C, 5 K source approach, 20 K air approach, ammonia bottom cycle,
-Pareto front v2 compressor, motor 0.93, MVR fans Pareto v2 at PR 1.5 with 5 K exit superheat and a 0.93 motor. The
+Pareto front compressor, motor 0.93, MVR fans on the Pareto front at PR 1.5 with 5 K exit superheat and a 0.93 motor. The
 Python port runs on CoolProp 8 and reproduces them to about 1e-9.
 """
 from __future__ import annotations

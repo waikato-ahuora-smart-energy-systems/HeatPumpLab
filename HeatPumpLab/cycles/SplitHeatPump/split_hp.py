@@ -58,7 +58,7 @@ class SplitHPConfig:
     dT_rhx1_cold: float = 80.0       # RHX1 cold-side temperature lift (design variable)
     comp2_power_frac: float = 0.5    # stage-2 share of compressor shaft power (design variable)
     n_comp: int = 2
-    comp_model_index: int = 5        # 0 ideal, 1 constant 0.729, 4 Pareto front v1, 5 Pareto front v2
+    comp_model_index: int = 5        # 0 ideal, 1 constant 0.729, 2 polynomial, 5 Pareto front
     motor_eff: float = 0.93
     dT_rhx1_cold_end: float = 25.0   # RHX1 hot-branch outlet minus suction-gas inlet (sets RHX1 size)
     rhx1_lmtd_min: float | None = None   # optional minimum RHX1 LMTD (K)
@@ -117,10 +117,8 @@ def isentropic_efficiency(pressure_ratio: float, model_index: int, P_in: float |
         eff = 0.7 / 0.96
     elif model_index == 2:
         eff = (0.65 + 0.015 * pr - 0.0015 * pr ** 2) / 0.96
-    elif model_index == 4:
-        eff = pareto_front_efficiency(pr, "isentropic")
     elif model_index == 5:
-        eff = pareto_front_efficiency(pr, "isentropic", version=2)
+        eff = pareto_front_efficiency(pr, "isentropic")
     else:
         raise ValueError(f"compressor model {model_index} is not supported by SplitHeatPump")
     return min(max(eff, 0.4), 1.0)
