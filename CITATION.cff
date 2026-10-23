@@ -7,8 +7,6 @@ authors:
   - family-names: Walmsley
     given-names: Timothy Gordon
     affiliation: "Ahuora – Centre for Smart Energy Systems, University of Waikato"
-  - family-names: Adamson
-    given-names: Keri-Marie
 repository-code: "https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab"
 url: "https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/"
 license: Apache-2.0
