@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use HeatPumpLab in published work, please cite the article below, and the reference for any other cycle you use (see the README)."
+title: "HeatPumpLab"
+abstract: "Python models of high-temperature heat pump cycles for industrial process heat (recuperative, cascade, MVR, sCO₂ Brayton and steam-generating heat pumps), with CoolProp or REFPROP fluid properties and in-browser web apps."
+type: software
+authors:
+  - family-names: Walmsley
+    given-names: Timothy Gordon
+    affiliation: "Ahuora – Centre for Smart Energy Systems, University of Waikato"
+  - family-names: Adamson
+    given-names: Keri-Marie
+repository-code: "https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab"
+url: "https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/"
+license: Apache-2.0
+version: 0.1.0
+keywords:
+  - heat pump
+  - high-temperature heat pump
+  - thermodynamics
+  - process heat
+  - industrial decarbonisation
+  - CoolProp
+  - REFPROP
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Walmsley
+      given-names: Timothy Gordon
+    - family-names: Adamson
+      given-names: Keri-Marie
+    - family-names: Arpagaus
+      given-names: Cordin
+    - family-names: Schlosser
+      given-names: Florian
+  title: "Recuperative heat pump cycle concept for high-temperature glide process heating applications"
+  journal: "Applied Thermal Engineering"
+  volume: 301
+  start: 131660
+  year: 2026
+  doi: "10.1016/j.applthermaleng.2026.131660"
