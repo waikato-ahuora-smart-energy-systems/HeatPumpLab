@@ -1,5 +1,7 @@
 # The Heat Pump Lab
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23604060.svg)](https://doi.org/10.5281/zenodo.23604060)
+
 The Heat Pump Lab, from the Ahuora Centre at the University of Waikato,
 is a Python package for building and analysing high-temperature heat pump cycles. It solves
 steady-state cycle designs with real-fluid properties, including zeotropic refrigerant mixtures
@@ -221,7 +223,9 @@ Detailed notes on the recuperative heat pump solver and optimiser are in
 ## Citing
 
 If you use HeatPumpLab in published work, please cite reference [1], and the reference for any
-other cycle you use.
+other cycle you use. To cite the software itself, use its Zenodo DOI,
+[10.5281/zenodo.23604060](https://doi.org/10.5281/zenodo.23604060), which always resolves to the
+latest release. GitHub's "Cite this repository" button gives both, from `CITATION.cff`.
 
 ## Licence
 

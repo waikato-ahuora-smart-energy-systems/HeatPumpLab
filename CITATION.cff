@@ -12,6 +12,15 @@ repository-code: "https://github.com/waikato-ahuora-smart-energy-systems/HeatPum
 url: "https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/"
 license: Apache-2.0
 version: 0.1.0
+doi: "10.5281/zenodo.23604060"
+date-released: "2026-10-23"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.23604060"
+    description: "Concept DOI: all versions, resolves to the latest release"
+  - type: doi
+    value: "10.5281/zenodo.23604061"
+    description: "Version DOI: release 0.1.0"
 keywords:
   - heat pump
   - high-temperature heat pump
