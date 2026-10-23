@@ -12,7 +12,7 @@ The package contains seven cycle models. Each is a module under `HeatPumpLab.cyc
 | --- | --- | --- | --- |
 | Recuperative heat pump (RHP) | `RecuperativeHeatPump` | One or two compressors with up to three recuperative heat exchangers (RHX) placed between the gas coolers, for high-temperature glide heating. Includes Bayesian optimisation of the design. | [1] |
 | Split-stream heat pump (SLTHP) | `SplitHeatPump` | Two-stage cycle with RHX1 in parallel with the low-temperature gas cooler. | [1] |
-| Conventional heat pump | `ConventionalHeatPump` | Single-stage rating model with compressor maps, heat losses and steam raising (the steam-generating heat pump). | [2] |
+| Steam-generating heat pump | `ConventionalHeatPump` | Single-stage rating model with compressor maps, heat losses and steam raising. | [2] |
 | Transcritical–transcritical CO₂ cascade | `TTCascadeHeatPump` | The bottom cycle gives its heat to the top cycle's suction gas in a cascade gas cooler; the top cycle heats the air in two gas coolers, with optional secondary air. IHXs in both cycles, optional expanders. | [3–5] |
 | n-level cascade | `CascadeHeatPump` | Two to four levels heating the air in series through each level's subcooler and its share of condenser heat. Optional IHX per level and expanders. | [6] |
 | Heat pump with MVR steam | `MVRHeatPump` | A vapour-compression cycle heats the air and raises low-pressure steam, which a chain of mechanical vapour recompression fans, with water injection and splits to the process, lifts to heat the air to the target. | [2] |
@@ -24,8 +24,8 @@ Two of the models also run in the browser, with CoolProp compiled to WebAssembly
 installed and no inputs leave the browser:
 
 - **Advanced dryer heat pumps** ([`apps/dryer`](apps/dryer)): the air-drying cycles (all but
-  the conventional one), solved live, plus the results of the REFPROP design study.
-- **Steam-generating heat pump** ([`apps/steam`](apps/steam)): the conventional cycle raising
+  the steam-generating heat pump), solved live, plus the results of the REFPROP design study.
+- **Steam-generating heat pump** ([`apps/steam`](apps/steam)): the single-stage cycle raising
   steam, with compressor maps, saved cases, side-by-side comparison and sweeps.
 
 A landing page ([`apps/index.html`](apps/index.html)) links the two. They are published at
@@ -36,22 +36,6 @@ python3 -m http.server 8000 --directory apps
 ```
 
 Then open <http://localhost:8000>. The Python models reproduce the apps' results.
-
-## Background
-
-Internal heat exchangers (IHXs) are widely used in vapour-compression and transcritical heat
-pumps. They transfer heat from the warm refrigerant just before expansion to the suction gas.
-Pinch analysis suggests a heat pump should absorb heat below the pinch and reject upgraded heat
-above it. Applied to the cycle itself, this means recuperators placed between the gas coolers
-can raise the compressor discharge temperature to the level a high-temperature process needs,
-at a lower pressure. To distinguish them from a conventional IHX, the model calls these
-recuperative heat exchangers (RHX). The concept and its results are described in:
-
-> T.G. Walmsley, K.-M. Adamson, C. Arpagaus, F. Schlosser, Recuperative heat pump cycle concept
-> for high-temperature glide process heating applications, *Applied Thermal Engineering* 301
-> (2026) 131660. https://doi.org/10.1016/j.applthermaleng.2026.131660
-
-See [ABOUT.md](HeatPumpLab/cycles/RecuperativeHeatPump/ABOUT.md) for the cycle variants.
 
 ## Requirements
 
@@ -79,11 +63,11 @@ uv sync --group dev          # optional: pytest and ruff
 ```
 
 To use REFPROP, set `HEATPUMPLAB_PROPERTY_BACKEND=refprop`, or pass `property_backend="refprop"`
-to the conventional cycle's configuration. The two backends agree closely; mixture results can
-differ slightly where their binary interaction parameters differ, and absolute enthalpies and
-entropies of some mixtures differ by a constant (reference state), which does not affect cycle
-results. The fluid property overview table (`get_fluid_prop_overview_table`) uses REFPROP-only
-outputs such as ODP and GWP.
+to the steam-generating heat pump's configuration (`ConventionalHPConfig`). The two backends
+agree closely; mixture results can differ slightly where their binary interaction parameters
+differ, and absolute enthalpies and entropies of some mixtures differ by a constant (reference
+state), which does not affect cycle results. The fluid property overview table
+(`get_fluid_prop_overview_table`) uses REFPROP-only outputs such as ODP and GWP.
 
 Run the examples below with `uv run python your_script.py` from the repository root.
 
@@ -152,7 +136,7 @@ res = SplitHeatPump(SplitHPConfig(
 print(res.success, res.COP, res.P_H)    # gas-cooler pressure, MPa
 ```
 
-### Conventional heat pump
+### Steam-generating heat pump
 
 ```python
 from HeatPumpLab.cycles.ConventionalHeatPump import ConventionalHeatPump, ConventionalHPConfig
