@@ -18,9 +18,24 @@ The package contains seven cycle models. Each is a module under `HeatPumpLab.cyc
 | Heat pump with MVR steam | `MVRHeatPump` | A vapour-compression cycle heats the air and raises low-pressure steam, which a chain of mechanical vapour recompression fans, with water injection and splits to the process, lifts to heat the air to the target. | — |
 | sCO₂ reverse Brayton heat pump | `BraytonHeatPump` | Supercritical CO₂ cycle with split compression, a preheater, an IHX and a turbine expander, architectures 1 and 2. | [4] |
 
-The air-drying cycles (all but the conventional one) are also available in the Advanced dryer heat
-pumps web app, and the conventional cycle in the Steam-generating heat pump web app, from the Ahuora
-Centre; the Python models reproduce the apps' results.
+## Web apps
+
+Two of the models also run in the browser, with CoolProp compiled to WebAssembly. Nothing is
+installed and no inputs leave the browser:
+
+- **Advanced dryer heat pumps** ([`apps/dryer`](apps/dryer)): the air-drying cycles (all but
+  the conventional one), solved live, plus the results of the REFPROP design study.
+- **Steam-generating heat pump** ([`apps/steam`](apps/steam)): the conventional cycle raising
+  steam, with compressor maps, saved cases, side-by-side comparison and sweeps.
+
+A landing page ([`apps/index.html`](apps/index.html)) links the two. They are published at
+<https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/>. To run them locally:
+
+```sh
+python3 -m http.server 8000 --directory apps
+```
+
+Then open <http://localhost:8000>. The Python models reproduce the apps' results.
 
 ## Background
 
@@ -167,6 +182,7 @@ HeatPumpLab/
   components/      compressors, heat exchangers, valves, streams and solver relationships
   cycles/          one module per cycle (see the table above), and shared helpers in common/
   utils/           property packages (CoolProp, REFPROP), caching, parallel solving, plotting
+apps/              web apps: landing page, dryer/ and steam/ (published with GitHub Pages)
 tests/             test suite
 rhp_*.py           research search scripts for the recuperative heat pump (Pareto, MOBO, trust region)
 ```

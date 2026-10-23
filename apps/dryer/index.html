@@ -714,12 +714,12 @@ table.cmpt small{color:var(--ink-3);font-weight:400;font-size:11.5px}
     <p>SLTHP results come from main_SLTHP_compare.py with no pressure cap: RHX1 lift 30–140 K at a 0.50 power share, with the gas-cooler pressure and RHX1 flow share optimised inside each design. Each design keeps its pressure scan (36 points, 5–60 bar). Under a limit, the page uses the optimum where it fits and otherwise the best scan point below the limit, so the SLTHP under a limit is resolved to about 7 % in pressure.</p>
     <p>Design choice: "Highest COP" takes the strict optimum. "Lowest pressure within 1 %" takes the lowest-pressure design whose COP is within 1 % of that optimum. The difference matters at a 30 K approach, where RHP-A at 150–170 °C has a second family of designs with no RHX1 lift at 45–68 bar that ties the recuperated designs at about 20 bar to within 0.04–1 % COP; the strict optimum then jumps between the two. The SLTHP has the same effect once (20/80, 170 °C, 20 K, 43 bar).</p>
     <p>Headline pressures: maximum pressure and overall pressure ratio are the highest, and low-stage suction pressure the lowest, across the six air temperatures. For the SLTHP, designs taken from a pressure-scan point (the 1 % rule) use the suction pressure of that lift's optimum, marked ≈.</p>
-    <p>Live design: the same two cycle models (RecuperativeHeatPump Design A and SplitHeatPump.evaluate) in JavaScript over CoolProp 8 (HEOS mixtures), with the same compressor model (Pareto front v2 isentropic efficiency, motor 0.93). Two things differ from the study. The source water has a finite flow from its inlet to its outlet temperature, and the evaporator pressure is the highest at which the evaporator and superheater stay 5 K below it; the study used an isothermal 40 °C source with the evaporator inlet held at 10 °C. And the RHP-A gas-cooler outlet offset is optimised continuously for COP (the study tried 0, 7, 10, 15, 20 and 30 K in turn until stage 1 was dry). Run on the study's own evaporator setting, the models reproduce the REFPROP COP to within about 0.02 % for the propane, butane and pentane blends, and to about 0.4 % for propane/cyclopentane (CoolProp's mixing parameters). The SLTHP's gas-cooler pressure and RHX1 flow share are inputs; an approach shortfall under 0.3 K is reported rather than failed.</p>
+    <p>Live design: the same two cycle models (RecuperativeHeatPump Design A and SplitHeatPump.evaluate) in JavaScript over CoolProp 8 (HEOS mixtures), with the same compressor model (Pareto front isentropic efficiency, motor 0.93). Two things differ from the study. The source water has a finite flow from its inlet to its outlet temperature, and the evaporator pressure is the highest at which the evaporator and superheater stay 5 K below it; the study used an isothermal 40 °C source with the evaporator inlet held at 10 °C. And the RHP-A gas-cooler outlet offset is optimised continuously for COP (the study tried 0, 7, 10, 15, 20 and 30 K in turn until stage 1 was dry). Run on the study's own evaporator setting, the models reproduce the REFPROP COP to within about 0.02 % for the propane, butane and pentane blends, and to about 0.4 % for propane/cyclopentane (CoolProp's mixing parameters). The SLTHP's gas-cooler pressure and RHX1 flow share are inputs; an approach shortfall under 0.3 K is reported rather than failed.</p>
     <p>Duties and power: refrigerant mass flow = stage-1 suction density × volumetric efficiency × low-stage swept volume. "Model" volumetric efficiency uses the pressure-ratio correlation in the cycle model (1 − 0.0824·(PR−1)^0.728); "Fixed" applies the chosen value to both cycles. For reference, a commercial screw compressor of this size is listed at 197 m³/h (50 Hz), and a commercial low-stage compressor at 145 m³/h (2950 rpm). High-stage swept volume needed = mass flow / (stage-2 suction density × stage-2 volumetric efficiency). Electrical input includes a motor efficiency of 0.93.</p>
     <p>Data: results/dryer_compare_v26 (dashboard_data.json, cycles_data.json, state_5C_1bar.json); tables in results/dryer_compare_v26/summary.md.</p>
   </section>
   <footer class="notes" style="padding:4px 2px 12px;font-size:12.5px">
-    <p>© 2021–2026 The University of Waikato. Licensed under the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/LICENSE">Apache License 2.0</a>. Bundles CoolProp (MIT licence); see the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/apps/dryer/THIRD_PARTY_NOTICES.md">third-party notices</a>.</p>
+    <p>© 2021–2026 The University of Waikato. Licensed under the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/LICENSE">Apache License 2.0</a>. Bundles CoolProp (MIT licence); see the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/apps/dryer/THIRD_PARTY_NOTICES.md">third-party notices</a>. <a href="../">All HeatPumpLab apps</a>.</p>
   </footer>
 </div>
 <div class="tip" id="tip" hidden></div>
@@ -1458,13 +1458,12 @@ table.cmpt small{color:var(--ink-3);font-weight:400;font-size:11.5px}
   // ---------------------------------------------------------------- compressor (components/compressor.py)
   // The six HeatPumpLab isentropic (shaft) efficiency models, clipped to 0.4-1.0 as Compressor.get_isentropic_efficiency:
   // 0 ideal, 1 constant 0.7/0.96, 2 polynomial (Wang & Cleland 2018), 3 Brendel et al. (needs the suction pressure, MPa),
-  // 4 Pareto front v1, 5 Pareto front v2 (the default, and the study's model)
-  const PF_V1 = [0.87096, 0.01991, 2.63312];
-  const PF_V2 = [0.8695, 0.025392, 1.476, 0.29915, 2.9599, 0.2];
-  const COMP_MODELS = ["Ideal (1.0)", "Constant", "Polynomial (Wang & Cleland)", "Brendel et al.", "Pareto front v1", "Pareto front v2"];
+  // 5 Pareto front (the default, and the study's model). 4, the first Pareto front, was removed; old cases using it load as 5
+  const PF = [0.8695, 0.025392, 1.476, 0.29915, 2.9599, 0.2];
+  const COMP_MODELS = ["Ideal (1.0)", "Constant", "Polynomial (Wang & Cleland)", "Brendel et al.", null, "Pareto front"];
   let compModel = 5, etaConst = 0.7 / 0.96;
   function setCompModel(i, eta = null) {
-    compModel = [0, 1, 2, 3, 4, 5].includes(+i) ? +i : 5;
+    compModel = [0, 1, 2, 3, 5].includes(+i) ? +i : 5;
     if (eta != null && isFinite(+eta)) etaConst = Math.min(Math.max(+eta, 0.4), 1);
   }
   function etaIs(pr, Pin = null) { return etaModel(compModel, etaConst, pr, Pin); }
@@ -1479,8 +1478,7 @@ table.cmpt small{color:var(--ink-3);font-weight:400;font-size:11.5px}
       case 1: e = Math.min(Math.max(+eConst, 0.4), 1); break;
       case 2: e = (0.65 + 0.015 * pr - 0.0015 * pr * pr) / 0.96; break;
       case 3: e = pr > 1 ? 0.66981 - 0.6 / Math.pow(pr - 0.01466, 8.38 * (Pin ?? 0.2)) - 0.00102 * Math.pow(pr, 1.8) : 0.4; break;
-      case 4: { const [e1, a, b] = PF_V1; e = e1 - a * Math.pow(L, b); break; }
-      default: { const [e1, a, b, d, L0, w] = PF_V2; e = e1 - a * Math.pow(L, b) - d / (1 + Math.exp(-(L - L0) / w)); }
+      default: { const [e1, a, b, d, L0, w] = PF; e = e1 - a * Math.pow(L, b) - d / (1 + Math.exp(-(L - L0) / w)); }
     }
     return Math.min(Math.max(e, 0.4), 1);
   }
@@ -4563,6 +4561,7 @@ try { const st = JSON.parse(localStorage.getItem('dryerlive1') || '{}'); Object.
 for (const [m, k] of [['airHum', 'rh'], ['srcHum', 'rh']]) if (!['rh', 'w', 'dew'].includes(LV[m])) LV[m] = k;
 if (!(+LV.Patm >= 70 && +LV.Patm <= 110)) LV.Patm = 101.325;
 if (+LV.compModel === 0) { LV.compModel = 1; LV.etaC = 1; }   // the ideal model is now Constant at 1.00
+for (const k of ['compModel', 'fanModel']) if (+LV[k] === 4) LV[k] = 5;   // the first Pareto front (4) was removed
 if (!Array.isArray(LV.comps) || !LV.comps.length) LV.comps = LV.w ? compsOf(LV.w).map(([n, f]) => [n, +f.toFixed(6)]) : [['Propane', 20], ['Isopentane', 80]];
 if (LV.basis !== 'mole') LV.basis = 'mass';
 // refrigerants of the multi-loop cycles, one list per loop (bottom first), and the parameters of each
@@ -4795,7 +4794,7 @@ function renderLiveControls() {
   linkComps(); syncW();
   LV.etaC = Math.min(Math.max(+LV.etaC || 0.73, 0.5), 1);
   $('lvEtaCRow').hidden = LV.compModel !== 1;
-  lvSeg('lvComp', DRYER.COMP_MODELS.map((n, i) => [i, n]).slice(1), LV.compModel, i => { LV.compModel = i; renderLiveControls(); changed(); });
+  lvSeg('lvComp', DRYER.COMP_MODELS.map((n, i) => [i, n]).slice(1).filter(([, n]) => n), LV.compModel, i => { LV.compModel = i; renderLiveControls(); changed(); });
   LV.motor = Math.min(Math.max(+LV.motor || 0.93, 0.8), 1);
   LV.expn = LV.expn === 'exp' ? 'exp' : 'valve'; LV.etaX = Math.min(Math.max(+LV.etaX || 0.75, 0.3), 1);
   const brayton = LV.cyc === 'X';
@@ -4820,7 +4819,7 @@ function renderLiveControls() {
     ? `The source air cools through the evaporator to the temperature at which its enthalpy drop carries the evaporator duty at the swept volume; below its dew point its moisture condenses. The evaporator and superheater stay ${srcDT(LV)} K below the air (counterflow); the superheater outlet is ${srcDT(LV)} K below the air inlet.`
     : `The evaporator pressure is the highest at which the evaporator and superheater stay ${srcDT(LV)} K below the source water (counterflow); the superheater outlet is ${srcDT(LV)} K below the water inlet.${LV.srcWm === 'flow' ? ' The water flow is held constant; its outlet temperature follows from the evaporator duty.' : ''}`;
   $('lvFanSec').hidden = LV.cyc !== 'M';  $('lvFanEtaRow').hidden = +LV.fanModel !== 1;
-  lvSeg('lvFanModel', DRYER.COMP_MODELS.map((n, i) => [i, n]).slice(1), +LV.fanModel, i => { LV.fanModel = i; renderLiveControls(); changed(); });
+  lvSeg('lvFanModel', DRYER.COMP_MODELS.map((n, i) => [i, n]).slice(1).filter(([, n]) => n), +LV.fanModel, i => { LV.fanModel = i; renderLiveControls(); changed(); });
   const mu = MULTI(LV.cyc);
   $('lvLoopRow').hidden = !mu || loopCount(LV.cyc) < 2; $('lvLoopHint').hidden = LV.cyc !== 'M';
   if (mu) lvSeg('lvLoop', loopNames(LV.cyc).map((n, i) => [i, n]), LV.loopSel[LV.cyc], i => { LV.loopSel[LV.cyc] = i; openPicker = -1; renderLiveControls(); });
@@ -6053,7 +6052,8 @@ const CASE_SCHEMA = 1;
 const MODEL_VERSION = "dryer-js 2026-10-13";                 // bump when the cycle models change results
 const CASE_COLORS = ["--s1", "--s2", "--s3", "--s4"];
 const MAX_COMPARE = 4;
-const PAGE_URL = "https://claude.ai/artifact/JVR7gXG2EEYADm5ribDttf";   // where case links point
+const PAGE_URL = typeof location !== "undefined" && /(\.github\.io|^localhost|^127\.0\.0\.1)$/.test(location.hostname)
+  ? location.origin + location.pathname : "https://claude.ai/artifact/JVR7gXG2EEYADm5ribDttf";   // where case links point: this page on GitHub Pages or localhost, else the claude.ai artifact
 const LOCAL_KEY = "dryer-cases-local";
 const CASE_KEYS = ["cyc", "mainComps", "basis", "multi", "par", "compModel", "etaC", "motor", "prMax", "T", "Tain", "RH", "Tmt", "phi",
   "a", "Ts", "Two", "lift", "lift2", "split", "liftS", "share", "alpha", "stagesH", "stagesA", "stagesS", "ihxH", "fanModel", "fanEta", "fanPR", "fanSh", "fanMotor", "src", "srcT", "srcM", "srcW", "srcHum", "srcRH", "srcDew", "airHum", "airWg", "airDew", "Patm", "dTs", "srcWm", "srcMw", "expn", "etaX", "pmax"];
@@ -6139,7 +6139,8 @@ function cleanInputs(raw) {           // anything from the store or a link is un
   o.airHum = HMS.includes(raw.airHum) ? raw.airHum : "rh";
   o.srcHum = HMS.includes(raw.srcHum) ? raw.srcHum : (raw.srcW != null ? "w" : "rh");   // cases saved before the RH input gave g/kg
   for (const [k, lo, hi] of CASE_NUM) { const x = +raw[k]; if (raw[k] != null && isFinite(x)) o[k] = Math.min(hi, Math.max(lo, x)); }
-  o.compModel = Math.round(o.compModel); o.stagesH = Math.round(o.stagesH); o.stagesA = Math.round(o.stagesA); o.stagesS = Math.round(o.stagesS);
+  o.compModel = Math.round(o.compModel); o.stagesH = Math.round(o.stagesH);
+  for (const k of ['compModel', 'fanModel']) if (Math.round(o[k]) === 4) o[k] = 5;   // the first Pareto front (4) was removed o.stagesA = Math.round(o.stagesA); o.stagesS = Math.round(o.stagesS);
   o.ihxH = raw.ihxH == null ? o.ihxH : !!raw.ihxH;
   if (raw.multi && typeof raw.multi === "object") for (const c of Object.keys(MULTI_DEF)) if (Array.isArray(raw.multi[c]))
     o.multi[c] = MULTI_DEF[c].map((d, i) => { try { return cleanComps(raw.multi[c][i]); } catch (_) { return d; } });
