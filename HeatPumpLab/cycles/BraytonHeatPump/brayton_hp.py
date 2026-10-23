@@ -1,5 +1,5 @@
 """Supercritical CO2 reverse Brayton heat pump with a split compression and a preheater, after architectures 1 and 2
-of Dalal, Klöppel, Rose and Walmsley (Euro sCO2 2027, "Evaluating sCO2 heat pump architectures for large-scale
+of Dalal, Klöppel, Rose and Walmsley (Euro sCO2 2027, under review, "Evaluating sCO2 heat pump architectures for large-scale
 industrial air drying above 150 °C").
 
 Low side (suction pressure P_L, usually above the critical pressure): turbine (expander) -> LTHX (heated by the

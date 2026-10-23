@@ -1,5 +1,7 @@
 """Transcritical-transcritical CO2 cascade heat pump for air drying, after Kong (2026, PhD thesis, University of
-Waikato), cycle TT-4 with the additional gas cooler and secondary air (Fig. 58). A port of ``DRYCASC.kong`` and
+Waikato, https://hdl.handle.net/10289/18056), cycle TT-4 with the additional gas cooler and secondary air (Fig. 58);
+see also Kong et al., Applied Thermal Engineering 238 (2024) 122005, and, for expansion work recovery, Kong et al.,
+Energies 19 (2026) 3767. A port of ``DRYCASC.kong`` and
 ``kongOptimise`` from the "Advanced dryer heat pumps" web app.
 
 Flow path::

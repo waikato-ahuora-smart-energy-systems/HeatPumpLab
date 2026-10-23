@@ -12,11 +12,11 @@ The package contains seven cycle models. Each is a module under `HeatPumpLab.cyc
 | --- | --- | --- | --- |
 | Recuperative heat pump (RHP) | `RecuperativeHeatPump` | One or two compressors with up to three recuperative heat exchangers (RHX) placed between the gas coolers, for high-temperature glide heating. Includes Bayesian optimisation of the design. | [1] |
 | Split-stream heat pump (SLTHP) | `SplitHeatPump` | Two-stage cycle with RHX1 in parallel with the low-temperature gas cooler. | [1] |
-| Conventional heat pump | `ConventionalHeatPump` | Single-stage rating model with compressor maps, heat losses and steam raising (the steam-generating heat pump). | — |
-| Transcritical–transcritical CO₂ cascade | `TTCascadeHeatPump` | The bottom cycle gives its heat to the top cycle's suction gas in a cascade gas cooler; the top cycle heats the air in two gas coolers, with optional secondary air. IHXs in both cycles, optional expanders. | [2] |
-| n-level cascade | `CascadeHeatPump` | Two to four levels heating the air in series through each level's subcooler and its share of condenser heat. Optional IHX per level and expanders. | [3] |
-| Heat pump with MVR steam | `MVRHeatPump` | A vapour-compression cycle heats the air and raises low-pressure steam, which a chain of mechanical vapour recompression fans, with water injection and splits to the process, lifts to heat the air to the target. | — |
-| sCO₂ reverse Brayton heat pump | `BraytonHeatPump` | Supercritical CO₂ cycle with split compression, a preheater, an IHX and a turbine expander, architectures 1 and 2. | [4] |
+| Conventional heat pump | `ConventionalHeatPump` | Single-stage rating model with compressor maps, heat losses and steam raising (the steam-generating heat pump). | [2] |
+| Transcritical–transcritical CO₂ cascade | `TTCascadeHeatPump` | The bottom cycle gives its heat to the top cycle's suction gas in a cascade gas cooler; the top cycle heats the air in two gas coolers, with optional secondary air. IHXs in both cycles, optional expanders. | [3–5] |
+| n-level cascade | `CascadeHeatPump` | Two to four levels heating the air in series through each level's subcooler and its share of condenser heat. Optional IHX per level and expanders. | [6] |
+| Heat pump with MVR steam | `MVRHeatPump` | A vapour-compression cycle heats the air and raises low-pressure steam, which a chain of mechanical vapour recompression fans, with water injection and splits to the process, lifts to heat the air to the target. | [2] |
+| sCO₂ reverse Brayton heat pump | `BraytonHeatPump` | Supercritical CO₂ cycle with split compression, a preheater, an IHX and a turbine expander, architectures 1 and 2. | [7] |
 
 ## Web apps
 
@@ -212,12 +212,27 @@ Detailed notes on the recuperative heat pump solver and optimiser are in
 1. T.G. Walmsley, K.-M. Adamson, C. Arpagaus, F. Schlosser, Recuperative heat pump cycle concept
    for high-temperature glide process heating applications, *Applied Thermal Engineering* 301
    (2026) 131660. https://doi.org/10.1016/j.applthermaleng.2026.131660
-2. Kong (2026), PhD thesis, University of Waikato: cycle TT-4 with the additional gas cooler.
-   [full reference to be added]
-3. Hoang et al. [full reference to be added]
-4. V. Dalal, S. Klöppel, C. Rose, T.G. Walmsley, Evaluating sCO₂ heat pump architectures for
-   large-scale industrial air drying above 150 °C, European sCO₂ Conference (Euro sCO₂ 2027).
-   [details to be confirmed]
+2. T.G. Walmsley, B. Ong, K. Hall, B. Lincoln, F. Schlosser, J. Walden, R. Padullés, D. Hoang,
+   M. Walmsley, C. Arpagaus, Steam cogeneration heat pumps for the food, dairy and meat industries,
+   in: 5th High-Temperature Heat Pump Symposium 2026, Book of Presentations, Copenhagen, Denmark,
+   February 2026, pp. 270–275.
+3. L. Kong, New high temperature transcritical CO₂ heat pump concept for spray drying, PhD thesis,
+   The University of Waikato (2026). https://hdl.handle.net/10289/18056 (the TT cascade model
+   follows cycle TT-4, with the additional gas cooler)
+4. L. Kong, T.G. Walmsley, D.K. Hoang, F. Schlosser, Q. Chen, J.K. Carson, D.J. Cleland,
+   Transcritical-transcritical cascade CO₂ heat pump cycles for high-temperature heating: A
+   numerical evaluation, *Applied Thermal Engineering* 238 (2024) 122005.
+   https://doi.org/10.1016/j.applthermaleng.2023.122005
+5. L. Kong, F. Schlosser, S. Kloeppel, J.K. Carson, D.J. Cleland, T.G. Walmsley,
+   Transcritical–transcritical cascade CO₂ heat pump with expansion work recovery: A
+   thermodynamic analysis, *Energies* 19 (2026) 3767. https://doi.org/10.3390/en19163767
+6. D.K. Hoang, T.G. Walmsley, D.J. Cleland, Q. Chen, J.K. Carson, Thermo-economic investigation
+   and multi objective optimization of cascade high temperature heat pump using low global warming
+   refrigerants, *Applied Thermal Engineering* 279 (2025) 127901.
+   https://doi.org/10.1016/j.applthermaleng.2025.127901
+7. V. Dalal, S. Klöppel, C. Rose, T.G. Walmsley, Evaluating sCO₂ heat pump architectures for
+   large-scale industrial air drying above 150 °C, European sCO₂ Conference (Euro sCO₂ 2027),
+   under review.
 
 ## Citing
 

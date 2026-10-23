@@ -1,4 +1,6 @@
-"""Conventional single-stage heat pump (evaporator, compressor, condenser, subcooler, valve)."""
+"""Conventional single-stage heat pump (evaporator, compressor, condenser, subcooler, valve): the steam-generating
+heat pump of Walmsley et al., "Steam cogeneration heat pumps for the food, dairy and meat industries",
+5th High-Temperature Heat Pump Symposium 2026, Book of Presentations, pp. 270-275."""
 
 from .compressor_curves import (
     CompressorInlet,

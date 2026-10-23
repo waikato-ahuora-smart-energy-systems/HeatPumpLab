@@ -1,5 +1,7 @@
 """Conventional single-stage vapour-compression heat pump: evaporator, internal heat exchanger
-(IHX), compressor, condenser, subcooler and expansion valve.
+(IHX), compressor, condenser, subcooler and expansion valve. As a steam-generating heat pump it
+follows Walmsley et al., "Steam cogeneration heat pumps for the food, dairy and meat industries",
+5th High-Temperature Heat Pump Symposium 2026, Book of Presentations, pp. 270-275.
 
 Flow path (state numbers used in ``states``)::
 

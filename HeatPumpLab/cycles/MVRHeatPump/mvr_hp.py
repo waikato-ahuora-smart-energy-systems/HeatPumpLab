@@ -1,6 +1,8 @@
 """Heat pump + MVR steam ("HP + MVR"): a vapour-compression bottom cycle heats the dryer air first and raises
 low-pressure steam with the rest of its condenser heat; a chain of mechanical-vapour-recompression (MVR) fans then
-compresses the steam, which desuperheats and condenses into the air up to the target.
+compresses the steam, which desuperheats and condenses into the air up to the target. After
+Walmsley et al., "Steam cogeneration heat pumps for the food, dairy and meat industries", 5th High-Temperature
+Heat Pump Symposium 2026, Book of Presentations, pp. 270-275.
 
 Bottom cycle (ammonia by default)::
 
