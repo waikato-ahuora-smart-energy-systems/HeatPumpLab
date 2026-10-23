@@ -6,6 +6,7 @@ type: software
 authors:
   - family-names: Walmsley
     given-names: Timothy Gordon
+    orcid: "https://orcid.org/0000-0002-9192-0771"
     affiliation: "Ahuora – Centre for Smart Energy Systems, University of Waikato"
 repository-code: "https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab"
 url: "https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/"
@@ -24,6 +25,7 @@ preferred-citation:
   authors:
     - family-names: Walmsley
       given-names: Timothy Gordon
+      orcid: "https://orcid.org/0000-0002-9192-0771"
     - family-names: Adamson
       given-names: Keri-Marie
     - family-names: Arpagaus
