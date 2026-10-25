@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/actions/workflows/tests.yml/badge.svg)](https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/waikato-ahuora-smart-energy-systems/HeatPumpLab)](https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/releases/latest)
+[![PyPI](https://img.shields.io/pypi/v/heatpumplab)](https://pypi.org/project/heatpumplab/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23604060.svg)](https://doi.org/10.5281/zenodo.23604060)
 [![Licence: Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
@@ -63,6 +64,15 @@ Then open <http://localhost:8000>. The Python models reproduce the apps' results
 
 ## Installation
 
+From [PyPI](https://pypi.org/project/heatpumplab/):
+
+```sh
+pip install heatpumplab                 # or: uv add heatpumplab
+pip install "heatpumplab[refprop]"      # optional: the REFPROP backend (needs a REFPROP installation)
+```
+
+From source, to run the tests, the research scripts or the latest development version:
+
 ```sh
 git clone https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab.git
 cd HeatPumpLab
@@ -78,7 +88,7 @@ differ, and absolute enthalpies and entropies of some mixtures differ by a const
 state), which does not affect cycle results. The fluid property overview table
 (`get_fluid_prop_overview_table`) uses REFPROP-only outputs such as ODP and GWP.
 
-Run the examples below with `uv run python your_script.py` from the repository root.
+Run the examples below with `python your_script.py`, or `uv run python your_script.py` in a source checkout.
 
 ## Quick start
 
