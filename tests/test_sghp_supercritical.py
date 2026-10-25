@@ -16,8 +16,8 @@ import pytest
 from HeatPumpLab.cycles.ConventionalHeatPump import ConventionalHeatPump, ConventionalHPConfig, recip_r600a
 
 ROOT = Path(__file__).resolve().parents[1]
-LIVE = ROOT / "local_scripts" / "sghp_live"
-CP_JS = ROOT / "local_scripts" / "coolprop_js" / "coolprop.js"
+LIVE = ROOT / "apps" / "src" / "steam"
+CP_JS = ROOT / "apps" / "src" / "coolprop" / "coolprop.js"
 
 SERVER = """
 import F from './coolprop.mjs'; import fs from 'fs'; import readline from 'readline'; import { createRequire } from 'module';
@@ -47,7 +47,7 @@ class NodeFluid:
     def __init__(self, tmp, comps):
         node = shutil.which("node")
         if node is None or not CP_JS.exists():
-            pytest.skip("node or local_scripts/coolprop_js/coolprop.js not available")
+            pytest.skip("node or apps/src/coolprop/coolprop.js not available")
         anchor = 'Module["decrementExceptionRefcount"]=decrementExceptionRefcount;'
         (tmp / "coolprop.mjs").write_text(CP_JS.read_text().replace(
             anchor, anchor + 'Module["sghpStackSave"]=stackSave;Module["sghpStackRestore"]=stackRestore;', 1))

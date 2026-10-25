@@ -46,7 +46,7 @@ build-backend = "hatchling.build"
 packages = ["HeatPumpLab"]
 
 [tool.hatch.build.targets.sdist]
-include = ["HeatPumpLab", "README.md", "LICENSE", "pyproject.toml"]
+include = ["/HeatPumpLab", "/README.md", "/LICENSE", "/CITATION.cff", "/pyproject.toml"]
 
 [project.optional-dependencies]
 # REFPROP backend: needs a licensed NIST REFPROP installation as well

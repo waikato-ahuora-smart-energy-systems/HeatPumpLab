@@ -36,7 +36,8 @@ installed and no inputs leave the browser:
 - **Steam-generating heat pump** ([`apps/steam`](apps/steam)): the single-stage cycle raising
   steam, with compressor maps, saved cases, side-by-side comparison and sweeps.
 
-A landing page ([`apps/index.html`](apps/index.html)) links the two. They are published at
+A landing page ([`apps/index.html`](apps/index.html)) links the two, and their sources and build scripts are
+in [`apps/src`](apps/src/README.md). The apps are published at
 <https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/>. To run them locally:
 
 ```sh
@@ -175,6 +176,8 @@ HeatPumpLab/
   cycles/          one module per cycle (see the table above), and shared helpers in common/
   utils/           property packages (CoolProp, REFPROP), caching, parallel solving, plotting
 apps/              web apps: landing page, dryer/ and steam/ (published with GitHub Pages)
+  src/             the apps' JavaScript sources and build scripts
+docs/dev-notes/    development notes (recuperative heat pump solver and optimiser)
 tests/             test suite
 scripts/           research search scripts for the recuperative heat pump (Pareto, MOBO, trust region)
 ```
@@ -190,14 +193,14 @@ Tests that check the REFPROP backend skip automatically when it is not installed
 
 ## Further documentation
 
-Detailed notes on the recuperative heat pump solver and optimiser are in
-[`HeatPumpLab/cycles/RecuperativeHeatPump/`](HeatPumpLab/cycles/RecuperativeHeatPump/), including:
-
-- [ABOUT.md](HeatPumpLab/cycles/RecuperativeHeatPump/ABOUT.md): the cycle variants
+- [ABOUT.md](HeatPumpLab/cycles/RecuperativeHeatPump/ABOUT.md): the recuperative heat pump cycle variants
 - [BAYESIAN_OPTIMISATION.md](HeatPumpLab/cycles/RecuperativeHeatPump/BAYESIAN_OPTIMISATION.md): the production optimiser
-- [OPTIMISER_COMPARISON.md](HeatPumpLab/cycles/RecuperativeHeatPump/OPTIMISER_COMPARISON.md) and
-  [ORIGIN_OPTIMISER_COMPARISON.md](HeatPumpLab/cycles/RecuperativeHeatPump/ORIGIN_OPTIMISER_COMPARISON.md): optimiser benchmarks
-- `V14_SOLVER_FIXES.md`, `V15_SOLVER_FIXES.md` and the other investigation notes: solver development history
+- [`docs/dev-notes/rhp/`](docs/dev-notes/rhp/README.md): development notes on the recuperative heat pump solver
+  and optimiser, including the optimiser benchmarks
+  ([OPTIMISER_COMPARISON.md](docs/dev-notes/rhp/OPTIMISER_COMPARISON.md),
+  [ORIGIN_OPTIMISER_COMPARISON.md](docs/dev-notes/rhp/ORIGIN_OPTIMISER_COMPARISON.md)) and the solver fixes by
+  evaluation version
+- [`apps/src/`](apps/src/README.md): the web apps' sources and how to rebuild them
 
 ## References
 
@@ -232,6 +235,10 @@ If you use HeatPumpLab in published work, please cite reference [1], and the ref
 other cycle you use. To cite the software itself, use its Zenodo DOI,
 [10.5281/zenodo.23604060](https://doi.org/10.5281/zenodo.23604060), which always resolves to the
 latest release. GitHub's "Cite this repository" button gives both, from `CITATION.cff`.
+
+## Contributing
+
+Bug reports, questions and contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

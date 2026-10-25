@@ -1,0 +1,42 @@
+name: Bug report
+description: A cycle that fails to solve, gives a wrong result, or an error in the package or web apps
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected and what you got. Include the error message if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: A short script with the cycle and its inputs, or a case link copied from the web app.
+      render: python
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Python package
+        - Advanced dryer heat pumps app
+        - Steam-generating heat pump app
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Property backend
+      options:
+        - CoolProp (default)
+        - REFPROP
+        - Not sure
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The HeatPumpLab release or commit, and your Python and OS versions.

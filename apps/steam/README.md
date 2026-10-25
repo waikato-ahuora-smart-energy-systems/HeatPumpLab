@@ -22,6 +22,8 @@ carries the design inputs in the URL.
 | `coolprop.wasm` | CoolProp 8 compiled to WebAssembly |
 | `THIRD_PARTY_NOTICES.md` | Licences for CoolProp and the web fonts |
 
+`index.html` is built from the sources in [`apps/src/steam`](../src/steam) (`uv run python apps/src/steam/build.py`); edit those, not the page. See [apps/src](../src/README.md).
+
 ## Running locally
 
 The page fetches `coolprop.wasm`, so open it through a static web server rather than as a

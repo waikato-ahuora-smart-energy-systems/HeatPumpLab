@@ -13,7 +13,7 @@ from HeatPumpLab.cycles.ConventionalHeatPump import (
 from test_steam_hot_water import JS_TOY, WATER, steam_model
 
 ROOT = Path(__file__).resolve().parents[1]
-JS = ROOT / "local_scripts" / "sghp_live" / "sghp_model.js"
+JS = ROOT / "apps" / "src" / "steam" / "sghp_model.js"
 MODELS = ("Recip-S", "Recip-M", "Recip-L")
 
 
