@@ -112,7 +112,7 @@ def test_limit_flags():
 
 def test_browser_extension_matches_python():
     node = shutil.which("node")
-    js = ROOT / "local_scripts" / "sghp_live" / "sghp_model.js"
+    js = ROOT / "apps" / "src" / "steam" / "sghp_model.js"
     if node is None or not js.exists():
         pytest.skip("node or sghp_model.js not available")
     pts = [[to, tc] for to in range(-30, 71, 7) for tc in range(20, 161, 9)]

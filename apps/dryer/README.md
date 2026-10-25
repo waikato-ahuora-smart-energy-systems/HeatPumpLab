@@ -20,6 +20,8 @@ the URL.
 | `dashboard_data.json`, `cycles_data.json`, `state_5C_1bar.json` | REFPROP design study results (results only, no REFPROP code or data files) |
 | `THIRD_PARTY_NOTICES.md` | Licences for CoolProp and the web fonts |
 
+`index.html` is built from the sources in [`apps/src/dryer`](../src/dryer) (`uv run python apps/src/dryer/build.py`); edit those, not the page. See [apps/src](../src/README.md).
+
 ## Running locally
 
 The page fetches the `.wasm` and `.json` files, so open it through a static web server rather

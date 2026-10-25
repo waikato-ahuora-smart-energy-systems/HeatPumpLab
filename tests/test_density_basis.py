@@ -416,7 +416,7 @@ def test_butane_design_point_map_refprop(hpl):
 
 def _node(script):
     node = shutil.which("node")
-    js = ROOT / "local_scripts" / "sghp_live" / "sghp_model.js"
+    js = ROOT / "apps" / "src" / "steam" / "sghp_model.js"
     if node is None or not js.exists():
         pytest.skip("node or sghp_model.js not available")
     return json.loads(subprocess.run([node, "-e", f"const S = require({json.dumps(str(js))});" + script],

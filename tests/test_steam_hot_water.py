@@ -143,7 +143,7 @@ const toy = { P_crit: 3.796, T_crit: 151.98,
 
 def test_browser_model_matches_python():
     node = shutil.which("node")
-    js = ROOT / "local_scripts" / "sghp_live" / "sghp_model.js"
+    js = ROOT / "apps" / "src" / "steam" / "sghp_model.js"
     if node is None or not js.exists():
         pytest.skip("node or sghp_model.js not available")
     cases = [dict(),

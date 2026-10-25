@@ -30,5 +30,10 @@ jobs:
         run: uv sync --locked --group dev
       - name: Lint
         run: uv run ruff check --select F HeatPumpLab tests
+      - name: Apps are built from their sources
+        run: |
+          uv run python apps/src/steam/build.py
+          uv run python apps/src/dryer/build.py
+          git diff --exit-code -- apps/steam apps/dryer
       - name: Tests
         run: uv run pytest -q -p no:cacheprovider

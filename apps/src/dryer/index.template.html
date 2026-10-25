@@ -1,0 +1,734 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta charset="utf-8">
+<title>Advanced dryer heat pumps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: engineering datasheet, same family as the binary-mixture cycle pages. Operating-point
+   selector and key figures, then cycle diagrams, heat and energy panels, the rating and
+   compressor maps, and the state table. Single column under 860px. */
+:root{
+  --bg:#f6f7f8; --surface:#ffffff; --ink:#14181c; --ink-2:#4c545c; --ink-3:#7d868f;
+  --rule:#dde1e5; --grid:#eceff2; --dome:#9aa3ab; --accent:#1f5f8b;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#7a5bd6;
+  --seq-lo:#e3eef8; --seq-hi:#1d4f7a; --on-seq:#ffffff;
+  --warn:#9a6200; --warn-bg:#fdf3e1; --info-bg:#e8f1f8; --bad:#b42318; --bad-bg:#fde8e6;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121417; --surface:#1a1d21; --ink:#f2f4f6; --ink-2:#b9c0c7; --ink-3:#88919a;
+  --rule:#2e3339; --grid:#252a2f; --dome:#6f7880; --accent:#7fb6e0;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --seq-lo:#1f2a35; --seq-hi:#7fb6e0; --on-seq:#0f1215;
+  --warn:#f0b54d; --warn-bg:#2d2414; --info-bg:#1b2833; --bad:#ff8a7a; --bad-bg:#3a1a17;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121417; --surface:#1a1d21; --ink:#f2f4f6; --ink-2:#b9c0c7; --ink-3:#88919a;
+  --rule:#2e3339; --grid:#252a2f; --dome:#6f7880; --accent:#7fb6e0;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --seq-lo:#1f2a35; --seq-hi:#7fb6e0; --on-seq:#0f1215;
+  --warn:#f0b54d; --warn-bg:#2d2414; --info-bg:#1b2833; --bad:#ff8a7a; --bad-bg:#3a1a17;
+  color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:28px 48px;display:grid;gap:22px}
+@media (max-width:480px){.wrap{padding-inline:16px}}
+header{display:grid;gap:6px}
+.eyebrow{font-family:var(--f-data);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+h1{font-family:var(--f-display);font-weight:600;font-size:clamp(26px,4vw,36px);line-height:1.1;margin:0;text-wrap:balance}
+.lede{color:var(--ink-2);max-width:72ch;margin:0}
+.sub{font-family:var(--f-display);font-weight:500;font-size:clamp(18px,2.6vw,22px);color:var(--ink-2);margin:0}
+.switch{display:flex;flex-wrap:wrap;gap:8px}
+.switch button{font:inherit;font-family:var(--f-body);font-weight:600;cursor:pointer;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:6px;padding:8px 14px;text-align:left;display:grid;gap:2px}
+.switch button small{font-weight:400;color:var(--ink-3);font-size:13px;font-family:var(--f-data)}
+.switch button[aria-pressed="true"]{border-color:var(--accent);color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent)}
+.switch button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* Slider with a fixed 16px thumb, so tick k sits at 8px + (100% - 16px) * k/(n-1): the thumb centre. */
+.speed{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;align-items:start}
+.pickrow.wide{grid-template-columns:minmax(0,1fr);gap:6px}
+.track{min-width:0;display:grid;gap:2px}
+.speed input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;margin:0;background:transparent;cursor:pointer}
+.speed input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--rule)}
+.speed input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--rule)}
+.speed input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid var(--surface);box-shadow:0 0 0 1px var(--accent);margin-top:-6px}
+.speed input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--surface);box-shadow:0 0 0 1px var(--accent)}
+.speed input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.speed output{font-family:var(--f-data);font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:16px}
+.ticks{position:relative;height:22px;font-family:var(--f-data);font-size:11px;color:var(--ink-3)}
+.ticks i{position:absolute;top:0;width:1px;height:5px;background:var(--dome);transform:translateX(-50%)}
+.ticks span{position:absolute;top:6px;transform:translateX(-50%);white-space:nowrap}
+.ticks span.on{color:var(--ink);font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:13px;padding:4px 10px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2)}
+.chip.warn{background:var(--warn-bg);border-color:transparent;color:var(--ink)}
+.chip.warn::before{content:"!";font-family:var(--f-data);font-weight:600;color:var(--warn)}
+.chip.bad{background:var(--bad-bg);border-color:transparent;color:var(--ink)}
+.chip.bad::before{content:"!";font-family:var(--f-data);font-weight:700;color:var(--bad)}
+.chip.info{background:var(--info-bg);border-color:transparent;color:var(--ink)}
+.chip.info::before{content:"i";font-family:var(--f-data);font-weight:600;color:var(--accent)}
+.pick{display:grid;gap:10px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:12px 14px}
+.pickrow{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center}
+@media (max-width:600px){.pickrow{grid-template-columns:1fr}}
+.pickrow .lab{font-size:13px;color:var(--ink-2)}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button,.btn{font:inherit;font-family:var(--f-data);font-size:13px;cursor:pointer;border:1px solid var(--rule);background:var(--bg);color:var(--ink-2);border-radius:5px;padding:4px 9px;font-variant-numeric:tabular-nums}
+.seg button[aria-pressed="true"]{border-color:var(--accent);color:var(--ink);box-shadow:inset 0 0 0 1px var(--accent);background:var(--surface)}
+.seg button.dim{opacity:.45}
+.seg button:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{font-family:var(--f-body);font-weight:600;color:var(--ink)}
+.figs{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+@media (min-width:900px){.figs{grid-template-columns:repeat(4,1fr)}}
+.fig{background:var(--surface);padding:10px 12px;display:grid;gap:2px;align-content:start}
+.fig .k{font-size:12px;color:var(--ink-3);letter-spacing:.03em}
+.fig .v{font-family:var(--f-data);font-size:18px;font-variant-numeric:tabular-nums}
+.fig .v small{font-size:12px;color:var(--ink-3);margin-left:3px}
+.fig .sub{font-family:var(--f-data);font-size:12px;color:var(--ink-3)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:14px 14px 10px;min-width:0;display:grid;gap:6px;position:relative;align-content:start}
+.panel h2{font-family:var(--f-display);font-weight:600;font-size:19px;margin:0}
+.panel p.note{margin:0;color:var(--ink-3);font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:16px;height:3px;border-radius:2px}
+.legend i.dash{background:none!important;border-top:2px dashed var(--dome);height:0}
+.legend i.box{width:11px;height:11px;border-radius:2px}
+svg{display:block;width:100%;height:auto;overflow:visible}
+svg text{font-family:var(--f-data);font-size:11px;fill:var(--ink-3)}
+svg .axl{font-family:var(--f-body);font-size:12px;fill:var(--ink-2)}
+svg .lbl{font-family:var(--f-body);font-size:12px;fill:var(--ink-2)}
+svg .val{font-family:var(--f-data);font-size:10.5px}
+.cell{cursor:pointer}
+.cell:focus-visible{outline:none;stroke:var(--ink);stroke-width:2}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--rule);border-radius:5px;padding:6px 8px;font-family:var(--f-data);font-size:12px;line-height:1.45;color:var(--ink);box-shadow:0 4px 14px rgba(0,0,0,.12);white-space:nowrap;z-index:2}
+.tip b{font-family:var(--f-body);font-weight:600}
+.empty{padding:28px 10px;color:var(--ink-2);text-align:center}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--rule);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:700px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--grid);text-align:right;font-variant-numeric:tabular-nums}
+th{font-family:var(--f-body);font-weight:600;color:var(--ink-2);font-size:12.5px;background:var(--bg)}
+td{font-family:var(--f-data)}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left;font-family:var(--f-body)}
+td .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:middle}
+.foot{color:var(--ink-3);font-size:13px;max-width:96ch;margin:0;display:grid;gap:6px}
+.foot p{margin:0}
+/* headline: four evenly spaced results (COP + stars, three dials); steam : hot water ratio as subtext */
+.headline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px 24px;align-items:center;justify-items:center;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:16px}
+.headline > .dial{width:100%;max-width:188px}
+.headline > .hl-s{grid-column:1/-1;justify-self:center;text-align:center;max-width:none}
+@media (max-width:640px){.headline{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}.headline > .hl-cop{grid-column:1/-1}}
+.hl-txt{display:grid;gap:3px;min-width:0}
+.hl-cop{justify-items:center}
+.hl-k{font-size:12px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase;font-family:var(--f-data)}
+.hl-v{font-family:var(--f-display);font-weight:600;font-size:56px;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hl-s{font-size:13px;color:var(--ink-2);max-width:46ch}
+.stars{display:flex;align-items:center;gap:4px}
+.stars svg{width:28px;height:28px;flex:none}
+.dial{display:grid;justify-items:center;gap:0;min-width:0}
+.dial svg{width:100%;height:auto;overflow:visible}
+.dial .dk{font-size:13px;color:var(--ink-2);text-align:center}
+figure.pfdfig{margin:0;min-width:0}
+.panel{grid-template-columns:minmax(0,1fr)}
+figure.pfdfig figcaption{color:var(--ink-3);font-size:13px;margin-top:4px}
+#pfd svg .ut{font-family:var(--f-body);font-size:13px;font-weight:600;fill:var(--ink)}
+#pfd svg .dv{font-family:var(--f-data);font-size:11.5px;fill:var(--ink-2)}
+#pfd svg .xs{font-family:var(--f-body);font-size:12.5px;font-weight:600}
+#pfd svg .sp{font-family:var(--f-data);font-size:11.5px;fill:var(--ink-2)}
+#pfd svg .spn{font-weight:600;fill:var(--ink)}
+.pfdwrap{overflow-x:auto}
+#pfd svg{min-width:640px}
+
+/* ---- dryer page: the steam-generating heat pump page's tokens, with the dryer page's own series and flows */
+:root{--panel:var(--surface);--f-mono:var(--f-data);--sA:var(--s1);--sS:var(--s2);--sX1:var(--s3);--sX2:var(--s6);--sX3:var(--s5);--sX4:var(--s4);
+  --good:#16794a;--chip-bad-bg:var(--bad-bg);--chip-good-bg:#e3f3ea;--sel-bg:var(--info-bg);--dome-fill:#eef1f3;--hp:#b8572b;--lp:#2f6fa8;--box:#f7f8f9}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--good:#4cc38a;--chip-good-bg:#173226;--dome-fill:#1f2328;--hp:#e08158;--lp:#6aa6dc;--box:#20242a}}
+:root[data-theme="dark"]{--good:#4cc38a;--chip-good-bg:#173226;--dome-fill:#1f2328;--hp:#e08158;--lp:#6aa6dc;--box:#20242a}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+h2{font-family:var(--f-display);font-weight:600;font-size:19px;margin:0;text-wrap:balance}
+h3{font-family:var(--f-display);font-weight:600;font-size:15.5px;margin:0}
+.lede b{color:var(--ink);font-weight:600}
+.mode-pane{display:grid;gap:22px}
+/* controls: the steam page's cards and sliders */
+.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+@media (max-width:860px){.controls{grid-template-columns:1fr}}
+.ctl-col{display:grid;gap:16px;min-width:0}
+.controls.mas{display:block;columns:2;column-gap:16px}
+.controls.mas>.ctl{break-inside:avoid;margin:0 0 16px;width:100%;box-sizing:border-box}
+@media (max-width:860px){.controls.mas{columns:1}}
+#lvCyc{margin-bottom:6px}
+.ctl{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
+.ctl .lab,.pickrow .lab{font-size:13px;color:var(--ink-2)}
+.temps{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.temps.two{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:22px}
+.ctl h3.opgrp{font-family:var(--f-data);font-size:11.5px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin:6px 0 0;padding-top:8px;border-top:1px solid var(--rule)}.ctl h2 + h3.opgrp{border-top:0;padding-top:0;margin-top:0}
+.speed input[type=range]:disabled{opacity:.5;cursor:default}.slhead output.derived{color:var(--ink-3);font-weight:400}
+/* Compressor card: sizing across the top, then the swept volume and the volumetric efficiency side by side */
+#lvCompCard #vswCtl{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:22px}#lvCompCard #sizeCtl{grid-column:1/-1}
+@media (max-width:520px){#lvCompCard #vswCtl{grid-template-columns:minmax(0,1fr)}}
+.humgrp{display:grid;gap:4px;align-content:start;min-width:0}.humgrp > .slhead{flex-wrap:wrap}.humgrp .seg button{padding:2px 7px;font-size:12px}
+/* cases and comparison */
+.cases-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 14px}
+.cases-head h2,#compare h2{font-family:var(--f-display);font-weight:600;font-size:19px;margin:0}
+#compare h3{font-family:var(--f-display);font-weight:600;font-size:15px;margin:10px 0 2px}
+.hint.warn{color:var(--s2)}
+#case-current{margin:0;color:var(--ink-2)}
+.case-form{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px 12px;align-items:end}
+.case-form label{display:grid;gap:3px;font-size:13px;color:var(--ink-2)}
+.case-form .row{grid-column:1/-1}
+@media (max-width:640px){.case-form{grid-template-columns:1fr}}
+input[type=text]{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:5px;padding:5px 7px;min-width:0;width:100%;box-sizing:border-box}
+#case-openbox,#case-linkbox{flex-wrap:nowrap}
+#case-openbox input,#case-linkbox input{flex:1}
+.btn:disabled{opacity:.5;cursor:default}
+.case-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.case-card{border:1px solid var(--rule);border-left:4px solid var(--rule);border-radius:6px;padding:9px 10px;display:grid;gap:4px;background:var(--bg);align-content:start}
+.case-card.on{border-left-color:var(--case)}
+.case-card.loaded{box-shadow:inset 0 0 0 1px var(--accent)}
+.case-top{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:start;cursor:pointer}
+.case-top input{margin:3px 0 0;accent-color:var(--accent)}
+.case-name{font-weight:600;font-size:14px;overflow-wrap:anywhere}
+.case-cop{font-family:var(--f-data);font-size:13px;white-space:nowrap}.tl{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0}.tl-g{background:var(--good)}.tl-a{background:var(--warn)}.tl-r{background:var(--bad)}
+.case-sub,.case-note{font-size:12.5px;color:var(--ink-2);overflow-wrap:anywhere}
+.case-meta{font-size:12px;color:var(--ink-3)}
+.case-act{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.btn.sm{font-size:12px;padding:3px 8px}
+.btn.danger{color:var(--s2);border-color:color-mix(in oklab,var(--s2) 45%,var(--rule))}
+.cmp-wrap{overflow-x:auto}
+table.cmp{min-width:0}
+table.cmp th.ch,table.cmp td:nth-child(n+2){text-align:right}
+table.cmp th.ch{vertical-align:bottom;min-width:120px;font-weight:600}
+table.cmp td:nth-child(n+2){font-family:var(--f-data)}
+table.cmp td small{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+table.cmp td.best{background:color-mix(in oklab,var(--accent) 26%,transparent)}
+table.cmp td.best span{font-weight:700}
+table.cmp i.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
+.base-tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;margin-top:4px;border-radius:999px;background:var(--accent);color:var(--surface)}
+.icon.mv{width:22px;height:22px;font-size:14px}
+.icon.mv:disabled{opacity:.35;cursor:default}
+.cmp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:860px){.cmp-grid{grid-template-columns:1fr}}
+.pick:focus-visible,.fopt:focus-visible,.tbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.icon{font:inherit;font-size:16px;line-height:1;cursor:pointer;border:1px solid var(--rule);background:var(--bg);color:var(--ink-2);border-radius:5px;width:28px;height:28px}
+.row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.inline{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2)}
+.inline select{width:auto}
+.cmp-order{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:6px 0 4px}
+.cmp-order .pick{width:auto;min-width:220px;max-width:100%}
+.side-head .base-tag{grid-column:2/-1;justify-self:start;margin-top:0}
+/* the columns share row tracks (subgrid), so every section lines up across cases whatever the name length or tags */
+.side{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(230px,1fr);grid-template-rows:repeat(8,auto);column-gap:12px;row-gap:0;padding-bottom:4px}
+.side-col{grid-row:span 8;display:grid;grid-template-rows:subgrid;row-gap:8px;align-content:start;border:1px solid var(--rule);border-top:4px solid var(--case);border-radius:6px;padding:10px;background:var(--bg);min-width:0}
+@supports not (grid-template-rows:subgrid){.side{grid-template-rows:none}.side-col{grid-row:auto;grid-template-rows:none}}
+.side-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:6px;align-items:start}
+.grip{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;color:var(--ink-3);font-size:16px;line-height:1.1;padding:0 2px}
+.grip:hover{color:var(--ink)}
+.side-col.dragging{opacity:.9;box-shadow:0 8px 22px rgba(0,0,0,.22);cursor:grabbing;position:relative;z-index:2}
+.side-col h4{margin:0;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.side-col .sub{font-size:12px;color:var(--ink-2);overflow-wrap:anywhere}
+.side-cop{display:grid;justify-items:center;gap:4px}
+.side-cop .v{font-family:var(--f-display);font-weight:600;font-size:40px;line-height:1;font-variant-numeric:tabular-nums}
+.side-cop .stars svg{width:20px;height:20px}
+.side-cop small{font-size:12px;color:var(--ink-3)}
+.side-dials{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 8px}
+.side-dials .dial .dk{font-size:11.5px}
+.side-kv{display:grid;grid-template-columns:auto auto;gap:3px 0;font-size:12.5px;margin:0}
+.side-kv dt{padding-right:10px}
+.side-kv dt{color:var(--ink-2)}
+.side-kv dd{margin:0;text-align:right;font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.side-bar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--grid)}
+.side-bar i{display:block;height:100%}
+.side-barlab{font-size:11.5px;color:var(--ink-3)}
+.side-col .mini svg{width:100%;height:auto}
+.side-col .empty{font-size:13px;color:var(--ink-3)}
+/* best value per metric: the same accent tint as the results table */
+.side-kv dd.win,.win-chip{background:var(--accent);border-radius:3px;font-weight:700;color:var(--surface)}
+.side-kv dd.win{padding:0 5px;margin-right:-5px;justify-self:end}
+.side-kv .dlt{font-size:10.5px;font-weight:400;color:var(--ink-3);margin-left:2px}
+.side-kv dd.win .dlt{color:inherit;opacity:.85}
+.win-chip{padding:0 4px}
+.side-cop.win .v{background:var(--accent);color:var(--surface);border-radius:6px;padding:2px 8px}
+.side-dials .dial.win .dk{background:var(--accent);border-radius:3px;padding:0 5px;font-weight:700;color:var(--surface)}
+.cmp-order{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:6px 0 4px}
+.cmp-order .pick{width:auto;min-width:220px;max-width:100%}
+.cmp-order .fluid-list{flex-basis:100%;box-sizing:border-box}
+.side-col .mini svg{width:100%;height:auto;display:block}
+.cases{display:grid;gap:10px}
+.cmphd{display:flex;align-items:center;justify-content:flex-end;gap:2px;white-space:normal}
+.cmpmv{display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-top:4px}
+#compare .cmp-grid .panel{margin:0}
+#cmp-results table.cmp td:first-child,#cmp-inputs table.cmp td:first-child{white-space:nowrap;color:var(--ink-2)}
+
+@media (max-width:520px){.temps.two{grid-template-columns:minmax(0,1fr)}}
+.temp{gap:2px}
+.slhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.slhead output{font-family:var(--f-data);font-size:14px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.pickrow{grid-template-columns:130px minmax(0,1fr)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 12px}
+.fields label{display:grid;gap:3px;font-size:12.5px;color:var(--ink-2)}
+input[type=number]{font:inherit;font-size:14px;font-family:var(--f-data);font-variant-numeric:tabular-nums;color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:5px;padding:5px 7px;min-width:0;width:100%}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hint{margin:0;color:var(--ink-3);font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.toggle{display:inline-flex;flex-wrap:wrap;gap:4px}
+.slhead output.editable{cursor:text;border-bottom:1px dashed var(--rule);padding:0 2px}.slhead output.editable:hover{border-bottom-color:var(--accent)}input.outedit{width:9ch;padding:1px 5px;font-size:14px;text-align:right}.levels{display:grid;gap:4px}.levels .lvlab{min-width:60px}.optrow{margin-top:8px}.optrow label{display:grid;gap:3px;font-size:12.5px;color:var(--ink-2);max-width:150px}.tbtn:disabled{opacity:.55;cursor:wait}
+.tbtn{font:inherit;font-size:13px;cursor:pointer;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:4px 10px}
+.tbtn:hover{color:var(--ink);border-color:var(--accent)}
+.tbtn:active:not(:disabled){background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.tbtn:disabled{opacity:.45;cursor:default}
+/* refrigerant components: the steam-generating heat pump page's rows */
+.comps{display:grid;gap:8px}
+.comp{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 74px 14px 28px;gap:8px;align-items:center}
+@media (max-width:480px){.comp{grid-template-columns:minmax(0,1fr) 70px 14px 28px}.comp input[type=range]{display:none}}
+.comp input[type=range]{width:100%;accent-color:var(--accent);min-width:0}
+input:disabled{opacity:.6}
+.unit{color:var(--ink-3);font-size:13px}
+.pick{font:inherit;font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0;width:100%;cursor:pointer;border:1px solid var(--rule);background:var(--bg);color:var(--ink);border-radius:5px;padding:5px 8px;text-align:left}
+.pick span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick .caret{color:var(--ink-3)}
+.pick[aria-expanded="true"]{border-color:var(--accent)}
+.pick.blendpick{width:auto;min-width:200px}
+.fluid-list{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--rule);border-radius:6px;background:var(--bg)}
+.fopt{font:inherit;font-size:13px;cursor:pointer;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:4px 10px}
+.fopt:hover:not(:disabled){color:var(--ink);border-color:var(--accent)}
+.fopt[aria-selected="true"],.tbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.fopt:disabled{opacity:.4;cursor:default}
+.fluid-list .grp{flex-basis:100%;font-size:12px;color:var(--ink-3);margin-top:2px}
+.icon{font:inherit;font-size:16px;line-height:1;cursor:pointer;border:1px solid var(--rule);background:var(--bg);color:var(--ink-2);border-radius:5px;width:28px;height:28px}
+.pick:focus-visible,.fopt:focus-visible,.tbtn:focus-visible,.icon:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.inline{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--ink-2)}
+/* study strip: pressure limit, approach and design choice */
+.controls.strip{display:flex;flex-wrap:wrap;gap:12px 26px;align-items:center;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:12px 14px;position:sticky;top:0;z-index:5}
+.strip .ctl{display:flex;align-items:center;gap:10px;background:none;border:0;padding:0}
+.strip .lab,.controls-inline .lab,.vside .lab{font-size:13px;color:var(--ink-2)}
+.strip .slider{flex:1 1 460px;min-width:0;flex-wrap:nowrap}
+.strip .slider input[type=range]{flex:1;min-width:90px;accent-color:var(--accent)}
+@media (max-width:560px){.strip .slider{flex-wrap:wrap}.controls.strip{position:static}}
+.pval{font-family:var(--f-data);font-weight:500;font-size:14px;flex:none;text-align:left;color:var(--ink);white-space:nowrap}
+input.num-in{flex:none;width:11ch;min-width:11ch;text-align:right;padding:3px 6px}
+.strip .lab{white-space:nowrap}
+.legend svg{display:inline-block;width:14px;height:14px;flex:none}
+/* headline cards */
+.hlsect{display:grid;gap:12px}
+.hl2{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+@media (max-width:760px){.hl2{grid-template-columns:1fr}}
+.abbr{margin:-4px 0 0;font-size:12px;color:var(--ink-3);max-width:110ch}
+.hcard{gap:12px}
+.hcard .seg button{padding:3px 7px;font-size:12px}
+.hcard .ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:none;border:0;padding:0}
+.hcard .ctl .lab{font-size:12px;color:var(--ink-3)}
+.hcard .vs{font-family:var(--f-data);font-size:12px;color:var(--ink-2)}
+.big{display:grid;gap:2px}
+.big .k{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2)}
+.big .v{font-family:var(--f-display);font-weight:600;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
+.big .s{font-family:var(--f-data);font-size:12px;color:var(--ink-3)}
+.big .kv{display:grid;grid-template-columns:auto auto 1fr;gap:2px 8px;margin-top:8px;font-size:13px;color:var(--ink-2);align-items:baseline}
+.big .kv b{font-family:var(--f-data);font-weight:500;font-size:15px;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+.big .kv span:nth-child(3n){font-family:var(--f-data);font-size:11.5px;color:var(--ink-3)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;flex:none}
+.dchip{font-family:var(--f-data);font-size:12px;padding:1px 6px;border-radius:3px;white-space:nowrap}
+.dchip.neg{background:var(--chip-bad-bg);color:var(--bad)}
+.dchip.pos{background:var(--chip-good-bg);color:var(--good)}
+.dchip.muted{color:var(--ink-3);border:1px dashed var(--rule)}
+/* sections and charts */
+.sect{display:grid;gap:12px}
+.sect-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px}
+.sect-head p{margin:0;color:var(--ink-2);font-size:13px;max-width:82ch}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:1000px){.grid3{grid-template-columns:1fr}}
+.chart .csub{color:var(--ink-3);font-size:12.5px;margin:0}
+.axis text,svg .lbl,.lbl{font-family:var(--f-data);font-size:11px;fill:var(--ink-3);color:var(--ink-3)}
+.axis .title{font-family:var(--f-body);font-size:12px;fill:var(--ink-2)}
+.gridline{stroke:var(--grid);stroke-width:1}
+.base{stroke:var(--rule);stroke-width:1}
+.legend .lg-line,.legend .lg-dash{width:18px;height:0;border-top:2px solid;display:inline-block;background:none;border-radius:0}
+.legend .lg-dash{border-top-style:dashed}
+.tip{position:fixed;z-index:20;min-width:180px;white-space:normal;font-family:var(--f-body)}
+.tip .tt{font-family:var(--f-data);color:var(--ink-3);font-size:11px;margin-bottom:4px}
+.tip .tr{display:grid;grid-template-columns:10px 1fr auto;gap:6px;align-items:center;font-variant-numeric:tabular-nums}
+.tip .tr b{font-family:var(--f-data);font-weight:500}
+.tip .note{color:var(--ink-3);font-size:11px;padding-left:16px}
+.controls-inline{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.cyrow{display:grid;grid-template-columns:14px auto 1fr;gap:4px 8px;align-items:baseline;font-variant-numeric:tabular-nums}
+.cyrow .f{font-family:var(--f-data);font-size:12.5px;color:var(--ink-2)}
+.flag{color:var(--warn);font-size:12.5px}
+#cyInfo{font-size:13px}
+/* process flow and swept volume */
+.pfdwrap{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;align-items:start;overflow:visible}
+.pfdwrap > .vside{grid-column:1/-1}
+@media (max-width:1000px){.pfdwrap{grid-template-columns:minmax(0,1fr)}}
+#pfd svg{min-width:0}
+.vside{gap:14px}
+#vswCtl{display:grid;gap:14px;min-width:0}
+#vswCtl .ctrl{display:grid;gap:8px}
+#vswCtl .lab{font-size:13px;color:var(--ink-2)}
+/* live view: the steam page's order - figures, then the diagrams two by two, then the process flow */
+.live-layout #cyHead,.live-layout #cyInfo{display:none}
+.live-layout #cyGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:860px){.live-layout #cyGrid{grid-template-columns:1fr}}
+.live-layout .pfdwrap{grid-template-columns:minmax(0,1fr)}
+.live-layout #pfd svg{max-width:880px;margin:0 auto}
+.lv-title{font-family:var(--f-display);font-weight:600;font-size:clamp(20px,2.6vw,24px);line-height:1.2;margin:0 0 -10px;text-wrap:balance}
+.lv-title span{color:var(--ink-2);font-weight:500}
+figure.mini{margin:0;max-width:440px;width:100%;justify-self:center}
+figure.mini figcaption{font-size:12px;color:var(--ink-3);text-align:center;margin-top:2px}
+.mini text{font-size:11px}
+.pfd .lbl2{font-family:var(--f-data);font-size:9.5px;fill:var(--ink-3)}
+.mini .cn{font-size:11px}
+#cyGrid > #vswSum{min-width:0}
+.nvrow{display:flex!important;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.nvrow .vswrow{flex:1 1 260px}
+.vswrow{display:flex;align-items:center;gap:8px}
+.vswrow input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
+.vticks{position:relative;height:14px;margin-right:calc(11ch + 52px)}
+.vticks span{position:absolute;transform:translateX(-50%);white-space:nowrap;font-size:11px}
+.vticks span:first-child{transform:none}.vticks span:last-child{transform:translateX(-100%)}
+.sumpanel{overflow-x:auto}
+.sumt{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:12.5px;min-width:0}
+.sumt th,.sumt td{padding:4px 4px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap;font-family:var(--f-data)}
+.sumt td:first-child,.sumt th:first-child{text-align:left;color:var(--ink-2);font-family:var(--f-body)}
+.sumt td:nth-child(2){text-align:right;font-family:var(--f-data)}
+.sumt td:last-child{white-space:normal;font-size:11px;min-width:9ch}
+.pfd{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
+.pfd svg{width:100%;height:auto;display:block}
+.pfd text{font-family:var(--f-data);font-size:10.5px;fill:var(--ink-2)}
+.pfd .cn{font-family:var(--f-body);font-size:12px;font-weight:600;fill:var(--ink)}
+.pfd .v{fill:var(--ink);font-weight:500}
+.pfd .q{font-weight:600}
+.pfd .qh{fill:var(--hp)}.pfd .ql{fill:var(--lp)}.pfd .qw{fill:var(--warn)}
+.pfd .eq{fill:var(--box);stroke:var(--ink-3);stroke-width:1.2}
+.pfd .ph{fill:none;stroke:var(--hp);stroke-width:2.4}
+.pfd .pl{fill:none;stroke:var(--lp);stroke-width:2.4}
+.pfd .air{fill:none;stroke:var(--ink-3);stroke-width:1.4;stroke-dasharray:5 4}
+.pfd .wat{fill:none;stroke:var(--accent);stroke-width:1.4;stroke-dasharray:5 4}
+.pfd .node{fill:var(--panel);stroke:var(--ink-2);stroke-width:1.4}
+/* tables */
+.over,.over b{color:var(--bad)!important}
+table.data{font-size:13px}
+table.data th,table.data td{padding:6px 8px;white-space:nowrap;text-align:right}
+table.data th:first-child,table.data td:first-child{text-align:left}
+table.data th:nth-child(2),table.data td:nth-child(2){text-align:right;font-family:var(--f-data)}
+table.data thead tr:first-child th{text-align:center}
+table.data .gA{box-shadow:inset 0 2px 0 var(--sA)}table.data .gS{box-shadow:inset 0 2px 0 var(--sS)}
+table.cmpt{min-width:640px}
+table.cmpt th{vertical-align:bottom;text-align:right!important}
+table.cmpt th:first-child{text-align:left!important}
+table.cmpt small{color:var(--ink-3);font-weight:400;font-size:11.5px}
+.tablewrap.flat{border:0;background:none}
+.figs{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+.fig .sub{overflow-wrap:anywhere}
+@media (min-width:900px){.figs{grid-template-columns:repeat(4,1fr)}}
+.notes{color:var(--ink-2);font-size:13.5px;gap:8px}
+.notes p{margin:0;max-width:96ch}
+@media (max-width:520px){.big .v{font-size:36px}}
+</style>
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="eyebrow">Innovative cycles for drying</div>
+    <h1 id="title">Advanced dryer heat pumps | Ahuora Centre</h1>
+    <p class="sub">Dryer inlet air at 100–220 °C, with heat recovered from warm water or air</p>
+    <p class="lede"><b>Live design</b> solves one cycle at a time here with CoolProp: recuperative RHP-A, B and C, the split-stream SLTHP, a transcritical–transcritical CO₂ cascade, an n-level cascade, or a heat pump with MVR steam (HP + MVR). Choose the refrigerants, the air and source-water temperatures, the approach and the design variables, or load an RHP-A or SLTHP design from the study. <b>Static results</b> are the REFPROP design study of RHP-A and the SLTHP.</p>
+  </header>
+
+  <div class="switch" role="group" aria-label="Results source" id="modeSwitch">
+    <button type="button" data-mode="live" aria-pressed="true">Live design<small>CoolProp</small></button>
+    <button type="button" data-mode="study" aria-pressed="false">Static results<small>REFPROP</small></button>
+  </div>
+
+  <div class="chips"><span class="chip" id="dataStatus" role="status" hidden>Loading the study results…</span><span class="chip" id="status" role="status">Loading CoolProp…</span><span class="chip" id="solve-time" hidden></span><button type="button" class="btn sm" id="autoBtn" aria-pressed="false" title="Pause solving after every change; solve on demand instead">Pause auto-solve</button><button type="button" class="btn sm" id="solveBtn" hidden>Solve now</button><span class="chip warn" id="staleChip" hidden>Inputs changed: results are out of date</span></div>
+
+  <!-- ===================================================================== study (REFPROP) -->
+  <div id="study" class="mode-pane" hidden>
+    <div class="controls strip" role="group" aria-label="Study controls">
+      <div class="ctl slider"><label class="lab" for="pcap">Pressure limit</label>
+        <input type="range" id="pcap" min="18" max="70" step="0.5" value="27" aria-describedby="pval">
+        <input type="number" id="pnum" min="18" max="70" step="0.1" value="27" class="num-in" aria-label="Pressure limit in bar abs"><output class="pval" id="pval" for="pcap">bar</output></div>
+      <div class="ctl"><span class="lab">Gas-cooler approach</span><div class="seg" id="segA"></div></div>
+      <div class="ctl"><span class="lab">Design choice</span><div class="seg" id="segTol"></div></div>
+    </div>
+
+    <section class="hlsect">
+      <div class="eyebrow" id="hlHead"></div>
+      <p class="lbl abbr">Blend labels give mass % in the order named: C3 propane, iC4 isobutane, nC4 n-butane, iC5 isopentane, cC5 cyclopentane. For example C3/iC4/iC5 20/20/60 is 20 % propane, 20 % isobutane and 60 % isopentane. Cards without a named blend are Propane/Isopentane.</p>
+      <div class="hl2" id="hlCards"></div>
+    </section>
+
+    <section class="sect">
+      <div class="sect-head"><h2>Best design at each air temperature</h2>
+        <p>Each point is the chosen design under the current limit. Red rings mark temperatures with no design under the limit; they show the design without a limit, as the headline and table do in red.</p></div>
+      <div class="legend" id="lgPerT"><span><i class="lg-line" style="border-color:var(--sA)"></i>RHP-A (RHX1 in series)</span><span><i class="lg-line" style="border-color:var(--sS)"></i>SLTHP (RHX1 parallel to LT gas cooler)</span><span><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="var(--panel)" stroke="var(--bad)" stroke-width="2"/></svg>over the pressure limit</span></div>
+      <div class="grid2">
+        <div class="panel chart"><h3>COP</h3><p class="csub">heat to air / electrical input</p><svg id="cCOP"></svg></div>
+        <div class="panel chart"><h3>Maximum pressure</h3><p class="csub">bar abs</p><svg id="cP"></svg></div>
+        <div class="panel chart"><h3>Stage-2 discharge temperature</h3><p class="csub">°C</p><svg id="cTd"></svg></div>
+        <div class="panel chart"><h3>Volumetric heating capacity</h3><p class="csub">MJ/m³ of stage-1 suction gas</p><svg id="cV"></svg></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================================================================== live (CoolProp) -->
+  <div id="live" class="mode-pane">
+    <div class="chips" id="lvChips" role="status"></div>
+    <div class="controls mas">
+      <section class="ctl" aria-labelledby="h-lvcycle">
+          <h2 id="h-lvcycle">Cycle</h2>
+          <div class="seg" id="lvCyc"></div>
+          <figure class="pfd mini" id="lvMini"></figure>
+        </section>
+      <section class="ctl" aria-labelledby="h-lvfluid">
+          <h2 id="h-lvfluid">Refrigerant</h2>
+          <div class="pickrow" id="lvLoopRow" hidden><span class="lab" id="lvLoopLab">Cycle</span><div class="seg" id="lvLoop"></div></div>
+          <div id="lvComps" class="comps"></div>
+          <p class="hint" id="lvLoopHint" hidden></p>
+          <div class="row">
+            <button type="button" class="btn" id="lvAdd">Add a component</button>
+            <span class="inline" id="lvBasisLab">Composition basis
+              <span class="toggle" role="group" aria-labelledby="lvBasisLab"><button type="button" class="tbtn" data-basis="mass" aria-pressed="true">mass</button><button type="button" class="tbtn" data-basis="mole" aria-pressed="false">mole</button></span></span>
+          </div>
+        </section>
+      <section class="ctl" aria-labelledby="h-lvcomp">
+          <h2 id="h-lvcomp">Compressor and Expander</h2>
+          <div class="pickrow wide"><span class="lab" title="Isentropic (shaft) efficiency of every compressor: a constant, or one of the HeatPumpLab models against stage pressure ratio">Efficiency model</span><div class="seg" id="lvComp"></div></div>
+          <div class="temps two">
+          <div class="pickrow wide temp" id="lvEtaCRow"><div class="slhead"><label class="lab" for="lvEtaC" title="One isentropic efficiency for every compressor stage; Kong et al. use 0.70">Isentropic efficiency</label><output id="lvEtaC-out" for="lvEtaC"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvEtaC" min="0.50" max="1" step="0.01" value="0.73"><div class="ticks" id="lvEtaC-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvPrMax" title="Largest pressure ratio any one compression stage may take; designs that need more stop with the ratio they would need">Max stage pressure ratio</label><output id="lvPrMax-out" for="lvPrMax"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvPrMax" min="5" max="50" step="1" value="20"><div class="ticks" id="lvPrMax-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="pickrow wide temp" id="lvPmaxRow"><div class="slhead"><label class="lab" for="lvPmax" title="Highest gas-cooler (high-side) pressure a design may use; designs that need more stop at the limit. The TT cascade and the sCO₂ Brayton cycle set their own limit under Design">Max pressure</label><output id="lvPmax-out" for="lvPmax"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvPmax" min="50" max="400" step="5" value="300"><div class="ticks" id="lvPmax-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvMotor" title="Electrical input = shaft power / motor efficiency, for every compressor">Motor efficiency</label><output id="lvMotor-out" for="lvMotor"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvMotor" min="0.80" max="1" step="0.01" value="0.93"><div class="ticks" id="lvMotor-ticks" aria-hidden="true"></div></div></div></div>
+          </div>
+          <div class="pickrow" id="lvExpRow"><span class="lab" title="Expand the high-pressure liquid or gas through a throttling valve (isenthalpic) or an expander (turbine) whose shaft work is returned as electricity at the motor efficiency">Expansion</span><div class="seg" id="lvExp"></div></div>
+          <div class="temps two" id="lvEtaXRow">
+          <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvEtaX" title="Isentropic efficiency of every expander; two-phase expanders typically reach 0.6-0.8">Expander isentropic efficiency</label><output id="lvEtaX-out" for="lvEtaX"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvEtaX" min="0.30" max="1" step="0.01" value="0.75"><div class="ticks" id="lvEtaX-ticks" aria-hidden="true"></div></div></div></div>
+          </div>
+          <p class="hint" id="lvExpHint"></p>
+          <div id="lvCompCard"></div>
+          <p class="hint">The low-stage swept volume sets the duties and flows; the COP does not depend on it.</p>
+        </section>
+      <section class="ctl" id="lvFanSec" aria-labelledby="h-lvfan" hidden>
+          <h2 id="h-lvfan">MVR fans</h2>
+          <div class="pickrow wide"><span class="lab" title="Isentropic efficiency of every MVR fan, separate from the heat-pump compressor: a constant, or one of the HeatPumpLab models at the fan pressure ratio">Efficiency model</span><div class="seg" id="lvFanModel"></div></div>
+          <div class="pickrow wide temp" id="lvFanEtaRow"><div class="slhead"><label class="lab" for="lvFanEta" title="One isentropic efficiency for every MVR fan">Isentropic efficiency</label><output id="lvFanEta-out" for="lvFanEta"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvFanEta" min="0.50" max="1" step="0.01" value="0.8"><div class="ticks" id="lvFanEta-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvFanPR" title="Every MVR fan raises the steam pressure by this ratio">Pressure ratio per fan</label><output id="lvFanPR-out" for="lvFanPR"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvFanPR" min="1.1" max="2.5" step="0.05" value="1.5"><div class="ticks" id="lvFanPR-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvFanSh" title="Water is injected after each fan (except the last, whose superheat goes to the air) until the steam is this far above saturation">Fan exit superheat</label><output id="lvFanSh-out" for="lvFanSh"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvFanSh" min="0" max="50" step="1" value="5"><div class="ticks" id="lvFanSh-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvFanMotor" title="Electrical input = fan shaft power / motor efficiency">Motor efficiency</label><output id="lvFanMotor-out" for="lvFanMotor"></output></div>
+            <div class="speed"><div class="track"><input type="range" id="lvFanMotor" min="0.8" max="1" step="0.01" value="0.93"><div class="ticks" id="lvFanMotor-ticks" aria-hidden="true"></div></div></div></div>
+          <p class="hint">Used by HP + MVR only; the heat-pump compressor keeps its own settings above.</p>
+        </section>
+      <section class="ctl" aria-labelledby="h-lvdesign">
+          <h2 id="h-lvdesign">Design</h2>
+          <div id="lvDesA">
+            <div class="pickrow" id="lvStagesRow"><span class="lab">Compression</span><div class="seg" id="lvStages"></div></div>
+            <div class="pickrow" id="lvIhxRow"><span class="lab">Internal heat exchanger</span><div class="seg" id="lvIhx"></div></div>
+            <div class="temps two">
+            <div class="pickrow wide temp" id="lvLiftRow"><div class="slhead"><label class="lab" for="lvLift" title="Stage-1 suction temperature rise across the RHX1 cold side">RHX1 lift</label><output id="lvLift-out" for="lvLift"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvLift" min="0" max="125" step="1" value="80"><div class="ticks" id="lvLift-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="lvLift2Row"><div class="slhead"><label class="lab" for="lvLift2" title="Interstage gas temperature rise across the RHX2 cold side, before stage 2">RHX2 lift</label><output id="lvLift2-out" for="lvLift2"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvLift2" min="0" max="125" step="1" value="40"><div class="ticks" id="lvLift2-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="lvSplitRow"><div class="slhead"><label class="lab" for="lvSplit" title="Stage-2 share of the compression, as in the HeatPumpLab model: ln(P_I/P_L) = (1 − f) ln(P_H/P_L); the shaft-power share it gives is shown in the results">Stage-2 power fraction</label><output id="lvSplit-out" for="lvSplit"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvSplit" min="0.30" max="0.70" step="0.01" value="0.45"><div class="ticks" id="lvSplit-ticks" aria-hidden="true"></div></div></div></div>
+            </div>
+            <p class="hint" id="lvDesAHint">The gas-cooler pressure is solved (the lowest at which the gas-cooler pinch reaches the approach) and the gas-cooler outlet offset is optimised for COP: the gas-cooler outlet sits at air inlet + approach + offset, and an offset keeps stage 1 out of wet compression.</p>
+          </div>
+          <div id="lvDesX" hidden></div>
+          <div id="lvDesS" hidden>
+            <div class="pickrow"><span class="lab">Compression</span><div class="seg" id="lvStagesS"></div></div>
+            <div class="temps two">
+            <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvLiftS" title="Suction temperature rise across the RHX1 cold side">RHX1 lift</label><output id="lvLiftS-out" for="lvLiftS"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvLiftS" min="0" max="140" step="1" value="80"><div class="ticks" id="lvLiftS-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="lvShareRow"><div class="slhead"><label class="lab" for="lvShare" title="Stage-2 share of the shaft power; it sets the intermediate pressure">Stage-2 power fraction</label><output id="lvShare-out" for="lvShare"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvShare" min="0.30" max="0.70" step="0.01" value="0.50"><div class="ticks" id="lvShare-ticks" aria-hidden="true"></div></div></div></div>
+            </div>
+            <div class="fields">
+              <label for="lvAlpha" title="Share of the high-side flow through the RHX1 hot branch">RHX1 flow share<input type="number" id="lvAlpha" value="0.3" step="any" min="0" max="0.95"></label>
+            </div>
+            <p class="hint">The gas-cooler pressure is solved: the lowest at which the gas coolers and RHX1 meet their approaches. The RHX1 flow share is an input; the study optimised it for each lift.</p>
+          </div>
+          <div class="row load">
+            <span class="lab">Load the study design</span>
+            <span class="toggle" role="group" aria-label="Load the study design"><button type="button" class="tbtn" data-load="cop">Highest COP</button><button type="button" class="tbtn" data-load="p1">Lowest pressure within 1 %</button></span>
+          </div>
+          <p class="hint" id="lvLoadHint"></p>
+        </section>
+      <section class="ctl" aria-labelledby="h-lvpoint">
+          <h2 id="h-lvpoint">Operating point</h2>
+          <h3 class="opgrp">Dryer air</h3>
+          <div class="temps two">
+            <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvTain" title="Air entering the gas coolers">Air inlet</label><output id="lvTain-out" for="lvTain"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvTain" min="0" max="40" step="0.5" value="15"><div class="ticks" id="lvTain-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvT" title="Air leaving the heat pump into the dryer">Dryer inlet air target</label><output id="lvT-out" for="lvT"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvT" min="100" max="220" step="0.5" value="170"><div class="ticks" id="lvT-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="humgrp"><div class="slhead"><span class="lab" title="Give the air inlet humidity as relative humidity, moisture content or dew point; the other two are shown beside the value, at the air inlet temperature and the atmospheric pressure">Air inlet humidity</span><div class="seg" id="lvAirHum" role="group" aria-label="Give the air inlet humidity as"></div></div>
+            <div class="pickrow wide temp" id="lvRHRow"><div class="slhead"><label class="lab" for="lvRH" title="Relative humidity of the air at the inlet temperature; its moisture content is carried through the heating (humid air from CoolProp, per kg of dry air)">Relative humidity</label><output id="lvRH-out" for="lvRH"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvRH" min="0" max="100" step="1" value="60"><div class="ticks" id="lvRH-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="lvAirWgRow"><div class="slhead"><label class="lab" for="lvAirWg" title="Moisture content of the inlet air, g of water per kg of dry air. The scale runs from dry air to saturation at the inlet temperature and the atmospheric pressure (non-linear: the low values get most of the track); a typed value above saturation is taken as saturated">Moisture, g/kg</label><output id="lvAirWg-out" for="lvAirWg"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvAirWg" min="0" max="1" step="0.001" value="0.66"><div class="ticks" id="lvAirWg-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="lvAirDewRow"><div class="slhead"><label class="lab" for="lvAirDew" title="Dew point of the inlet air at the atmospheric pressure; above the inlet temperature the air is taken as saturated">Dew point</label><output id="lvAirDew-out" for="lvAirDew"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvAirDew" min="-30" max="40" step="0.5" value="7.2"><div class="ticks" id="lvAirDew-ticks" aria-hidden="true"></div></div></div></div></div>
+            <div class="pickrow wide temp" id="lvPatmRow"><div class="slhead"><label class="lab" for="lvPatm" title="Pressure of the inlet air and the source air (humid-air properties, dew points and the moisture they can hold); 101.3 kPa at sea level">Atmospheric pressure</label><output id="lvPatm-out" for="lvPatm"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvPatm" min="70" max="110" step="0.1" value="101.3"><div class="ticks" id="lvPatm-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="flowRow"><div class="slhead"><label class="lab" for="lvFlow" title="Dryer inlet air mass flow, kg/s per kg of dry air (the primary air when there is secondary air), on a log scale. Set here when the compressor is sized by Sink flow; otherwise it follows from the design at the swept volume or the sink duty">Dryer inlet air mass flow</label><output id="lvFlow-out" for="lvFlow"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvFlow" min="0" max="1" step="0.001" value="0.5"><div class="ticks" id="lvFlow-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="dutyRow"><div class="slhead"><label class="lab" for="lvDuty" title="Total heat to the dryer air (sink duty), kW, on a log scale. Set here when the compressor is sized by Sink duty; otherwise it follows from the design at the swept volume or the air flow">Total sink heating duty</label><output id="lvDuty-out" for="lvDuty"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvDuty" min="0" max="1" step="0.001" value="0.5"><div class="ticks" id="lvDuty-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvTmt" title="Primary and secondary air are heated together up to this temperature, where the secondary air leaves (for example to a fluidised bed); the primary air goes on to the dryer inlet target">Secondary air target</label><output id="lvTmt-out" for="lvTmt"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvTmt" min="30" max="200" step="1" value="102"><div class="ticks" id="lvTmt-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lvPhi" title="Secondary air mass flow per kg of primary (dryer inlet) air; 0: primary air only. 0.5 sends a third of the air to the secondary use">Secondary/primary air</label><output id="lvPhi-out" for="lvPhi"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvPhi" min="0" max="2" step="0.05" value="0"><div class="ticks" id="lvPhi-ticks" aria-hidden="true"></div></div></div></div>
+          </div>
+          <h3 class="opgrp">Heat source</h3>
+          <div class="pickrow wide"><div class="seg" id="lvSrc" role="group" aria-label="Heat source" title="What the evaporator draws heat from: source water (inlet and outlet temperatures), or air (temperature, flow and moisture; its outlet follows from the duty)"></div></div>
+          <div class="pickrow wide" id="lvSrcWmRow"><div class="seg" id="lvSrcWm" role="group" aria-label="Source water given by" title="Source water: set its outlet temperature (the flow follows from the duty), or set its flow (the outlet temperature follows from the duty)"></div></div>
+          <div class="temps two">
+            <div class="pickrow wide temp" id="lvTsRow"><div class="slhead"><label class="lab" for="lvTs" title="The superheater outlet is the source approach below it">Source water in</label><output id="lvTs-out" for="lvTs"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvTs" min="0" max="80" step="0.5" value="40"><div class="ticks" id="lvTs-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="lvTwoRow"><div class="slhead"><label class="lab" for="lvTwo" title="The evaporator pressure is the highest at which the evaporator and superheater stay the source approach below the water">Source water out</label><output id="lvTwo-out" for="lvTwo"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvTwo" min="0" max="80" step="0.5" value="30"><div class="ticks" id="lvTwo-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="lvSrcMwRow"><div class="slhead"><label class="lab" for="lvSrcMw" title="Mass flow of the source water, held constant; its outlet temperature follows from the evaporator duty. 0.1–2000 kg/s on a cube-root scale">Source water flow, kg/s</label><output id="lvSrcMw-out" for="lvSrcMw"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvSrcMw" min="0" max="1" step="0.001" value="0.17"><div class="ticks" id="lvSrcMw-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp src-air"><div class="slhead"><label class="lab" for="lvSrcT" title="Air entering the evaporator; the superheater outlet is the source approach below it">Source air temperature</label><output id="lvSrcT-out" for="lvSrcT"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvSrcT" min="0" max="100" step="0.5" value="20"><div class="ticks" id="lvSrcT-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp src-air"><div class="slhead"><label class="lab" for="lvSrcM" title="Mass flow of the (moist) source air, 0.1–200 kg/s on a cube-root scale; its outlet temperature follows from the evaporator duty at the swept volume">Source air flow, kg/s</label><output id="lvSrcM-out" for="lvSrcM"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvSrcM" min="0" max="1" step="0.001" value="0.292"><div class="ticks" id="lvSrcM-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="humgrp src-air"><div class="slhead"><span class="lab" title="Give the source air humidity as relative humidity, moisture content or dew point; with the source air temperature and the atmospheric pressure it sets the heat the air can give, including condensation below its dew point">Source air humidity</span><div class="seg" id="lvSrcHum" role="group" aria-label="Give the source air humidity as"></div></div>
+            <div class="pickrow wide temp src-air" id="lvSrcRHRow"><div class="slhead"><label class="lab" for="lvSrcRH" title="Relative humidity of the source air at its temperature; below its dew point its moisture condenses in the evaporator">Relative humidity</label><output id="lvSrcRH-out" for="lvSrcRH"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvSrcRH" min="0" max="100" step="1" value="50"><div class="ticks" id="lvSrcRH-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp src-air" id="lvSrcWRow"><div class="slhead"><label class="lab" for="lvSrcW" title="Moisture content of the source air, g of water per kg of dry air; below its dew point it condenses in the evaporator. The scale runs from dry air to saturation at the source air temperature and the atmospheric pressure (non-linear: the low values get most of the track)">Moisture, g/kg</label><output id="lvSrcW-out" for="lvSrcW"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvSrcW" min="0" max="1" step="0.001" value="0.69"><div class="ticks" id="lvSrcW-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp src-air" id="lvSrcDewRow"><div class="slhead"><label class="lab" for="lvSrcDew" title="Dew point of the source air at the atmospheric pressure; below it the moisture condenses in the evaporator">Dew point</label><output id="lvSrcDew-out" for="lvSrcDew"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvSrcDew" min="-30" max="100" step="0.5" value="9"><div class="ticks" id="lvSrcDew-ticks" aria-hidden="true"></div></div></div></div></div>
+          </div>
+          <h3 class="opgrp">Minimum approaches</h3>
+          <div class="temps two">
+            <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="lva" title="Minimum temperature difference between refrigerant and air in the gas coolers">Gas-cooler approach</label><output id="lva-out" for="lva"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lva" min="0" max="40" step="0.5" value="20"><div class="ticks" id="lva-ticks" aria-hidden="true"></div></div></div></div>
+            <div class="pickrow wide temp" id="lvDTsRow"><div class="slhead"><label class="lab" for="lvDTs" title="Smallest temperature difference between the heat source (water or air) and the refrigerant in the evaporator and superheater; the superheater outlet sits this far below the source inlet. 0 to 40 K; the recuperator and IHX approaches are unchanged">Source approach</label><output id="lvDTs-out" for="lvDTs"></output></div>
+              <div class="speed"><div class="track"><input type="range" id="lvDTs" min="0" max="40" step="0.5" value="5"><div class="ticks" id="lvDTs-ticks" aria-hidden="true"></div></div></div></div>
+          </div>
+          <p class="hint" id="lvSrcHint">The evaporator pressure is the highest at which the evaporator and superheater stay 5 K below the source water (counterflow); the superheater outlet is 5 K below the water inlet.</p>
+        </section>
+    </div>
+
+    <h2 class="lv-title" id="lvTitle"></h2>
+    <div class="headline" id="lvHeadline" hidden></div>
+    <div class="figs" id="lvFigs"></div>
+
+    <section class="panel cases" id="cases" aria-labelledby="h-cases">
+      <div class="cases-head"><h2 id="h-cases">Cases</h2><span class="hint" id="case-store">Loading cases…</span></div>
+      <p class="hint" id="case-current"></p>
+      <div class="case-form">
+        <label for="case-name">Name<input type="text" id="case-name" maxlength="120" autocomplete="off"></label>
+        <label for="case-note">Note<input type="text" id="case-note" maxlength="500" placeholder="Optional" autocomplete="off"></label>
+        <div class="row"><button class="btn" type="button" id="case-save">Save case</button><button class="btn" type="button" id="case-saveas" hidden>Save as new</button>
+          <button class="btn" type="button" id="case-copy">Copy link</button><button class="btn" type="button" id="case-open">Open a link…</button></div>
+      </div>
+      <div class="row" id="case-openbox" hidden><input type="text" id="case-opentext" placeholder="Paste a case link" aria-label="Case link to open" autocomplete="off"><button class="btn" type="button" id="case-opengo">Open</button></div>
+      <div class="row" id="case-linkbox" hidden><input type="text" id="case-linktext" readonly aria-label="Case link"></div>
+      <p class="hint" id="case-status" role="status"></p>
+      <div class="row"><span class="hint" id="case-count"></span><button class="btn sm" type="button" id="case-none" hidden>Clear selection</button><button class="btn" type="button" id="case-export" hidden disabled>Export comparison (CSV and JSON)</button></div>
+      <div class="case-list" id="case-list"></div>
+    </section>
+
+    <section class="panel cases" id="compare" hidden aria-labelledby="h-cmp">
+      <div class="cases-head"><h2 id="h-cmp">Compare cases</h2><span class="hint" id="cmp-status" role="status"></span></div>
+      <p class="hint">Each case is re-solved here with CoolProp. The left-most case is the baseline; the others show their change from it, and the best value of each result is shaded. Drag a column by its handle (or use ‹ ›) to re-order, or sort by a result.</p>
+      <div class="chips" id="cmp-notes"></div>
+      <div class="cmp-order">
+        <span class="inline" id="cmp-order-lab">Order by</span>
+        <button type="button" class="pick" id="cmp-order" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="cmp-order-lab cmp-order"><span id="cmp-order-val">Your order (drag)</span><span class="caret" aria-hidden="true">▾</span></button>
+        <div class="fluid-list" id="cmp-order-list" role="listbox" aria-labelledby="cmp-order-lab" hidden></div>
+      </div>
+      <div class="cmp-wrap"><div class="side" id="cmp-side"></div></div>
+      <h3>Results</h3>
+      <div class="cmp-wrap" id="cmp-results"></div>
+      <h3>Inputs that differ</h3>
+      <div class="cmp-wrap" id="cmp-inputs"></div>
+      <p class="hint" id="cmp-same"></p>
+      <div class="cmp-grid">
+        <div class="panel chart"><h3>Temperature–entropy</h3><p class="csub">every loop of each case, in its colour</p><svg id="cmp-ts"></svg></div>
+        <div class="panel chart"><h3>Sweep</h3>
+          <div class="row"><span class="inline">Vary</span><span class="toggle wrap-toggle" id="sweep-x" role="group" aria-label="Variable to sweep"></span></div>
+          <div class="row"><span class="inline">Show</span><span class="toggle wrap-toggle" id="sweep-y" role="group" aria-label="Result to plot"></span></div>
+          <div class="row"><button class="btn" type="button" id="sweep-run">Run the sweep</button><span class="hint" id="sweep-status" role="status"></span></div>
+          <svg id="cmp-sweep"></svg></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ===================================================================== cycle diagrams and flows (both modes) -->
+  <section class="sect" id="cySect">
+    <div class="sect-head" id="cyHead"><h2>Cycle diagrams</h2>
+      <p id="cyNote">One cycle at a time, coloured by component, with the bubble and dew lines of its fluid.</p></div>
+    <div class="controls-inline" id="cySel" hidden><span class="lab">Dryer inlet air</span><div class="seg" id="segTd"></div><span class="lab">Show</span><div class="seg" id="segCy"></div><span class="lab">RHP-A fluid</span><div class="seg" id="segCyA"></div></div>
+    <div class="panel" id="cyInfo"></div>
+    <div class="grid3" id="cyGrid">
+      <div class="panel chart"><h3>Temperature–entropy</h3><svg id="dTs"></svg></div>
+      <div class="panel chart"><h3>Pressure–enthalpy</h3><svg id="dPh"></svg></div>
+      <div class="panel chart"><h3>Heat exchange profiles</h3><p class="csub">Temperature against heat transferred: the exchangers with the dryer air and the heat source. Dashed: the dryer air (grey) and the heat source (blue), named in the legend; shaded: the heat transfer between the streams. The exchangers on the dryer air are stacked in the order the air passes them, so the air reads as one continuous line.</p><div class="legend" id="lgPr"></div><svg id="dPr"></svg></div>
+      <div class="panel chart" id="dPr2Panel"><h3>Internal heat exchange</h3><p class="csub">Recuperators, internal heat exchangers and cascade exchangers (and the HP + MVR steam generator): heat passed between the cycle's own streams. Solid: the hot side; dashed in the same colour: that exchanger's cold side, named in the legend; shaded: the heat transfer.</p><div class="legend" id="lgPr2"></div><svg id="dPr2"></svg></div>
+    </div>
+    <div class="legend" id="lgComp"></div>
+    <div class="legend"><span><i class="lg-line" style="border-color:var(--hp)"></i>high-pressure side</span><span><i class="lg-line" style="border-color:var(--lp)"></i>low-pressure side</span><span><i class="lg-dash" style="border-color:var(--ink-3)"></i>dryer air</span><span><i class="lg-dash" style="border-color:var(--accent)"></i>source water</span><span class="lbl">numbers: refrigerant °C at each point; pressures in bar abs; duties in kW (heat ▲ to air, ▼ from water; electrical input at the compressors)</span></div>
+    <div class="pfdwrap">
+      <aside class="panel vside" id="vswAside"><div id="vswCtl">
+        <div class="ctrl" id="sizeCtl">
+          <span class="lab">Size by</span><div class="seg" id="segSize"></div>
+          <span class="lbl" id="sizeHint" hidden></span>
+        </div>
+        <div class="ctrl vfull">
+          <label class="lab" for="vsw">Low-stage swept volume</label>
+          <div class="vswrow"><input type="range" id="vsw" min="0" max="1000" step="1" value="300" aria-label="Swept volume, logarithmic"><input type="number" id="vswn" min="20" max="15600" step="1" value="145" class="num-in" aria-label="Swept volume in m³/h"><span class="lbl">m³/h</span></div>
+          <div class="lbl vticks"><span style="left:0%">20</span><span style="left:30.2%">150</span><span style="left:64.8%">1 500</span><span style="left:100%">15 600</span></div>
+        </div>
+        <div class="ctrl nvrow">
+          <label class="lab" for="nvs">Stage-1 volumetric efficiency</label>
+          <div class="seg" id="segNv"></div>
+          <div class="vswrow"><input type="range" id="nvs" min="0.50" max="1.00" step="0.01" value="0.85" aria-label="Fixed volumetric efficiency"><input type="number" id="nvv" min="0.3" max="1" step="0.01" value="0.85" class="num-in" aria-label="Fixed volumetric efficiency value"></div>
+        </div>
+      </div></aside>
+      <div class="pfd" id="pfd"></div>
+      <div class="pfd" id="vswSum"></div>
+    </div>
+  </section>
+
+  <section class="sect" id="tblSect" hidden>
+    <div class="sect-head"><h2 id="tblTitle">Detail</h2>
+      <p>Marginal COP is the extra heat over the extra electricity for the 10 K step up to that temperature, at the same air flow. A direct electric heater gives 1.0.</p></div>
+    <div class="tablewrap"><table class="data" id="tbl"></table></div>
+  </section>
+
+  <section class="panel notes">
+    <h2>Method notes</h2>
+    <p>RHP-A results come from main_RHPdesignA_caps.py: a fixed grid of RHX1 lift (0–125 K, within the 2/3-rule limit) and stage-2 power share (0.40–0.55), with the gas-cooler outlet offset optimised for each design. Its gas-cooler pressure follows from the design, so the limit simply removes designs above it.</p>
+    <p>SLTHP results come from main_SLTHP_compare.py with no pressure cap: RHX1 lift 30–140 K at a 0.50 power share, with the gas-cooler pressure and RHX1 flow share optimised inside each design. Each design keeps its pressure scan (36 points, 5–60 bar). Under a limit, the page uses the optimum where it fits and otherwise the best scan point below the limit, so the SLTHP under a limit is resolved to about 7 % in pressure.</p>
+    <p>Design choice: "Highest COP" takes the strict optimum. "Lowest pressure within 1 %" takes the lowest-pressure design whose COP is within 1 % of that optimum. The difference matters at a 30 K approach, where RHP-A at 150–170 °C has a second family of designs with no RHX1 lift at 45–68 bar that ties the recuperated designs at about 20 bar to within 0.04–1 % COP; the strict optimum then jumps between the two. The SLTHP has the same effect once (20/80, 170 °C, 20 K, 43 bar).</p>
+    <p>Headline pressures: maximum pressure and overall pressure ratio are the highest, and low-stage suction pressure the lowest, across the six air temperatures. For the SLTHP, designs taken from a pressure-scan point (the 1 % rule) use the suction pressure of that lift's optimum, marked ≈.</p>
+    <p>Live design: the same two cycle models (RecuperativeHeatPump Design A and SplitHeatPump.evaluate) in JavaScript over CoolProp 8 (HEOS mixtures), with the same compressor model (Pareto front isentropic efficiency, motor 0.93). Two things differ from the study. The source water has a finite flow from its inlet to its outlet temperature, and the evaporator pressure is the highest at which the evaporator and superheater stay 5 K below it; the study used an isothermal 40 °C source with the evaporator inlet held at 10 °C. And the RHP-A gas-cooler outlet offset is optimised continuously for COP (the study tried 0, 7, 10, 15, 20 and 30 K in turn until stage 1 was dry). Run on the study's own evaporator setting, the models reproduce the REFPROP COP to within about 0.02 % for the propane, butane and pentane blends, and to about 0.4 % for propane/cyclopentane (CoolProp's mixing parameters). The SLTHP's gas-cooler pressure and RHX1 flow share are inputs; an approach shortfall under 0.3 K is reported rather than failed.</p>
+    <p>Duties and power: refrigerant mass flow = stage-1 suction density × volumetric efficiency × low-stage swept volume. "Model" volumetric efficiency uses the pressure-ratio correlation in the cycle model (1 − 0.0824·(PR−1)^0.728); "Fixed" applies the chosen value to both cycles. For reference, a commercial screw compressor of this size is listed at 197 m³/h (50 Hz), and a commercial low-stage compressor at 145 m³/h (2950 rpm). High-stage swept volume needed = mass flow / (stage-2 suction density × stage-2 volumetric efficiency). Electrical input includes a motor efficiency of 0.93.</p>
+    <p>Data: results/dryer_compare_v26 (dashboard_data.json, cycles_data.json, state_5C_1bar.json); tables in results/dryer_compare_v26/summary.md.</p>
+  </section>
+  <footer class="notes" style="padding:4px 2px 12px;font-size:12.5px">
+    <p>© 2021–2026 The University of Waikato. Licensed under the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/LICENSE">Apache License 2.0</a>. Bundles CoolProp (MIT licence); see the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/apps/dryer/THIRD_PARTY_NOTICES.md">third-party notices</a>. <a href="../">All HeatPumpLab apps</a>.</p>
+  </footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>{{include sghp_model.js}}</script>
+<script>{{include dryer_model.js}}</script>
+<script>{{include dryer_cascades.js}}</script>
+<script>{{include cp_preset.js}}</script>
+<script type="module">{{include @coolprop}}</script>
+<script>{{include adapter.js dryer_study.js dryer_live.js dryer_cases.js boot.js}}</script>
+
+</body></html>

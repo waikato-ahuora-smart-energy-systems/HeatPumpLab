@@ -1,4 +1,4 @@
-"""Build checks for the SGHP live page (local_scripts/sghp_live/build_sghp_live.py).
+"""Build checks for the SGHP live page (apps/src/steam/build.py).
 
 These catch a page that loads but can never solve: the CoolProp loader missing or not handed to the
 page, or coolprop.wasm not copied next to index.html. They need no CoolProp and no browser.
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD = ROOT / "local_scripts" / "sghp_live" / "build_sghp_live.py"
+BUILD = ROOT / "apps" / "src" / "steam" / "build.py"
 
 FAKE_ES_LOADER = """var Module = (() => { return async function(opts) { return {}; }; })();
 var s = "</script>";
@@ -21,8 +21,8 @@ FAKE_CLASSIC_LOADER = "var Module = typeof Module != 'undefined' ? Module : {};\
 @pytest.fixture(scope="module")
 def build_mod():
     if not BUILD.exists():
-        pytest.skip("local_scripts/sghp_live not present")
-    spec = importlib.util.spec_from_file_location("build_sghp_live", BUILD)
+        pytest.skip("apps/src/steam not present")
+    spec = importlib.util.spec_from_file_location("sghp_build", BUILD)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -180,7 +180,7 @@ def test_real_coolprop_survives_repeated_errors(build_mod, tmp_path):
 def test_real_coolprop_build(build_mod, tmp_path):
     js = build_mod.CP_DIR / "coolprop.js"
     if not js.exists():
-        pytest.skip("local_scripts/coolprop_js/coolprop.js not present")
+        pytest.skip("apps/src/coolprop/coolprop.js not present")
     page = build_mod.build(tmp_path / "out", js)
     html = page.read_text()
     assert len(html) > len(js.read_text())                    # loader inlined, not just referenced
@@ -202,7 +202,7 @@ def test_mixture_near_critical_fallbacks(build_mod, tmp_path):
     (tmp_path / "coolprop.mjs").write_text(js.read_text().replace(
         anchor, anchor + 'Module["sghpStackSave"]=stackSave;Module["sghpStackRestore"]=stackRestore;', 1))
     shutil.copy(js.parent / "coolprop.wasm", tmp_path / "coolprop.wasm")
-    live = ROOT / "local_scripts" / "sghp_live"
+    live = ROOT / "apps" / "src" / "steam"
     (tmp_path / "t.mjs").write_text(f"""
 import F from './coolprop.mjs'; import fs from 'fs'; import {{ createRequire }} from 'module';
 const SGHP = createRequire(import.meta.url)({json.dumps(str(live / "sghp_model.js"))});

@@ -1,4 +1,4 @@
-"""Cases on the SGHP live page (local_scripts/sghp_live/sghp_cases.js): the link code, input
+"""Cases on the SGHP live page (apps/src/steam/sghp_cases.js): the link code, input
 cleaning, and the page wiring. The shared store and the browser behaviour are checked by hand."""
 import importlib.util
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-LIVE = ROOT / "local_scripts" / "sghp_live"
+LIVE = ROOT / "apps" / "src" / "steam"
 
 
 def run_cases_js(script):
@@ -73,9 +73,9 @@ def test_summary_and_rows():
     assert o["sweeps"] == ["T_steam", "T_source", "compressor_Hz"]
 
 
-@pytest.mark.skipif(not (LIVE / "build_sghp_live.py").exists(), reason="local_scripts/sghp_live not present (gitignored)")
+@pytest.mark.skipif(not (LIVE / "build.py").exists(), reason="apps/src/steam not present")
 def test_page_wiring(tmp_path):
-    spec = importlib.util.spec_from_file_location("build_sghp_live", LIVE / "build_sghp_live.py")
+    spec = importlib.util.spec_from_file_location("sghp_build", LIVE / "build.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     html = mod.build(tmp_path / "out", None, mock=True).read_text()

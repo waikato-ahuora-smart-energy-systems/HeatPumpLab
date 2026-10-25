@@ -1,0 +1,145 @@
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="eyebrow">Single-stage heat pump · solved in your browser with CoolProp</div>
+    <h1 id="title">Steam-generating heat pump | Ahuora Centre</h1>
+    <p class="sub" id="subtitle"></p>
+    <p class="lede">Choose up to three refrigerant components and their shares, set the operating point, and the cycle is solved here with CoolProp. Hover any chart for values.</p>
+  </header>
+
+  <div class="chips"><span class="chip" id="status" role="status">Loading CoolProp…</span><span class="chip" id="solve-time"></span></div>
+
+  <div class="chips" id="chips" role="status"></div>
+
+  <div class="controls">
+    <div class="ctl-col">
+      <section class="ctl" aria-labelledby="h-comp">
+        <h2 id="h-comp">Compressor</h2>
+        <p class="hint" id="compressor-lab">Semi-hermetic reciprocating, R600a efficiency maps; swept volume at 50 Hz</p>
+        <span class="toggle wrap-toggle" role="group" aria-labelledby="h-comp" id="compressor-pick"></span>
+      </section>
+      <section class="ctl" aria-labelledby="h-point">
+      <h2 id="h-point">Operating point</h2>
+      <div class="temps">
+        <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="T_source">Heat source</label><output id="T_source-out" for="T_source"></output></div>
+          <div class="speed"><div class="track"><input type="range" id="T_source" min="20" max="80" step="1" value="55"><div class="ticks" id="T_source-ticks" aria-hidden="true"></div></div></div></div>
+        <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="T_steam">Steam</label><output id="T_steam-out" for="T_steam"></output></div>
+          <div class="speed"><div class="track"><input type="range" id="T_steam" min="90" max="140" step="1" value="120"><div class="ticks" id="T_steam-ticks" aria-hidden="true"></div></div></div></div>
+        <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="T_water_in">Hot water in</label><output id="T_water_in-out" for="T_water_in"></output></div>
+          <div class="speed"><div class="track"><input type="range" id="T_water_in" min="20" max="120" step="1" value="80"><div class="ticks" id="T_water_in-ticks" aria-hidden="true"></div></div></div></div>
+        <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="T_water_out">Hot water out</label><output id="T_water_out-out" for="T_water_out"></output></div>
+          <div class="speed"><div class="track"><input type="range" id="T_water_out" min="30" max="135" step="1" value="95"><div class="ticks" id="T_water_out-ticks" aria-hidden="true"></div></div></div></div>
+      </div>
+      <div class="temps pair">     <!-- side by side: preheat from subcooling and suction superheat -->
+        <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="preheat_sub" title="Share of the feedwater preheat (bled hot water heated to boiling in the steam generator) taken from subcooling the refrigerant liquid at the condenser exit; the rest is from condensing. More subcooling, more steam.">Preheat from subcooling</label><output id="preheat_sub-out" for="preheat_sub"></output></div>
+          <div class="speed"><div class="track"><input type="range" id="preheat_sub" min="0" max="100" step="5" value="100"><div class="ticks" id="preheat_sub-ticks" aria-hidden="true"></div></div></div></div>
+        <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="dT_superheat" title="Compressor suction above the evaporating dew point, given by the internal heat exchanger">Suction superheat</label><output id="dT_superheat-out" for="dT_superheat"></output></div>
+          <div class="speed"><div class="track"><input type="range" id="dT_superheat" min="0" max="40" step="1" value="15"><div class="ticks" id="dT_superheat-ticks" aria-hidden="true"></div></div></div></div>
+      </div>
+      <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="hz">Compressor speed</label><output id="hz-out" for="hz"></output></div>
+        <div class="speed"><div class="track"><input type="range" id="hz" min="30" max="70" step="1" value="50"><div class="ticks" id="hz-ticks" aria-hidden="true"></div></div></div>
+        <span class="hint" id="hz-sub"></span></div>
+      </section>
+    </div>
+    <div class="ctl-col">
+      <section class="ctl" aria-labelledby="h-fluid">
+        <h2 id="h-fluid">Refrigerant</h2>
+        <div id="comps" class="comps"></div>
+        <div class="row">
+          <button type="button" class="btn" id="add-comp">Add a component</button>
+          <span class="inline" id="basis-lab">Shares by
+            <span class="toggle" role="group" aria-labelledby="basis-lab"><button type="button" class="tbtn" data-basis="mass" aria-pressed="true">mass</button><button type="button" class="tbtn" data-basis="mole" aria-pressed="false">mole</button></span>
+            <input type="hidden" id="frac-basis" value="mass"></span>
+        </div>
+        <p class="hint">The last component takes the balance, so the shares always add to 100 %.</p>
+      </section>
+      <section class="ctl" aria-labelledby="h-set">
+        <h2 id="h-set">Approaches and losses</h2>
+        <div class="fields">
+          <label for="dTmin_source" title="Evaporator outlet (dew point) below the heat source">ΔT source, K<input type="number" id="dTmin_source" value="5" step="0.5" min="0"></label>
+          <label for="dTmin_steam" title="Condenser outlet (bubble point) above the steam">ΔT steam, K<input type="number" id="dTmin_steam" value="5" step="0.5" min="0"></label>
+          <label for="dTmin_water" title="Minimum subcooler approach to the hot water">ΔT hot water, K<input type="number" id="dTmin_water" value="5" step="0.5" min="0"></label>
+          <label for="dTmin_ihx" title="Minimum approach in the internal heat exchanger">ΔT IHX, K<input type="number" id="dTmin_ihx" value="5" step="0.5" min="0"></label>
+          <label for="UA_manual" title="Compressor shell heat loss to ambient: UA × (mean of suction and discharge − ambient)">Compressor heat loss UA, W/K<input type="number" id="UA_manual" value="15" step="1" min="0"></label>
+          <label for="UA_cond" title="Condenser (steam generator) heat loss to ambient, from the mean refrigerant temperature; off the steam duty">Condenser heat loss UA, W/K<input type="number" id="UA_cond" value="0" step="1" min="0"></label>
+          <label for="UA_subcool" title="Subcooler heat loss to ambient, from the mean refrigerant temperature; off the hot-water duty">Subcooler heat loss UA, W/K<input type="number" id="UA_subcool" value="0" step="1" min="0"></label>
+          <label for="UA_evap" title="Evaporator heat loss to ambient, from the mean refrigerant temperature; the source supplies it">Evaporator heat loss UA, W/K<input type="number" id="UA_evap" value="0" step="1" min="0"></label>
+          <label for="dPK_cond" title="Condenser refrigerant pressure drop, ΔP [kPa] = K × (V̇ [m³/h])^1.8, V̇ at the mean of the inlet and outlet specific volumes. The exit (bubble point) stays pinned, so the compressor discharges this much higher.">Condenser pressure-loss K, kPa/(m³/h)¹·⁸<input type="number" id="dPK_cond" value="0" step="0.01" min="0"></label>
+          <label for="dPK_subcool" title="Subcooler refrigerant pressure drop, ΔP [kPa] = K × (V̇ [m³/h])^1.8, V̇ at the mean of the inlet and outlet specific volumes. Reported only: the liquid stays subcooled.">Subcooler pressure-loss K, kPa/(m³/h)¹·⁸<input type="number" id="dPK_subcool" value="0" step="0.01" min="0"></label>
+          <label for="dPK_evap" title="Evaporator refrigerant pressure drop, ΔP [kPa] = K × (V̇ [m³/h])^1.8, V̇ at the mean of the inlet and outlet specific volumes. The exit (dew point) stays pinned, so the evaporator inlet sits this much higher.">Evaporator pressure-loss K, kPa/(m³/h)¹·⁸<input type="number" id="dPK_evap" value="0" step="0.01" min="0"></label>
+          <label for="T_ambient">Ambient, °C<input type="number" id="T_ambient" value="15" step="1"></label>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="headline" id="headline" hidden></div>
+
+  <section class="panel" id="cases-panel" aria-labelledby="h-cases">
+    <div class="cases-head"><h2 id="h-cases">Cases</h2><span class="hint" id="case-store">Loading cases…</span></div>
+    <p class="hint" id="case-current"></p>
+    <div class="case-form">
+      <label for="case-name">Name<input type="text" id="case-name" maxlength="120" autocomplete="off"></label>
+      <label for="case-note">Note<input type="text" id="case-note" maxlength="500" placeholder="Optional" autocomplete="off"></label>
+      <div class="row"><button class="btn" type="button" id="case-save">Save case</button><button class="btn" type="button" id="case-saveas" hidden>Save as new</button>
+        <button class="btn" type="button" id="case-copy">Copy link</button><button class="btn" type="button" id="case-open">Open a link…</button></div>
+    </div>
+    <div class="row" id="case-openbox" hidden><input type="text" id="case-opentext" placeholder="Paste a case link" aria-label="Case link to open" autocomplete="off"><button class="btn" type="button" id="case-opengo">Open</button></div>
+    <div class="row" id="case-linkbox" hidden><input type="text" id="case-linktext" readonly aria-label="Case link"></div>
+    <p class="hint" id="case-status" role="status"></p>
+    <div class="row"><span class="hint" id="case-count"></span><button class="btn sm" type="button" id="case-all" hidden>Select all</button><button class="btn sm" type="button" id="case-none" hidden>Clear selection</button><button class="btn sm danger" type="button" id="case-del-sel" hidden>Delete selected</button><button class="btn" type="button" id="case-export" hidden disabled>Export comparison (CSV and JSON)</button></div>
+    <div class="case-list" id="case-list"></div>
+  </section>
+
+  <section class="panel" id="compare" hidden aria-labelledby="h-cmp">
+    <h2 id="h-cmp">Comparison</h2>
+    <div class="legend" id="lg-cmp"></div>
+    <div class="chips" id="cmp-notes"></div>
+    <div class="cmp-order">
+      <span class="inline" id="cmp-order-lab">Order by</span>
+      <button type="button" class="pick" id="cmp-order" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="cmp-order-lab cmp-order"><span id="cmp-order-val">Your order (drag)</span><span class="caret" aria-hidden="true">▾</span></button>
+      <div class="fluid-list" id="cmp-order-list" role="listbox" aria-labelledby="cmp-order-lab" hidden></div>
+    </div>
+    <h3>Side by side</h3>
+    <p class="note">Pick an order above, or drag a column by its ⠿ handle (or use ‹ ›) to re-order the comparison by hand; the left-most case is the baseline, and the others show their change from it in brackets. Gauges share one scale across the cases (kW and bar), rounded up to the next 10. For each result where higher or lower is better, the <span class="win-chip">best value</span> is highlighted.</p>
+    <div class="cmp-wrap"><div class="side" id="cmp-side"></div></div>
+    <h3>Inputs that differ</h3>
+    <div class="cmp-wrap" id="cmp-inputs"></div>
+    <p class="hint" id="cmp-same"></p>
+    <div class="cmp-grid">
+      <div><h3>Temperature–entropy</h3><div id="cmp-ts"></div></div>
+      <div><h3>Pressure–enthalpy</h3><div id="cmp-ph"></div></div>
+    </div>
+    <h3>Sweep</h3>
+    <div class="row"><span class="inline">Vary</span><span class="toggle wrap-toggle" id="sweep-x" role="group" aria-label="Variable to sweep"></span></div>
+    <div class="row"><span class="inline">Show</span><span class="toggle wrap-toggle" id="sweep-y" role="group" aria-label="Result to plot"></span><span class="hint" id="sweep-status" role="status"></span></div>
+    <p class="note">Each case keeps its other inputs; points with no cycle leave a gap.</p>
+    <div id="cmp-sweep"></div>
+  </section>
+
+  <div class="figs" id="figs"></div>
+
+  <div class="grid">
+    <section class="panel"><h2>Temperature–entropy</h2><div class="legend" id="lg-ts"></div><div id="ts"></div></section>
+    <section class="panel"><h2>Pressure–enthalpy</h2><div class="legend" id="lg-ph"></div><div id="ph"></div></section>
+    <section class="panel"><h2>Heat exchange profiles</h2><p class="note">Temperature against heat transferred, from each exchanger's cold end; the IHX follows the evaporator. Dashed grey: the other stream (feedwater heated to boiling and turned to steam, the hot water, the heat source); shaded: the heat transfer between the streams.</p><div class="legend" id="lg-pr"></div><div id="pr"></div></section>
+    <section class="panel"><h2>Energy flows</h2><p class="note" id="ef-note"></p><div class="legend" id="lg-ef"></div><div id="ef"></div></section>
+  </div>
+
+  <section class="panel"><h2>Process flow</h2>
+    <figure class="pfdfig"><div class="pfdwrap" id="pfd"></div><figcaption id="pfd-cap"></figcaption></figure></section>
+
+
+  <div class="grid">
+    <section class="panel"><h2>Heating COP across the rating grid</h2>
+      <p class="note">Same refrigerant and settings at every point. Click a cell to show it. "IHX": the liquid is too cold to give the suction superheat; "wet": compression ends two-phase; "HW": the hot water outlet is too close to the condensing temperature.</p>
+      <div class="row"><button class="btn" id="btn-map" type="button">Compute COP map</button>
+        <label class="inline" for="auto-map"><input type="checkbox" id="auto-map" checked> recompute when settings change</label>
+        <span class="hint" id="map-status" role="status"></span></div>
+      <div id="map"></div></section>
+    <section class="panel"><h2>Compressor efficiency map</h2><p class="note" id="eff-note"></p><div class="legend" id="lg-eff"></div><div id="eff"></div></section>
+  </div>
+
+  <div class="tablewrap"><table id="tbl"></table></div>
+  <div class="foot" id="foot"></div>
+  <div class="foot"><p>© 2021–2026 The University of Waikato. Licensed under the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/LICENSE">Apache License 2.0</a>. Bundles CoolProp (MIT licence); see the <a href="https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab/blob/main/apps/steam/THIRD_PARTY_NOTICES.md">third-party notices</a>. <a href="../">All HeatPumpLab apps</a>.</p></div>
+</div>

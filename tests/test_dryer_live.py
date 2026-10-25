@@ -1,4 +1,4 @@
-"""Advanced dryer heat pumps page (local_scripts/dryer_live): the build, and the JavaScript cycle models over
+"""Advanced dryer heat pumps app (sources in apps/src/dryer): the build, and the JavaScript cycle models over
 CoolProp against the REFPROP study.
 
 The regression cases are study designs (results/dryer_compare_v26/dashboard_data.json) with their REFPROP COP and
@@ -18,9 +18,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-LIVE = ROOT / "local_scripts" / "dryer_live"
-SGHP = ROOT / "local_scripts" / "sghp_live"
-CP_JS = ROOT / "local_scripts" / "coolprop_js" / "coolprop.js"
+LIVE = ROOT / "apps" / "src" / "dryer"          # the dryer app's sources, with its own copies of the SGHP model and adapter
+PAGE = ROOT / "apps" / "dryer"
+CP_JS = ROOT / "apps" / "src" / "coolprop" / "coolprop.js"
+DATA_FILES = ("dashboard_data.json", "cycles_data.json", "state_5C_1bar.json")
 
 # (fluid key, approach K, air C, lift K, split, GC outlet offset K, REFPROP COP, REFPROP gas-cooler pressure bar)
 RHPA = [
@@ -46,44 +47,35 @@ SLTHP = [
 
 @pytest.fixture(scope="module")
 def build_mod():
-    if not (LIVE / "build_dryer_live.py").exists():
-        pytest.skip("local_scripts/dryer_live not present (gitignored)")
-    spec = importlib.util.spec_from_file_location("build_dryer_live", LIVE / "build_dryer_live.py")
+    spec = importlib.util.spec_from_file_location("dryer_build", LIVE / "build.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
-def test_build_page(build_mod, tmp_path):
-    if not CP_JS.exists():
-        pytest.skip("local_scripts/coolprop_js/coolprop.js not present")
-    data = tmp_path / "data"
-    data.mkdir()
-    for name in build_mod.DATA_FILES:
-        (data / name).write_text("{}")
-    page = build_mod.build(tmp_path / "out", CP_JS, data)
+def test_build_reproduces_the_page(build_mod, tmp_path):
+    """apps/dryer/index.html is exactly what its sources build, and the page has the parts the app relies on."""
+    page = build_mod.build(tmp_path / "out")
     html = page.read_text()
+    assert page.read_bytes() == (PAGE / "index.html").read_bytes(), "rebuild apps/dryer: uv run python apps/src/dryer/build.py"
+    assert (page.parent / "coolprop.wasm").read_bytes() == (PAGE / "coolprop.wasm").read_bytes()
     assert "<title>Advanced dryer heat pumps</title>" in html
-    assert "Advanced dryer heat pumps | Ahuora Centre" in html
-    assert "Barlow Semi Condensed" in html and "--accent:#1f5f8b" in html          # the steam page's style
-    assert 'Module["sghpStackSave"]=stackSave' in html
+    assert 'Module["sghpStackSave"]=stackSave' in html and "window.__cpFactoryReady(Module);" in html
+    assert "export default" not in html                                             # not valid in the inline module
     assert "class CoolPropFluid" in html and "root.DRYER = api" in html
-    assert "bindLive();\nstudyBoot();" in html
-    assert "const D = {" not in html                                                # data fetched, not inlined
-    for tag in ('id="case-save"', 'id="cmp-results"', 'id="cmp-side"', 'id="cmp-order"', 'id="sweep-run"', 'casesBoot();', 'function solveCfg(cfg)', 'function cleanInputs(raw)',
-                'id="lvTmt"', 'id="lvPhi"', 'id="lvPrMax"', 'id="lvStages"', 'id="lvIhx"', 'id="h-lvcycle"', "['H', 'Conventional']",
-                'id="lvOpt"', 'function optimise(c)', 'cascadeOptimiseSteps', 'boosterOptimiseSteps',
-                'id="lvSrc"', 'id="lvSrcT"', 'id="lvSrcM"', 'id="lvSrcW"', 'function withSource(cfg, solveOne)', 'id="lvFanSec"', 'id="lvFanPR"', 'function splitFields(p)'):
-        assert tag in html, tag                                                     # secondary air, PR limit, conventional, Cycle box
-    for name in build_mod.DATA_FILES + ("coolprop.wasm",):
-        assert (page.parent / name).exists(), name
-    page2 = build_mod.build(tmp_path / "out", CP_JS, data)                          # rebuild over read-only copies
-    assert page2 == page
+    assert "bindLive();\nstudyBoot();" in html and "casesBoot();" in html
+    assert "const D = {" not in html                                                # study data fetched, not inlined
+    for tag in ('id="case-save"', 'id="cmp-results"', 'id="sweep-run"', 'function solveCfg(cfg)', 'function cleanInputs(raw)',
+                'id="lvTmt"', 'id="lvPhi"', 'id="lvPrMax"', 'id="lvPmax"', 'id="lvExp"', 'id="lvStagesS"', 'id="autoBtn"',
+                'id="lvSrc"', 'function withSource(cfg, solveOne)', 'id="lvFanSec"', 'function splitFields(p)'):
+        assert tag in html, tag
+    for name in DATA_FILES:
+        assert (PAGE / name).exists(), name
 
 
 def test_build_needs_coolprop(build_mod, tmp_path):
-    with pytest.raises(SystemExit, match="coolprop.js not found"):
-        build_mod.build(tmp_path / "out", tmp_path / "nowhere" / "coolprop.js", None)
+    with pytest.raises(FileNotFoundError):
+        build_mod.build(tmp_path / "out", tmp_path / "nowhere" / "coolprop.js")
 
 
 def _run_node(tmp_path, body: str, timeout=900):
@@ -97,9 +89,8 @@ def _run_node(tmp_path, body: str, timeout=900):
     (tmp_path / "t.mjs").write_text(f"""
 import F from './coolprop.mjs'; import fs from 'fs'; import {{ createRequire }} from 'module';
 const req = createRequire(import.meta.url);
-const SGHP = req({json.dumps(str(SGHP / "sghp_model.js"))}), DRY = req({json.dumps(str(LIVE / "dryer_model.js"))});
-const src = fs.readFileSync({json.dumps(str(SGHP / "sghp_live.js"))}, 'utf8');
-const code = src.slice(0, src.indexOf('/* ---------------------------------------------------------------- state */'));
+const SGHP = req({json.dumps(str(LIVE / "sghp_model.js"))}), DRY = req({json.dumps(str(LIVE / "dryer_model.js"))});
+const code = fs.readFileSync({json.dumps(str(LIVE / "adapter.js"))}, 'utf8');     // CoolProp loading and CoolPropFluid
 const CP = await F({{ locateFile: p => new URL(p, import.meta.url).pathname }});
 globalThis.document = {{ getElementById: () => ({{}}) }};
 const Fluid = new Function('CP_', 'SGHP', code.replace('let CP = null', 'let CP = CP_') + '\\nreturn CoolPropFluid;')(CP, SGHP);
@@ -452,18 +443,13 @@ console.log(JSON.stringify({{ a0: [a0.success, a0.COP, a0.P_L], a1: [a1.success,
     assert all(len(e["hot"]) == 16 for e in k["ev"])
 
 
-def test_air_source_page(build_mod, tmp_path):
+def test_air_source_page(tmp_path):
     """In the page, an air source (temperature, flow, moisture) is solved on its outlet: the evaporator duty at the
     swept volume equals the source air's enthalpy drop, moisture condenses below the dew point, switching back
     to water gives the water result again, and sizing by a target sink duty sets the swept volume to meet it."""
     sync_api = pytest.importorskip("playwright.sync_api")
-    if not CP_JS.exists():
-        pytest.skip("coolprop.js not present")
-    import os, threading, http.server, functools
-    data = Path(os.environ.get("DRYER_DATA", str(build_mod.DATA_DIR)))      # the page needs the real study data to start
-    if not all((data / n).exists() for n in build_mod.DATA_FILES):
-        pytest.skip(f"study data not found in {data} (set DRYER_DATA)")
-    page = build_mod.build(tmp_path / "out", CP_JS, data)
+    import threading, http.server, functools
+    page = PAGE / "index.html"                                              # the built app, with the study data
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(page.parent))
     handler.log_message = lambda *a, **k: None
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
