@@ -39,7 +39,7 @@ Recovery increases effort on difficult cycles. The slowest failed replay took ab
 
 ## Implementation and evidence
 
-- [Internal properties implementation](../../utils/properties_package.py)
+- [Internal properties implementation](../../../HeatPumpLab/utils/properties_package.py)
 - [Fallback regression tests](../../../tests/test_ph_nearby_recovery.py)
 - [Numerical summary](../../../results/RHPcomposition/v17_internal_ph_fallback/summary.json)
 - [All original candidate outcomes](../../../results/RHPcomposition/v17_internal_ph_fallback/candidate_outcomes.md)

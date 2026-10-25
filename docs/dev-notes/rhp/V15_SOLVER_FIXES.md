@@ -64,8 +64,8 @@ The bounded retries increase effort on difficult evaluations. The normal isolate
 - [Serialization and resume checks](../../../results/RHPcomposition/v15_failure_fixes/verified/serialization_tests.log)
 - [Frozen thermodynamic source](../../../results/RHPcomposition/v15_failure_fixes/verified/source_manifest.json)
 - [Evidence manifest](../../../results/RHPcomposition/v15_failure_fixes/verified/evidence_manifest.json)
-- [Sink guards](solver/_cycle_analysis.py), [cycle retries](solver/cycle_solver.py), [pressure-seed retries](utils/analysis.py)
-- [Exchanger state handling](../../components/common/base_heat_exchanger.py), [validated PH refinement](../../utils/properties_package.py)
-- [Objective diagnostics](optimisation/_objective.py), [benchmark serializer](../../../main_RHPoptimiser_benchmark.py)
+- [Sink guards](../../../HeatPumpLab/cycles/RecuperativeHeatPump/solver/_cycle_analysis.py), [cycle retries](../../../HeatPumpLab/cycles/RecuperativeHeatPump/solver/cycle_solver.py), [pressure-seed retries](../../../HeatPumpLab/cycles/RecuperativeHeatPump/utils/analysis.py)
+- [Exchanger state handling](../../../HeatPumpLab/components/common/base_heat_exchanger.py), [validated PH refinement](../../../HeatPumpLab/utils/properties_package.py)
+- [Objective diagnostics](../../../HeatPumpLab/cycles/RecuperativeHeatPump/optimisation/_objective.py), [benchmark serializer](../../../main_RHPoptimiser_benchmark.py)
 
 The `verified` directory contains the final measurements and frozen source. Earlier files under `v15_failure_fixes` and its `final` subdirectory are intermediate diagnostic runs, superseded by this report. Raw requests, results, trace logs and statuses are retained. Rebuild the final summary with `python main_RHPv15_report.py` from the repository root.

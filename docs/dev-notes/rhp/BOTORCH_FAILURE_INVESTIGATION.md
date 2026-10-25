@@ -35,7 +35,7 @@ A **diagnostic-only guard** rejects nonpositive total duty or gas-cooler duty be
 
 Shortfalls in this table are beyond the existing 0.05 K pinch allowance. The guard prevents the unsafe intermediate calculation; it does not by itself make these designs converge. Three known BoTorch winners, one per composition, retain **exactly identical SEC, COP, pressure and VHC** with the guard. This is a promising prototype, not full regression validation or a production change.
 
-Relevant code: [sink reconstruction](solver/_cycle_analysis.py), [pressure fallback](solver/_discharge_pressure.py), and [sampled scalar search](../common/scalar_search.py).
+Relevant code: [sink reconstruction](../../../HeatPumpLab/cycles/RecuperativeHeatPump/solver/_cycle_analysis.py), [pressure fallback](../../../HeatPumpLab/cycles/RecuperativeHeatPump/solver/_discharge_pressure.py), and [sampled scalar search](../../../HeatPumpLab/cycles/common/scalar_search.py).
 
 ## 2. Native PH errors create numerical failure regions
 
@@ -52,7 +52,7 @@ With unchanged composition, design variables and physical tolerances, pressure s
 
 Every recovered result passes the model's final convergence checks and has minimum gas-cooler approach at least 19.95 K. None improves the best observed COP for its composition. Correcting their evaluations could nevertheless alter the subsequent optimisation trajectories, so the archived method rankings should not be silently recomputed using these replays.
 
-Relevant code: [PH recovery and validation](../../utils/properties_package.py), [cycle retry](solver/cycle_solver.py), and [pinch property calculations](solver/_gas_cooler_pinch.py).
+Relevant code: [PH recovery and validation](../../../HeatPumpLab/utils/properties_package.py), [cycle retry](../../../HeatPumpLab/cycles/RecuperativeHeatPump/solver/cycle_solver.py), and [pinch property calculations](../../../HeatPumpLab/cycles/RecuperativeHeatPump/solver/_gas_cooler_pinch.py).
 
 ## 3. Two pinch failures recover with tighter coupled convergence
 
@@ -66,7 +66,7 @@ The BoTorch Propane/Pentane 30/70 candidates at evaluations 106 (seed 20260909) 
 
 The recorded outlet enthalpy also rises despite negligible positive duty, indicating that the PH property round trip overwhelms the tiny intended enthalpy change. Tightening the outer cycle tolerance does not cure either failure. Investigate a consistent near-zero-duty state treatment or improved PH consistency, with energy-balance checks. A blanket relaxation of exchanger direction checks would conceal larger physical errors.
 
-Relevant code: [heat-transfer direction validation](../../components/common/base_heat_exchanger.py).
+Relevant code: [heat-transfer direction validation](../../../HeatPumpLab/components/common/base_heat_exchanger.py).
 
 ## 5. Failure reporting loses the useful cause
 
