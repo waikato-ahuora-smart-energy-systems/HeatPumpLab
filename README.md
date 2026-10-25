@@ -236,6 +236,10 @@ other cycle you use. To cite the software itself, use its Zenodo DOI,
 [10.5281/zenodo.23604060](https://doi.org/10.5281/zenodo.23604060), which always resolves to the
 latest release. GitHub's "Cite this repository" button gives both, from `CITATION.cff`.
 
+## Contributing
+
+Bug reports, questions and contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Licence
 
 Copyright 2021–2026 The University of Waikato.
