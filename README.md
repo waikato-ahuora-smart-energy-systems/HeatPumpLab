@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/heatpumplab)](https://pypi.org/project/heatpumplab/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23604060.svg)](https://doi.org/10.5281/zenodo.23604060)
 [![Licence: Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Python 3.12 | 3.13 | 3.14](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/)
 [![Properties: CoolProp | REFPROP](https://img.shields.io/badge/properties-CoolProp%20%7C%20REFPROP-informational.svg)](http://www.coolprop.org)
 [![Web apps](https://img.shields.io/badge/web%20apps-live-brightgreen.svg)](https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/)
 
@@ -49,7 +49,7 @@ Then open <http://localhost:8000>. The Python models reproduce the apps' results
 
 ## Requirements
 
-- Python 3.12 or later, and [uv](https://docs.astral.sh/uv/) (recommended) or pip.
+- Python 3.12 to 3.14, and [uv](https://docs.astral.sh/uv/) (recommended) or pip.
 - Fluid properties come from [CoolProp](http://www.coolprop.org) (free, installed with the
   package) by default, for every cycle. Mixtures use phase-imposed flashes with cached bubble and
   dew points, plus a phase-envelope fallback near the critical point, so zeotropic blends solve
