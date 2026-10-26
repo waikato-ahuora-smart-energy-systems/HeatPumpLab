@@ -1,4 +1,4 @@
-# Lint and run the test suite on the CoolProp backend for every pull request (REFPROP is commercial and
+# Lint and run the test suite on the CoolProp backend, on each supported Python version, for every pull request (REFPROP is commercial and
 # not available here; its tests skip themselves).
 name: Tests
 
@@ -16,9 +16,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  suite:
+    name: suite (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
     env:
       HEATPUMPLAB_PROPERTY_BACKEND: coolprop
     steps:
@@ -26,6 +31,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          python-version: ${{ matrix.python }}
       - name: Install
         run: uv sync --locked --group dev
       - name: Lint
@@ -37,3 +43,12 @@ jobs:
           git diff --exit-code -- apps/steam apps/dryer
       - name: Tests
         run: uv run pytest -q -p no:cacheprovider
+
+  # The one check main's branch protection requires: passes only when the suite passes on every Python version.
+  test:
+    if: always()
+    needs: suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: All Python versions passed
+        run: test "${{ needs.suite.result }}" = "success"
