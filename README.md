@@ -15,7 +15,7 @@ steady-state cycle designs with real-fluid properties, including zeotropic refri
 and transcritical and supercritical operation, and reports COP, pressures, compressor duties and heat-exchanger
 approaches.
 
-The package contains seven cycle models. Each is a module under `HeatPumpLab.cycles`:
+The package contains eleven cycle models. Each is a module under `HeatPumpLab.cycles`:
 
 | Cycle | Module | What it models | Reference |
 | --- | --- | --- | --- |
@@ -26,14 +26,18 @@ The package contains seven cycle models. Each is a module under `HeatPumpLab.cyc
 | n-level cascade | `CascadeHeatPump` | Two to four levels heating the air in series through each level's subcooler and its share of condenser heat. Optional IHX per level and expanders. | [6] |
 | Heat pump with MVR steam | `MVRHeatPump` | A vapour-compression cycle heats the air and raises low-pressure steam, which a chain of mechanical vapour recompression fans, with water injection and splits to the process, lifts to heat the air to the target. | [2] |
 | sCO₂ reverse Brayton heat pump | `BraytonHeatPump` | Supercritical CO₂ cycle with split compression, a preheater, an IHX and a turbine expander, architectures 1 and 2. | [7] |
+| Two-stage economiser heat pump | `EconomiserHeatPump` | Two-stage cycle with a flash tank, a closed economiser (vapour injection) or parallel compression, or single-stage for comparison; optimises the intermediate pressure. | [8, 9] |
+| Dual-pressure condensation heat pump | `DualPressureHeatPump` | One evaporator and two condensing pressures in series on the air; the high-pressure liquid returns to the low-pressure condenser. Optimises the low condensing temperature. | [10] |
+| Reverse-Stirling heat pump | `StirlingHeatPump` | Semi-empirical block: a fraction of the Carnot COP per unit, one to four units in series on the air. Indicative only. | [11, 12] |
+| Ammonia–water hybrid heat pump | `HybridHeatPump` | Absorption–compression (Osenbrück) cycle: desorber, separator, compressor with optional wet compression, solution pump and absorber heating the air. Properties from the IAPWS 2001 ammonia–water formulation through teqp (`ammonia-water` extra). | [13, 14] |
 
 ## Web apps
 
 Two of the models also run in the browser, with CoolProp compiled to WebAssembly. Nothing is
 installed and no inputs leave the browser:
 
-- **Advanced dryer heat pumps** ([`apps/dryer`](apps/dryer)): the air-drying cycles (all but
-  the steam-generating heat pump), solved live, plus the results of the REFPROP design study.
+- **Advanced dryer heat pumps** ([`apps/dryer`](apps/dryer)): the RHP, SLTHP, cascade,
+  HP + MVR and sCO₂ Brayton cycles, solved live, plus the results of the REFPROP design study.
 - **Steam-generating heat pump** ([`apps/steam`](apps/steam)): the single-stage cycle raising
   steam, with compressor maps, saved cases, side-by-side comparison and sweeps.
 
@@ -69,6 +73,7 @@ From [PyPI](https://pypi.org/project/heatpumplab/):
 ```sh
 pip install heatpumplab                 # or: uv add heatpumplab
 pip install "heatpumplab[refprop]"      # optional: the REFPROP backend (needs a REFPROP installation)
+pip install "heatpumplab[ammonia-water]"  # optional: ammonia-water properties (teqp) for HybridHeatPump
 ```
 
 From source, to run the tests, the research scripts or the latest development version:
@@ -78,6 +83,7 @@ git clone https://github.com/waikato-ahuora-smart-energy-systems/HeatPumpLab.git
 cd HeatPumpLab
 uv sync                      # core dependencies (including CoolProp), and the package itself
 uv sync --extra refprop      # optional: the REFPROP backend (needs a REFPROP installation)
+uv sync --extra ammonia-water  # optional: ammonia-water properties (teqp) for HybridHeatPump
 uv sync --group dev          # optional: pytest and ruff
 ```
 
@@ -238,6 +244,28 @@ Tests that check the REFPROP backend skip automatically when it is not installed
 7. V. Dalal, S. Klöppel, C. Rose, T.G. Walmsley, Evaluating sCO₂ heat pump architectures for
    large-scale industrial air drying above 150 °C, European sCO₂ Conference (Euro sCO₂ 2027),
    under review.
+8. C. Arpagaus, F. Bless, M. Uhlmann, J. Schiffmann, S.S. Bertsch, High temperature heat pumps:
+   Market overview, state of the art, research status, refrigerants, and application potentials,
+   *Energy* 152 (2018) 985–1010. https://doi.org/10.1016/j.energy.2018.03.166
+9. K.-M. Adamson, T.G. Walmsley, J.K. Carson, Q. Chen, F. Schlosser, L. Kong, D.J. Cleland,
+   High-temperature and transcritical heat pump cycles and advancements: A review, *Renewable and
+   Sustainable Energy Reviews* 167 (2022) 112798. https://doi.org/10.1016/j.rser.2022.112798
+10. B. Dai, X. Liu, S. Liu, Y. Zhang, D. Zhong, Y. Feng, V. Nian, Y. Hao, Dual-pressure condensation
+    high temperature heat pump system for waste heat recovery: Energetic and exergetic assessment,
+    *Energy Conversion and Management* 218 (2020) 112997.
+    https://doi.org/10.1016/j.enconman.2020.112997
+11. N. Häggqvist, T. Tveit, R. Zevenhoven, Combining measurements and simulation for condition
+    monitoring and performance optimization of an alpha-configuration double-acting high-temperature
+    Stirling cycle-based heat pump, *Case Studies in Thermal Engineering* 47 (2023) 103066.
+    https://doi.org/10.1016/j.csite.2023.103066
+12. Høeg et al., Performance evaluation of industrial heat pump based on reversed Stirling cycle for
+    ultra-high temperature applications, IEA Heat Pump Conference (2026).
+13. J.K. Jensen, W.B. Markussen, L. Reinholdt, B. Elmegaard, On the development of high temperature
+    ammonia–water hybrid absorption–compression heat pumps, *International Journal of
+    Refrigeration* 58 (2015) 79–89. https://doi.org/10.1016/j.ijrefrig.2015.06.006
+14. R. Tillner-Roth, D.G. Friend, A Helmholtz free energy formulation of the thermodynamic
+    properties of the mixture {water + ammonia}, *Journal of Physical and Chemical Reference Data*
+    27 (1998) 63–96. https://doi.org/10.1063/1.556015 (IAPWS Guideline G4-01, 2001)
 
 ## Citing
 

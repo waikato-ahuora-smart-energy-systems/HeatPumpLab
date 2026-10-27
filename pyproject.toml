@@ -56,6 +56,10 @@ include = ["/HeatPumpLab", "/README.md", "/LICENSE", "/CITATION.cff", "/pyprojec
 refprop = [
     "ctrefprop>=0.10.5",
 ]
+# Ammonia-water mixture properties (IAPWS 2001 / Tillner-Roth and Friend) for HybridHeatPump, through NIST's teqp
+ammonia-water = [
+    "teqp>=0.23.2",
+]
 
 [dependency-groups]
 benchmark = [
@@ -64,6 +68,7 @@ benchmark = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.15.14",
+    "teqp>=0.23.2",
 ]
 
 [tool.pytest.ini_options]
