@@ -4555,14 +4555,14 @@ const RHP = c => c === 'A' || c === 'B' || c === 'C' || c === 'H';      // RHP-A
 const stagesOf = c => c.cyc === 'H' ? (c.stagesH || 1) : c.cyc === 'A' ? (c.stagesA === 1 ? 1 : 2) : c.cyc === 'S' ? (c.stagesS === 1 ? 1 : 2) : 2;
 const lifts = c => ({lift: c.cyc === 'B' || c.cyc === 'H' ? 0 : c.lift, lift2: c.cyc === 'A' || c.cyc === 'H' ? 0 : c.lift2, split: stagesOf(c) === 1 ? 0 : c.split, ihx_on: c.cyc !== 'H' || !!c.ihxH});
 const MULTI = c => c === 'K' || c === 'N' || c === 'M' || c === 'X';    // multi-loop cycles (dryer_cascades.js)
-const LV = {stagesS: 2, pmax: 300, expn: 'valve', etaX: 0.75, srcWm: 'out', srcMw: 10, stagesA: 2, dTs: 5, src: 'water', srcT: 20, srcM: 5, srcW: 7, srcHum: 'rh', srcRH: 50, srcDew: 9, airHum: 'rh', airWg: 6.4, airDew: 7.2, Patm: 101.325, fanModel: 5, fanEta: 0.8, fanPR: 1.5, fanSh: 5, fanMotor: 0.93, Tmt: 102, phi: 0, prMax: 20, stagesH: 1, ihxH: true, RH: 60, motor: 0.93, compModel: 5, etaC: 0.73, lift2: 40, cyc: 'A', comps: [['Propane', 20], ['Isopentane', 80]], basis: 'mass', w: '0.200-0.800', T: 170, a: 20, Ts: 40, Tain: 15, Two: 30, lift: 80, split: 0.45, off: 0, liftS: 80, share: 0.5, PH: 25, alpha: 0.3, PHg: null, PLg: null, gKey: '', init: false};
+const LV = {stagesS: 2, pmax: 300, expn: 'valve', etaX: 0.75, srcWm: 'out', srcMw: 10, stagesA: 2, dTs: 5, src: 'water', srcT: 20, srcM: 5, srcW: 7, srcHum: 'rh', srcRH: 50, srcDew: 9, airHum: 'rh', airWg: 6.4, airDew: 7.2, Patm: 101.325, fanModel: 5, fanEta: 0.8, fanPR: 1.5, fanSh: 5, fanMotor: 0.93, Tmt: 102, phi: 0, prMax: 20, stagesH: 1, ihxH: true, RH: 60, motor: 0.93, compModel: 5, etaC: 0.73, lift2: 40, cyc: 'A', comps: [['Butane', 100]], basis: 'mass', w: '', T: 170, a: 20, Ts: 40, Tain: 15, Two: 30, lift: 80, split: 0.45, off: 0, liftS: 80, share: 0.5, PH: 25, alpha: 0.3, PHg: null, PLg: null, gKey: '', init: false};
 const LV_DEF = JSON.parse(JSON.stringify(LV));            // the defaults, for cases saved before a setting existed
 try { const st = JSON.parse(localStorage.getItem('dryerlive1') || '{}'); Object.assign(LV, st); if (st.srcW != null && st.srcHum == null) LV.srcRH = null; } catch (e) {}   // saved before RH input: srcRH set from srcW once CoolProp is ready
 for (const [m, k] of [['airHum', 'rh'], ['srcHum', 'rh']]) if (!['rh', 'w', 'dew'].includes(LV[m])) LV[m] = k;
 if (!(+LV.Patm >= 70 && +LV.Patm <= 110)) LV.Patm = 101.325;
 if (+LV.compModel === 0) { LV.compModel = 1; LV.etaC = 1; }   // the ideal model is now Constant at 1.00
 for (const k of ['compModel', 'fanModel']) if (+LV[k] === 4) LV[k] = 5;   // the first Pareto front (4) was removed
-if (!Array.isArray(LV.comps) || !LV.comps.length) LV.comps = LV.w ? compsOf(LV.w).map(([n, f]) => [n, +f.toFixed(6)]) : [['Propane', 20], ['Isopentane', 80]];
+if (!Array.isArray(LV.comps) || !LV.comps.length) LV.comps = LV.w ? compsOf(LV.w).map(([n, f]) => [n, +f.toFixed(6)]) : [['Butane', 100]];
 if (LV.basis !== 'mole') LV.basis = 'mass';
 // refrigerants of the multi-loop cycles, one list per loop (bottom first), and the parameters of each
 const MULTI_DEF = {K: [[['CarbonDioxide', 100]], [['CarbonDioxide', 100]]], N: [[['IsoButane', 100]], [['Cyclopentane', 100]], [['Cyclopentane', 100]], [['Cyclopentane', 100]]], M: [[['Ammonia', 100]]], X: [[['CarbonDioxide', 100]]]};
@@ -5390,7 +5390,12 @@ function solveS(cfg, base) {
 }
 function liveEnter() {
   if (!D) return;
-  if (!LV.init) { setComps([['Propane', 20], ['Isopentane', 80]]); LV.T = 170; LV.a = 20; LV.cyc = 'A'; loadStudy('p1'); return; }
+  if (!LV.init) {
+    // first visit: RHP-A with n-butane heating 15 C air to 170 C with a 20 K approach from 40 C source water (butane
+    // is not a study blend, so the design starts from the page's defaults rather than a loaded study design)
+    setComps([['Butane', 100]]); LV.T = 170; LV.a = 20; LV.cyc = 'A'; LV.Ts = 40; LV.Tain = 15;
+    LV.init = true; renderLiveControls(); changed(); return;
+  }
   renderLiveControls();
   if (!LIVE.res || cfgKey(LIVE.cfg) !== cfgKey(LV)) changed(); else { renderLive(); renderCycles(); renderPFD(); }
 }
