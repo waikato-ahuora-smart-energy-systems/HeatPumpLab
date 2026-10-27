@@ -8,6 +8,8 @@ puts the named files back in order, with no separators:
   sghp_model.js      the SGHP cycle model (saturation dome and solvers) the dryer models build on
   dryer_model.js     the RHP-A / SLTHP cycle models (``DRYER``)
   dryer_cascades.js  the multi-loop cycles: TT cascade, n-level cascade, HP + MVR, sCO2 Brayton (``DRYCASC``)
+  ammonia_water.js   the IAPWS G4-01 ammonia-water properties (``AMMWAT``)
+  dryer_more.js      flash tank / economiser, dual-pressure, Stirling and ammonia-water hybrid cycles (``DRYMORE``)
   cp_preset.js       promises the page waits on until CoolProp is ready
   @coolprop          the CoolProp Emscripten loader, generated from ../coolprop/coolprop.js
   adapter.js         CoolProp loading and the CoolPropFluid property adapter

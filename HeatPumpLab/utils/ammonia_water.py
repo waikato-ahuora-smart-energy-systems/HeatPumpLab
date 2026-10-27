@@ -31,6 +31,7 @@ M_H2O = 18.015268e-3
 R_MIX = 8.314471             # J/mol/K, the gas constant of the mixture model
 _X_MIN = 1e-10               # the Tillner-Roth model rejects mole fractions of exactly zero
 T_K = 273.15
+_T_RETRY = (0.99, 1.01, 0.98, 1.02, 0.97, 1.03, 0.95, 1.05)   # saturation starts tried when the estimate has no root
 
 
 def mole_fraction(w: float) -> float:
@@ -249,6 +250,13 @@ class AmmoniaWater:
             return math.log(S), inc
 
         g0, inc = resid(T, inc)
+        if g0 is None:
+            # a phase root is missing at the estimate (Raoult's law is far off for this mixture): try nearby temperatures
+            for f in _T_RETRY:
+                g0, inc = resid(T * f, None)
+                if g0 is not None:
+                    T *= f
+                    break
         if g0 is None:
             raise ValueError(f"ammonia-water {'dew' if dew else 'bubble'} point at {p / 1e6:.3f} MPa, x={x:.4f}: "
                              "no phase root at the starting temperature")

@@ -37,7 +37,8 @@ Two of the models also run in the browser, with CoolProp compiled to WebAssembly
 installed and no inputs leave the browser:
 
 - **Advanced dryer heat pumps** ([`apps/dryer`](apps/dryer)): the RHP, SLTHP, cascade,
-  HP + MVR and sCO₂ Brayton cycles, solved live, plus the results of the REFPROP design study.
+  HP + MVR, sCO₂ Brayton, flash tank / economiser, dual-pressure, Stirling and ammonia–water
+  hybrid cycles, solved live, plus the results of the REFPROP design study.
 - **Steam-generating heat pump** ([`apps/steam`](apps/steam)): the single-stage cycle raising
   steam, with compressor maps, saved cases, side-by-side comparison and sweeps.
 

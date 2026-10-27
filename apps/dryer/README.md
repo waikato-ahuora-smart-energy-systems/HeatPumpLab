@@ -2,9 +2,12 @@
 
 An interactive page for designing and comparing heat pumps that heat drying air. Its "Live
 design" mode solves the recuperative heat pump (RHP-A), split-stream heat pump (SLTHP) and
-other cycles in the browser. The models are ported from HeatPumpLab, plus published cycles
-(Kong et al., Hoang et al., Dalal et al.). Fluid properties come from CoolProp compiled to
-WebAssembly. Its "Study" mode shows the results of the REFPROP design study.
+other cycles in the browser: cascades, HP + MVR, sCO₂ Brayton, a two-stage cycle with a flash
+tank, economiser or parallel compression, dual-pressure condensation, reverse-Stirling units and
+an ammonia–water hybrid (absorption–compression) heat pump. The models are ported from
+HeatPumpLab, plus published cycles (Kong et al., Hoang et al., Dalal et al.). Fluid properties
+come from CoolProp compiled to WebAssembly; the ammonia–water mixture, which CoolProp lacks, uses
+a JavaScript port of the IAPWS G4-01 formulation (the model HeatPumpLab evaluates through teqp). Its "Study" mode shows the results of the REFPROP design study.
 
 The page runs entirely in the browser. It has no server-side code and sends none of your inputs anywhere; the only external
 requests are for the web fonts.
@@ -18,7 +21,7 @@ the URL.
 | `index.html` | The page: layout, the cycle models in JavaScript and the CoolProp Emscripten loader |
 | `coolprop.wasm` | CoolProp 8 compiled to WebAssembly |
 | `dashboard_data.json`, `cycles_data.json`, `state_5C_1bar.json` | REFPROP design study results (results only, no REFPROP code or data files) |
-| `THIRD_PARTY_NOTICES.md` | Licences for CoolProp and the web fonts |
+| `THIRD_PARTY_NOTICES.md` | Licences for CoolProp, the teqp ammonia–water coefficients and the web fonts |
 
 `index.html` is built from the sources in [`apps/src/dryer`](../src/dryer) (`uv run python apps/src/dryer/build.py`); edit those, not the page. See [apps/src](../src/README.md).
 
