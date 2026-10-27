@@ -14,7 +14,7 @@ const PAGE_URL = typeof location !== "undefined" && /(\.github\.io|^localhost|^1
 const LOCAL_KEY = "dryer-cases-local";
 const CASE_KEYS = ["cyc", "mainComps", "basis", "multi", "par", "compModel", "etaC", "motor", "prMax", "T", "Tain", "RH", "Tmt", "phi",
   "a", "Ts", "Two", "lift", "lift2", "split", "liftS", "share", "alpha", "stagesH", "stagesA", "stagesS", "ihxH", "fanModel", "fanEta", "fanPR", "fanSh", "fanMotor", "src", "srcT", "srcM", "srcW", "srcHum", "srcRH", "srcDew", "airHum", "airWg", "airDew", "Patm", "dTs", "srcWm", "srcMw", "expn", "etaX", "pmax"];
-const CYC_SHORT = { H: "Conventional", A: "RHP-A", B: "RHP-B", C: "RHP-C", S: "SLTHP", K: "TT cascade", N: "n-cascade", M: "HP + MVR", X: "sCO2 Brayton" };
+const CYC_SHORT = { H: "Conventional", A: "RHP-A", B: "RHP-B", C: "RHP-C", S: "SLTHP", K: "TT cascade", N: "n-cascade", M: "HP + MVR", X: "sCO2 Brayton", E: "Flash / economiser", D: "Dual-pressure", R: "Stirling", Y: "NH3-H2O hybrid" };
 // numeric inputs: [key, lo, hi]
 const CASE_NUM = [["compModel", 1, 5], ["etaC", 0.5, 1], ["motor", 0.8, 1], ["prMax", 5, 50], ["T", 100, 220], ["Tain", 0, 40], ["RH", 0, 100],
   ["Tmt", 30, 200], ["phi", 0, 2], ["a", 0, 40], ["Ts", 0, 80], ["Two", 0, 80], ["lift", 0, 140], ["lift2", 0, 140], ["split", 0.3, 0.7],
@@ -111,6 +111,8 @@ function cleanInputs(raw) {           // anything from the store or a link is un
     }
   }
   o.par.N.n = Math.min(4, Math.max(2, Math.round(o.par.N.n))); o.par.M.n_mvr = Math.min(20, Math.max(1, Math.round(o.par.M.n_mvr))); o.par.M.split = o.par.M.split.map(v => Math.min(1, Math.max(0, v)));
+  o.par.E.arr = Math.min(3, Math.max(0, Math.round(o.par.E.arr))); o.par.R.n = Math.min(4, Math.max(1, Math.round(o.par.R.n)));
+  o.par.Y.w_rich = Math.min(0.95, Math.max(0.05, o.par.Y.w_rich)); o.par.Y.q_des = Math.min(0.95, Math.max(0.02, o.par.Y.q_des));
   const out = {}; for (const k of CASE_KEYS) out[k] = o[k];
   out.size = cleanSize(raw.size);
   return out;
@@ -128,10 +130,12 @@ function caseFluids(i) {
   if (i.cyc === "K") return `${lab(i.multi.K[0])} / ${lab(i.multi.K[1])}`;
   if (i.cyc === "N") return i.multi.N.slice(0, i.par.N.n).map(lab).join(" / ");
   if (i.cyc === "M") return `${lab(i.multi.M[0])} + steam`;
-  if (i.cyc === "X") return lab(i.multi.X[0]);
+  if (i.cyc === "X" || i.cyc === "E" || i.cyc === "D") return lab(i.multi[i.cyc][0]);
+  if (i.cyc === "Y") return `NH3-H2O ${fixed(100 * i.par.Y.w_rich, 1)} %`;
+  if (i.cyc === "R") return "helium";
   return lab(i.mainComps);
 }
-const designText = i => designText0(i) + (i.expn === "exp" && i.cyc !== "X" ? ` · expander ηis ${fixed(i.etaX, 2)}` : "");
+const designText = i => designText0(i) + (i.expn === "exp" && !["X", "E", "D", "R", "Y"].includes(i.cyc) ? ` · expander ηis ${fixed(i.etaX, 2)}` : "");
 function designText0(i) {
   const p = i.par;
   switch (i.cyc) {
@@ -143,6 +147,10 @@ function designText0(i) {
     case "K": return `${p.K.P_b}/${p.K.P_t} bar · r ${p.K.r} · evap ${p.K.T_ev_b}/${p.K.T_ev_t} °C`;
     case "N": return `condensing ${p.N.T_cond.slice(0, p.N.n - 1).join("/")} °C`;
     case "X": return `arch ${p.X.arch} · ${p.X.P_L}/${p.X.P_H_min ? "lowest" : p.X.P_H} bar · split ${fixed(p.X.x, 2)}`;
+    case "E": return `${["flash tank", "economiser", "parallel", "single stage"][p.E.arr] || "flash tank"}${p.E.arr === 3 ? "" : ` · intermediate ${p.E.T_int_auto ? "geometric mean" : `${p.E.T_int} °C`}`}`;
+    case "D": return `low condensing ${p.D.T_cond_low} °C`;
+    case "R": return `${p.R.n} unit${p.R.n > 1 ? "s" : ""} · Carnot fraction ${fixed(p.R.eta_carnot, 2)}${p.R.n > 1 ? ` · air ${p.R.bounds_auto ? "equal steps" : p.R.bounds.slice(0, p.R.n - 1).join("/") + " °C"}` : ""}`;
+    case "Y": return `w ${fixed(p.Y.w_rich, 3)} · degassing ${fixed(p.Y.q_des, 3)} · ${p.Y.wet ? "wet" : "dry"} compression`;
     case "M": return `bottom ${p.M.T_cond} °C · ${p.M.n_mvr} MVR stages · split ${p.M.split_fill ? "auto" : p.M.split.slice(0, Math.max(0, p.M.n_mvr - 1)).map(v => fixed(v, 2)).join("/") || "–"}`;
   }
   return "";
@@ -154,7 +162,7 @@ function summarize(r, i) {
   const multi = MULTI(i.cyc), p = r.report || {};
   const o = multi ? {
     ok: true, COP: r.COP, VHC: r.VHC, Pmax: r.Pmax_bar, Tdis: r.T_dis_max, qair: r.q_air, wel: r.w_shaft / (i.motor || 0.93),
-    Psuc: i.cyc === "X" ? p.P_L_bar : i.cyc === "K" ? Math.min(p.P_evap_bot_bar, p.P_evap_top_bar) : i.cyc === "N" ? (p.levels && p.levels[0] ? p.levels[0].Pe_bar : null) : p.P_evap_bar,
+    Psuc: i.cyc === "X" ? p.P_L_bar : i.cyc === "Y" ? p.P_low_bar : i.cyc === "K" ? Math.min(p.P_evap_bot_bar, p.P_evap_top_bar) : i.cyc === "N" ? (p.levels && p.levels[0] ? p.levels[0].Pe_bar : null) : p.P_evap_bar,
   } : {
     ok: true, COP: r.COP, VHC: p.VHC, Pmax: p.Pmax_bar, Psuc: p.P_evap_bar, Tdis: p.T_comp_discharge, qair: p.q_air_kJkg, wel: p.w_el_kJkg,
   };

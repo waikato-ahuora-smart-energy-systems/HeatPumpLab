@@ -1172,7 +1172,9 @@
   }
 
   const api = { KONG, CASC, BOOST, kong, kongOptimise, kongOptimiseSteps, cascade, booster,
-    cascadeOptimise, cascadeOptimiseSteps, boosterOptimise, boosterOptimiseSteps, BRAY, brayton, braytonOptimiseSteps };
+    cascadeOptimise, cascadeOptimiseSteps, boosterOptimise, boosterOptimiseSteps, BRAY, brayton, braytonOptimiseSteps,
+    // helpers shared with the cycles in dryer_more.js
+    _h: { stage, isGas, pt, iso, compPath, airProfile, minGap, coolerOutlet, lin, srcT, waterLine, fail, compassSearch, Tph } };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.DRYCASC = api;
 })(typeof self !== "undefined" ? self : this);
 

@@ -3273,10 +3273,1179 @@ table.cmpt small{color:var(--ink-3);font-weight:400;font-size:11.5px}
   }
 
   const api = { KONG, CASC, BOOST, kong, kongOptimise, kongOptimiseSteps, cascade, booster,
-    cascadeOptimise, cascadeOptimiseSteps, boosterOptimise, boosterOptimiseSteps, BRAY, brayton, braytonOptimiseSteps };
+    cascadeOptimise, cascadeOptimiseSteps, boosterOptimise, boosterOptimiseSteps, BRAY, brayton, braytonOptimiseSteps,
+    // helpers shared with the cycles in dryer_more.js
+    _h: { stage, isGas, pt, iso, compPath, airProfile, minGap, coolerOutlet, lin, srcT, waterLine, fail, compassSearch, Tph } };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.DRYCASC = api;
 })(typeof self !== "undefined" ? self : this);
 
+</script>
+<script>/* Ammonia-water mixture properties for the hybrid absorption-compression heat pump, in plain JavaScript: a port of
+   HeatPumpLab/utils/ammonia_water.py (AmmoniaWater, AmmoniaWaterStream), which evaluates the same model through teqp.
+
+   Model     IAPWS Guideline G4-01 (2001), Tillner-Roth and Friend, J. Phys. Chem. Ref. Data 27 (1998) 63, exactly as in
+             teqp 0.23.2 (AmmoniaWaterTillnerRoth): reduced Helmholtz energy at tau = Tred(x)/T, delta = rho/rhored(x)
+             of x * ammonia (Tillner-Roth 1993) + (1 - x) * water (IAPWS-95) + the departure function; x is the ammonia
+             mole fraction, R = 8.314471 J/mol/K. Analytic tau, delta and x derivatives (chain rule through Tred(x),
+             rhored(x)), and the second delta derivative for dp/drho.
+   Ideal gas CoolProp's pure-fluid ideal parts as teqp converts them (IdealHelmholtz), so h and s carry CoolProp's
+             reference states, as in Python: alpha_ig = sum x_i (alpha_ig,i(T, rho) + ln x_i).
+   Algorithms as in Python: densities by Newton on p(rho) with the same root checks; equilibrium at (T, p) by Newton
+             on the ln K equations (Python: teqp's mix_VLE_Tp, same equations and solution), damped successive
+             substitution as the fallback; bubble/dew points by secant on T or by pressure substitution; Brent's method
+             (scipy's brentq, ported) where Python uses brentq. Starting values use the pure-fluid vapour-pressure
+             ancillaries (Python: CoolProp saturation tables) - converged results do not depend on them.
+
+   Units of the model object: T K, p Pa, rho mol/m3, h J/mol, s J/mol/K. Streams (fixed ammonia mass fraction w):
+   T C, P MPa, h kJ/kg, s kJ/kg/K, D kg/m3; a state is {T, P, h, s, D, q, phase, w_liq, w_vap[, x_mol, y_mol]} with
+   q = -1 outside the two-phase region. Methods take (P, x) like the cycles' fluids and throw Error on failure. */
+(function (root) {
+  "use strict";
+  const M_NH3 = 17.03026e-3, M_H2O = 18.015268e-3;         // kg/mol (IAPWS G4-01, Table 1)
+  const R = 8.314471, X_MIN = 1e-10, T_K = 273.15;
+
+  const mole_fraction = w => { const a = w / M_NH3; return a / (a + (1 - w) / M_H2O); };
+  const mass_fraction = x => x * M_NH3 / (x * M_NH3 + (1 - x) * M_H2O);
+  const molarMass = x => x * M_NH3 + (1 - x) * M_H2O;
+  const clampX = x => Math.min(Math.max(x, X_MIN), 1 - X_MIN);
+
+  // ------------------------------------------------------------------ coefficients (teqp's hard-coded JSON)
+  const F64 = a => Float64Array.from(a);
+  const power = (n, t, d, l) => ({ n: F64(n), t: F64(t), d: F64(d), l: Int32Array.from(l), N: n.length });
+  const NH3 = power(   // Tillner-Roth et al. (1993): n delta^d tau^t exp(-delta^l), no exponential where l = 0
+    [0.04554431, 0.7238548, 0.0122947, -1.858814, 2.141882e-11, -0.0143002, 0.3441324, -0.2873571, 2.352589e-05,
+      -0.03497111, 0.02397852, 0.001831117, -0.04085375, 0.2379275, -0.03548972, -0.1823729, 0.02281556, -0.006663444,
+      -0.008847486, 0.002272635, -0.0005588655],
+    [-0.5, 0.5, 1, 1.5, 3, 0, 3, 4, 4, 5, 3, 5, 6, 8, 8, 10, 10, 5, 7.5, 15, 30],
+    [2, 1, 4, 1, 15, 3, 3, 1, 8, 2, 1, 8, 1, 2, 3, 2, 4, 3, 1, 2, 4],
+    [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3]);
+  const H2O = power(   // IAPWS-95 (Wagner and Pruss 2002), polynomial and exponential terms
+    [0.012533547935523, 7.8957634722828, -8.7803203303561, 0.31802509345418, -0.26145533859358, -0.0078199751687981,
+      0.0088089493102134, -0.66856572307965, 0.20433810950965, -6.6212605039687e-05, -0.19232721156002,
+      -0.25709043003438, 0.16074868486251, -0.040092828925807, 3.9343422603254e-07, -7.5941377088144e-06,
+      0.00056250979351888, -1.5608652257135e-05, 1.1537996422951e-09, 3.6582165144204e-07, -1.3251180074668e-12,
+      -6.2639586912454e-10, -0.10793600908932, 0.017611491008752, 0.22132295167546, -0.40247669763528,
+      0.58083399985759, 0.0049969146990806, -0.031358700712549, -0.74315929710341, 0.4780732991548,
+      0.020527940895948, -0.13636435110343, 0.014180634400617, 0.0083326504880713, -0.029052336009585,
+      0.038615085574206, -0.020393486513704, -0.0016554050063734, 0.0019955571979541, 0.00015870308324157,
+      -1.638856834253e-05, 0.043613615723811, 0.034994005463765, -0.076788197844621, 0.022446277332006,
+      -6.2689710414685e-05, -5.5711118565645e-10, -0.19905718354408, 0.31777497330738, -0.11841182425981],
+    [-0.5, 0.875, 1, 0.5, 0.75, 0.375, 1, 4, 6, 12, 1, 5, 4, 2, 13, 9, 3, 4, 11, 4, 13, 1, 7, 1, 9, 10, 10, 3, 7, 10,
+      10, 6, 10, 10, 1, 2, 3, 4, 8, 6, 9, 8, 16, 22, 23, 23, 10, 50, 44, 46, 50],
+    [1, 1, 1, 2, 2, 3, 4, 1, 1, 1, 2, 2, 3, 4, 4, 5, 7, 9, 10, 11, 13, 15, 1, 2, 2, 2, 3, 4, 4, 4, 5, 6, 6, 7, 9, 9, 9,
+      9, 9, 10, 10, 12, 3, 4, 4, 5, 14, 3, 6, 6, 6],
+    [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+      2, 2, 2, 2, 3, 3, 3, 3, 4, 6, 6, 6, 6]);
+  // IAPWS-95 Gaussian terms: n delta^d tau^t exp(-eta (delta - eps)^2 - beta (tau - gamma)^2)
+  const GA = { n: [-31.306260323435, 31.546140237781, -2521.3154341695], t: [0, 1, 4], d: [3, 3, 3],
+    eta: [20, 20, 20], eps: [1, 1, 1], beta: [150, 150, 250], gam: [1.21, 1.21, 1.25] };
+  // IAPWS-95 non-analytic terms: n Delta^b delta Psi
+  const NA = { n: [-0.14874640856724, 0.31806110878444], A: [0.32, 0.32], B: [0.2, 0.2], C: [28, 32], D: [700, 800],
+    a: [3.5, 3.5], b: [0.85, 0.95], beta: [0.3, 0.3] };
+  // departure function (terms 1..14 of aw.hpp; the first has no exponential)
+  const DEP = power(
+    [-1.855822E-02, 5.258010E-02, 3.552874E-10, 5.451379E-06, -5.998546E-13, -3.687808E-06, 0.2586192, -1.368072E-08,
+      1.226146E-02, -7.181443E-02, 9.970849E-02, 1.0584086E-03, -0.1963687, -0.7777897],
+    [1.5, 0.5, 6.5, 1.75, 15, 6, -1, 4, 3.5, 0, -1, 8, 7.5, 4],
+    [4, 5, 15, 12, 12, 15, 4, 15, 4, 5, 6, 10, 6, 2],
+    [0, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 2, 2, 2]);
+  const DEP_GAMMA = 0.5248379;
+  const TcN = 405.40, TcW = 647.096, kT = 0.9648407, ALPHA = 1.125455;
+  const vcN = 0.01703026 / 225, vcW = 0.018015268 / 322, kV = 1.2395117, BETA = 0.8978069;
+  // ideal gas, teqp-converted from CoolProp: ln rho + a1 + a2/T + c + aT ln T + sum n ln(1 - exp(-theta/T))
+  const IG = [
+    { a1: -16.11892003782038, a2: 2271.5462320021797, c: 18.015806484253137, aT: -3.0,
+      n: [2.224, 3.148, 0.9579], th: [1646.0000000000002, 3965.0, 7231.0] },
+    { a1: -18.11153368769503, a2: 4324.6787995634495, c: 19.458390148113008, aT: -3.00632,
+      n: [0.012436, 0.97315, 1.2795, 0.96956, 0.24873],
+      th: [832.9999962983201, 2289.00000119312, 5009.00000151968, 5982.000000404159, 17800.000014507998] }];
+  // pure vapour-pressure ancillaries (starting values only): p = pc exp(Tr/T sum n (1 - T/Tr)^t)
+  const ANC = [
+    { Tt: 195.495, Tr: 405.4, pc: 11333000.0, n: [0.0016131703802769548, 0.01339903644956835, -6.4517151211338994,
+      -4.349105787320862, 1.8295554336003688, 7.011533373126273], t: [0.108, 0.435, 0.971, 4.023, 4.944, 17.494] },
+    { Tt: 273.16, Tr: 647.096, pc: 22064000.0, n: [-9.75639641045262, 3.3357600887120102, -1.10029278432831,
+      0.02037617155190105, -2.6668589845604367, 6.676721087238668], t: [1.018, 1.206, 2.327, 5.753, 4.215, 14.951] }];
+
+  // ------------------------------------------------------------------ residual Helmholtz energy
+  // Accumulators: value, delta*d/ddelta, tau*d/dtau, delta^2*d2/ddelta2.
+  const acc = new Float64Array(4);
+  const dpow = new Float64Array(7);
+  function powerTerms(P, lnt, lnd, out) {
+    let A = 0, Ad = 0, At = 0, Add = 0;
+    const n = P.n, t = P.t, d = P.d, l = P.l;
+    for (let i = 0; i < P.N; i++) {
+      const L = l[i], dl = L ? dpow[L] : 0;
+      const v = n[i] * Math.exp(t[i] * lnt + d[i] * lnd - dl);
+      const k = d[i] - L * dl;
+      A += v; Ad += v * k; At += v * t[i]; Add += v * (k * (k - 1) - L * L * dl);
+    }
+    out[0] = A; out[1] = Ad; out[2] = At; out[3] = Add;
+  }
+  function waterExtra(tau, delta, out) {         // Gaussian and non-analytic terms, added to out
+    let A = 0, Ad = 0, At = 0, Add = 0;
+    for (let i = 0; i < 3; i++) {
+      const de = delta - GA.eps[i], dt = tau - GA.gam[i];
+      const v = GA.n[i] * Math.pow(delta, GA.d[i]) * Math.pow(tau, GA.t[i]) *
+        Math.exp(-GA.eta[i] * de * de - GA.beta[i] * dt * dt);
+      const k = GA.d[i] - 2 * GA.eta[i] * delta * de;
+      A += v; Ad += v * k; At += v * (GA.t[i] - 2 * GA.beta[i] * tau * dt);
+      Add += v * (k * k - GA.d[i] - 2 * GA.eta[i] * delta * delta);
+    }
+    const dm1 = delta - 1, S = dm1 * dm1, tm1 = tau - 1;
+    for (let i = 0; i < 2; i++) {
+      const a = NA.a[i], b = NA.b[i], B = NA.B[i], Aa = NA.A[i], C = NA.C[i], D = NA.D[i], be = NA.beta[i];
+      const k = 1 / (2 * be);
+      const Sk1 = Math.pow(S, k - 1), Sa1 = Math.pow(S, a - 1);
+      const theta = (1 - tau) + Aa * Math.pow(S, k);
+      const Dl = theta * theta + B * Math.pow(S, a);
+      const Dl_d = dm1 * (Aa * theta * (2 / be) * Sk1 + 2 * B * a * Sa1);
+      const Dl_dd = Aa * theta * (2 / be) * Sk1 + 2 * B * a * Sa1 + 4 * B * a * (a - 1) * Sa1 +
+        2 * Aa * Aa / (be * be) * Math.pow(S, 2 * k - 1) + Aa * theta * (4 / be) * (k - 1) * Sk1;
+      const Db = Math.pow(Dl, b), Db1 = Math.pow(Dl, b - 1), Db2 = Math.pow(Dl, b - 2);
+      const Db_d = b * Db1 * Dl_d, Db_dd = b * (Db1 * Dl_dd + (b - 1) * Db2 * Dl_d * Dl_d);
+      const Db_t = -2 * theta * b * Db1;
+      const Psi = Math.exp(-C * S - D * tm1 * tm1);
+      const Psi_d = -2 * C * dm1 * Psi, Psi_dd = (2 * C * S - 1) * 2 * C * Psi, Psi_t = -2 * D * tm1 * Psi;
+      const n = NA.n[i];
+      const v = n * Db * delta * Psi;
+      const vd = n * (Db * (Psi + delta * Psi_d) + Db_d * delta * Psi);
+      const vdd = n * (Db * (2 * Psi_d + delta * Psi_dd) + 2 * Db_d * (Psi + delta * Psi_d) + Db_dd * delta * Psi);
+      const vt = n * delta * (Db_t * Psi + Db * Psi_t);
+      if (!(Number.isFinite(v) && Number.isFinite(vd) && Number.isFinite(vdd) && Number.isFinite(vt))) continue;
+      A += v; Ad += delta * vd; At += tau * vt; Add += delta * delta * vdd;
+    }
+    out[0] += A; out[1] += Ad; out[2] += At; out[3] += Add;
+  }
+
+  // the last evaluation: alphar, delta*ar_delta, tau*ar_tau, delta^2*ar_deltadelta, d(alphar)/dx at (T, rho)
+  const RES = { T: NaN, rho: NaN, x: NaN, ar: 0, d: 0, t: 0, dd: 0, ax: 0 };
+  const aN = new Float64Array(4), aW = new Float64Array(4), s0 = new Float64Array(4), s1 = new Float64Array(4),
+    s2 = new Float64Array(4);
+  const DEP0 = power([...DEP.n.slice(0, 6)], [...DEP.t.slice(0, 6)], [...DEP.d.slice(0, 6)], [...DEP.l.slice(0, 6)]);
+  const DEP1 = power([...DEP.n.slice(6, 13)], [...DEP.t.slice(6, 13)], [...DEP.d.slice(6, 13)], [...DEP.l.slice(6, 13)]);
+  const DEP2 = power([...DEP.n.slice(13)], [...DEP.t.slice(13)], [...DEP.d.slice(13)], [...DEP.l.slice(13)]);
+
+  function evalRes(T, rho, x) {
+    x = clampX(x);
+    if (T === RES.T && rho === RES.rho && x === RES.x) return RES;
+    const x1 = 1 - x, xa = Math.pow(x, ALPHA), xb = Math.pow(x, BETA);
+    const Tred = TcN * x * x + TcW * x1 * x1 + 2.0 * x * (1.0 - xa) * kT / 2.0 * (TcN + TcW);
+    const dTred = 2 * TcN * x - 2 * TcW * x1 + (1 - (1 + ALPHA) * xa) * kT * (TcN + TcW);
+    const vred = vcN * x * x + vcW * x1 * x1 + 2.0 * x * (1.0 - xb) * kV / 2.0 * (vcN + vcW);
+    const dvred = 2 * vcN * x - 2 * vcW * x1 + (1 - (1 + BETA) * xb) * kV * (vcN + vcW);
+    const tau = Tred / T, delta = rho / (1 / vred);
+    const lnt = Math.log(tau), lnd = Math.log(delta);
+    dpow[1] = delta; dpow[2] = delta * delta; dpow[3] = dpow[2] * delta; dpow[4] = dpow[2] * dpow[2];
+    dpow[5] = dpow[4] * delta; dpow[6] = dpow[3] * dpow[3];
+    powerTerms(NH3, lnt, lnd, aN);
+    powerTerms(H2O, lnt, lnd, aW);
+    waterExtra(tau, delta, aW);
+    powerTerms(DEP0, lnt, lnd, s0);
+    powerTerms(DEP1, lnt, lnd, s1);
+    powerTerms(DEP2, lnt, lnd, s2);
+    const xg = Math.pow(x, DEP_GAMMA), F = x * (1 - xg), dF = 1 - (1 + DEP_GAMMA) * xg;
+    let ar = 0, d = 0, t = 0, dd = 0;
+    for (let j = 0; j < 4; j++) {
+      const sum = s0[j] + x * s1[j] + x * x * s2[j];
+      acc[j] = x * aN[j] + x1 * aW[j] + F * sum;
+    }
+    ar = acc[0]; d = acc[1]; t = acc[2]; dd = acc[3];
+    const depx = dF * (s0[0] + x * s1[0] + x * x * s2[0]) + F * (s1[0] + 2 * x * s2[0]);
+    RES.T = T; RES.rho = rho; RES.x = x;
+    RES.ar = ar; RES.d = d; RES.t = t; RES.dd = dd;
+    // d(alphar)/dx at T, rho: through tau (Tred) and delta (vred), and explicitly
+    RES.ax = t * dTred / Tred + d * dvred / vred + (aN[0] - aW[0] + depx);
+    return RES;
+  }
+
+  // ideal gas: alpha_ig and -T d(alpha_ig)/dT at constant rho
+  const IGR = { a0: 0, a10: 0 };
+  function evalIdeal(T, rho, x) {
+    x = clampX(x);
+    let a0 = 0, a10 = 0;
+    for (let i = 0; i < 2; i++) {
+      const g = IG[i], zi = i === 0 ? x : 1 - x;
+      let ai = Math.log(rho) + g.a1 + g.a2 / T + g.c + g.aT * Math.log(T), bi = g.a2 / T - g.aT;
+      for (let j = 0; j < g.n.length; j++) {
+        const u = g.th[j] / T;
+        ai += g.n[j] * Math.log(1.0 - Math.exp(-u));
+        bi += g.n[j] * u / (Math.exp(u) - 1);
+      }
+      a0 += zi * (ai + Math.log(zi));
+      a10 += zi * bi;
+    }
+    IGR.a0 = a0; IGR.a10 = a10;
+    return IGR;
+  }
+
+  // ------------------------------------------------------------------ Brent (scipy's brentq)
+  function brentq(f, xa, xb, xtol = 2e-12, rtol = 4 * 2.220446049250313e-16, maxiter = 100) {
+    let xpre = xa, xcur = xb, xblk = 0, fblk = 0, spre = 0, scur = 0;
+    let fpre = f(xpre), fcur = f(xcur);
+    if (fpre === 0) return xpre;
+    if (fcur === 0) return xcur;
+    if ((fpre > 0) === (fcur > 0)) throw new Error("brentq: f(a) and f(b) must have different signs");
+    for (let i = 0; i < maxiter; i++) {
+      if (fpre !== 0 && fcur !== 0 && (fpre > 0) !== (fcur > 0)) {
+        xblk = xpre; fblk = fpre; spre = scur = xcur - xpre;
+      }
+      if (Math.abs(fblk) < Math.abs(fcur)) {
+        xpre = xcur; xcur = xblk; xblk = xpre;
+        fpre = fcur; fcur = fblk; fblk = fpre;
+      }
+      const delta = (xtol + rtol * Math.abs(xcur)) / 2, sbis = (xblk - xcur) / 2;
+      if (fcur === 0 || Math.abs(sbis) < delta) return xcur;
+      if (Math.abs(spre) > delta && Math.abs(fcur) < Math.abs(fpre)) {
+        let stry;
+        if (xpre === xblk) stry = -fcur * (xcur - xpre) / (fcur - fpre);
+        else {
+          const dpre = (fpre - fcur) / (xpre - xcur), dblk = (fblk - fcur) / (xblk - xcur);
+          stry = -fcur * (fblk * dblk - fpre * dpre) / (dblk * dpre * (fblk - fpre));
+        }
+        if (2 * Math.abs(stry) < Math.min(Math.abs(spre), 3 * Math.abs(sbis) - delta)) { spre = scur; scur = stry; }
+        else { spre = sbis; scur = sbis; }
+      } else { spre = sbis; scur = sbis; }
+      xpre = xcur; fpre = fcur;
+      xcur += Math.abs(scur) > delta ? scur : (sbis > 0 ? delta : -delta);
+      fcur = f(xcur);
+    }
+    throw new Error("brentq: failed to converge");
+  }
+
+  // ------------------------------------------------------------------ the model
+  // pure vapour pressures for starting values: ln p linear in 1/T between 120 ancillary points (as Python tabulates
+  // CoolProp's saturation pressures), extended along the end segments' slopes
+  const PSAT = ANC.map(a => {
+    const anc = T => { const th = 1 - T / a.Tr; let s = 0; for (let i = 0; i < a.n.length; i++) s += a.n[i] * Math.pow(th, a.t[i]); return a.pc * Math.exp(a.Tr / T * s); };
+    const Ts = []; for (let i = 0; i < 120; i++) Ts.push(a.Tt + 0.5 + (a.Tr - 1.0 - a.Tt - 0.5) * i / 119);
+    Ts.reverse();
+    return { invT: Float64Array.from(Ts, t => 1 / t), lnp: Float64Array.from(Ts, t => Math.log(anc(t))) };
+  });
+  function psatPure(i, T) {
+    const { invT, lnp } = PSAT[i], u = 1 / T, N = invT.length;
+    let k;
+    if (u <= invT[0]) k = 0;
+    else if (u >= invT[N - 1]) k = N - 2;
+    else { let lo = 0, hi = N; while (lo < hi) { const m = (lo + hi) >> 1; if (invT[m] < u) lo = m + 1; else hi = m; } k = Math.min(lo - 1, N - 2); }
+    return Math.exp(lnp[k] + (lnp[k + 1] - lnp[k]) * (u - invT[k]) / (invT[k + 1] - invT[k]));
+  }
+
+  function pressure(T, rho, x) { return rho * R * T * (1.0 + evalRes(T, rho, x).d); }
+  function dpdrho(T, rho, x) { const r = evalRes(T, rho, x); return R * T * (1.0 + 2.0 * r.d + r.dd); }
+
+  /* Molar density of the liquid or vapour root at T (K), p (Pa), or null; rho0 overrides the starting value (used to
+     warm-start the equilibrium Newton). */
+  function density(T, p, x, phase, rho0) {
+    const liq = phase === "liquid";
+    let rho = rho0 !== undefined ? rho0 : (liq ? 50000.0 - 15000.0 * x : p / (R * T)), ok = false;
+    for (let it = 0; it < 100; it++) {
+      const r = evalRes(T, rho, x);
+      const pr = rho * R * T * (1.0 + r.d), d = R * T * (1.0 + 2.0 * r.d + r.dd);
+      if (!(d > 0 && Number.isFinite(pr))) { rho *= liq ? 1.05 : 0.9; continue; }
+      let nw = rho - (pr - p) / d;
+      if (nw <= 0) nw = rho / 2;
+      if (liq && nw < 0.25 * rho) nw = 0.5 * rho;
+      if (Math.abs(nw - rho) <= 1e-11 * rho) { rho = nw; ok = true; break; }
+      rho = nw;
+    }
+    if (!ok) return null;
+    if (!(dpdrho(T, rho, x) > 0) || !(Math.abs(pressure(T, rho, x) - p) <= 1e-6 * p + 1e-3)) return null;
+    const Zc = p / (rho * R * T);
+    if (liq && Zc > 0.3) return null;
+    if (!liq && Zc < 0.3) return null;
+    return rho;
+  }
+
+  function h_s(T, rho, x) {
+    const r = evalRes(T, rho, x), ar = r.ar, ad = r.d, at = r.t, ig = evalIdeal(T, rho, x);
+    const a10 = at + ig.a10;
+    return [R * T * (a10 + 1.0 + ad), R * (a10 - ar - ig.a0)];
+  }
+
+  const LP = new Float64Array(2);
+  function lnPhiInto(T, rho, x, out) {
+    const r = evalRes(T, rho, x), xc = RES.x, base = r.ar + r.d - Math.log(1 + r.d);
+    out[0] = base + (1 - xc) * r.ax;
+    out[1] = base - xc * r.ax;
+    return out;
+  }
+  function ln_phi(T, rho, x) { const o = lnPhiInto(T, rho, x, LP); return [o[0], o[1]]; }
+
+  /* Newton on F = ln(x_i phi_i^L) - ln(y_i phi_i^V) = 0 in (x, y), each phase's density solved at (T, p); the
+     composition derivatives of ln phi by finite differences (they only steer). */
+  const LL = new Float64Array(2), LV = new Float64Array(2), LH = new Float64Array(2);
+  function vleNewton(T, p, x, y, rL, rV) {
+    for (let it = 0; it < 60; it++) {
+      rL = density(T, p, x, "liquid", rL) || density(T, p, x, "liquid");
+      rV = density(T, p, y, "vapour", rV) || density(T, p, y, "vapour");
+      if (rL === null || rV === null) return null;
+      lnPhiInto(T, rL, x, LL); lnPhiInto(T, rV, y, LV);
+      const F1 = LL[0] + Math.log(x) - LV[0] - Math.log(y);
+      const F2 = LL[1] + Math.log(1 - x) - LV[1] - Math.log(1 - y);
+      if (!(Number.isFinite(F1) && Number.isFinite(F2))) return null;
+      if (Math.abs(F1) < 1e-14 && Math.abs(F2) < 1e-14) return [x, y, rL, rV];   // (the noise floor is ~1e-13)
+      const hx = 1e-7 * Math.min(x, 1 - x), hy = 1e-7 * Math.min(y, 1 - y);
+      const rLh = density(T, p, x + hx, "liquid", rL), rVh = density(T, p, y + hy, "vapour", rV);
+      if (rLh === null || rVh === null) return null;
+      lnPhiInto(T, rLh, x + hx, LH);
+      const J11 = (LH[0] - LL[0]) / hx + 1 / x, J21 = (LH[1] - LL[1]) / hx - 1 / (1 - x);
+      lnPhiInto(T, rVh, y + hy, LH);
+      const J12 = -(LH[0] - LV[0]) / hy - 1 / y, J22 = -(LH[1] - LV[1]) / hy + 1 / (1 - y);
+      const det = J11 * J22 - J12 * J21;
+      if (!(det !== 0 && Number.isFinite(det))) return null;
+      let dx = -(J22 * F1 - J12 * F2) / det, dy = -(-J21 * F1 + J11 * F2) / det;
+      let lam = 1;
+      while (lam > 1e-3 && !(x + lam * dx > 0 && x + lam * dx < 1 && y + lam * dy > 0 && y + lam * dy < 1)) lam /= 2;
+      dx *= lam; dy *= lam;
+      x += dx; y += dy;
+      if (Math.abs(dx) < 1e-11 && Math.abs(dy) < 1e-11) {         // quadratic: this last step lands at the noise
+        rL = density(T, p, x, "liquid", rL); rV = density(T, p, y, "vapour", rV);
+        return rL === null || rV === null ? null : [x, y, rL, rV];
+      }
+    }
+    return null;
+  }
+
+  /* Coexisting liquid and vapour ammonia mole fractions at T (K) and p (Pa): [x, y, rhoL, rhoV], or null. */
+  function equilibrium_TP(T, p, x0, y0) {
+    if (x0 == null || y0 == null) {
+      const Ka = psatPure(0, T) / p, Kw = psatPure(1, T) / p;
+      if (!(Ka > 1 && 1 > Kw)) return null;
+      x0 = (1 - Kw) / (Ka - Kw);
+      y0 = Ka * x0;
+    }
+    let x = x0, y = y0;
+    let rL = density(T, p, x, "liquid"), rV = density(T, p, y, "vapour");
+    if (rL === null || rV === null) return null;
+    if (x > 0 && x < 1 && y > 0 && y < 1) {
+      const r = vleNewton(T, p, x, y, rL, rV);
+      if (r) {
+        const [xs, ys, dL, dV] = r;
+        if (Math.abs(ys - xs) > 1e-6 && ys > xs && Math.abs(pressure(T, dL, xs) / p - 1) < 1e-7 &&
+            Math.abs(pressure(T, dV, ys) / p - 1) < 1e-7 && dL > dV) return r;
+      }
+    }
+    let conv = false;
+    for (let it = 0; it < 400; it++) {
+      rL = density(T, p, x, "liquid");
+      rV = density(T, p, y, "vapour");
+      if (rL === null || rV === null) return null;
+      lnPhiInto(T, rL, x, LL); lnPhiInto(T, rV, y, LV);
+      const Ka = Math.exp(LL[0] - LV[0]), Kw = Math.exp(LL[1] - LV[1]);
+      if (!(Ka > 1 && 1 > Kw)) return null;
+      const xn = (1 - Kw) / (Ka - Kw), yn = Ka * xn;
+      if (!(xn > 0 && xn < 1 && yn > 0 && yn < 1)) return null;
+      if (Math.abs(xn - x) < 1e-10 && Math.abs(yn - y) < 1e-10) { x = xn; y = yn; conv = true; break; }
+      x += 0.5 * (xn - x); y += 0.5 * (yn - y);
+    }
+    if (!conv || Math.abs(y - x) < 1e-6) return null;
+    return [x, y, density(T, p, x, "liquid"), density(T, p, y, "vapour")];
+  }
+
+  function raoultT(p, x, dew) {
+    return brentq(T => {
+      const pa = psatPure(0, T), pw = psatPure(1, T);
+      return dew ? (x / pa + (1 - x) / pw) * p - 1 : x * pa + (1 - x) * pw - p;
+    }, 180.0, 900.0);
+  }
+
+  const P_ = (p) => (p / 1e6).toFixed(3), X_ = (x) => x.toFixed(4);
+  /* Bubble (dew=false: x is the liquid) or dew (dew=true: x is the vapour) temperature (K) at p (Pa), and the
+     incipient phase's mole fraction: successive substitution on the K-values, secant on temperature. */
+  const T_RETRY = [0.99, 1.01, 0.98, 1.02, 0.97, 1.03, 0.95, 1.05];   // saturation starts tried when the estimate has no root
+  function saturationT(p, x, dew, T0) {
+    let T = T0 != null ? T0 : raoultT(p, x, dew);
+    const base = dew ? "vapour" : "liquid", other = dew ? "liquid" : "vapour";
+    const LB = new Float64Array(2), LI = new Float64Array(2);
+    function resid(T, inc) {
+      const rB = density(T, p, x, base);
+      if (rB === null) return [null, inc];
+      lnPhiInto(T, rB, x, LB);
+      if (inc === null) {
+        const K0 = psatPure(0, T) / p, K1 = psatPure(1, T) / p;
+        inc = dew ? (x / K0) / (x / K0 + (1 - x) / K1) : K0 * x / (K0 * x + K1 * (1 - x));
+      }
+      let S = NaN;
+      for (let it = 0; it < 60; it++) {
+        const rI = density(T, p, inc, other);
+        if (rI === null) return [null, inc];
+        lnPhiInto(T, rI, inc, LI);
+        const t0 = x * Math.exp(LB[0] - LI[0]), t1 = (1 - x) * Math.exp(LB[1] - LI[1]);
+        S = t0 + t1;
+        const nw = t0 / S;
+        if (Math.abs(nw - inc) < 1e-11) { inc = nw; break; }
+        inc = nw;
+      }
+      return [Math.log(S), inc];
+    }
+    let [g0, inc] = resid(T, null);
+    // a phase root is missing at the estimate (Raoult's law is far off for this mixture): try nearby temperatures
+    for (const f of T_RETRY) { if (g0 !== null) break; [g0, inc] = resid(T * f, null); if (g0 !== null) T *= f; }
+    if (g0 === null) throw new Error(`ammonia-water ${dew ? "dew" : "bubble"} point at ${P_(p)} MPa, x=${X_(x)}: ` +
+      "no phase root at the starting temperature");
+    let T1 = T * ((g0 > 0) === dew ? 1.002 : 0.998);
+    let [g1, inc1] = resid(T1, inc);
+    for (let it = 0; it < 60; it++) {
+      if (g1 === null) { T1 = (T + T1) / 2; [g1, inc1] = resid(T1, inc); continue; }
+      if (Math.abs(g1) < 1e-11) return [T1, inc1];
+      if (g1 === g0) break;
+      let T2 = T1 - g1 * (T1 - T) / (g1 - g0);
+      T2 = Math.min(Math.max(T2, T1 - 30), T1 + 30);
+      T = T1; g0 = g1; inc = inc1;
+      T1 = T2;
+      [g1, inc1] = resid(T1, inc);
+    }
+    if (g1 !== null && Math.abs(g1) < 1e-8) return [T1, inc1];
+    throw new Error(`ammonia-water ${dew ? "dew" : "bubble"} point at ${P_(p)} MPa, x=${X_(x)} did not converge`);
+  }
+
+  /* Bubble or dew pressure (Pa) at T (K), and the incipient phase's mole fraction. */
+  function saturationP(T, x, dew) {
+    const pa = psatPure(0, T), pw = psatPure(1, T);
+    let p, inc;
+    if (dew) { p = 1.0 / (x / pa + (1 - x) / pw); inc = (x / pa) / (x / pa + (1 - x) / pw); }
+    else { p = x * pa + (1 - x) * pw; inc = x * pa / p; }
+    const base = dew ? "vapour" : "liquid", other = dew ? "liquid" : "vapour";
+    const LB = new Float64Array(2), LI = new Float64Array(2);
+    for (let it = 0; it < 500; it++) {
+      const rB = density(T, p, x, base), rI = density(T, p, inc, other);
+      if (rB === null || rI === null) { p *= ((rI === null) !== dew) ? 0.7 : 1.3; continue; }
+      lnPhiInto(T, rB, x, LB); lnPhiInto(T, rI, inc, LI);
+      const t0 = x * Math.exp(LB[0] - LI[0]), t1 = (1 - x) * Math.exp(LB[1] - LI[1]), S = t0 + t1;
+      const ni = t0 / S, pn = dew ? p / S : p * S;
+      if (Math.abs(pn / p - 1) < 1e-10 && Math.abs(ni - inc) < 1e-9) return [pn, ni];
+      p = pn; inc = ni;
+    }
+    throw new Error(`ammonia-water ${dew ? "dew" : "bubble"} pressure at ${T.toFixed(2)} K, x=${X_(x)} did not converge`);
+  }
+
+  const model = {
+    pressure, density: (T, p, x, phase) => density(T, p, x, phase), h_s, ln_phi, equilibrium_TP,
+    bubble_T: (p, x) => saturationT(p, x, false), dew_T: (p, y) => saturationT(p, y, true),
+    bubble_p: (T, x) => saturationP(T, x, false), dew_p: (T, y) => saturationP(T, y, true),
+    psat_pure: (name, T) => psatPure(name === "Ammonia" ? 0 : 1, T),
+  };
+
+  // ------------------------------------------------------------------ streams of fixed composition
+  class AmmoniaWaterStream {
+    constructor(w, m) {
+      if (!(w > 0 && w < 1)) throw new Error("the ammonia mass fraction must lie between 0 and 1");
+      this.model = m || model;
+      this.w = w;
+      this.x = mole_fraction(w);
+      this.name = this.fluid = `ammonia-water (${(w * 100).toFixed(1)} % NH3 by mass)`;
+      this.backend = "IAPWS G4-01 (JavaScript)";
+      this.P_crit = NaN; this.T_crit = NaN; this.fast = false;
+      this._memo = new Map(); this._sat = new Map(); this._iso = new Map();
+    }
+    fast_view() { return this; }
+
+    // T(h) along an isobar: liquid from 120 K below the bubble point, the two-phase region in 1 K steps (warm-started),
+    // vapour to 160 K above the dew point; linear between the points
+    _iso_table(P) {
+      const key = Math.round(P * 1e9);
+      const got = this._iso.get(key);
+      if (got) return got;
+      const [Tb, Td] = this.bubble_dew(P);
+      const pts = [];
+      for (let T = Tb - 120.0; T < Tb; T += 4.0) {
+        try { const st = this._single(T, P, "liquid"); pts.push([st.h, st.T]); } catch (e) { /* skip */ }
+      }
+      pts.push([this._single(Tb, P, "liquid").h, Tb - T_K]);
+      const n = Math.max(Math.trunc((Td - Tb) / 1.0), 8);
+      let guess = null;
+      for (let i = 1; i < n; i++) {
+        const Tt = Tb + (Td - Tb) * i / n;
+        try { const st = this._two_phase(Tt, P, guess); guess = [st.x_mol, st.y_mol]; pts.push([st.h, st.T]); }
+        catch (e) { guess = null; }
+      }
+      pts.push([this._single(Td, P, "vapour").h, Td - T_K]);
+      for (let T = Td + 4.0; T <= Td + 160.0; T += 4.0) {
+        try { const st = this._single(T, P, "vapour"); pts.push([st.h, st.T]); } catch (e) { /* skip */ }
+      }
+      pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const H = [], Ts = [];
+      for (const [h, t] of pts) if (!H.length || h > H[H.length - 1] + 1e-9) { H.push(h); Ts.push(t); }
+      const tab = { H: Float64Array.from(H), T: Float64Array.from(Ts) };
+      if (this._iso.size > 200) this._iso.clear();
+      this._iso.set(key, tab);
+      return tab;
+    }
+
+    /** Bubble and dew temperatures (K) at P (MPa), with the incipient vapour and liquid mole fractions. */
+    bubble_dew(P) {
+      const key = Math.round(P * 1e10);
+      let r = this._sat.get(key);
+      if (!r) {
+        const m = this.model, p = P * 1e6;
+        const [Tb, yb] = m.bubble_T(p, this.x), [Td, xd] = m.dew_T(p, this.x);
+        r = [Tb, Td, yb, xd];
+        this._sat.set(key, r);
+      }
+      return r;
+    }
+
+    _single(T, P, phase) {
+      const m = this.model, p = P * 1e6;
+      let rho = m.density(T, p, this.x, phase);
+      if (rho === null) {
+        const other = phase === "liquid" ? "vapour" : "liquid";
+        rho = m.density(T, p, this.x, other);
+        if (rho === null) throw new Error(`${this.name}: no single-phase state at ${(T - T_K).toFixed(2)} C, ${P.toFixed(4)} MPa`);
+        phase = other;
+      }
+      const [h, s] = m.h_s(T, rho, this.x), M = molarMass(this.x), liq = phase === "liquid";
+      return { T: T - T_K, P, h: h / M / 1000, s: s / M / 1000, D: rho * M, q: -1.0,
+        phase: liq ? "liquid" : "superheated_vapour", w_liq: liq ? this.w : null, w_vap: liq ? null : this.w };
+    }
+
+    _two_phase(T, P, guess) {
+      const m = this.model, p = P * 1e6;
+      if (!guess) {
+        const [Tb, Td, yb, xd] = this.bubble_dew(P);
+        const f = Td > Tb ? Math.min(Math.max((T - Tb) / (Td - Tb), 0.0), 1.0) : 0.5;
+        guess = [this.x + f * (xd - this.x), yb + f * (this.x - yb)];
+      }
+      let eq = m.equilibrium_TP(T, p, guess[0], guess[1]);
+      if (eq === null) eq = m.equilibrium_TP(T, p);
+      if (eq === null) throw new Error(`${this.name}: no two-phase equilibrium at ${(T - T_K).toFixed(2)} C, ${P.toFixed(4)} MPa`);
+      const [x, y, rL, rV] = eq;
+      const V = Math.min(Math.max((this.x - x) / (y - x), 0.0), 1.0);
+      const [hL, sL] = m.h_s(T, rL, x), [hV, sV] = m.h_s(T, rV, y);
+      const ML = molarMass(x), MV = molarMass(y), nL = 1.0 - V, nV = V, mass = nL * ML + nV * MV;
+      return { T: T - T_K, P, h: (nL * hL + nV * hV) / mass / 1000, s: (nL * sL + nV * sV) / mass / 1000,
+        D: mass / (nL / rL + nV / rV), q: nV * MV / mass, phase: "two_phase",
+        w_liq: mass_fraction(x), w_vap: mass_fraction(y), x_mol: x, y_mol: y };
+    }
+
+    _memoised(key, fn) {
+      let st = this._memo.get(key);
+      if (st === undefined) {
+        st = fn();
+        if (this._memo.size > 100000) this._memo.clear();
+        this._memo.set(key, st);
+      }
+      return st;
+    }
+
+    PT(P, T) {
+      return this._memoised("PT" + P + "," + T, () => {
+        const Tk = T + T_K, [Tb, Td] = this.bubble_dew(P);
+        if (Tk <= Tb) return this._single(Tk, P, "liquid");
+        if (Tk >= Td) return this._single(Tk, P, "vapour");
+        return this._two_phase(Tk, P);
+      });
+    }
+
+    _solve_T(P, prop, value) {
+      const [Tb, Td] = this.bubble_dew(P);
+      const vb = this._single(Tb, P, "liquid")[prop], vd = this._single(Td, P, "vapour")[prop];
+      let lo, hi, region;
+      if (value <= vb) {
+        lo = Tb - 1.0; hi = Tb; region = "liquid";
+        while (this._single(lo, P, "liquid")[prop] > value) {
+          hi = lo; lo -= 25.0;
+          if (lo < 180.0) throw new Error(`${this.name}: ${prop}=${value} below the liquid range at ${P} MPa`);
+        }
+      } else if (value >= vd) {
+        lo = Td; hi = Td + 1.0; region = "vapour";
+        while (this._single(hi, P, "vapour")[prop] < value) {
+          lo = hi; hi += 25.0;
+          if (hi > 1200.0) throw new Error(`${this.name}: ${prop}=${value} above the vapour range at ${P} MPa`);
+        }
+      } else { lo = Tb; hi = Td; region = "two"; }
+      const f = T => {
+        if (region === "two") {
+          if (T <= Tb + 1e-9) return vb - value;
+          if (T >= Td - 1e-9) return vd - value;
+          return this._two_phase(T, P)[prop] - value;
+        }
+        return this._single(T, P, region)[prop] - value;
+      };
+      const T = brentq(f, lo, hi, 1e-10, 1e-13);
+      if (region === "two")
+        return Tb < T && T < Td ? this._two_phase(T, P) : this._single(T, P, T <= Tb ? "liquid" : "vapour");
+      return this._single(T, P, region);
+    }
+
+    PH(P, h) { return this._memoised("PH" + P + "," + h, () => this._solve_T(P, "h", h)); }
+    PS(P, s) { return this._memoised("PS" + P + "," + s, () => this._solve_T(P, "s", s)); }
+
+    /** Saturated liquid (q=0), saturated vapour (q=1) or a vapour mass fraction q in between, at P (MPa). */
+    PQ(P, q) {
+      return this._memoised("PQ" + P + "," + q, () => {
+        const [Tb, Td] = this.bubble_dew(P);
+        if (q <= 0) return Object.assign(this._single(Tb, P, "liquid"), { q: 0.0, phase: "saturated_liquid" });
+        if (q >= 1) return Object.assign(this._single(Td, P, "vapour"), { q: 1.0, phase: "saturated_vapour" });
+        const T = brentq(T => this._two_phase(T, P).q - q, Tb + 1e-7, Td - 1e-7, 1e-10);
+        return this._two_phase(T, P);
+      });
+    }
+
+    /** The saturation state at T (C) and vapour mass fraction q (0: bubble, 1: dew). */
+    TQ(T, q) {
+      return this._memoised("TQ" + T + "," + q, () => {
+        const m = this.model, Tk = T + T_K;
+        let p = q <= 0 ? m.bubble_p(Tk, this.x)[0] : q >= 1 ? m.dew_p(Tk, this.x)[0] : null;
+        if (p === null) {
+          const lo = m.dew_p(Tk, this.x)[0], hi = m.bubble_p(Tk, this.x)[0];
+          p = Math.exp(brentq(lp => this.PT(Math.exp(lp) / 1e6, T).q - q, Math.log(lo) + 1e-9, Math.log(hi) - 1e-9, 1e-12));
+        }
+        return this.PQ(p / 1e6, q);
+      });
+    }
+
+    is_gas(st) { return st.phase === "saturated_vapour" || st.phase === "superheated_vapour"; }
+    Tph(P, h) { return this.PH(P, h).T; }
+
+    /** Temperature (C) at (P, h) from the isobar table (a PH flash outside it). */
+    T_ph_fast(P, h) {
+      const { H, T } = this._iso_table(P), N = H.length;
+      if (h < H[0] || h > H[N - 1]) return this.PH(P, h).T;
+      let lo = 0, hi = N;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (h < H[m]) hi = m; else lo = m + 1; }
+      const i = Math.min(lo - 1, N - 2);
+      return T[i] + (T[i + 1] - T[i]) * (h - H[i]) / (H[i + 1] - H[i]);
+    }
+  }
+
+  const api = { M_NH3, M_H2O, R_MIX: R, mole_fraction, mass_fraction, model, AmmoniaWaterStream,
+    stream: (w, m) => new AmmoniaWaterStream(w, m), brentq, backend: "IAPWS G4-01 (JavaScript)" };
+  if (typeof module !== "undefined" && module.exports) module.exports = api; else root.AMMWAT = api;
+})(typeof self !== "undefined" ? self : this);
+</script>
+<script>/* Advanced dryer heat pumps: four more cycles, solved in the browser like dryer_cascades.js. Each is a port of the
+   Python model in HeatPumpLab/cycles with the same equations and iterations, so the two agree to round-off.
+
+   economiser    two-stage heat pump with an intermediate pressure: a flash tank, a closed economiser (vapour
+                 injection) or parallel compression, or a single stage for comparison (EconomiserHeatPump). The high
+                 pressure is the lowest that heats the air to the target with the approach; the intermediate pressure
+                 is set by its saturation temperature T_int (null: the geometric mean of the evaporating and high
+                 pressures).
+   dualPressure  dual-pressure condensation after Dai et al. (2020): a low-pressure condenser heats the air from the
+                 inlet to T_mid and a high-pressure one from T_mid to the target; the high-pressure liquid is
+                 throttled into the low-pressure condenser (DualPressureHeatPump).
+   stirling      reverse-Stirling units in series on the air, each a fraction of the Carnot COP between its hot side
+                 (dT_hot above the air it delivers) and its cold side (dT_cold below the source outlet): a
+                 semi-empirical block, not a physical Stirling model (StirlingHeatPump).
+   hybrid        ammonia-water absorption-compression (Osenbrück) heat pump over the IAPWS G4-01 mixture model in
+                 ammonia_water.js (HybridHeatPump).
+
+   Results have the shape of DRYCASC's ({success, message, warnings, COP, VHC, report, loops, hx, q_air, w_shaft,
+   q_source, ref, Pmax_bar, T_dis_max}); duties per kg of the basis flow named in each model (Stirling: per kg of
+   primary air, with ref.air set because no compressor sets the size). Each optimiser is a generator that yields
+   {nEval, best} after every solve and returns its outcome, like DRYCASC's. */
+(function (root) {
+  "use strict";
+  const node = typeof module !== "undefined" && module.exports;
+  const C_ = node ? require("./dryer_cascades.js") : root.DRYCASC;
+  const AW = () => node ? require("./ammonia_water.js") : root.AMMWAT;
+  const { stage, pt, iso, compPath, airProfile, minGap, coolerOutlet, lin, srcT, waterLine, fail, compassSearch } = C_._h;
+  const MOTOR = 0.93;
+  const GAS = new Set(["saturated_vapour", "superheated_vapour", "supercritical"]);
+  const gasLike = (fl, st) => GAS.has(st.phase) || (isFinite(fl.P_crit) && st.P >= fl.P_crit && st.T >= fl.T_crit);
+  const errMsg = e => `${e && e.message ? e.message : e}`;
+  const jsRound = (x, d = 0) => Math.round(x * 10 ** d) / 10 ** d;
+  const nameOf = fl => fl.label || fl.fluid || "the refrigerant";
+
+  /* smallest suction superheat (K, at least shMin) whose compression from saturation at Pin (Tsat) to Pout
+     discharges margin K above the dew point at Pout: overhanging fluids compress wet from near saturation */
+  function drySuperheat(fl, Pin, Tsat, Pout, shMin, margin = 5) {
+    const dew = isFinite(fl.P_crit) && Pout >= fl.P_crit ? -Infinity : fl.PQ(Pout, 1).T;
+    const dry = sh => stage(fl, Pin, fl.PT(Pin, Tsat + sh), Pout).out.T - dew - margin;
+    const sh = Math.max(shMin, 0.5);
+    if (dry(sh) >= 0) return sh;
+    let hi = sh;
+    while (dry(hi) < 0 && hi < 120) hi += 10;
+    if (dry(hi) < 0) throw new Error(`${nameOf(fl)} cannot compress dry from ${Tsat.toFixed(0)} C (raise the superheat or change the fluid)`);
+    let lo = sh;
+    for (let k = 0; k < 30 && hi - lo > 0.05; k++) { const m = (lo + hi) / 2; if (dry(m) >= 0) hi = m; else lo = m; }
+    return hi;
+  }
+  /* the lowest high pressure (40 log steps from Plo to Pmax, then bisection in log P) whose design keeps the air
+     approach: at(P) returns the design ({gap}) or throws */
+  function lowestPressure(at, Plo, Pmax, dT, nScan = 40, tol = 1e-5, nBis = 30) {
+    const tryAt = P => { try { return at(P); } catch (e) { return e instanceof Error ? e : new Error(errMsg(e)); } };
+    let prev = Plo, found = null, last = null;
+    for (let i = 0; i <= nScan; i++) {
+      const P = Plo * Math.pow(Pmax / Plo, i / nScan), r = tryAt(P);
+      if (!(r instanceof Error) && r.gap >= dT - 0.05) { found = [P, r]; break; }
+      last = r; prev = P;
+    }
+    if (!found) return { last };
+    let lo = prev, [hi, S] = found;
+    for (let k = 0; k < nBis && hi / lo - 1 >= tol; k++) {
+      const m = Math.sqrt(lo * hi), r = tryAt(m);
+      if (!(r instanceof Error) && r.gap >= dT - 0.05) { hi = m; S = r; } else lo = m;
+    }
+    return { S };
+  }
+  const noPressure = (c, last) => `no high pressure up to ${c.P_max_bar} bar heats the air to ${c.T_air_tar} C with a ${c.dT_GC_min} K approach${last instanceof Error ? ` (${last.message})` : ""}`;
+  // a one-variable optimiser: the start, a coarse grid and a compass search, rounded to 0.1 K
+  function* optimise1(f, x0, lo, hi, grid, maxEval, state) {
+    const b0 = x0 ? f(x0) : { y: -Infinity };
+    yield { nEval: state.nEval, best: b0.y };
+    let xg = null, bg = { y: -Infinity };
+    for (const a of grid) {
+      const z = [lo[0] + a * (hi[0] - lo[0])], o = f(z);
+      if (o.y > bg.y) { bg = o; xg = z; }
+      yield { nEval: state.nEval, best: Math.max(b0.y, bg.y) };
+    }
+    const g = compassSearch(f, [[x0, b0], [xg, bg]], lo, hi, [8], [0.05], [false], state, maxEval);
+    let st, overall = Math.max(b0.y, bg.y);
+    while (!(st = g.next()).done) { overall = Math.max(overall, st.value); yield { nEval: state.nEval, best: overall }; }
+    let { x, best, converged } = st.value;
+    if (!x) return { x: null, b0 };
+    const xr = [jsRound(x[0], 1)], o = f(xr);
+    if (isFinite(o.y)) { x = xr; best = o; }
+    return { x, best, converged, b0 };
+  }
+  const memo1 = (state, solve) => x => {
+    const k = (+x[0]).toFixed(4);
+    if (state.memo.has(k)) return state.memo.get(k);
+    state.nEval++;
+    let r; try { r = solve(+x[0]); } catch (e) { r = fail(errMsg(e)); }
+    const o = { y: r.success ? r.COP : -Infinity, r };
+    state.memo.set(k, o); return o;
+  };
+  const air0 = { T_air_inlet: 15, T_air_tar: 170, dT_GC_min: 20, T_source_in: 60, T_source_out: 50, dT_src: 5 };
+  const evapT = c => (c.T_source_out ?? c.T_source_in) - c.dT_src;
+  const prWarn = (prs, dis, warnings) => {
+    if (Math.max(...prs) > 20) warnings.push(`stage pressure ratio ${Math.max(...prs).toFixed(0)}, beyond the compressor efficiency correlations (fitted up to 20): treat the efficiency, and the COP, with caution`);
+    if (Math.max(...dis) > 250) warnings.push(`discharge at ${Math.max(...dis).toFixed(0)} C: check the refrigerant's and the oil's stability limits`);
+  };
+  const evapHx = (fl, c, Pe, he, hs, m, qE) => ({ name: "Evaporator", key: "evap", hot: waterLine(qE, c), coldRef: true,
+    cold: iso(fl, Pe, he, hs).map(p => [m * (p[2] - he), p[0]]), otherName: c.source_name || "source water" });
+
+  // ================================================================== economiser / flash tank / parallel compression
+  /* Per kg of the high-pressure flow. flash: the condenser liquid flashes at P_i; the flash vapour (x) joins the
+     low-stage discharge at the high-stage suction and the saturated liquid expands to the evaporator. economiser: a
+     fraction y of the condenser liquid expands to P_i and evaporates (superheat_inj above saturation) against the
+     rest, which is subcooled to dT_econ above the saturation temperature at P_i; the vapour joins the low-stage
+     discharge. parallel: as flash, but the flash vapour (heated by the liquid if a dry discharge needs it) has its
+     own compressor to the high pressure, and the low stage compresses straight to it. single: one stage. */
+  const ECON = { arrangement: "flash", T_int: null, dT_econ: 5, superheat_inj: 5, superheat: 5, P_max_bar: 60 };
+  const ARR = ["flash", "economiser", "parallel", "single"];
+  function econCycle(fl, air, c, P_H, Pe, Te, P_i) {
+    const arr = c.arrangement, two = arr !== "single";
+    if (two && !(Pe < P_i && P_i < P_H)) throw new Error("the intermediate pressure must lie between the evaporating and high pressures");
+    const loOut = arr === "flash" || arr === "economiser" ? P_i : P_H;
+    const sh = drySuperheat(fl, Pe, Te, loOut, Math.max(c.superheat, 0.5));
+    const suc = fl.PT(Pe, Te + sh), low = stage(fl, Pe, fl.PT(Pe, Te + sh), loOut);
+    let lq = null, vq = null, hInj = null, par = null;
+    if (two) {
+      lq = fl.PQ(P_i, 0); vq = fl.PQ(P_i, 1);
+      // the parallel compressor's suction is heated (superheat_inj, more if a dry discharge needs it) by the liquid
+      const shInj = arr === "parallel" ? drySuperheat(fl, P_i, vq.T, P_H, c.superheat_inj) : arr === "economiser" ? Math.max(c.superheat_inj, 0) : 0;
+      hInj = shInj > 0 ? fl.PT(P_i, vq.T + shInj).h : vq.h;
+      if (arr === "parallel") par = stage(fl, P_i, fl.PH(P_i, hInj), P_H);
+    }
+    // the condenser inlet, its outlet and the injected fraction that outlet implies, at an injected fraction v
+    const evaluate = v => {
+      let hi = null, hIn;
+      if (arr === "single") hIn = low.out.h;
+      else if (arr === "flash" || arr === "economiser") {
+        const mix = fl.PH(P_i, (1 - v) * low.out.h + v * hInj);
+        if (!gasLike(fl, mix)) throw new Error("the high-stage suction is wet (raise the superheat or the intermediate pressure)");
+        hi = stage(fl, P_i, mix, P_H); hIn = hi.out.h;
+      } else hIn = (1 - v) * low.out.h + v * par.out.h;
+      const h3 = coolerOutlet(fl, air, P_H, hIn, c.T_air_inlet, c.T_air_tar, c.dT_GC_min);
+      let vNew;
+      if (arr === "single") vNew = 0;
+      else if (arr === "economiser") { const hSub = Math.min(h3, fl.PT(P_H, vq.T + c.dT_econ).h); vNew = h3 > hSub ? (h3 - hSub) / (hInj - hSub) : 0; }
+      else { const dh = hInj - vq.h; vNew = Math.min(Math.max((h3 - lq.h) / (vq.h - lq.h + dh), 0), 1); }
+      return { hIn, h3, hi, vNew };
+    };
+    // iterate directly; where that does not settle, the smallest self-consistent fraction by a scan and bisection
+    let v = 0, E = evaluate(0), settled = !two || E.vNew < 1e-12;
+    for (let k = 0; k < 25 && !settled; k++) {
+      const vn = E.vNew, En = evaluate(vn);
+      if (Math.abs(En.vNew - vn) < 1e-8) settled = true;
+      v = vn; E = En;
+    }
+    if (!settled) {
+      const g = u => evaluate(u).vNew - u;
+      let lo = 0, hi = null;
+      for (let k = 1; k <= 40; k++) { const u = k / 40; if (g(u) <= 0) { hi = u; break; } lo = u; }
+      if (hi == null) throw new Error("no self-consistent injected fraction");
+      for (let k = 0; k < 40 && hi - lo >= 1e-8; k++) { const m = (lo + hi) / 2; if (g(m) > 0) lo = m; else hi = m; }
+      v = hi; E = evaluate(v);
+      if (Math.abs(E.vNew - v) < 1e-5) v = E.vNew;
+      E = evaluate(v);
+    }
+    const { hIn, h3, hi } = E;
+    const x = arr === "flash" || arr === "parallel" ? v : 0, y = arr === "economiser" ? v : 0;
+    let mLow, hValve;
+    if (arr === "single") { mLow = 1; hValve = h3; }
+    else if (arr === "flash" || arr === "parallel") { mLow = 1 - x; hValve = x > 0 ? lq.h : h3; }
+    else { mLow = 1 - y; hValve = y > 0 ? h3 - y / (1 - y) * (hInj - h3) : h3; }
+    const he = hValve, qAir = hIn - h3;
+    const w = mLow * low.w + (hi ? hi.w : 0) + (par ? x * par.w : 0), qSrc = mLow * (suc.h - he);
+    const gap = minGap(airProfile(fl, air, P_H, hIn, h3, c.T_air_inlet, c.T_air_tar, 18));
+    return { P_H, P_i, Pe, Te, sh, suc, low, hi, par, x, y, hInj, hIn, h3, hValve, he, mLow, qAir, w, qSrc, gap };
+  }
+  function economiser(fl, air, cfg) {
+    const c = Object.assign({}, air0, ECON, cfg), warnings = [];
+    if (!ARR.includes(c.arrangement)) return fail(`arrangement must be one of ${ARR.join(", ")}`);
+    try {
+      const Te = evapT(c), Pe = fl.TQ(Te, 1).P, Pmax = c.P_max_bar / 10;
+      const Tcc = isFinite(fl.T_crit) ? fl.T_crit : Infinity;
+      // floor of the pressure scan: condensing well below the air target, and below the critical point
+      const T0 = Math.min(Math.max(Te + 10, c.T_air_tar - 60), Tcc - 1);
+      const Plo = T0 > Te + 5 ? fl.TQ(T0, 1).P : Pe * 2;
+      if (Plo >= Pmax) return fail(`${nameOf(fl)} needs more than ${c.P_max_bar} bar to reach ${c.T_air_tar} C`);
+      const Pint = P_H => c.arrangement === "single" ? null : c.T_int != null ? fl.TQ(c.T_int, 1).P : Math.sqrt(Pe * P_H);
+      const { S, last } = lowestPressure(P_H => econCycle(fl, air, c, P_H, Pe, Te, Pint(P_H)), Plo, Pmax, c.dT_GC_min);
+      if (!S) return fail(noPressure(c, last));
+      return econResult(fl, air, c, S, warnings);
+    } catch (e) { return fail(errMsg(e), { warnings }); }
+  }
+  function econResult(fl, air, c, S, warnings) {
+    const wEl = S.w / (c.motor_eff ?? MOTOR), cop = S.qAir / wEl, { P_H, P_i, Pe } = S, arr = c.arrangement;
+    const supercritical = isFinite(fl.P_crit) && P_H >= fl.P_crit;
+    const hiIn = S.hi ? S.hi.out.h - S.hi.w : null;
+    let vs = S.mLow / S.suc.D;
+    if (S.hi) vs += 1 / fl.PH(P_i, hiIn).D;
+    if (S.par) vs += S.x / fl.PH(P_i, S.hInj).D;
+    const VHC = S.qAir / vs / 1000;
+    const dis = [S.low.out.T, ...(S.hi ? [S.hi.out.T] : []), ...(S.par ? [S.par.out.T] : [])];
+    const prs = [S.low.pr, ...(S.hi ? [S.hi.pr] : []), ...(S.par ? [S.par.pr] : [])];
+    prWarn(prs, dis, warnings);
+    const gcName = "Condenser" + (supercritical ? " / gas cooler" : "");
+    const fromHigh = arr === "single" || arr === "economiser";   // the main liquid expands from the high pressure
+    const paths = [
+      ...(arr === "flash" || arr === "parallel" ? [{ name: "Flash valve", pts: compPath(fl, P_H, S.h3, P_i, S.h3) }] : []),
+      { name: "Expansion valve", pts: compPath(fl, fromHigh ? P_H : P_i, S.hValve, Pe, S.he) },
+      { name: "Evaporator", pts: iso(fl, Pe, S.he, S.suc.h) },
+      { name: "Low-stage compressor", pts: compPath(fl, Pe, S.suc.h, S.low.out.P, S.low.out.h) },
+      ...(S.hi ? [{ name: "High-stage compressor", pts: compPath(fl, P_i, hiIn, P_H, S.hi.out.h) }] : []),
+      ...(S.par ? [{ name: "Parallel compressor", pts: compPath(fl, P_i, S.hInj, P_H, S.par.out.h) }] : []),
+      ...(arr === "economiser" && S.y > 0 ? [{ name: "Injection valve", pts: compPath(fl, P_H, S.h3, P_i, S.h3) },
+        { name: "Economiser (injected side)", pts: iso(fl, P_i, S.h3, S.hInj) }, { name: "Economiser (main liquid)", pts: iso(fl, P_H, S.h3, S.hValve) }] : []),
+      { name: gcName, pts: iso(fl, P_H, S.hIn, S.h3) },
+    ];
+    const prof = airProfile(fl, air, P_H, S.hIn, S.h3, c.T_air_inlet, c.T_air_tar, 18);
+    const hx = [{ name: `${gcName} to air`, key: "gc", hot: prof.map(p => [p[0], p[1]]), cold: prof.map(p => [p[0], p[2]]), otherName: "dryer air" },
+      evapHx(fl, c, Pe, S.he, S.suc.h, S.mLow, S.qSrc)];
+    if (arr === "economiser" && S.y > 0) {
+      const q = S.y * (S.hInj - S.h3);           // per kg high-pressure flow
+      hx.push({ name: "Economiser", key: "ihx", hot: lin(0, 1, 14).map(f => [f * q, fl.PH(P_H, S.hValve + f * (S.h3 - S.hValve)).T]),
+        cold: lin(0, 1, 14).map(f => [f * q, fl.PH(P_i, S.h3 + f * (S.hInj - S.h3)).T]), otherName: "injected vapour" });
+    }
+    const report = { COP: cop, VHC, arrangement: arr, fluid: nameOf(fl), P_high_bar: P_H * 10, P_int_bar: P_i != null ? P_i * 10 : null, P_evap_bar: Pe * 10,
+      T_int: P_i != null ? fl.PQ(P_i, 1).T : null, T_evap: S.Te, superheat: S.sh, supercritical,
+      flows: { high: 1, low: S.mLow, injected: arr === "flash" || arr === "parallel" ? S.x : S.y }, x_flash: S.x, y_econ: S.y, w_el_kJkg: wEl,
+      q_air: S.qAir, q_evap: S.qSrc, gap_air: S.gap, T_dis_low: S.low.out.T, T_dis_high: S.hi ? S.hi.out.T : null, T_dis_parallel: S.par ? S.par.out.T : null,
+      PR_low: S.low.pr, PR_high: S.hi ? S.hi.pr : S.par ? S.par.pr : null,
+      air_per_ref: S.qAir / (air.h(c.T_air_tar) - air.h(c.T_air_inlet)), air_W: air.W, balance: S.qAir - S.w - S.qSrc };
+    return { success: true, message: "success", cycle: "E", warnings, COP: cop, VHC, loops: [{ name: "Cycle", fluid: 0, flow: 1, paths }], hx,
+      q_air: S.qAir, w_shaft: S.w, q_source: S.qSrc, ref: { rho: 1 / vs, flow: 1, PR: Math.max(...prs) },
+      Pmax_bar: P_H * 10, T_dis_max: Math.max(...dis), report };
+  }
+  // best-COP intermediate saturation temperature
+  function* economiserOptimiseSteps(fl, air, cfg, opt = {}) {
+    const c = Object.assign({}, air0, ECON, cfg), maxEval = opt.maxEval ?? 120, state = { nEval: 0, memo: new Map() };
+    if (c.arrangement === "single") { const r = economiser(fl, air, c); return r.success ? { success: true, COP: r.COP, start: r.COP, startOk: true, T_int: null, nEval: 1, atBound: false } : r; }
+    const Te = evapT(c), top = Math.min(c.T_air_tar, isFinite(fl.T_crit) ? fl.T_crit - 2 : c.T_air_tar);
+    const lo = [Te + 5], hi = [top - 5];
+    if (lo[0] >= hi[0]) return fail("no room for an intermediate pressure between the evaporator and the condenser");
+    const f = memo1(state, T => economiser(fl, air, { ...c, T_int: T }));
+    const base = economiser(fl, air, { ...c, T_int: null });
+    const x0 = base.success ? [Math.min(Math.max(base.report.T_int, lo[0]), hi[0])] : null;
+    const o = yield* optimise1(f, x0, lo, hi, [0.2, 0.35, 0.5, 0.65, 0.8], maxEval, state);
+    if (!o.x) return fail("no intermediate pressure gives a feasible design", { nEval: state.nEval });
+    const near = v => Math.abs(v - lo[0]) < 0.05 || Math.abs(v - hi[0]) < 0.05;
+    return { success: true, COP: o.best.y, start: base.success ? base.COP : NaN, startOk: base.success, T_int: o.x[0], nEval: state.nEval, converged: o.converged, atBound: near(o.x[0]), lo, hi };
+  }
+
+  // ================================================================== dual-pressure condensation (Dai et al.)
+  /* Per kg of evaporator flow: evaporator -> low-stage compressor (Pe -> P_L) -> split: 1 - a to the low-pressure
+     condenser, a through the high-stage compressor to the high-pressure condenser and a valve back to P_L, where it
+     joins the low-pressure condenser inlet; all the flow leaves that condenser for the evaporator valve. The air
+     passes the low-pressure condenser (inlet -> T_mid), then the high-pressure one (T_mid -> target). a follows
+     from the air balance, T_mid is the highest the low-pressure condenser allows and P_H the lowest that heats the
+     air to the target. */
+  const DUAL = { T_cond_low: 110, superheat: 5, P_max_bar: 60 };
+  function dualAt(fl, air, c, P_H, Pe, Te, P_L, low) {
+    const { sh, suc, lo } = low, h1 = lo.out.h, hi = stage(fl, P_L, lo.out, P_H), h2 = hi.out.h;
+    const Tain = c.T_air_inlet, Ttar = c.T_air_tar, haIn = air.h(Tain), haTar = air.h(Ttar), TdewL = fl.PQ(P_L, 1).T;
+    const sections = Tmid => {
+      const h3H = coolerOutlet(fl, air, P_H, h2, Tmid, Ttar, c.dT_GC_min), qH = h2 - h3H, hm = air.h(Tmid);
+      let a = 0.5;
+      for (let k = 0; k < 60; k++) {
+        const hInL = (1 - a) * h1 + a * h3H, h3L = coolerOutlet(fl, air, P_L, hInL, Tain, Tmid, c.dT_GC_min), qL = hInL - h3L;
+        const aNew = qL * (haTar - hm) / (qH * (hm - haIn));          // the same air flow through both condensers
+        if (!(aNew > 0 && aNew < 1)) throw new Error("no split of the flow balances the two condensers");
+        if (Math.abs(aNew - a) < 1e-9) { a = aNew; break; }
+        a = a + 0.8 * (aNew - a);
+      }
+      const hInL = (1 - a) * h1 + a * h3H, h3L = coolerOutlet(fl, air, P_L, hInL, Tain, Tmid, c.dT_GC_min);
+      return { a, h3H, qH, hInL, h3L, qL: hInL - h3L };
+    };
+    const top = TdewL - c.dT_GC_min;
+    if (top <= Tain + 1) throw new Error(`the low condensing temperature (${TdewL.toFixed(0)} C) is too close to the air inlet`);
+    let best = null, loT = Tain + 1, hiT = null;
+    for (let k = 0; k <= 20; k++) {
+      const T = top - (top - Tain - 1) * k / 20;
+      try { best = [T, sections(T)]; loT = T; break; } catch (e) { hiT = T; }
+    }
+    if (!best) throw new Error("the low-pressure condenser cannot take any of the air heating");
+    if (hiT != null) for (let k = 0; k < 25 && hiT - loT >= 0.02; k++) {
+      const m = (loT + hiT) / 2;
+      try { best = [m, sections(m)]; loT = m; } catch (e) { hiT = m; }
+    }
+    const [Tmid, S] = best, a = S.a, he = S.h3L;
+    const gapH = minGap(airProfile(fl, air, P_H, h2, S.h3H, Tmid, Ttar, 18)), gapL = minGap(airProfile(fl, air, P_L, S.hInL, S.h3L, Tain, Tmid, 18));
+    return { P_H, P_L, Pe, Te, sh, suc, lo, hi, Tmid, h1, h2, he, qAir: a * S.qH + S.qL, w: lo.w + a * hi.w, qSrc: suc.h - he,
+      gap: Math.min(gapH, gapL), gapH, gapL, ...S };
+  }
+  function dualPressure(fl, air, cfg) {
+    const c = Object.assign({}, air0, DUAL, cfg), warnings = [];
+    try {
+      const Te = evapT(c), Pe = fl.TQ(Te, 1).P;
+      if (isFinite(fl.T_crit) && c.T_cond_low >= fl.T_crit - 1) return fail(`the low condensing temperature must be below ${nameOf(fl)}'s critical temperature`);
+      if (c.T_cond_low <= Te + 5) return fail("the low condensing temperature must be above the evaporating temperature");
+      const P_L = fl.TQ(c.T_cond_low, 1).P;
+      const sh = drySuperheat(fl, Pe, Te, P_L, c.superheat), suc = fl.PT(Pe, Te + sh);
+      const low = { sh, suc, lo: stage(fl, Pe, suc, P_L) };
+      const Pmax = c.P_max_bar / 10, Plo = P_L * 1.05;
+      if (Plo >= Pmax) return fail(`${nameOf(fl)} needs more than ${c.P_max_bar} bar`);
+      const { S, last } = lowestPressure(P_H => dualAt(fl, air, c, P_H, Pe, Te, P_L, low), Plo, Pmax, c.dT_GC_min);
+      if (!S) return fail(noPressure(c, last));
+      return dualResult(fl, air, c, S, warnings);
+    } catch (e) { return fail(errMsg(e), { warnings }); }
+  }
+  function dualResult(fl, air, c, S, warnings) {
+    const wEl = S.w / (c.motor_eff ?? MOTOR), cop = S.qAir / wEl, { P_H, P_L, Pe, a } = S;
+    const supercritical = isFinite(fl.P_crit) && P_H >= fl.P_crit;
+    const prs = [S.lo.pr, S.hi.pr], dis = [S.lo.out.T, S.hi.out.T];
+    prWarn(prs, dis, warnings);
+    const vs = 1 / S.suc.D + a / S.lo.out.D, VHC = S.qAir / vs / 1000;
+    const hpName = "High-pressure condenser" + (supercritical ? " / gas cooler" : "");
+    const paths = [
+      { name: "Expansion valve", pts: compPath(fl, P_L, S.h3L, Pe, S.he) },
+      { name: "Evaporator", pts: iso(fl, Pe, S.he, S.suc.h) },
+      { name: "Low-stage compressor", pts: compPath(fl, Pe, S.suc.h, P_L, S.h1) },
+      { name: "High-stage compressor", pts: compPath(fl, P_L, S.h1, P_H, S.h2) },
+      { name: hpName, pts: iso(fl, P_H, S.h2, S.h3H) },
+      { name: "High-pressure valve", pts: compPath(fl, P_H, S.h3H, P_L, S.h3H) },
+      { name: "Low-pressure condenser", pts: iso(fl, P_L, S.hInL, S.h3L) },
+    ];
+    const pH = airProfile(fl, air, P_H, S.h2, S.h3H, S.Tmid, c.T_air_tar, 18), pL = airProfile(fl, air, P_L, S.hInL, S.h3L, c.T_air_inlet, S.Tmid, 18);
+    const hx = [
+      { name: "Low-pressure condenser to air", key: "gc2", hot: pL.map(p => [p[0], p[1]]), cold: pL.map(p => [p[0], p[2]]), otherName: "dryer air" },
+      { name: `${hpName} to air`, key: "gc", hot: pH.map(p => [a * p[0], p[1]]), cold: pH.map(p => [a * p[0], p[2]]), otherName: "dryer air" },
+      evapHx(fl, c, Pe, S.he, S.suc.h, 1, S.qSrc),
+    ];
+    const report = { COP: cop, VHC, fluid: nameOf(fl), P_high_bar: P_H * 10, P_low_cond_bar: P_L * 10, P_evap_bar: Pe * 10, T_cond_low: c.T_cond_low,
+      T_evap: S.Te, T_mid: S.Tmid, split_high: a, superheat: S.sh, supercritical, w_el_kJkg: wEl, q_air: S.qAir, q_air_low: S.qL, q_air_high: a * S.qH,
+      q_evap: S.qSrc, gap_air: S.gap, gap_low: S.gapL, gap_high: S.gapH, T_dis_low: dis[0], T_dis_high: dis[1], PR_low: prs[0], PR_high: prs[1],
+      air_per_ref: S.qAir / (air.h(c.T_air_tar) - air.h(c.T_air_inlet)), air_W: air.W, balance: S.qAir - S.w - S.qSrc };
+    return { success: true, message: "success", cycle: "D", warnings, COP: cop, VHC, loops: [{ name: "Cycle", fluid: 0, flow: 1, paths }], hx,
+      q_air: S.qAir, w_shaft: S.w, q_source: S.qSrc, ref: { rho: 1 / vs, flow: 1, PR: Math.max(...prs) }, Pmax_bar: P_H * 10, T_dis_max: Math.max(...dis),
+      air: [{ name: "low-pressure condenser", q: S.qL, to: S.Tmid }, { name: "high-pressure", q: a * S.qH }], report };
+  }
+  // best-COP low condensing temperature
+  function* dualPressureOptimiseSteps(fl, air, cfg, opt = {}) {
+    const c = Object.assign({}, air0, DUAL, cfg), maxEval = opt.maxEval ?? 120, state = { nEval: 0, memo: new Map() };
+    const Te = evapT(c), top = Math.min(c.T_air_tar, isFinite(fl.T_crit) ? fl.T_crit - 2 : c.T_air_tar);
+    const lo = [Math.max(Te + 10, c.T_air_inlet + c.dT_GC_min + 5)], hi = [top - 5];
+    if (lo[0] >= hi[0]) return fail("no room for a low condensing temperature between the source and the air target");
+    const f = memo1(state, T => dualPressure(fl, air, { ...c, T_cond_low: T }));
+    const x0 = [Math.min(Math.max(c.T_cond_low, lo[0]), hi[0])];
+    const o = yield* optimise1(f, x0, lo, hi, [0.2, 0.35, 0.5, 0.65, 0.8], maxEval, state);
+    if (!o.x) return fail("no low condensing temperature gives a feasible design", { nEval: state.nEval });
+    const near = v => Math.abs(v - lo[0]) < 0.05 || Math.abs(v - hi[0]) < 0.05;
+    return { success: true, COP: o.best.y, start: o.b0.y, startOk: isFinite(o.b0.y), T_cond_low: o.x[0], nEval: state.nEval, converged: o.converged, atBound: near(o.x[0]), lo, hi };
+  }
+
+  // ================================================================== reverse-Stirling units
+  /* COP_unit = eta_carnot * T_hot / (T_hot - T_cold) (K), eta_carnot a constant (0.37 from the RFC Maasdam case:
+     COP 2 at about 428 K / 348 K) or eta_of_ratio(T_hot / T_cold). n_units in series on the air heat bands between
+     the boundaries (equal steps when null); duties per kg of primary air. */
+  const STIR = { n_units: 1, boundaries: null, eta_carnot: 0.37, eta_of_ratio: null, dT_hot: 20, dT_cold: 5 };
+  const DEMONSTRATED_T_HOT = 200;
+  const stirBounds = c => c.boundaries != null ? c.boundaries.map(Number) : Array.from({ length: c.n_units - 1 }, (_, k) => c.T_air_inlet + (c.T_air_tar - c.T_air_inlet) * (k + 1) / c.n_units);
+  function stirling(air, cfg) {
+    const c = Object.assign({}, air0, STIR, cfg), warnings = [], n = c.n_units;
+    if (!(n >= 1 && n <= 4)) return fail("1 to 4 Stirling units in series");
+    const bounds = stirBounds(c);
+    if (bounds.length !== n - 1) return fail(`${n} units need ${n - 1} boundary temperatures`);
+    const T = [c.T_air_inlet, ...bounds, c.T_air_tar];
+    if (T.some((t, i) => i > 0 && t <= T[i - 1])) return fail("the unit boundaries must rise from the air inlet to the target");
+    const Tcold = (c.T_source_out ?? c.T_source_in) - c.dT_cold;
+    const units = []; let qAir = 0, W = 0;
+    for (let k = 0; k < n; k++) {
+      const Thot = T[k + 1] + c.dT_hot, Th = Thot + 273.15, Tc = Tcold + 273.15;
+      if (Th <= Tc) return fail(`unit ${k + 1}: its hot side (${Thot.toFixed(0)} C) is not above its cold side (${Tcold.toFixed(0)} C)`);
+      const eta = typeof c.eta_of_ratio === "function" ? c.eta_of_ratio(Th / Tc) : c.eta_carnot;
+      if (!(eta > 0 && eta <= 1)) return fail(`unit ${k + 1}: Carnot fraction ${eta} outside (0, 1]`);
+      const carnot = Th / (Th - Tc), cop = eta * carnot, q = air.h(T[k + 1]) - air.h(T[k]), w = q / cop;
+      qAir += q; W += w;
+      units.push({ T_air_in: T[k], T_air_out: T[k + 1], T_hot: Thot, T_cold: Tcold, carnot_COP: carnot, eta_carnot: eta, COP: cop, q_air: q, w_el: w, q_source: q - w, lift: Thot - Tcold });
+      if (Thot > DEMONSTRATED_T_HOT) warnings.push(`unit ${k + 1} hot side at ${Thot.toFixed(0)} C, above the about ${DEMONSTRATED_T_HOT} C of the published field data`);
+    }
+    const cop = qAir / W;
+    const report = { COP: cop, units, n_units: n, boundaries: bounds, T_cold: Tcold, w_el_kJkg: W, q_air: qAir, q_source: qAir - W, air_W: air.W,
+      eta_model: typeof c.eta_of_ratio === "function" ? "eta_of_ratio" : `constant ${c.eta_carnot}`, balance: 0 };
+    const hx = units.map((u, k) => ({ name: `Unit ${k + 1} to air`, key: ["gc", "gc2", "gc3", "gc4"][k], hot: [[0, u.T_hot], [u.q_air, u.T_hot]],
+      cold: [[0, u.T_air_in], [u.q_air, u.T_air_out]], otherName: "dryer air" }));
+    hx.push({ name: "Cold side (source)", key: "evap", hot: waterLine(qAir - W, c), cold: [[0, Tcold], [qAir - W, Tcold]], otherName: c.source_name || "source water", coldRef: true });
+    return { success: true, message: "success", cycle: "R", warnings, COP: cop, VHC: NaN, loops: [], hx, q_air: qAir, w_shaft: W, q_source: qAir - W,
+      ref: { air: true, rho: NaN, flow: 1, PR: 1 }, Pmax_bar: NaN, T_dis_max: Math.max(...units.map(u => u.T_hot)),
+      air: units.map((u, k) => ({ name: `unit ${k + 1}`, q: u.q_air, to: u.T_air_out })), report };
+  }
+  // best-COP air temperatures between the units
+  function* stirlingOptimiseSteps(air, cfg, opt = {}) {
+    const c = Object.assign({}, air0, STIR, cfg), n = c.n_units, maxEval = opt.maxEval ?? 200, state = { nEval: 0 };
+    if (n <= 1) { const r = stirling(air, c); return r.success ? { success: true, COP: r.COP, start: r.COP, startOk: true, boundaries: [], nEval: 1, atBound: false } : r; }
+    const lo = Array(n - 1).fill(c.T_air_inlet + 1), hi = Array(n - 1).fill(c.T_air_tar - 1);
+    const f = x => {
+      state.nEval++;
+      if (x.some((b, i) => i > 0 && b <= x[i - 1])) return { y: -Infinity, r: null };
+      const r = stirling(air, { ...c, boundaries: x.map(Number) });
+      return { y: r.success ? r.COP : -Infinity, r };
+    };
+    const x0 = stirBounds(c), b0 = f(x0);
+    yield { nEval: state.nEval, best: b0.y };
+    const g = compassSearch(f, [[x0, b0]], lo, hi, Array(n - 1).fill(10), Array(n - 1).fill(0.05), Array(n - 1).fill(false), state, maxEval);
+    let st; while (!(st = g.next()).done) yield { nEval: state.nEval, best: st.value };
+    let { x, best, converged } = st.value;
+    if (!x) return fail("no set of unit boundaries gives a feasible design");
+    const xr = x.map(v => jsRound(v, 1)), o = f(xr);
+    if (isFinite(o.y)) { x = xr; best = o; }
+    return { success: true, COP: best.y, start: b0.y, startOk: isFinite(b0.y), boundaries: x.map(Number), nEval: state.nEval, converged, atBound: false };
+  }
+
+  // ================================================================== ammonia-water hybrid (Osenbrück)
+  /* Per kg of solution through the absorber. Desorber (P_L): the throttled solution is heated by the source to
+     T_des_out = T_source_in - dT_src, where q_des has boiled off; the separator sends the ammonia-rich vapour to the
+     compressor and the lean liquid to the pump, less any part injected at the compressor suction (wet compression,
+     to hold the discharge at T_dis_max); both are absorbed in the absorber (P_H), which heats the air; the absorber
+     outlet is the coldest that keeps the approach, P_H the lowest that heats the air to the target. The solution keeps
+     one composition through the absorber and the desorber, which behave as a condenser and an evaporator with a
+     large glide (Jensen et al. 2015). Properties: ammonia_water.js. */
+  const HYB = { w_rich: 0.5, q_des: 0.4, T_air_tar: 120, dT_GC_min: 10, T_source_out: 40, P_max_bar: 50, T_dis_max: 170,
+    wet_compression: true, limit_discharge: false, eta_pump: 0.6 };
+  const STREAMS = new Map();
+  const awStream = w => { const k = w.toFixed(12); let s = STREAMS.get(k); if (!s) { if (STREAMS.size > 400) STREAMS.clear(); s = AW().stream(w); STREAMS.set(k, s); } return s; };
+  // T(h) from the stream's isobar table, as the Python model's fast lookups (airProfile and coolerOutlet use PH(..).T)
+  const fastAW = R => ({ PT: (P, T) => R.PT(P, T), PH: (P, h) => ({ T: R.T_ph_fast(P, h) }) });
+  function hybrid(air, cfg) {
+    const c = Object.assign({}, air0, HYB, cfg), warnings = [];
+    if (!(c.w_rich > 0 && c.w_rich < 1) || !(c.q_des > 0 && c.q_des < 1)) return fail("w_rich and q_des must lie between 0 and 1");
+    try {
+      const R = awStream(c.w_rich), Rf = fastAW(R), Tdo = c.T_source_in - c.dT_src;
+      const desOut = R.TQ(Tdo, c.q_des), P_L = desOut.P;            // low pressure: q_des boiled off at Tdo
+      const V = awStream(desOut.w_vap), L = awStream(desOut.w_liq);
+      const vap = V.PQ(P_L, 1), liq = L.PQ(P_L, 0);
+      if (Math.abs(vap.T - Tdo) > 0.05 || Math.abs(liq.T - Tdo) > 0.05) throw new Error("the separator phases are not at the desorber outlet temperature");
+      const Pmax = c.P_max_bar / 10;
+      if (P_L * 1.2 >= Pmax) return fail(`the low pressure (${(P_L * 10).toFixed(1)} bar) leaves no room below ${c.P_max_bar} bar`);
+      const wv = desOut.w_vap, wl = desOut.w_liq;
+      // the separator vapour (q_des kg) compressed with m kg of lean liquid injected at the suction
+      const compression = (P_H, m) => {
+        if (m <= 0) return [stage(V, P_L, vap, P_H), 0];
+        const n = c.q_des + m, Cm = awStream((c.q_des * wv + m * wl) / n), suc = Cm.PH(P_L, (c.q_des * vap.h + m * liq.h) / n);
+        return [stage(Cm, P_L, suc, P_H), m];
+      };
+      const at = P_H => {
+        let [comp, mInj] = compression(P_H, 0);
+        if (c.wet_compression && comp.out.T > c.T_dis_max) {
+          const mHi = 1 - c.q_des - 1e-6;
+          if (compression(P_H, mHi)[0].out.T > c.T_dis_max) throw new Error(`even injecting all the lean liquid cannot hold the discharge at ${c.T_dis_max} C`);
+          // regula falsi (Illinois) on the discharge temperature, which falls smoothly with m
+          let a = 0, b = mHi, ga = comp.out.T - c.T_dis_max, gb = compression(P_H, b)[0].out.T - c.T_dis_max, side = 0, best = b, m = b, gm = gb;
+          for (let k = 0; k < 40; k++) {
+            m = b - gb * (b - a) / (gb - ga); gm = compression(P_H, m)[0].out.T - c.T_dis_max;
+            if (gm <= 0) best = m;
+            if (Math.abs(gm) < 0.02) break;
+            if ((gm > 0) === (ga > 0)) { a = m; ga = gm; if (side === -1) gb /= 2; side = -1; }
+            else { b = m; gb = gm; if (side === 1) ga /= 2; side = 1; }
+          }
+          [comp, mInj] = compression(P_H, Math.abs(gm) < 0.02 ? m : best);
+        }
+        const mc = c.q_des + mInj, mp = 1 - mc, wPump = (P_H - P_L) * 1e3 / liq.D / c.eta_pump, hPump = liq.h + wPump;
+        const hIn = mc * comp.out.h + mp * hPump;
+        const hOut = coolerOutlet(Rf, air, P_H, hIn, c.T_air_inlet, c.T_air_tar, c.dT_GC_min);
+        const gap = minGap(airProfile(Rf, air, P_H, hIn, hOut, c.T_air_inlet, c.T_air_tar, 18));
+        return { P_H, comp, mInj, mc, mp, wPump, hPump, hIn, hOut, gap };
+      };
+      const { S, last } = lowestPressure(at, P_L * 1.2, Pmax, c.dT_GC_min, 24, 2e-4, 20);
+      if (!S) return fail(noPressure(c, last));
+      const P_H = S.P_H, hDi = S.hOut, qSrc = desOut.h - hDi;
+      const pts = lin(0, 1, 16).map(f => [f * qSrc, R.T_ph_fast(P_L, hDi + f * qSrc), srcT(c, f)]);
+      const gapSrc = Math.min(...pts.map(p => p[2] - p[1]));
+      if (gapSrc < c.dT_src - 0.05) return fail(`the desorber comes within ${gapSrc.toFixed(1)} K of the source water (needs ${c.dT_src} K): raise the degassing or the ammonia fraction, or lower the source outlet`);
+      const w = S.mc * S.comp.w + S.mp * S.wPump, qAir = S.hIn - S.hOut, wEl = w / (c.motor_eff ?? MOTOR), cop = qAir / wEl, Tdis = S.comp.out.T;
+      if (Tdis > c.T_dis_max + 0.05) {
+        const msg = `compressor discharge at ${Tdis.toFixed(0)} C, above the ${c.T_dis_max} C limit`;
+        if (c.limit_discharge) return fail(msg);
+        warnings.push(msg);
+      }
+      return hybridResult(air, c, S, desOut, vap, liq, P_L, qAir, w, wEl, cop, qSrc, gapSrc, pts, warnings);
+    } catch (e) { return fail(errMsg(e), { warnings }); }
+  }
+  function hybridResult(air, c, S, desOut, vap, liq, P_L, qAir, w, wEl, cop, qSrc, gapSrc, srcPts, warnings) {
+    const R = awStream(c.w_rich), P_H = S.P_H, comp = S.comp;
+    const absIn = R.PH(P_H, S.hIn), absOut = R.PH(P_H, S.hOut), desIn = R.PH(P_L, S.hOut);
+    const [Tb, Td] = R.bubble_dew(P_H);
+    const prof = airProfile(fastAW(R), air, P_H, S.hIn, S.hOut, c.T_air_inlet, c.T_air_tar, 18);
+    const vs = S.mInj > 0 ? S.mc / R.PH(P_L, comp.out.h - comp.w).D : c.q_des / vap.D;
+    const VHC = qAir / vs / 1000;
+    // the diagrams follow the solution (rich composition) through the absorber, valve and desorber
+    const sucSt = S.mInj > 0 ? awStream((c.q_des * desOut.w_vap + S.mInj * desOut.w_liq) / S.mc) : awStream(desOut.w_vap);
+    const paths = [
+      { name: "Absorber (to air)", pts: iso(R, P_H, S.hIn, S.hOut, 10) },
+      { name: "Expansion valve", pts: [pt(absOut), pt(desIn)] },
+      { name: "Desorber (source)", pts: iso(R, P_L, S.hOut, desOut.h, 10) },
+      { name: "Compressor", pts: [pt(sucSt.PH(P_L, comp.out.h - comp.w)), pt(comp.out)] },
+      { name: "Solution pump", pts: [pt(liq), pt(Object.assign({}, liq, { P: P_H, h: S.hPump }))] },
+    ];
+    const hx = [
+      { name: "Absorber to air", key: "gc", hot: prof.map(p => [p[0], p[1]]), cold: prof.map(p => [p[0], p[2]]), otherName: "dryer air" },
+      { name: "Desorber", key: "evap", hot: srcPts.map(p => [p[0], p[2]]), cold: srcPts.map(p => [p[0], p[1]]), otherName: c.source_name || "source water", coldRef: true },
+    ];
+    const report = { COP: cop, VHC, w_rich: c.w_rich, q_des: c.q_des, w_vapour: desOut.w_vap, w_lean: desOut.w_liq, P_low_bar: P_L * 10, P_high_bar: P_H * 10,
+      PR: P_H / P_L, T_des_out: desOut.T, T_des_in: desIn.T, T_abs_in: absIn.T, T_abs_out: absOut.T, T_bubble_high: Tb - 273.15, T_dew_high: Td - 273.15,
+      T_dis: comp.out.T, eta_comp: comp.eta, w_comp: S.mc * comp.w, w_pump: S.mp * S.wPump, m_injected: S.mInj, wet_compression: S.mInj > 0, w_el_kJkg: wEl,
+      q_air: qAir, q_source: qSrc, gap_air: S.gap, gap_source: gapSrc, air_per_solution: qAir / (air.h(c.T_air_tar) - air.h(c.T_air_inlet)), air_W: air.W,
+      balance: qAir - w - qSrc, properties: "IAPWS G4-01 (Tillner-Roth and Friend), ammonia_water.js" };
+    return { success: true, message: "success", cycle: "Y", warnings, COP: cop, VHC, loops: [{ name: "Solution", fluid: 0, flow: 1, paths }], hx,
+      q_air: qAir, w_shaft: w, q_source: qSrc, ref: { rho: 1 / vs, flow: 1, PR: P_H / P_L }, Pmax_bar: P_H * 10, T_dis_max: comp.out.T, report };
+  }
+  // best-COP solution composition and degassing
+  function* hybridOptimiseSteps(air, cfg, opt = {}) {
+    const c = Object.assign({}, air0, HYB, cfg), maxEval = opt.maxEval ?? 80, state = { nEval: 0 }, memo = new Map();
+    const lo = [0.2, 0.05], hi = [0.9, 0.9];
+    const f = x => {
+      const k = `${(+x[0]).toFixed(4)},${(+x[1]).toFixed(4)}`;
+      if (memo.has(k)) return memo.get(k);
+      state.nEval++;
+      const r = hybrid(air, { ...c, w_rich: +x[0], q_des: +x[1] }), ok = r.success && !(c.limit_discharge && r.T_dis_max > c.T_dis_max);
+      const o = { y: ok ? r.COP : -Infinity, r }; memo.set(k, o); return o;
+    };
+    const x0 = [Math.min(Math.max(c.w_rich, lo[0]), hi[0]), Math.min(Math.max(c.q_des, lo[1]), hi[1])], b0 = f(x0), starts = [[x0, b0]];
+    yield { nEval: state.nEval, best: b0.y };
+    if (!isFinite(b0.y)) for (const w of [0.35, 0.5, 0.65]) for (const q of [0.2, 0.4, 0.6]) {
+      const o = f([w, q]); if (isFinite(o.y)) starts.push([[w, q], o]);
+      yield { nEval: state.nEval, best: Math.max(...starts.map(s => s[1].y)) };
+    }
+    const g = compassSearch(f, starts, lo, hi, [0.08, 0.08], [0.002, 0.002], [false, false], state, maxEval);
+    let st; while (!(st = g.next()).done) yield { nEval: state.nEval, best: st.value };
+    let { x, best, converged } = st.value;
+    if (!x) return fail("no solution composition and degassing gives a feasible design", { nEval: state.nEval });
+    const xr = [jsRound(x[0], 3), jsRound(x[1], 3)], o = f(xr);
+    if (isFinite(o.y)) { x = xr; best = o; }
+    const near = (v, i) => Math.abs(v - lo[i]) < 1e-3 || Math.abs(v - hi[i]) < 1e-3;
+    return { success: true, COP: best.y, start: b0.y, startOk: isFinite(b0.y), w_rich: +x[0], q_des: +x[1], nEval: state.nEval, converged,
+      atBound: { w_rich: near(x[0], 0), q_des: near(x[1], 1) } };
+  }
+
+  const api = { ECON, DUAL, STIR, DEMONSTRATED_T_HOT, drySuperheat, economiser, economiserOptimiseSteps, dualPressure, dualPressureOptimiseSteps,
+    stirling, stirlingOptimiseSteps, HYB, hybrid, hybridOptimiseSteps };
+  if (node) module.exports = api; else root.DRYMORE = api;
+})(typeof self !== "undefined" ? self : this);
 </script>
 <script>
 window.__cpReadyPromise = new Promise(r => { window.__cpReady = r; });
@@ -4554,7 +5723,8 @@ const RHP = c => c === 'A' || c === 'B' || c === 'C' || c === 'H';      // RHP-A
 // compressors in series: the conventional cycle and RHP-A can run one or two stages, the other recuperative cycles two
 const stagesOf = c => c.cyc === 'H' ? (c.stagesH || 1) : c.cyc === 'A' ? (c.stagesA === 1 ? 1 : 2) : c.cyc === 'S' ? (c.stagesS === 1 ? 1 : 2) : 2;
 const lifts = c => ({lift: c.cyc === 'B' || c.cyc === 'H' ? 0 : c.lift, lift2: c.cyc === 'A' || c.cyc === 'H' ? 0 : c.lift2, split: stagesOf(c) === 1 ? 0 : c.split, ihx_on: c.cyc !== 'H' || !!c.ihxH});
-const MULTI = c => c === 'K' || c === 'N' || c === 'M' || c === 'X';    // multi-loop cycles (dryer_cascades.js)
+const MULTI = c => ['K', 'N', 'M', 'X', 'E', 'D', 'R', 'Y'].includes(c);    // multi-loop cycles (dryer_cascades.js, dryer_more.js)
+const NOFLUID = c => c === 'R' || c === 'Y';    // Stirling (helium, not modelled) and the ammonia-water hybrid: no refrigerant to pick
 const LV = {stagesS: 2, pmax: 300, expn: 'valve', etaX: 0.75, srcWm: 'out', srcMw: 10, stagesA: 2, dTs: 5, src: 'water', srcT: 20, srcM: 5, srcW: 7, srcHum: 'rh', srcRH: 50, srcDew: 9, airHum: 'rh', airWg: 6.4, airDew: 7.2, Patm: 101.325, fanModel: 5, fanEta: 0.8, fanPR: 1.5, fanSh: 5, fanMotor: 0.93, Tmt: 102, phi: 0, prMax: 20, stagesH: 1, ihxH: true, RH: 60, motor: 0.93, compModel: 5, etaC: 0.73, lift2: 40, cyc: 'A', comps: [['Butane', 100]], basis: 'mass', w: '', T: 170, a: 20, Ts: 40, Tain: 15, Two: 30, lift: 80, split: 0.45, off: 0, liftS: 80, share: 0.5, PH: 25, alpha: 0.3, PHg: null, PLg: null, gKey: '', init: false};
 const LV_DEF = JSON.parse(JSON.stringify(LV));            // the defaults, for cases saved before a setting existed
 try { const st = JSON.parse(localStorage.getItem('dryerlive1') || '{}'); Object.assign(LV, st); if (st.srcW != null && st.srcHum == null) LV.srcRH = null; } catch (e) {}   // saved before RH input: srcRH set from srcW once CoolProp is ready
@@ -4565,26 +5735,34 @@ for (const k of ['compModel', 'fanModel']) if (+LV[k] === 4) LV[k] = 5;   // the
 if (!Array.isArray(LV.comps) || !LV.comps.length) LV.comps = LV.w ? compsOf(LV.w).map(([n, f]) => [n, +f.toFixed(6)]) : [['Butane', 100]];
 if (LV.basis !== 'mole') LV.basis = 'mass';
 // refrigerants of the multi-loop cycles, one list per loop (bottom first), and the parameters of each
-const MULTI_DEF = {K: [[['CarbonDioxide', 100]], [['CarbonDioxide', 100]]], N: [[['IsoButane', 100]], [['Cyclopentane', 100]], [['Cyclopentane', 100]], [['Cyclopentane', 100]]], M: [[['Ammonia', 100]]], X: [[['CarbonDioxide', 100]]]};
+const MULTI_DEF = {K: [[['CarbonDioxide', 100]], [['CarbonDioxide', 100]]], N: [[['IsoButane', 100]], [['Cyclopentane', 100]], [['Cyclopentane', 100]], [['Cyclopentane', 100]]], M: [[['Ammonia', 100]]], X: [[['CarbonDioxide', 100]]],
+  E: [[['Cyclopentane', 100]]], D: [[['Cyclopentane', 100]]], R: [[['Helium', 100]]], Y: [[['Ammonia', 50], ['Water', 50]]]};
 const PAR_DEF = {
   K: {v: 3, P_b: 150, P_t: 150, r: 0.43, gc_off: 0, T_ev_b: 10, T_ev_t: 20, T_mt: 102, air_ratio: 0.5, dT_cgc: 5, dT_ihx_b: 5, dT_ihx_t: 5, Pmax: 150},
   N: {n: 2, T_cond: [100, 150, 180], cond_air: [true, true, true], sub_air: [true, true, true, true], dT_casc: 5, superheat: 5, ihx: [false, false, false, false], dT_ihx: 5},
   M: {T_cond: 90, dT_sg: 5, n_mvr: 9, inject: true, sub_air: true, ihx: false, dT_ihx: 5, split_fill: false, split: Array(19).fill(0)},
   X: {arch: 1, P_L: 80, P_H: 165, P_H_min: false, x: 0.37, eps_ihx: 0.85, eps_pre: 0.85, eps_lthx: 0.85, eta_c: 0.85, eta_t: 0.85, eta_m: 0.99, dP_hp: 50, dP_lp: 10, Pmax: 300},
+  E: {arr: 0, T_int_auto: true, T_int: 100, dT_econ: 5, superheat_inj: 5, superheat: 5, Pmax: 60},
+  D: {T_cond_low: 110, superheat: 5, Pmax: 60},
+  R: {n: 1, bounds_auto: true, bounds: [60, 100, 140], eta_carnot: 0.37, dT_hot: 20, dT_cold: 5},
+  Y: {w_rich: 0.5, q_des: 0.4, Pmax: 50, T_dis_max: 170, wet: true, limit_dis: false, eta_pump: 0.6},
 };
+const ECON_ARR = ['flash', 'economiser', 'parallel', 'single'];
 if (!LV.mainComps) LV.mainComps = LV.comps;
 LV.multi = Object.assign(JSON.parse(JSON.stringify(MULTI_DEF)), LV.multi || {});
 LV.par = Object.assign(JSON.parse(JSON.stringify(PAR_DEF)), LV.par || {});
 const savedKv = LV.par.K && LV.par.K.v;
 for (const k in PAR_DEF) LV.par[k] = Object.assign(JSON.parse(JSON.stringify(PAR_DEF[k])), LV.par[k]);
 if (savedKv !== PAR_DEF.K.v) LV.par.K = JSON.parse(JSON.stringify(PAR_DEF.K));   // the TT layout changed: start from the new defaults
-LV.loopSel = Object.assign({K: 1, N: 0, M: 0, X: 0}, LV.loopSel || {});
+LV.loopSel = Object.assign({K: 1, N: 0, M: 0, X: 0, E: 0, D: 0, R: 0, Y: 0}, LV.loopSel || {});
 function linkComps() {
   if (MULTI(LV.cyc)) { const L = LV.multi[LV.cyc]; LV.loopSel[LV.cyc] = Math.min(LV.loopSel[LV.cyc], loopCount(LV.cyc) - 1); LV.comps = L[LV.loopSel[LV.cyc]]; }
   else LV.comps = LV.mainComps;
 }
 const loopCount = c => c === 'K' ? 2 : c === 'N' ? LV.par.N.n : 1;
-const loopNames = c => c === 'K' ? ['Bottom', 'Top'] : c === 'N' ? Array.from({length: LV.par.N.n}, (_, i) => `Level ${i + 1}`) : c === 'X' ? ['Working fluid'] : ['Bottom'];
+const loopNames = c => c === 'K' ? ['Bottom', 'Top'] : c === 'N' ? Array.from({length: LV.par.N.n}, (_, i) => `Level ${i + 1}`) : c === 'X' || c === 'R' ? ['Working fluid'] : c === 'E' || c === 'D' ? ['Refrigerant'] : c === 'Y' ? ['Solution'] : ['Bottom'];
+// the working fluid of loop i as text: the hybrid's solution is set by its ammonia fraction under Design
+const loopFluidText = (c, v, i) => v === 'Y' ? `ammonia–water, ${(100 * c.par.Y.w_rich).toFixed(1)} % NH₃ (mass)` : v === 'R' ? 'helium (not modelled)' : fluidLabel({comps: c.multi[v][i], basis: c.basis});
 const lvSave = () => { try { localStorage.setItem('dryerlive1', JSON.stringify(LV)); } catch (e) {} };
 let LIVE = {res: null, cfg: null, fl: null, flKey: '', dome: null, air: null, busy: false};
 let cpPromise = null;
@@ -4797,12 +5975,14 @@ function renderLiveControls() {
   lvSeg('lvComp', DRYER.COMP_MODELS.map((n, i) => [i, n]).slice(1).filter(([, n]) => n), LV.compModel, i => { LV.compModel = i; renderLiveControls(); changed(); });
   LV.motor = Math.min(Math.max(+LV.motor || 0.93, 0.8), 1);
   LV.expn = LV.expn === 'exp' ? 'exp' : 'valve'; LV.etaX = Math.min(Math.max(+LV.etaX || 0.75, 0.3), 1);
-  const brayton = LV.cyc === 'X';
+  const brayton = LV.cyc === 'X', noExp = ['X', 'E', 'D', 'R', 'Y'].includes(LV.cyc);
   if (LV.cyc === 'S') { lvSeg('lvStagesS', [[1, 'Single stage'], [2, 'Two stages']], stagesOf(LV), v => { LV.stagesS = v; renderLiveControls(); changed(); }); $('lvShareRow').hidden = stagesOf(LV) === 1; }
   LV.pmax = Math.min(Math.max(+LV.pmax || 300, 50), 400); $('lvPmaxRow').hidden = MULTI(LV.cyc);
   lvSeg('lvExp', [['valve', 'Expansion valve'], ['exp', 'Expander']], LV.expn, v => { LV.expn = v; renderLiveControls(); changed(); });
-  $('lvExpRow').hidden = brayton; $('lvEtaXRow').hidden = brayton || LV.expn !== 'exp';
+  $('lvExpRow').hidden = noExp; $('lvEtaXRow').hidden = noExp || LV.expn !== 'exp';
   $('lvExpHint').textContent = brayton ? 'The sCO₂ Brayton cycle always expands through its turbine; its efficiency is set under Design.'
+    : LV.cyc === 'R' ? 'Stirling units have no compressor or valve: their performance is a fraction of the Carnot COP, set under Design.'
+    : noExp ? 'This cycle expands through valves (no expander option).'
     : LV.expn === 'exp' ? `Every expansion valve becomes an expander of this isentropic efficiency; its work is returned as electricity at the motor efficiency. A two-phase outlet (the usual case below the critical point) is flagged: two-phase expanders are less proven than gas turbines.`
     : 'Isenthalpic throttling through an expansion valve.';
   const air = LV.src === 'air';
@@ -4821,10 +6001,11 @@ function renderLiveControls() {
   $('lvFanSec').hidden = LV.cyc !== 'M';  $('lvFanEtaRow').hidden = +LV.fanModel !== 1;
   lvSeg('lvFanModel', DRYER.COMP_MODELS.map((n, i) => [i, n]).slice(1).filter(([, n]) => n), +LV.fanModel, i => { LV.fanModel = i; renderLiveControls(); changed(); });
   const mu = MULTI(LV.cyc);
-  $('lvLoopRow').hidden = !mu || loopCount(LV.cyc) < 2; $('lvLoopHint').hidden = LV.cyc !== 'M';
+  $('lvLoopRow').hidden = !mu || loopCount(LV.cyc) < 2; $('lvLoopHint').hidden = LV.cyc !== 'M' && !NOFLUID(LV.cyc);
+  for (const e of [$('lvComps'), $('lvAdd').parentElement]) e.hidden = NOFLUID(LV.cyc);
   if (mu) lvSeg('lvLoop', loopNames(LV.cyc).map((n, i) => [i, n]), LV.loopSel[LV.cyc], i => { LV.loopSel[LV.cyc] = i; openPicker = -1; renderLiveControls(); });
-  $('lvLoopHint').textContent = 'The HP + MVR cycle\'s steam loop is water.';
-  lvSeg('lvCyc', [['H', 'Conventional'], ['A', 'RHP-A'], ['B', 'RHP-B'], ['C', 'RHP-C'], ['S', 'SLTHP'], ['K', 'TT cascade'], ['N', 'n-cascade'], ['M', 'HP + MVR'], ['X', 'sCO₂ Brayton']], LV.cyc, v => { LV.cyc = v; renderLiveControls(); changed(); });
+  $('lvLoopHint').textContent = LV.cyc === 'R' ? 'Stirling units run on helium; the model does not need its properties.' : LV.cyc === 'Y' ? 'The hybrid cycle runs on an ammonia–water solution (IAPWS G4-01 properties, solved in the page); set its ammonia fraction under Design.' : 'The HP + MVR cycle\'s steam loop is water.';
+  lvSeg('lvCyc', [['H', 'Conventional'], ['A', 'RHP-A'], ['B', 'RHP-B'], ['C', 'RHP-C'], ['S', 'SLTHP'], ['K', 'TT cascade'], ['N', 'n-cascade'], ['M', 'HP + MVR'], ['X', 'sCO₂ Brayton'], ['E', 'Flash / economiser'], ['D', 'Dual-pressure'], ['Y', 'NH₃–H₂O hybrid'], ['R', 'Stirling']], LV.cyc, v => { LV.cyc = v; renderLiveControls(); changed(); });
   $('lvMini').innerHTML = RHP(LV.cyc) ? miniRHP(LV.cyc, stagesOf(LV)) : mu ? miniMulti(LV.cyc) : miniSchematic(LV.cyc);
   compRows();
   for (const b of document.querySelectorAll('.tbtn[data-basis]')) b.setAttribute('aria-pressed', String(b.dataset.basis === LV.basis));
@@ -5641,8 +6822,9 @@ function miniConv(stages, ihx) {
 }
 
 /* ================================================================== multi-loop cycles: TT cascade, n-cascade, HP + MVR */
-const MULTI_NAME = {K: 'TT cascade', N: 'n-cascade', M: 'HP + MVR', X: 'sCO₂ Brayton'};
-const MULTI_TITLE = {K: 'Transcritical–transcritical cascade (Kong et al.)', N: 'n-level cascade (Hoang et al.)', M: 'HP + MVR: heat pump and MVR steam', X: 'sCO₂ reverse Brayton (Dalal et al.)'};
+const MULTI_NAME = {K: 'TT cascade', N: 'n-cascade', M: 'HP + MVR', X: 'sCO₂ Brayton', E: 'Flash / economiser', D: 'Dual-pressure', R: 'Stirling', Y: 'NH₃–H₂O hybrid'};
+const MULTI_TITLE = {K: 'Transcritical–transcritical cascade (Kong et al.)', N: 'n-level cascade (Hoang et al.)', M: 'HP + MVR: heat pump and MVR steam', X: 'sCO₂ reverse Brayton (Dalal et al.)',
+  E: 'Two-stage heat pump: flash tank, economiser or parallel compression', D: 'Dual-pressure condensation (Dai et al.)', R: 'Reverse-Stirling units (semi-empirical)', Y: 'Ammonia–water hybrid absorption–compression (Osenbrück)'};
 function renderMultiFields() {
   const c = LV.cyc, p = LV.par[c], box = $('lvDesX');
   const num = (key, lab, step, title = '', idx = null) => {
@@ -5675,6 +6857,40 @@ function renderMultiFields() {
       <div class="row optrow">${num('Pmax', 'Max pressure, bar', 'any', 'Upper bound for the optimiser and the lowest-pressure search')}${optBtn()}</div>
       <p class="hint">Optimise sets the suction pressure, the discharge pressure and the split for the highest COP. It starts from the values above (80 bar suction by default) and may take the suction below the 73.8 bar critical pressure (a transcritical low side) or up to where the discharge pressure meets the max pressure.${p.arch === 2 ? ' Architecture 2 is slow: a few minutes.' : ''}</p>
       <p class="hint">${p.arch === 2 ? 'Architecture 2 (with Held’s split stream): the secondary stream, after preheating the main stream, heats the cooler part of the air in HTHX 2 and rejoins before the turbine; the main stream heats the hotter part in HTHX 1, then gives heat back in the IHX.' : 'Architecture 1: compressor 2 heats the air in the HTHX; the secondary stream, after preheating the main stream, rejoins it after the HTHX and both give heat back in the IHX before the turbine.'} The LTHX (gas heater) keeps the source approach and the HTHX the gas-cooler approach, both under Operating point. The whole cycle is supercritical; the turbine (expander) replaces the valve. After Dalal, Klöppel, Rose and Walmsley (Euro sCO₂ 2027).</p>`;
+  } else if (c === 'E') {
+    const arr = ECON_ARR[p.arr] || 'flash';
+    h = `<div class="pickrow"><span class="lab">Arrangement</span><div class="seg" id="lvEarr"></div></div>
+      ${arr === 'single' ? '' : `<div class="row">${chk('T_int_auto', 'intermediate pressure at the geometric mean of the evaporating and high pressures')}</div>`}
+      <div class="fields">${arr === 'single' || p.T_int_auto ? '' : num('T_int', 'Intermediate saturation, °C', 'any', 'Saturation (dew) temperature at the intermediate pressure; Optimise sets it')}
+      ${num('superheat', 'Min suction superheat, K', 'any', 'Raised where an overhanging fluid needs more for a discharge 5 K above the dew point')}
+      ${arr === 'economiser' ? num('dT_econ', 'Economiser approach, K', 'any', 'The main liquid leaves the economiser this far above the saturation temperature at the intermediate pressure') : ''}
+      ${arr === 'economiser' || arr === 'parallel' ? num('superheat_inj', 'Injected vapour superheat, K', 'any', arr === 'parallel' ? 'The parallel compressor suction is heated at least this far above saturation by the high-pressure liquid (more if a dry discharge needs it)' : 'The injected vapour leaves the economiser this far above saturation') : ''}</div>
+      <div class="row optrow">${num('Pmax', 'Max pressure, bar', 'any', 'Highest high-side pressure searched')}${arr === 'single' ? '' : optBtn()}</div>
+      ${arr === 'single' ? '' : '<p class="hint">Optimise sets the intermediate saturation temperature for the highest COP.</p>'}
+      <p class="hint">${{flash: 'Flash tank: the condenser liquid flashes at the intermediate pressure; the flash vapour joins the low-stage discharge at the high-stage suction and the saturated liquid expands to the evaporator.',
+        economiser: 'Closed economiser (vapour injection): part of the condenser liquid expands to the intermediate pressure and evaporates against the rest, which is subcooled; the vapour joins the low-stage discharge.',
+        parallel: 'Parallel compression: as the flash tank, but the flash vapour has its own compressor to the high pressure and the low stage compresses straight to it.',
+        single: 'Single stage, for comparison: one compressor and one valve.'}[arr]} The high pressure is the lowest that heats the air to the target with the approach (subcritical or transcritical, from the fluid). After Arpagaus et al. (2018) and Adamson et al. (2022).</p>`;
+  } else if (c === 'D') {
+    h = `<div class="fields">${num('T_cond_low', 'Low condensing, °C', 'any', 'Saturation (dew) temperature in the low-pressure condenser; Optimise sets it')}${num('superheat', 'Min suction superheat, K', 'any', 'Raised where an overhanging fluid needs more for a discharge 5 K above the dew point')}</div>
+      <div class="row optrow">${num('Pmax', 'Max pressure, bar', 'any', 'Highest high-side pressure searched')}${optBtn()}</div>
+      <p class="hint">Optimise sets the low condensing temperature for the highest COP.</p>
+      <p class="hint">The low-stage compressor feeds the low-pressure condenser, which heats the air from the inlet; part of its discharge goes on through the high-stage compressor to the high-pressure condenser, which heats the air to the target, and its liquid is throttled back into the low-pressure condenser. The split follows from the air balance and the air between the condensers is the hottest the low-pressure condenser allows. After Dai et al. (2020).</p>`;
+  } else if (c === 'R') {
+    h = `<div class="pickrow"><span class="lab">Units in series</span><div class="seg" id="lvRn"></div></div>
+      ${p.n > 1 ? `<div class="row">${chk('bounds_auto', 'equal air temperature steps between the units')}</div>` : ''}
+      <div class="fields">${p.n > 1 && !p.bounds_auto ? Array.from({length: p.n - 1}, (_, k) => num('bounds', `Air after unit ${k + 1}, °C`, 'any', '', k)).join('') : ''}
+      ${num('eta_carnot', 'Carnot fraction', '0.01', 'COP = this × T_hot / (T_hot − T_cold), in K; 0.37 from the RFC Maasdam case (COP 2 for 155 °C steam from about 75 °C waste heat)')}
+      ${num('dT_hot', 'Hot-side approach, K', 'any', 'Each unit\'s hot side sits this far above the air it delivers (through an intermediate water or steam loop)')}${num('dT_cold', 'Cold-side approach, K', 'any', 'The cold side sits this far below the source outlet')}</div>
+      ${p.n > 1 ? `<div class="row optrow">${optBtn()}</div><p class="hint">Optimise sets the air temperatures between the units for the highest COP.</p>` : ''}
+      <p class="hint">A semi-empirical block, not a physical Stirling model: industrial reverse-Stirling heat pumps (helium, about 400–720 kW) publish little performance data, so each unit's COP is a fraction of the Carnot COP between its hot and cold sides (Høeg et al. 2026; Häggqvist et al. 2023). Treat results as indicative; above about 200 °C hot side there is no field data. Size the units by sink duty or air flow (Size), as there is no compressor swept volume.</p>`;
+  } else if (c === 'Y') {
+    h = `<div class="fields">${num('w_rich', 'NH₃ mass fraction', '0.01', 'Ammonia mass fraction of the circulating solution; Optimise sets it')}${num('q_des', 'Degassing (vapour fraction)', '0.01', 'Vapour mass fraction boiled off in the desorber; Optimise sets it')}
+      ${num('T_dis_max', 'Discharge limit, °C', 'any', 'Ammonia compressors and oil: 170 °C (Jensen et al. 2015)')}${num('eta_pump', 'Solution pump η', '0.01')}</div>
+      <div class="row">${chk('wet', 'wet compression: inject lean liquid at the suction to hold the discharge limit')}${p.wet ? '' : chk('limit_dis', 'fail designs above the discharge limit')}</div>
+      <div class="row optrow">${num('Pmax', 'Max pressure, bar', 'any', 'Component pressure class: Jensen et al. compare 28, 50 and 140 bar')}${optBtn()}</div>
+      <p class="hint">Optimise sets the ammonia fraction and the degassing for the highest COP. A solve takes a few seconds; Optimise up to a few minutes.</p>
+      <p class="hint">The solution boils partly in the desorber on the source and separates; the ammonia-rich vapour is compressed (with lean liquid injected to hold the discharge limit) and the lean liquid pumped, and both are absorbed again in the absorber, which heats the air with a large temperature glide. The absorber outlet is the coldest that keeps the air approach and the high pressure the lowest that heats the air to the target. Properties: the IAPWS G4-01 ammonia–water formulation (Tillner-Roth and Friend 1998), solved in the page. After Jensen et al. (2015).</p>`;
   } else {
     h = `<div class="fields">${num('T_cond', 'Bottom condensing, °C', 'any')}${num('dT_sg', 'Steam generator approach, K', 'any')}
       ${num('n_mvr', 'MVR stages', '1', 'Each at the fan pressure ratio (MVR fans card)')}</div>${splitFields(p)}
@@ -5690,12 +6906,14 @@ function renderMultiFields() {
     if (inp.type !== 'checkbox' && !isFinite(v)) return;
     if (i == null) p[k] = v; else p[k][+i] = k === 'split' ? Math.min(Math.max(v, 0), 1) : v;
     if (LIVE.optMsg) LIVE.optMsg[c] = '';
-    if (inp.type === 'checkbox') { if (k === 'ihx' && c === 'M') renderMultiFields(); $('lvMini').innerHTML = miniMulti(LV.cyc); }   // the schematic shows the options
+    if (inp.type === 'checkbox') { if ((k === 'ihx' && c === 'M') || ['T_int_auto', 'bounds_auto', 'wet'].includes(k)) renderMultiFields(); $('lvMini').innerHTML = miniMulti(LV.cyc); }   // the schematic shows the options
     changed();
   });
-  $('lvOpt').addEventListener('click', () => optimise(c));
+  const ob = $('lvOpt'); if (ob) ob.addEventListener('click', () => optimise(c));
   if (c === 'M') lvSeg('lvSplitMode', [[false, 'Manual'], [true, 'Auto (to the approach)']], !!p.split_fill, v => { p.split_fill = v; renderLiveControls(); changed(); });
   if (c === 'X') lvSeg('lvXarch', [[1, '1: split + preheater'], [2, '2: with split-stream HTHXs']], +p.arch === 2 ? 2 : 1, v => { p.arch = v; renderLiveControls(); changed(); });
+  if (c === 'E') lvSeg('lvEarr', [[0, 'Flash tank'], [1, 'Economiser'], [2, 'Parallel'], [3, 'Single stage']], +p.arr || 0, v => { p.arr = v; if (LIVE.optMsg) LIVE.optMsg.E = ''; renderLiveControls(); changed(); });
+  if (c === 'R') lvSeg('lvRn', [[1, '1'], [2, '2'], [3, '3'], [4, '4']], p.n, v => { p.n = v; if (LIVE.optMsg) LIVE.optMsg.R = ''; renderLiveControls(); changed(); });
 }
 /* HP + MVR: after each fan but the last, the fraction of its exhaust that goes to the process (condensing into the
    air at that pressure); the rest goes on to the next fan. Auto sizes each to heat the air to its saturation less
@@ -5724,7 +6942,7 @@ function optBtn() {
    painting. TT: the two pressures, the bottom/top flow and the top GC outlet raise; n-level cascade: the lower
    levels' condensing temperatures; booster: the bottom condensing temperature and the MVR stage count. */
 function optimise(c) {
-  if (LIVE.opt || !CP || !LIVE.air || !['K', 'N', 'M', 'X'].includes(c)) return;
+  if (LIVE.opt || !CP || !LIVE.air || !MULTI(c)) return;
   airFor(LV);
   const cfg = JSON.parse(JSON.stringify(LV)), p = cfg.par[c];
   if (cfg.src === 'air') {          // air source: optimise at the air outlet of the last solve; the page then re-solves it
@@ -5751,6 +6969,21 @@ function optimise(c) {
     const fls = cfg.multi.X.slice(0, 1).map(l => fluidFor(l, cfg.basis));
     gen = DRYCASC.braytonOptimiseSteps(fls[0], LIVE.air, {...base, ...braytonCfg(p)});
     apply = (o, P) => { if (o.P_L != null) P.P_L = +(o.P_L * 10).toFixed(1); P.P_H = +(o.P_H * 10).toFixed(1); P.x = +o.x.toFixed(3); P.P_H_min = false; return [o.atBound.P_L && 'suction pressure', o.atBound.P_H && 'discharge pressure', o.atBound.x && 'split', o.budgetHit && 'solve budget (run it again to continue)']; };
+  } else if (c === 'E' || c === 'D') {
+    const fl = fluidFor(cfg.multi[c][0], cfg.basis);
+    if (c === 'E') {
+      gen = DRYMORE.economiserOptimiseSteps(fl, LIVE.air, {...base, ...econCfg(p)});
+      apply = (o, P) => { if (o.T_int != null) { P.T_int = +(+o.T_int).toFixed(1); P.T_int_auto = false; } return [o.atBound && 'intermediate temperature']; };
+    } else {
+      gen = DRYMORE.dualPressureOptimiseSteps(fl, LIVE.air, {...base, ...dualCfg(p)});
+      apply = (o, P) => { P.T_cond_low = +(+o.T_cond_low).toFixed(1); return [o.atBound && 'low condensing temperature']; };
+    }
+  } else if (c === 'R') {
+    gen = DRYMORE.stirlingOptimiseSteps(LIVE.air, {...base, ...stirCfg(p)});
+    apply = (o, P) => { o.boundaries.forEach((v, k) => { P.bounds[k] = +(+v).toFixed(1); }); if (o.boundaries.length) P.bounds_auto = false; return []; };
+  } else if (c === 'Y') {
+    gen = DRYMORE.hybridOptimiseSteps(LIVE.air, {...base, ...hybCfg(p)});
+    apply = (o, P) => { P.w_rich = +(+o.w_rich).toFixed(3); P.q_des = +(+o.q_des).toFixed(3); return [o.atBound.w_rich && 'ammonia fraction', o.atBound.q_des && 'degassing']; };
   } else {
     const fls = cfg.multi.M.slice(0, 1).map(l => fluidFor(l, cfg.basis));
     gen = DRYCASC.boosterOptimiseSteps(fls[0], fluidFor([['Water', 100]], 'mass'), LIVE.air, {...base, ...p, ...fanCfg(cfg)});
@@ -5787,15 +7020,24 @@ function fluidFor(list, basis) {
 }
 // sCO2 Brayton inputs in the page's units (bar, kPa) to the model's (MPa)
 const braytonCfg = p => ({...p, P_L: p.P_L / 10, P_H: p.P_H / 10, Pmax: p.Pmax / 10, dP_hp: p.dP_hp / 1000, dP_lp: p.dP_lp / 1000});
+// the new cycles' design inputs (dryer_more.js) from the page's
+const econCfg = p => ({arrangement: ECON_ARR[p.arr] || 'flash', T_int: p.T_int_auto ? null : +p.T_int, dT_econ: +p.dT_econ, superheat_inj: +p.superheat_inj, superheat: +p.superheat, P_max_bar: +p.Pmax});
+const dualCfg = p => ({T_cond_low: +p.T_cond_low, superheat: +p.superheat, P_max_bar: +p.Pmax});
+const stirCfg = p => ({n_units: p.n, boundaries: p.n > 1 && !p.bounds_auto ? p.bounds.slice(0, p.n - 1).map(Number) : null, eta_carnot: +p.eta_carnot, dT_hot: +p.dT_hot, dT_cold: +p.dT_cold});
+const hybCfg = p => ({w_rich: +p.w_rich, q_des: +p.q_des, P_max_bar: +p.Pmax, T_dis_max: +p.T_dis_max, wet_compression: !!p.wet, limit_discharge: !p.wet && !!p.limit_dis, eta_pump: +p.eta_pump});
 const ttAir = cfg => ({air_ratio: secOn(cfg) ? +cfg.phi : 0, T_mt: secOn(cfg) ? +cfg.Tmt : (cfg.Tain + cfg.T) / 2});
 function solveMulti(cfg) {
   const c = cfg.cyc, p = cfg.par[c];
   const base = baseOf(cfg);
-  const fls = cfg.multi[c].slice(0, loopCount(c)).map(l => fluidFor(l, cfg.basis));
+  const fls = NOFLUID(c) ? [] : cfg.multi[c].slice(0, loopCount(c)).map(l => fluidFor(l, cfg.basis));
   let r;
   if (c === 'K') r = DRYCASC.kong(fls[0], fls[1], LIVE.airBase, {...base, ...p, ...ttAir(cfg), P_b: p.P_b / 10, P_t: p.P_t / 10, eta: null});
   else if (c === 'N') r = DRYCASC.cascade(fls, LIVE.air, {...base, ...p});
   else if (c === 'X') r = DRYCASC.brayton(fls[0], LIVE.air, {...base, ...braytonCfg(p), q_lthx_max: cfg._qcap, _quick: cfg._qcap != null});   // the source-limit search skips the lowest-pressure search on failures
+  else if (c === 'E') r = DRYMORE.economiser(fls[0], LIVE.air, {...base, ...econCfg(p)});
+  else if (c === 'D') r = DRYMORE.dualPressure(fls[0], LIVE.air, {...base, ...dualCfg(p)});
+  else if (c === 'R') r = DRYMORE.stirling(LIVE.air, {...base, ...stirCfg(p)});
+  else if (c === 'Y') r = DRYMORE.hybrid(LIVE.air, {...base, ...hybCfg(p)});
   else r = DRYCASC.booster(fls[0], fluidFor([['Water', 100]], 'mass'), LIVE.air, {...base, ...p, ...fanCfg(cfg)});
   r.fluids = fls; if (c === 'M') r.fluids = [fls[0], fluidFor([['Water', 100]], 'mass')];
   return r;
@@ -5804,8 +7046,10 @@ const loopFluid = (r, L) => L.fluid === 'water' ? r.fluids[r.fluids.length - 1] 
 /* duties at the swept volume: the reference compressor (the bottom loop's) sets the mass flows */
 function energyG(r, c) {
   if (!r || !r.success) return null;
-  const nv = state.nvMode === 'fixed' ? state.nvFix : DRYER.etaVol(r.ref.PR);
-  const m = r.ref.rho * nv * state.vsw / 3600 / r.ref.flow;        // kg/s of the result's basis flow
+  // Stirling: no compressor, so the volume is the dryer air's at the inlet (dry-air density) and the basis kg of air
+  const nv = r.ref.air ? 1 : state.nvMode === 'fixed' ? state.nvFix : DRYER.etaVol(r.ref.PR);
+  const rho = r.ref.air ? (+c.Patm || 101.325) * 1000 / (287.05 * (+c.Tain + 273.15)) : r.ref.rho;
+  const m = rho * nv * state.vsw / 3600 / r.ref.flow;        // kg/s of the result's basis flow
   const wEl = r.report && isFinite(r.report.w_el_kJkg) ? r.report.w_el_kJkg : r.w_shaft / (c.motor ?? 0.93);   // the fans' own motor in HP + MVR
   const kw = {air: m * r.q_air, el: m * wEl, ev: m * r.q_source};
   kw.ex = m * (r.report && r.report.w_exp_kJkg || 0);
@@ -5814,8 +7058,8 @@ function energyG(r, c) {
 }
 function multiSrc() {
   const c = LIVE.cfg || LV, v = c.cyc, r = LIVE.res && LIVE.cfg && MULTI(LIVE.cfg.cyc) ? LIVE.res : null;
-  const desc = !r ? (LIVE.busy ? 'solving…' : 'waiting for CoolProp…') : !r.success ? `<span class="flag">${r.message}</span>` : `COP ${r.COP.toFixed(3)} · Pmax ${r.Pmax_bar.toFixed(1)} bar`;
-  const fl = loopNames(v).map((n, i) => `${n} ${fluidLabel({comps: c.multi[v][i], basis: c.basis})}`).join(' · ');
+  const desc = !r ? (LIVE.busy ? 'solving…' : 'waiting for CoolProp…') : !r.success ? `<span class="flag">${r.message}</span>` : `COP ${r.COP.toFixed(3)}${isFinite(r.Pmax_bar) ? ` · Pmax ${r.Pmax_bar.toFixed(1)} bar` : ''}`;
+  const fl = loopNames(v).map((n, i) => `${n} ${loopFluidText(c, v, i)}`).join(' · ');
   return {generic: true, k: v, name: MULTI_NAME[v], color: 'var(--sA)', res: r, cfg: c, Tair: c.T, Tsrc: c.Ts, Tain: c.Tain, Twout: c.Two, ...srcOf(c, r), live: true,
           title: MULTI_TITLE[v], label: fl,
           info: `<div class="cyrow"><i class="sw" style="background:var(--sA)"></i><b>${MULTI_NAME[v]}</b><span class="f">${fl} · ${c.T} °C air · ${desc}</span></div>`};
@@ -5830,7 +7074,9 @@ function renderLiveMulti() {
   const figs = $('lvFigs');
   if (!r || !r.success) { figs.innerHTML = ''; return; }
   const p = r.report, fig = (k, v, u, sub = '') => `<div class="fig"><span class="k">${k}</span><span class="v">${v}<small>${u}</small></span>${sub ? `<span class="sub">${sub}</span>` : ''}</div>`;
-  const cells = [fig('COP', r.COP.toFixed(3), '', 'heat to air / electricity'), fig('VHC', r.VHC.toFixed(2), 'MJ/m³', 'per m³ of suction gas, all compressors'),
+  const cells = c.cyc === 'R' ? [fig('COP', r.COP.toFixed(3), '', 'heat to air / electricity'), fig('Hottest unit', r.T_dis_max.toFixed(1), '°C', 'hot side'),
+      fig('Cold side', p.T_cold.toFixed(1), '°C', 'every unit'), fig('Carnot fraction', p.units[0].eta_carnot.toFixed(2), '', p.eta_model)]
+    : [fig('COP', r.COP.toFixed(3), '', 'heat to air / electricity'), fig('VHC', r.VHC.toFixed(2), 'MJ/m³', 'per m³ of suction gas, all compressors'),
     fig('Max pressure', r.Pmax_bar.toFixed(1), 'bar', ''), fig('Hottest discharge', r.T_dis_max.toFixed(1), '°C', '')];
   if (r.report && r.report.expander) cells.push(expFig(r.report, fig));
   if (c.cyc === 'K') cells.push(
@@ -5845,6 +7091,24 @@ function renderLiveMulti() {
     fig('IHX duties', `${p.q_ihx_top.toFixed(0)} / ${p.q_ihx_bot.toFixed(0)}`, 'kJ/kg', 'top / bottom, per kg top'),
     fig('Bottom/top flow', p.r.toFixed(3), 'kg/kg', `refrigerant mass flow · GC outlet raise ${p.gc_off.toFixed(1)} K`));
   else if (c.cyc === 'N') p.levels.forEach((l, k) => cells.push(fig(`Level ${k + 1}`, `${l.Te.toFixed(0)} → ${l.Tc.toFixed(1)}`, '°C', `${l.Pe_bar.toFixed(2)} → ${l.Pc_bar.toFixed(1)} bar · PR ${l.PR.toFixed(2)} · ${(100 * l.q_air / r.q_air).toFixed(0)} % of the heat · superheat ${l.superheat.toFixed(0)} K${k < p.levels.length - 1 ? ` · ${(100 * l.f_air).toFixed(0)} % condensing to air` : ''}`)));
+  else if (c.cyc === 'E') cells.push(
+    fig('Pressures', `${p.P_evap_bar.toFixed(2)}${p.P_int_bar != null ? ` → ${p.P_int_bar.toFixed(1)}` : ''} → ${p.P_high_bar.toFixed(1)}`, 'bar', `evaporating ${p.T_evap.toFixed(1)} °C${p.T_int != null ? ` · intermediate ${p.T_int.toFixed(1)} °C` : ''}${p.supercritical ? ' · transcritical' : ''}`),
+    fig('Compression', p.PR_high != null ? `${p.PR_low.toFixed(2)} / ${p.PR_high.toFixed(2)}` : p.PR_low.toFixed(2), 'PR', `${p.arrangement === 'parallel' ? 'low stage / parallel' : p.PR_high != null ? 'low / high stage' : 'single stage'} · discharge ${p.T_dis_low.toFixed(0)}${p.T_dis_high != null ? ` / ${p.T_dis_high.toFixed(0)}` : p.T_dis_parallel != null ? ` / ${p.T_dis_parallel.toFixed(0)}` : ''} °C`),
+    ...(p.arrangement === 'single' ? [] : [fig(p.arrangement === 'economiser' ? 'Injected' : 'Flash vapour', (100 * p.flows.injected).toFixed(1), '%', `of the high-pressure flow · ${(100 * p.flows.low).toFixed(1)} % through the evaporator`)]),
+    fig('Condenser', p.gap_air.toFixed(1), 'K', `air approach · suction superheat ${p.superheat.toFixed(1)} K`));
+  else if (c.cyc === 'D') cells.push(
+    fig('Pressures', `${p.P_evap_bar.toFixed(2)} → ${p.P_low_cond_bar.toFixed(1)} → ${p.P_high_bar.toFixed(1)}`, 'bar', `evaporating ${p.T_evap.toFixed(1)} °C · low condensing ${p.T_cond_low.toFixed(1)} °C${p.supercritical ? ' · high side transcritical' : ''}`),
+    fig('Air between condensers', p.T_mid.toFixed(1), '°C', `low-pressure condenser ${(100 * p.q_air_low / p.q_air).toFixed(0)} % of the heat`),
+    fig('High-stage flow', p.split_high.toFixed(3), 'kg/kg', `of the evaporator flow · discharge ${p.T_dis_low.toFixed(0)} / ${p.T_dis_high.toFixed(0)} °C`),
+    fig('Air approaches', `${p.gap_low.toFixed(1)} / ${p.gap_high.toFixed(1)}`, 'K', 'low / high-pressure condenser'));
+  else if (c.cyc === 'R') p.units.forEach((u, k) => cells.push(fig(`Unit ${k + 1}`, u.COP.toFixed(2), 'COP', `air ${u.T_air_in.toFixed(0)} → ${u.T_air_out.toFixed(0)} °C · hot side ${u.T_hot.toFixed(0)} °C · Carnot ${u.carnot_COP.toFixed(2)} · ${(100 * u.q_air / r.q_air).toFixed(0)} % of the heat`)));
+  else if (c.cyc === 'Y') cells.push(
+    fig('Pressures', `${p.P_low_bar.toFixed(1)} → ${p.P_high_bar.toFixed(1)}`, 'bar', `PR ${p.PR.toFixed(2)} · discharge ${p.T_dis.toFixed(0)} °C`),
+    fig('Solution', (100 * p.w_rich).toFixed(1), '% NH₃', `vapour ${(100 * p.w_vapour).toFixed(1)} % · lean liquid ${(100 * p.w_lean).toFixed(1)} % · degassing ${p.q_des.toFixed(2)}`),
+    fig('Absorber', `${p.T_abs_in.toFixed(0)} → ${p.T_abs_out.toFixed(1)}`, '°C', `air approach ${p.gap_air.toFixed(1)} K · glide ${p.T_dew_high.toFixed(0)} → ${p.T_bubble_high.toFixed(0)} °C`),
+    fig('Desorber', `${p.T_des_in.toFixed(1)} → ${p.T_des_out.toFixed(1)}`, '°C', `source approach ${p.gap_source.toFixed(1)} K`),
+    fig('Wet compression', p.wet_compression ? (100 * p.m_injected).toFixed(1) : 'off', p.wet_compression ? '%' : '', p.wet_compression ? 'lean liquid injected, per kg of solution' : 'dry compression of the vapour'),
+    fig('Work split', (100 * p.w_pump / (p.w_comp + p.w_pump)).toFixed(1), '% pump', `compressor ηis ${p.eta_comp.toFixed(3)}`));
   else if (c.cyc === 'X') cells.push(
     fig('Pressures', `${p.P_L_bar.toFixed(0)} → ${p.P_H_bar.toFixed(1)}`, 'bar', `PR ${p.PR.toFixed(2)} · architecture ${p.arch}`),
     fig('Shaft COP', p.COP_shaft.toFixed(3), '', 'heat to air / net shaft work, as in the paper'),
@@ -5880,9 +7144,9 @@ function lvHeadlineMulti() {
       <span class="stars" role="img" aria-label="${n.toFixed(2)} of 5 stars, one star per unit of COP">${starRowL(n, 'lvst')}</span></div>
     <div class="dial">${dialL(heat, kwTop, '--s4', 'kW heat to air')}<span class="dk">Heat to air, kW</span></div>
     <div class="dial">${dialL(el, kwTop, '--s2', 'kW electrical')}<span class="dk">Electrical, kW</span></div>
-    <div class="dial">${dialL(r.Pmax_bar, niceTop(r.Pmax_bar, 10), '--s6', 'bar maximum pressure')}<span class="dk">Max pressure, bar</span></div>
-    <div class="dial">${dialL(r.T_dis_max, niceTop(r.T_dis_max, 50), '--s5', '°C discharge', 0)}<span class="dk">Discharge, °C</span></div>
-    <span class="hl-s">${vswTxt()} m³/h swept by ${c.cyc === 'X' ? 'both compressors' : 'the bottom compressor'} · ${air} · ${srcLine(c, r, u.kw.ev, water)}</span>`;
+    ${isFinite(r.Pmax_bar) ? `<div class="dial">${dialL(r.Pmax_bar, niceTop(r.Pmax_bar, 10), '--s6', 'bar maximum pressure')}<span class="dk">Max pressure, bar</span></div>` : ''}
+    <div class="dial">${dialL(r.T_dis_max, niceTop(r.T_dis_max, 50), '--s5', '°C discharge', 0)}<span class="dk">${c.cyc === 'R' ? 'Hot side' : 'Discharge'}, °C</span></div>
+    <span class="hl-s">${vswTxt()} m³/h ${c.cyc === 'R' ? 'of dryer air at the inlet' : `swept by ${c.cyc === 'X' ? 'both compressors' : ['E', 'D', 'Y'].includes(c.cyc) ? 'all compressors' : 'the bottom compressor'}`}${air ? ` · ${air}` : ''} · ${srcLine(c, r, u.kw.ev, water)}</span>`;
 }
 /* diagrams of every loop: each loop's own dome, the loops told apart by dash */
 function genericDiagrams(src) {
@@ -6016,6 +7280,48 @@ function miniMulti(v, cfg = LV) {
       ${T(262, 106, 'split', 'lbl2', 'start')}</g>`;
     cap = a2 ? 'sCO₂ Brayton, architecture 2: the secondary stream (C1) preheats the main stream before C2, then heats the cooler air in HTHX 2 and rejoins before the turbine (T); the main stream heats the hotter air in HTHX 1 and gives heat back to the suction in the IHX; the LTHX takes heat from the source.'
       : 'sCO₂ Brayton, architecture 1: the secondary stream (C1) preheats the main stream before C2; C2 heats the air in the HTHX; the two streams rejoin, give heat back to the suction in the IHX and expand in the turbine (T); the LTHX takes heat from the source.';
+  } else if (v === 'E') {
+    const arr = ECON_ARR[(cfg.par || LV.par).E.arr] || 'flash', single = arr === 'single', par = arr === 'parallel', eco = arr === 'economiser';
+    H = 236;
+    body = `<g transform="translate(0 8)"><g style="color:var(--hp)">${hp(`M60 ${single ? 150 : 44} V22 H210`)}${ar(210, 22, 'r')}${hp('M290 22 H396 V60')}
+        ${single ? '' : hp('M60 150 V112')}${par ? `${hp('M190 92 V22')}${ar(190, 30, 'u')}` : ''}</g>
+      <g style="color:var(--lp)">${single ? lp('M396 76 V204 H330') : `${lp('M396 76 V96')}${ar(396, 96, 'd')}${lp(`M${eco ? 396 : 396} 132 V170`)}${lp('M396 186 V204 H330')}`}${ar(330, 204, 'l')}${lp('M270 204 H60 V182')}${ar(60, 182, 'u')}
+        ${single ? '' : `${lp(`M370 110 H${par ? 204 : 74}`)}${ar(par ? 204 : 74, 110, 'l')}${par ? '' : lp('M60 112 V76')}`}</g>
+      ${single ? comp(60, 166, 'C') : `${comp(60, 166, 'C1')}${comp(60, 60, 'C2')}`}${par ? comp(190, 108, 'C3') : ''}
+      ${box(210, 10, 80, 24, single ? 'Condenser' : 'Condenser')}${valve(396, 68)}${single ? '' : box(370, 96, 52, 36, eco ? 'Econ.' : 'Flash')}${valve(396, 178)}${box(270, 192, 60, 24, 'Evaporator')}
+      ${single || par ? '' : T(70, 106, 'mix', 'lbl2', 'start')}${single ? '' : T(300, 104, eco ? 'injection' : 'flash vapour', 'lbl2', 'middle')}
+      <path class="air" d="M300 -2 H200"/><g style="color:var(--ink-3)">${ar(200, -2, 'l')}</g>${T(304, 2, 'air', 'lbl2', 'start')}
+      <path class="wat" d="M330 222 H270"/><g style="color:var(--accent)">${ar(270, 222, 'l')}</g>${T(334, 226, 'source', 'lbl2', 'start')}</g>`;
+    cap = {flash: 'Flash tank: the condenser liquid flashes at the intermediate pressure; the flash vapour joins the low-stage (C1) discharge at the high-stage (C2) suction and the saturated liquid expands to the evaporator.',
+      economiser: 'Closed economiser: part of the condenser liquid expands to the intermediate pressure and evaporates against the rest (subcooling it); the vapour is injected at the high-stage (C2) suction.',
+      parallel: 'Parallel compression: the flash vapour has its own compressor (C3) to the high pressure; the low stage (C1) compresses the evaporator vapour straight to it.',
+      single: 'Single stage: one compressor, condenser, valve and evaporator, for comparison.'}[arr];
+  } else if (v === 'D') {
+    H = 250;
+    body = `<g transform="translate(0 20)"><g style="color:var(--hp)">${hp('M60 150 V110 H210')}${ar(210, 110, 'r')}${hp('M60 110 V76')}${hp('M60 44 V22 H210')}${ar(210, 22, 'r')}${hp('M290 22 H330 V98')}${ar(330, 98, 'd')}</g>
+      <g style="color:var(--lp)">${lp('M290 110 H396 V170')}${lp('M396 186 V204 H330')}${ar(330, 204, 'l')}${lp('M270 204 H60 V182')}${ar(60, 182, 'u')}</g>
+      ${comp(60, 166, 'C1')}${comp(60, 60, 'C2')}${box(210, 98, 80, 24, 'LP cond.')}${box(210, 10, 80, 24, 'HP cond.')}${valve(330, 60)}${valve(396, 178)}${box(270, 192, 60, 24, 'Evaporator')}
+      <path class="air" d="M250 134 V146 H170 V-6 H250 V10"/><g style="color:var(--ink-3)">${ar(250, 4, 'd')}</g>${T(254, 144, 'air in', 'lbl2', 'start')}${T(174, -10, 'air to the HP condenser', 'lbl2', 'start')}
+      <path class="wat" d="M330 222 H270"/><g style="color:var(--accent)">${ar(270, 222, 'l')}</g>${T(334, 226, 'source', 'lbl2', 'start')}</g>`;
+    cap = 'Dual-pressure condensation: C1 feeds the low-pressure condenser, which heats the air from the inlet; part of its discharge goes on through C2 to the high-pressure condenser, which heats the air to the target, and its liquid is throttled back into the low-pressure condenser.';
+  } else if (v === 'R') {
+    const n = (cfg.par || LV.par).R.n, w = 300 / n;
+    H = 170;
+    body = `${Array.from({length: n}, (_, k) => box(70 + k * w, 50, w - 20, 50, `Unit ${k + 1}`)).join('')}
+      <path class="air" d="M40 30 H410"/><g style="color:var(--ink-3)">${ar(410, 30, 'r')}</g>${T(40, 22, 'air in', 'lbl2', 'start')}${T(410, 22, 'to the dryer', 'lbl2', 'end')}
+      <path class="wat" d="M410 128 H40"/><g style="color:var(--accent)">${ar(40, 128, 'l')}</g>${T(410, 146, 'source (every unit\'s cold side)', 'lbl2', 'end')}
+      ${Array.from({length: n}, (_, k) => `<path class="ph" d="M${60 + (k + 0.5) * w} 50 V30"/><path class="pl" d="M${60 + (k + 0.5) * w} 100 V128"/>`).join('')}`;
+    cap = `Reverse-Stirling: ${n > 1 ? `${n} units in series on the air, each heating one band of it` : 'one unit heats the air'} at a hot side above the air it delivers, taking heat from the source at its cold side; each unit's COP is a fraction of its Carnot COP.`;
+  } else if (v === 'Y') {
+    H = 236;
+    body = `<g transform="translate(0 8)"><g style="color:var(--hp)">${hp('M60 150 V22 H220')}${ar(220, 22, 'r')}${hp('M150 160 V70 H220')}${ar(220, 70, 'r')}</g>
+      <g style="color:var(--lp)">${lp('M300 46 H396 V170')}${lp('M396 186 V204 H330')}${ar(330, 204, 'l')}${lp('M270 204 H230')}${ar(230, 204, 'l')}${lp('M190 204 H60 V182')}${ar(60, 182, 'u')}${lp('M190 204 H150 V176')}${ar(150, 176, 'u')}
+        <path class="pl" style="stroke-dasharray:3 3" d="M150 120 H74"/>${ar(74, 120, 'l')}</g>
+      ${comp(60, 166, 'C')}<circle class="eq" cx="150" cy="168" r="10"/>${T(150, 172, 'P')}${box(220, 10, 80, 72, 'Absorber')}${valve(396, 178)}${box(270, 192, 60, 24, 'Desorber')}${box(190, 192, 40, 24, 'Sep.')}
+      ${T(152, 116, 'wet', 'lbl2', 'start')}${T(66, 196, 'vapour', 'lbl2', 'start')}${T(160, 186, 'lean liquid', 'lbl2', 'start')}
+      <path class="air" d="M340 -4 H230"/><g style="color:var(--ink-3)">${ar(230, -4, 'l')}</g>${T(344, 0, 'air', 'lbl2', 'start')}
+      <path class="wat" d="M330 222 H270"/><g style="color:var(--accent)">${ar(270, 222, 'l')}</g>${T(334, 226, 'source', 'lbl2', 'start')}</g>`;
+    cap = 'Ammonia–water hybrid: the solution boils partly in the desorber on the source; the separator sends the ammonia-rich vapour to the compressor (C, with lean liquid injected to hold the discharge limit) and the lean liquid to the pump (P); both are absorbed again in the absorber, which heats the air, and the solution returns through the valve.';
   } else {
     body = `<g style="color:var(--hp)">${hp('M60 150 V140 H170')}${ar(170, 140, 'r')}${hp('M230 140 H300')}${ar(300, 140, 'r')}${hp('M360 140 H396 V170')}</g>
       <g style="color:var(--lp)">${lp('M396 186 V204 H330')}${ar(330, 204, 'l')}${lp('M270 204 H60 V182')}${ar(60, 182, 'u')}</g>
@@ -6036,12 +7342,14 @@ const FULL_NAME = {
   A: 'Recuperative heat pump A (RHX1 on the stage-1 suction)', B: 'Recuperative heat pump B (RHX2 on the interstage gas, with IHX)',
   C: 'Recuperative heat pump C (RHX1 and RHX2)', S: 'Split-stream heat pump (SLTHP: RHX1 parallel to the LT gas cooler)',
   K: 'Transcritical–transcritical cascade heat pump (Kong et al.)', N: 'cascade heat pump (Hoang et al.)', M: 'Heat pump with MVR steam', X: 'Supercritical CO₂ reverse Brayton heat pump (Dalal et al.)',
+  E: 'Two-stage heat pump', D: 'Dual-pressure condensation heat pump (Dai et al.)', R: 'Reverse-Stirling heat pump units (semi-empirical)', Y: 'Ammonia–water hybrid absorption–compression heat pump',
 };
+const ECON_NAME = {flash: 'with a flash tank', economiser: 'with a closed economiser (vapour injection)', parallel: 'with parallel compression', single: 'single stage, for comparison'};
 function lvTitle() {
   const c = LIVE.cfg && LIVE.cfg.cyc === LV.cyc ? LIVE.cfg : LV, v = c.cyc;
-  const name = v === 'N' ? `${c.par.N.n}-level ${FULL_NAME.N}` : v === 'H' ? FULL_NAME['H' + (c.stagesH || 1)] + (c.ihxH ? ' with IHX' : '') : FULL_NAME[v];
+  const name = v === 'N' ? `${c.par.N.n}-level ${FULL_NAME.N}` : v === 'E' ? `${FULL_NAME.E} ${ECON_NAME[ECON_ARR[c.par.E.arr] || 'flash']}` : v === 'R' ? `Reverse-Stirling heat pump, ${c.par.R.n > 1 ? `${c.par.R.n} units in series` : 'one unit'} (semi-empirical)` : v === 'H' ? FULL_NAME['H' + (c.stagesH || 1)] + (c.ihxH ? ' with IHX' : '') : FULL_NAME[v];
   const nameOut = v === 'A' && stagesOf(c) === 1 ? name.replace('stage-1 suction', 'suction') + ', single stage' : name;
-  const fl = MULTI(v) ? loopNames(v).map((n, i) => `${n.toLowerCase()} ${fluidLabel({comps: c.multi[v][i], basis: c.basis})}`).join(', ') + (v === 'M' ? ', steam (water)' : '')
+  const fl = MULTI(v) ? loopNames(v).map((n, i) => `${n.toLowerCase()} ${loopFluidText(c, v, i)}`).join(', ') + (v === 'M' ? ', steam (water)' : '')
     : fluidLabel({comps: c.mainComps || c.comps, basis: c.basis}) + ((c.mainComps || c.comps).filter(x => x[1] > 0).length > 1 && c.basis !== 'mole' ? ' (mass)' : '');
   $('lvTitle').innerHTML = `${nameOut}: <span>${fl}</span>`;
 }
@@ -6062,7 +7370,7 @@ const PAGE_URL = typeof location !== "undefined" && /(\.github\.io|^localhost|^1
 const LOCAL_KEY = "dryer-cases-local";
 const CASE_KEYS = ["cyc", "mainComps", "basis", "multi", "par", "compModel", "etaC", "motor", "prMax", "T", "Tain", "RH", "Tmt", "phi",
   "a", "Ts", "Two", "lift", "lift2", "split", "liftS", "share", "alpha", "stagesH", "stagesA", "stagesS", "ihxH", "fanModel", "fanEta", "fanPR", "fanSh", "fanMotor", "src", "srcT", "srcM", "srcW", "srcHum", "srcRH", "srcDew", "airHum", "airWg", "airDew", "Patm", "dTs", "srcWm", "srcMw", "expn", "etaX", "pmax"];
-const CYC_SHORT = { H: "Conventional", A: "RHP-A", B: "RHP-B", C: "RHP-C", S: "SLTHP", K: "TT cascade", N: "n-cascade", M: "HP + MVR", X: "sCO2 Brayton" };
+const CYC_SHORT = { H: "Conventional", A: "RHP-A", B: "RHP-B", C: "RHP-C", S: "SLTHP", K: "TT cascade", N: "n-cascade", M: "HP + MVR", X: "sCO2 Brayton", E: "Flash / economiser", D: "Dual-pressure", R: "Stirling", Y: "NH3-H2O hybrid" };
 // numeric inputs: [key, lo, hi]
 const CASE_NUM = [["compModel", 1, 5], ["etaC", 0.5, 1], ["motor", 0.8, 1], ["prMax", 5, 50], ["T", 100, 220], ["Tain", 0, 40], ["RH", 0, 100],
   ["Tmt", 30, 200], ["phi", 0, 2], ["a", 0, 40], ["Ts", 0, 80], ["Two", 0, 80], ["lift", 0, 140], ["lift2", 0, 140], ["split", 0.3, 0.7],
@@ -6159,6 +7467,8 @@ function cleanInputs(raw) {           // anything from the store or a link is un
     }
   }
   o.par.N.n = Math.min(4, Math.max(2, Math.round(o.par.N.n))); o.par.M.n_mvr = Math.min(20, Math.max(1, Math.round(o.par.M.n_mvr))); o.par.M.split = o.par.M.split.map(v => Math.min(1, Math.max(0, v)));
+  o.par.E.arr = Math.min(3, Math.max(0, Math.round(o.par.E.arr))); o.par.R.n = Math.min(4, Math.max(1, Math.round(o.par.R.n)));
+  o.par.Y.w_rich = Math.min(0.95, Math.max(0.05, o.par.Y.w_rich)); o.par.Y.q_des = Math.min(0.95, Math.max(0.02, o.par.Y.q_des));
   const out = {}; for (const k of CASE_KEYS) out[k] = o[k];
   out.size = cleanSize(raw.size);
   return out;
@@ -6176,10 +7486,12 @@ function caseFluids(i) {
   if (i.cyc === "K") return `${lab(i.multi.K[0])} / ${lab(i.multi.K[1])}`;
   if (i.cyc === "N") return i.multi.N.slice(0, i.par.N.n).map(lab).join(" / ");
   if (i.cyc === "M") return `${lab(i.multi.M[0])} + steam`;
-  if (i.cyc === "X") return lab(i.multi.X[0]);
+  if (i.cyc === "X" || i.cyc === "E" || i.cyc === "D") return lab(i.multi[i.cyc][0]);
+  if (i.cyc === "Y") return `NH3-H2O ${fixed(100 * i.par.Y.w_rich, 1)} %`;
+  if (i.cyc === "R") return "helium";
   return lab(i.mainComps);
 }
-const designText = i => designText0(i) + (i.expn === "exp" && i.cyc !== "X" ? ` · expander ηis ${fixed(i.etaX, 2)}` : "");
+const designText = i => designText0(i) + (i.expn === "exp" && !["X", "E", "D", "R", "Y"].includes(i.cyc) ? ` · expander ηis ${fixed(i.etaX, 2)}` : "");
 function designText0(i) {
   const p = i.par;
   switch (i.cyc) {
@@ -6191,6 +7503,10 @@ function designText0(i) {
     case "K": return `${p.K.P_b}/${p.K.P_t} bar · r ${p.K.r} · evap ${p.K.T_ev_b}/${p.K.T_ev_t} °C`;
     case "N": return `condensing ${p.N.T_cond.slice(0, p.N.n - 1).join("/")} °C`;
     case "X": return `arch ${p.X.arch} · ${p.X.P_L}/${p.X.P_H_min ? "lowest" : p.X.P_H} bar · split ${fixed(p.X.x, 2)}`;
+    case "E": return `${["flash tank", "economiser", "parallel", "single stage"][p.E.arr] || "flash tank"}${p.E.arr === 3 ? "" : ` · intermediate ${p.E.T_int_auto ? "geometric mean" : `${p.E.T_int} °C`}`}`;
+    case "D": return `low condensing ${p.D.T_cond_low} °C`;
+    case "R": return `${p.R.n} unit${p.R.n > 1 ? "s" : ""} · Carnot fraction ${fixed(p.R.eta_carnot, 2)}${p.R.n > 1 ? ` · air ${p.R.bounds_auto ? "equal steps" : p.R.bounds.slice(0, p.R.n - 1).join("/") + " °C"}` : ""}`;
+    case "Y": return `w ${fixed(p.Y.w_rich, 3)} · degassing ${fixed(p.Y.q_des, 3)} · ${p.Y.wet ? "wet" : "dry"} compression`;
     case "M": return `bottom ${p.M.T_cond} °C · ${p.M.n_mvr} MVR stages · split ${p.M.split_fill ? "auto" : p.M.split.slice(0, Math.max(0, p.M.n_mvr - 1)).map(v => fixed(v, 2)).join("/") || "–"}`;
   }
   return "";
@@ -6202,7 +7518,7 @@ function summarize(r, i) {
   const multi = MULTI(i.cyc), p = r.report || {};
   const o = multi ? {
     ok: true, COP: r.COP, VHC: r.VHC, Pmax: r.Pmax_bar, Tdis: r.T_dis_max, qair: r.q_air, wel: r.w_shaft / (i.motor || 0.93),
-    Psuc: i.cyc === "X" ? p.P_L_bar : i.cyc === "K" ? Math.min(p.P_evap_bot_bar, p.P_evap_top_bar) : i.cyc === "N" ? (p.levels && p.levels[0] ? p.levels[0].Pe_bar : null) : p.P_evap_bar,
+    Psuc: i.cyc === "X" ? p.P_L_bar : i.cyc === "Y" ? p.P_low_bar : i.cyc === "K" ? Math.min(p.P_evap_bot_bar, p.P_evap_top_bar) : i.cyc === "N" ? (p.levels && p.levels[0] ? p.levels[0].Pe_bar : null) : p.P_evap_bar,
   } : {
     ok: true, COP: r.COP, VHC: p.VHC, Pmax: p.Pmax_bar, Psuc: p.P_evap_bar, Tdis: p.T_comp_discharge, qair: p.q_air_kJkg, wel: p.w_el_kJkg,
   };
