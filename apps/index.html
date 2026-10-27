@@ -63,6 +63,7 @@ dd{margin:0;font-family:var(--f-data);font-size:13px;font-variant-numeric:tabula
 .band.hot{background:var(--hot)}
 .band.steam{background:var(--steam)}
 .span{position:absolute;top:50%;height:2px;background:var(--ink-3);transform:translateY(-50%)}
+.span.hot{height:3px;background:var(--hot)}
 .ticks{position:relative;height:14px;font-family:var(--f-data);font-size:10.5px;color:var(--ink-3)}
 .ticks span{position:absolute;transform:translateX(-50%)}
 .ticks span:first-child{transform:none}
@@ -99,12 +100,12 @@ footer p{margin:0;max-width:75ch}
         <div class="kind">Live model</div>
         <h3>Steam-generating heat pump</h3>
         <p>Single-stage cycle with an internal heat exchanger and a hot-water subcooler. The condenser raises steam from bled hot water. Set the source, steam and hot-water temperatures, the refrigerant mix and compressor speed, and the cycle re-solves with CoolProp. Save cases, compare up to four side by side, and run sweeps.</p>
-        <div class="lift" role="img" aria-label="Heat source 20 to 80 °C, steam 90 to 140 °C, hot water 80 to 95 °C">
-          <div class="lift-label">Source 20–80 °C → steam 90–140 °C, hot water 80→95 °C</div>
+        <div class="lift" role="img" aria-label="Heat source 20 to 80 °C, steam 90 to 140 °C, hot water between 20 and 135 °C">
+          <div class="lift-label">Source 20–80 °C → steam 90–140 °C, hot water 20–135 °C</div>
           <div class="bar">
             <div class="band cold" style="left:9.09%;width:27.27%"></div>
-            <div class="band hot" style="left:36.36%;width:6.82%;opacity:.75"></div>
             <div class="band steam" style="left:40.91%;width:22.73%"></div>
+            <div class="span hot" style="left:9.09%;width:52.27%"></div>
           </div>
           <div class="ticks"><span style="left:0">0</span><span style="left:22.73%">50</span><span style="left:45.45%">100</span><span style="left:68.18%">150</span><span style="left:100%">220 °C</span></div>
         </div>
@@ -130,11 +131,11 @@ footer p{margin:0;max-width:75ch}
         <div class="kind">Live model · study</div>
         <h3>Advanced dryer heat pumps</h3>
         <p>Design and compare heat pumps that heat drying air: the recuperative and split-stream cycles, CO₂ and n-level cascades, a heat pump with MVR steam and an sCO₂ reverse Brayton cycle, solved live with CoolProp. A study mode shows the results of the REFPROP design study.</p>
-        <div class="lift" role="img" aria-label="Source 40 °C, water or air; air heated from 15 to 100–220 °C">
-          <div class="lift-label">Source 40 °C (water or air) → air 15→100–220 °C</div>
+        <div class="lift" role="img" aria-label="Source water 0 to 80 °C or source air up to 100 °C; air heated from an inlet of 0 to 40 °C to 100–220 °C">
+          <div class="lift-label">Source water 0–80 °C or air to 100 °C → air 0–40 → 100–220 °C</div>
           <div class="bar">
-            <div class="band cold" style="left:17.73%;width:1.2%"></div>
-            <div class="span" style="left:6.82%;width:38.64%"></div>
+            <div class="band cold" style="left:0;width:36.36%"></div>
+            <div class="span" style="left:0;width:45.45%"></div>
             <div class="band hot" style="left:45.45%;width:54.55%"></div>
           </div>
           <div class="ticks"><span style="left:0">0</span><span style="left:22.73%">50</span><span style="left:45.45%">100</span><span style="left:68.18%">150</span><span style="left:100%">220 °C</span></div>
