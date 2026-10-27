@@ -354,6 +354,36 @@ def stage(fl: Fluid, P_in: float, st: dict, P_out: float, eta: float | None = No
     return {"w": w, "eta": e, "out": fl.PH(P_out, st["h"] + w), "pr": P_out / P_in}
 
 
+def dry_superheat(fl: Fluid, P_in: float, T_sat: float, P_out: float, sh_min: float, model: int = 5,
+                  eta_const: float = 0.7 / 0.96, margin: float = 5.0) -> float:
+    """Smallest suction superheat (K, at least sh_min) whose compression from saturation at P_in (T_sat) to P_out
+    discharges ``margin`` K above the dew point at P_out: overhanging fluids compress wet from near saturation."""
+    supercritical = math.isfinite(fl.P_crit) and P_out >= fl.P_crit
+    dew_out = -math.inf if supercritical else fl.PQ(P_out, 1.0)["T"]
+
+    def dry(sh):
+        return stage(fl, P_in, fl.PT(P_in, T_sat + sh), P_out, None, model, eta_const)["out"]["T"] - dew_out - margin
+
+    sh = max(sh_min, 0.5)
+    if dry(sh) >= 0:
+        return sh
+    hi = sh
+    while dry(hi) < 0 and hi < 120:
+        hi += 10
+    if dry(hi) < 0:
+        raise ValueError(f"{fl.fluid} cannot compress dry from {T_sat:.0f} C (raise the superheat or change the fluid)")
+    lo = sh
+    for _ in range(30):
+        if hi - lo <= 0.05:
+            break
+        m = (lo + hi) / 2
+        if dry(m) >= 0:
+            hi = m
+        else:
+            lo = m
+    return hi
+
+
 def expand_to(fl: Fluid, P_in: float, h_in: float, P_out: float, eta: float | None) -> float:
     """Outlet enthalpy from the high side: an isenthalpic valve (eta None or 0) or an expander of isentropic
     efficiency ``eta``."""

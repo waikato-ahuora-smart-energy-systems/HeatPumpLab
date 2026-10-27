@@ -47,6 +47,7 @@ from ..common.dryer import (
     compass_search,
     cooler_outlet,
     dry_air,
+    dry_superheat,
     humid_air,
     iso_path,
     js_round,
@@ -132,36 +133,7 @@ class EconomiserHeatPump:
         return sh, fl.PT(Pe, Te + sh), stage(fl, Pe, fl.PT(Pe, Te + sh), P_out, None, c.comp_model, c.eta_const)
 
     def _dry_superheat(self, c, P_in, T_sat, P_out, sh_min):
-        """Smallest suction superheat (at least sh_min) whose compression from P_in to P_out discharges 5 K above
-        the dew point (overhanging fluids compress wet from near saturation)."""
-        fl = self.fluid
-        dew_out = fl.PQ(P_out, 1.0)["T"] if not (math.isfinite(fl.P_crit) and P_out >= fl.P_crit) else -math.inf
-
-        def comp(sh):
-            return stage(fl, P_in, fl.PT(P_in, T_sat + sh), P_out, None, c.comp_model, c.eta_const)
-
-        def dry(sh):
-            return comp(sh)["out"]["T"] - dew_out - 5.0
-
-        sh = max(sh_min, 0.5)
-        if dry(sh) < 0:
-            hi = sh
-            while dry(hi) < 0 and hi < 120:
-                hi += 10
-            if dry(hi) < 0:
-                raise ValueError(f"{fl.fluid} cannot compress dry from {T_sat:.0f} C (raise the superheat or change the "
-                                 "fluid)")
-            lo = sh
-            for _ in range(30):
-                if hi - lo <= 0.05:
-                    break
-                m = (lo + hi) / 2
-                if dry(m) >= 0:
-                    hi = m
-                else:
-                    lo = m
-            sh = hi
-        return sh
+        return dry_superheat(self.fluid, P_in, T_sat, P_out, sh_min, c.comp_model, c.eta_const)
 
     def _cycle(self, c: EconomiserConfig, P_H: float, Pe: float, Te: float, P_i: float | None) -> dict:
         """All states at a high pressure P_H (raises ValueError when the air cannot be heated to the target)."""
