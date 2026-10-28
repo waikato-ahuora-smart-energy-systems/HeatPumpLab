@@ -53,5 +53,15 @@ def test_infeasible_designs_fail_with_a_reason(hp):
     assert not near_source.success and "above the evaporating temperature" in near_source.message
     supercrit = hp.solve(T_cond_low=260.0)
     assert not supercrit.success and "critical temperature" in supercrit.message
-    too_low = hp.solve(T_cond_low=80.0)
-    assert not too_low.success
+    hot_inlet = hp.solve(T_cond_low=110.0, T_air_inlet=95.0)
+    assert not hot_inlet.success and "too close to the air inlet" in hot_inlet.message
+
+
+def test_low_condensing_temperature_well_below_the_target(hp):
+    """A low condenser at 80 C still balances (most of the flow goes on to the high stage): the split is solved by
+    a bracketed root, where the old damped iteration stopped at its first overshoot."""
+    r = hp.solve(T_cond_low=80.0)
+    assert r.success, r.message
+    rp = r.report
+    assert 0.75 < rp["split_high"] < 0.9 and abs(rp["balance"]) < 1e-6
+    assert min(rp["gap_low"], rp["gap_high"]) >= 20.0 - 0.06

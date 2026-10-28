@@ -3,7 +3,7 @@
 An interactive page for designing and comparing heat pumps that heat drying air. Its "Live
 design" mode solves the recuperative heat pump (RHP-A), split-stream heat pump (SLTHP) and
 other cycles in the browser: cascades, HP + MVR, sCO₂ Brayton, a two-stage cycle with a flash
-tank, economiser or parallel compression, dual-pressure condensation, reverse-Stirling units and
+tank, economiser or parallel compression, multi-pressure condensation (2–5 pressures), reverse-Stirling units and
 an ammonia–water hybrid (absorption–compression) heat pump. The models are ported from
 HeatPumpLab, plus published cycles (Kong et al., Hoang et al., Dalal et al.). Fluid properties
 come from CoolProp compiled to WebAssembly; the ammonia–water mixture, which CoolProp lacks, uses

@@ -32,7 +32,7 @@ const PAR_DEF = {
   M: {T_cond: 90, dT_sg: 5, n_mvr: 9, inject: true, sub_air: true, ihx: false, dT_ihx: 5, split_fill: false, split: Array(19).fill(0)},
   X: {arch: 1, P_L: 80, P_H: 165, P_H_min: false, x: 0.37, eps_ihx: 0.85, eps_pre: 0.85, eps_lthx: 0.85, eta_c: 0.85, eta_t: 0.85, eta_m: 0.99, dP_hp: 50, dP_lp: 10, Pmax: 300},
   E: {arr: 0, T_int_auto: true, T_int: 100, dT_econ: 5, superheat_inj: 5, superheat: 5, Pmax: 60},
-  D: {T_cond_low: 110, superheat: 5, Pmax: 60},
+  D: {n: 3, T_cond_auto: true, T_cond: [85, 120, 145, 160], superheat: 5, Pmax: 60},
   R: {n: 1, bounds_auto: true, bounds: [60, 100, 140], eta_carnot: 0.37, dT_hot: 20, dT_cold: 5},
   Y: {w_rich: 0.5, q_des: 0.4, Pmax: 50, T_dis_max: 170, wet: true, limit_dis: false, eta_pump: 0.6},
 };
@@ -294,7 +294,7 @@ function renderLiveControls() {
   for (const e of [$('lvComps'), $('lvAdd').parentElement]) e.hidden = NOFLUID(LV.cyc);
   if (mu) lvSeg('lvLoop', loopNames(LV.cyc).map((n, i) => [i, n]), LV.loopSel[LV.cyc], i => { LV.loopSel[LV.cyc] = i; openPicker = -1; renderLiveControls(); });
   $('lvLoopHint').textContent = LV.cyc === 'R' ? 'Stirling units run on helium; the model does not need its properties.' : LV.cyc === 'Y' ? 'The hybrid cycle runs on an ammonia–water solution (IAPWS G4-01 properties, solved in the page); set its ammonia fraction under Design.' : 'The HP + MVR cycle\'s steam loop is water.';
-  lvSeg('lvCyc', [['H', 'Conventional'], ['A', 'RHP-A'], ['B', 'RHP-B'], ['C', 'RHP-C'], ['S', 'SLTHP'], ['K', 'TT cascade'], ['N', 'n-cascade'], ['M', 'HP + MVR'], ['X', 'sCO₂ Brayton'], ['E', 'Flash / economiser'], ['D', 'Dual-pressure'], ['Y', 'NH₃–H₂O hybrid'], ['R', 'Stirling']], LV.cyc, v => { LV.cyc = v; renderLiveControls(); changed(); });
+  lvSeg('lvCyc', [['H', 'Conventional'], ['A', 'RHP-A'], ['B', 'RHP-B'], ['C', 'RHP-C'], ['S', 'SLTHP'], ['K', 'TT cascade'], ['N', 'n-cascade'], ['M', 'HP + MVR'], ['X', 'sCO₂ Brayton'], ['E', 'Flash / economiser'], ['D', 'n-pressure'], ['Y', 'NH₃–H₂O hybrid'], ['R', 'Stirling']], LV.cyc, v => { LV.cyc = v; renderLiveControls(); changed(); });
   $('lvMini').innerHTML = RHP(LV.cyc) ? miniRHP(LV.cyc, stagesOf(LV)) : mu ? miniMulti(LV.cyc) : miniSchematic(LV.cyc);
   compRows();
   for (const b of document.querySelectorAll('.tbtn[data-basis]')) b.setAttribute('aria-pressed', String(b.dataset.basis === LV.basis));
@@ -1111,9 +1111,9 @@ function miniConv(stages, ihx) {
 }
 
 /* ================================================================== multi-loop cycles: TT cascade, n-cascade, HP + MVR */
-const MULTI_NAME = {K: 'TT cascade', N: 'n-cascade', M: 'HP + MVR', X: 'sCO₂ Brayton', E: 'Flash / economiser', D: 'Dual-pressure', R: 'Stirling', Y: 'NH₃–H₂O hybrid'};
+const MULTI_NAME = {K: 'TT cascade', N: 'n-cascade', M: 'HP + MVR', X: 'sCO₂ Brayton', E: 'Flash / economiser', D: 'n-pressure', R: 'Stirling', Y: 'NH₃–H₂O hybrid'};
 const MULTI_TITLE = {K: 'Transcritical–transcritical cascade (Kong et al.)', N: 'n-level cascade (Hoang et al.)', M: 'HP + MVR: heat pump and MVR steam', X: 'sCO₂ reverse Brayton (Dalal et al.)',
-  E: 'Two-stage heat pump: flash tank, economiser or parallel compression', D: 'Dual-pressure condensation (Dai et al.)', R: 'Reverse-Stirling units (semi-empirical)', Y: 'Ammonia–water hybrid absorption–compression (Osenbrück)'};
+  E: 'Two-stage heat pump: flash tank, economiser or parallel compression', D: 'Multi-pressure condensation (after Dai et al.)', R: 'Reverse-Stirling units (semi-empirical)', Y: 'Ammonia–water hybrid absorption–compression (Osenbrück)'};
 function renderMultiFields() {
   const c = LV.cyc, p = LV.par[c], box = $('lvDesX');
   const num = (key, lab, step, title = '', idx = null) => {
@@ -1161,10 +1161,13 @@ function renderMultiFields() {
         parallel: 'Parallel compression: as the flash tank, but the flash vapour has its own compressor to the high pressure and the low stage compresses straight to it.',
         single: 'Single stage, for comparison: one compressor and one valve.'}[arr]} The high pressure is the lowest that heats the air to the target with the approach (subcritical or transcritical, from the fluid). After Arpagaus et al. (2018) and Adamson et al. (2022).</p>`;
   } else if (c === 'D') {
-    h = `<div class="fields">${num('T_cond_low', 'Low condensing, °C', 'any', 'Saturation (dew) temperature in the low-pressure condenser; Optimise sets it')}${num('superheat', 'Min suction superheat, K', 'any', 'Raised where an overhanging fluid needs more for a discharge 5 K above the dew point')}</div>
-      <div class="row optrow">${num('Pmax', 'Max pressure, bar', 'any', 'Highest high-side pressure searched')}${optBtn()}</div>
-      <p class="hint">Optimise sets the low condensing temperature for the highest COP.</p>
-      <p class="hint">The low-stage compressor feeds the low-pressure condenser, which heats the air from the inlet; part of its discharge goes on through the high-stage compressor to the high-pressure condenser, which heats the air to the target, and its liquid is throttled back into the low-pressure condenser. The split follows from the air balance and the air between the condensers is the hottest the low-pressure condenser allows. After Dai et al. (2020).</p>`;
+    h = `<div class="pickrow"><span class="lab">Condensing pressures</span><div class="seg" id="lvDn"></div></div>
+      <div class="row">${chk('T_cond_auto', 'lower condensing temperatures in equal steps from the evaporator to the air target')}</div>
+      <div class="fields">${p.T_cond_auto ? '' : Array.from({length: p.n - 1}, (_, k) => num('T_cond', `Condensing ${k + 1}, °C`, 'any', k ? '' : 'Saturation (dew) temperatures of the lower pressures, rising; Optimise sets them', k)).join('')}
+      ${num('superheat', 'Min suction superheat, K', 'any', 'Raised where an overhanging fluid needs more for a discharge 5 K above the dew point')}</div>
+      <div class="row optrow">${num('Pmax', 'Max pressure, bar', 'any', 'Highest top pressure searched')}${optBtn()}</div>
+      <p class="hint">Optimise sets the lower condensing temperatures for the highest COP.</p>
+      <p class="hint">Compressor 1 feeds condenser 1, which heats the air from the inlet; at each pressure part of the flow goes on through the next compressor to the next condenser, up to the top one, which heats the air to the target. Each condenser's liquid is throttled into the one below. The flows follow from the air balances, the air between condensers is the hottest the condensers allow, and the top pressure is the lowest that reaches the target. Two pressures is the dual-pressure cycle of Dai et al. (2020).</p>`;
   } else if (c === 'R') {
     h = `<div class="pickrow"><span class="lab">Units in series</span><div class="seg" id="lvRn"></div></div>
       ${p.n > 1 ? `<div class="row">${chk('bounds_auto', 'equal air temperature steps between the units')}</div>` : ''}
@@ -1195,13 +1198,14 @@ function renderMultiFields() {
     if (inp.type !== 'checkbox' && !isFinite(v)) return;
     if (i == null) p[k] = v; else p[k][+i] = k === 'split' ? Math.min(Math.max(v, 0), 1) : v;
     if (LIVE.optMsg) LIVE.optMsg[c] = '';
-    if (inp.type === 'checkbox') { if ((k === 'ihx' && c === 'M') || ['T_int_auto', 'bounds_auto', 'wet'].includes(k)) renderMultiFields(); $('lvMini').innerHTML = miniMulti(LV.cyc); }   // the schematic shows the options
+    if (inp.type === 'checkbox') { if ((k === 'ihx' && c === 'M') || ['T_int_auto', 'bounds_auto', 'wet', 'T_cond_auto'].includes(k)) renderMultiFields(); $('lvMini').innerHTML = miniMulti(LV.cyc); }   // the schematic shows the options
     changed();
   });
   const ob = $('lvOpt'); if (ob) ob.addEventListener('click', () => optimise(c));
   if (c === 'M') lvSeg('lvSplitMode', [[false, 'Manual'], [true, 'Auto (to the approach)']], !!p.split_fill, v => { p.split_fill = v; renderLiveControls(); changed(); });
   if (c === 'X') lvSeg('lvXarch', [[1, '1: split + preheater'], [2, '2: with split-stream HTHXs']], +p.arch === 2 ? 2 : 1, v => { p.arch = v; renderLiveControls(); changed(); });
   if (c === 'E') lvSeg('lvEarr', [[0, 'Flash tank'], [1, 'Economiser'], [2, 'Parallel'], [3, 'Single stage']], +p.arr || 0, v => { p.arr = v; if (LIVE.optMsg) LIVE.optMsg.E = ''; renderLiveControls(); changed(); });
+  if (c === 'D') lvSeg('lvDn', [[2, '2'], [3, '3'], [4, '4'], [5, '5']], p.n, v => { p.n = v; if (LIVE.optMsg) LIVE.optMsg.D = ''; renderLiveControls(); changed(); });
   if (c === 'R') lvSeg('lvRn', [[1, '1'], [2, '2'], [3, '3'], [4, '4']], p.n, v => { p.n = v; if (LIVE.optMsg) LIVE.optMsg.R = ''; renderLiveControls(); changed(); });
 }
 /* HP + MVR: after each fan but the last, the fraction of its exhaust that goes to the process (condensing into the
@@ -1264,8 +1268,8 @@ function optimise(c) {
       gen = DRYMORE.economiserOptimiseSteps(fl, LIVE.air, {...base, ...econCfg(p)});
       apply = (o, P) => { if (o.T_int != null) { P.T_int = +(+o.T_int).toFixed(1); P.T_int_auto = false; } return [o.atBound && 'intermediate temperature']; };
     } else {
-      gen = DRYMORE.dualPressureOptimiseSteps(fl, LIVE.air, {...base, ...dualCfg(p)});
-      apply = (o, P) => { P.T_cond_low = +(+o.T_cond_low).toFixed(1); return [o.atBound && 'low condensing temperature']; };
+      gen = DRYMORE.multiPressureOptimiseSteps(fl, LIVE.air, {...base, ...multiCfg(p)});
+      apply = (o, P) => { o.T_cond.forEach((v, k) => { P.T_cond[k] = +(+v).toFixed(1); }); P.T_cond_auto = false; return o.atBound.map((b, k) => b && `condensing ${k + 1}`); };
     }
   } else if (c === 'R') {
     gen = DRYMORE.stirlingOptimiseSteps(LIVE.air, {...base, ...stirCfg(p)});
@@ -1311,7 +1315,7 @@ function fluidFor(list, basis) {
 const braytonCfg = p => ({...p, P_L: p.P_L / 10, P_H: p.P_H / 10, Pmax: p.Pmax / 10, dP_hp: p.dP_hp / 1000, dP_lp: p.dP_lp / 1000});
 // the new cycles' design inputs (dryer_more.js) from the page's
 const econCfg = p => ({arrangement: ECON_ARR[p.arr] || 'flash', T_int: p.T_int_auto ? null : +p.T_int, dT_econ: +p.dT_econ, superheat_inj: +p.superheat_inj, superheat: +p.superheat, P_max_bar: +p.Pmax});
-const dualCfg = p => ({T_cond_low: +p.T_cond_low, superheat: +p.superheat, P_max_bar: +p.Pmax});
+const multiCfg = p => ({n_pressures: p.n, T_cond: p.T_cond_auto ? null : p.T_cond.slice(0, p.n - 1).map(Number), superheat: +p.superheat, P_max_bar: +p.Pmax});
 const stirCfg = p => ({n_units: p.n, boundaries: p.n > 1 && !p.bounds_auto ? p.bounds.slice(0, p.n - 1).map(Number) : null, eta_carnot: +p.eta_carnot, dT_hot: +p.dT_hot, dT_cold: +p.dT_cold});
 const hybCfg = p => ({w_rich: +p.w_rich, q_des: +p.q_des, P_max_bar: +p.Pmax, T_dis_max: +p.T_dis_max, wet_compression: !!p.wet, limit_discharge: !p.wet && !!p.limit_dis, eta_pump: +p.eta_pump});
 const ttAir = cfg => ({air_ratio: secOn(cfg) ? +cfg.phi : 0, T_mt: secOn(cfg) ? +cfg.Tmt : (cfg.Tain + cfg.T) / 2});
@@ -1324,7 +1328,7 @@ function solveMulti(cfg) {
   else if (c === 'N') r = DRYCASC.cascade(fls, LIVE.air, {...base, ...p});
   else if (c === 'X') r = DRYCASC.brayton(fls[0], LIVE.air, {...base, ...braytonCfg(p), q_lthx_max: cfg._qcap, _quick: cfg._qcap != null});   // the source-limit search skips the lowest-pressure search on failures
   else if (c === 'E') r = DRYMORE.economiser(fls[0], LIVE.air, {...base, ...econCfg(p)});
-  else if (c === 'D') r = DRYMORE.dualPressure(fls[0], LIVE.air, {...base, ...dualCfg(p)});
+  else if (c === 'D') r = DRYMORE.multiPressure(fls[0], LIVE.air, {...base, ...multiCfg(p)});
   else if (c === 'R') r = DRYMORE.stirling(LIVE.air, {...base, ...stirCfg(p)});
   else if (c === 'Y') r = DRYMORE.hybrid(LIVE.air, {...base, ...hybCfg(p)});
   else r = DRYCASC.booster(fls[0], fluidFor([['Water', 100]], 'mass'), LIVE.air, {...base, ...p, ...fanCfg(cfg)});
@@ -1386,10 +1390,10 @@ function renderLiveMulti() {
     ...(p.arrangement === 'single' ? [] : [fig(p.arrangement === 'economiser' ? 'Injected' : 'Flash vapour', (100 * p.flows.injected).toFixed(1), '%', `of the high-pressure flow · ${(100 * p.flows.low).toFixed(1)} % through the evaporator`)]),
     fig('Condenser', p.gap_air.toFixed(1), 'K', `air approach · suction superheat ${p.superheat.toFixed(1)} K`));
   else if (c.cyc === 'D') cells.push(
-    fig('Pressures', `${p.P_evap_bar.toFixed(2)} → ${p.P_low_cond_bar.toFixed(1)} → ${p.P_high_bar.toFixed(1)}`, 'bar', `evaporating ${p.T_evap.toFixed(1)} °C · low condensing ${p.T_cond_low.toFixed(1)} °C${p.supercritical ? ' · high side transcritical' : ''}`),
-    fig('Air between condensers', p.T_mid.toFixed(1), '°C', `low-pressure condenser ${(100 * p.q_air_low / p.q_air).toFixed(0)} % of the heat`),
-    fig('High-stage flow', p.split_high.toFixed(3), 'kg/kg', `of the evaporator flow · discharge ${p.T_dis_low.toFixed(0)} / ${p.T_dis_high.toFixed(0)} °C`),
-    fig('Air approaches', `${p.gap_low.toFixed(1)} / ${p.gap_high.toFixed(1)}`, 'K', 'low / high-pressure condenser'));
+    fig('Pressures', [p.P_evap_bar.toFixed(2), ...p.P_cond_bar.map(v => v.toFixed(1))].join(' → '), 'bar', `evaporating ${p.T_evap.toFixed(1)} °C · condensing ${p.T_cond.map(v => v.toFixed(1)).join(' / ')} °C${p.supercritical ? ' · top transcritical' : ''}`),
+    fig('Air between condensers', p.T_air_between.map(v => v.toFixed(0)).join(' / '), '°C', `heat split ${p.q_air_levels.map(q => (100 * q / p.q_air).toFixed(0)).join(' / ')} %`),
+    fig('Compressor flows', p.flows.map(v => v.toFixed(2)).join(' / '), 'kg/kg', `of the evaporator flow · discharge ${p.T_dis.map(v => v.toFixed(0)).join(' / ')} °C`),
+    fig('Air approaches', p.gaps.map(v => v.toFixed(1)).join(' / '), 'K', `PR ${p.PR.map(v => v.toFixed(2)).join(' / ')}`));
   else if (c.cyc === 'R') p.units.forEach((u, k) => cells.push(fig(`Unit ${k + 1}`, u.COP.toFixed(2), 'COP', `air ${u.T_air_in.toFixed(0)} → ${u.T_air_out.toFixed(0)} °C · hot side ${u.T_hot.toFixed(0)} °C · Carnot ${u.carnot_COP.toFixed(2)} · ${(100 * u.q_air / r.q_air).toFixed(0)} % of the heat`)));
   else if (c.cyc === 'Y') cells.push(
     fig('Pressures', `${p.P_low_bar.toFixed(1)} → ${p.P_high_bar.toFixed(1)}`, 'bar', `PR ${p.PR.toFixed(2)} · discharge ${p.T_dis.toFixed(0)} °C`),
@@ -1586,13 +1590,20 @@ function miniMulti(v, cfg = LV) {
       parallel: 'Parallel compression: the flash vapour has its own compressor (C3) to the high pressure; the low stage (C1) compresses the evaporator vapour straight to it.',
       single: 'Single stage: one compressor, condenser, valve and evaporator, for comparison.'}[arr];
   } else if (v === 'D') {
-    H = 250;
-    body = `<g transform="translate(0 20)"><g style="color:var(--hp)">${hp('M60 150 V110 H210')}${ar(210, 110, 'r')}${hp('M60 110 V76')}${hp('M60 44 V22 H210')}${ar(210, 22, 'r')}${hp('M290 22 H330 V98')}${ar(330, 98, 'd')}</g>
-      <g style="color:var(--lp)">${lp('M290 110 H396 V170')}${lp('M396 186 V204 H330')}${ar(330, 204, 'l')}${lp('M270 204 H60 V182')}${ar(60, 182, 'u')}</g>
-      ${comp(60, 166, 'C1')}${comp(60, 60, 'C2')}${box(210, 98, 80, 24, 'LP cond.')}${box(210, 10, 80, 24, 'HP cond.')}${valve(330, 60)}${valve(396, 178)}${box(270, 192, 60, 24, 'Evaporator')}
-      <path class="air" d="M250 134 V146 H170 V-6 H250 V10"/><g style="color:var(--ink-3)">${ar(250, 4, 'd')}</g>${T(254, 144, 'air in', 'lbl2', 'start')}${T(174, -10, 'air to the HP condenser', 'lbl2', 'start')}
-      <path class="wat" d="M330 222 H270"/><g style="color:var(--accent)">${ar(270, 222, 'l')}</g>${T(334, 226, 'source', 'lbl2', 'start')}</g>`;
-    cap = 'Dual-pressure condensation: C1 feeds the low-pressure condenser, which heats the air from the inlet; part of its discharge goes on through C2 to the high-pressure condenser, which heats the air to the target, and its liquid is throttled back into the low-pressure condenser.';
+    // n levels from the bottom: compressor k discharges at y_k into condenser k (and on up to compressor k + 1);
+    // each condenser's liquid drops through a valve into the one below; the bottom one feeds the evaporator
+    const n = (cfg.par || LV.par).D.n, rowH = 46, base = 56 + n * rowH;
+    H = base + 46;
+    const y = k => base - 24 - k * rowH;
+    for (let k = 0; k < n; k++) {
+      body += `<g style="color:var(--hp)">${hp(`M60 ${y(k) - 2} V${y(k) - 16} H210`)}${ar(210, y(k) - 16, 'r')}${k < n - 1 ? hp(`M60 ${y(k) - 16} V${y(k + 1) + 16}`) : ''}</g>`;
+      body += `${comp(60, y(k) + 14, `C${k + 1}`)}${box(210, y(k) - 28, 70, 24, `Cond. ${k + 1}`)}`;
+      if (k > 0) body += `<g style="color:var(--lp)">${lp(`M280 ${y(k) - 16} H330 V${y(k - 1) - 16} H282`)}${ar(282, y(k - 1) - 16, 'l')}</g>${valve(330, (y(k) + y(k - 1)) / 2 - 16)}`;
+    }
+    body += `<g style="color:var(--lp)">${lp(`M280 ${y(0) - 10} H396 V${base + 2}`)}${lp(`M396 ${base + 18} V${base + 26} H330`)}${ar(330, base + 26, 'l')}${lp(`M270 ${base + 26} H60 V${y(0) + 32}`)}${ar(60, y(0) + 32, 'u')}</g>
+      ${valve(396, base + 10)}${box(270, base + 14, 60, 24, 'Evaporator')}
+      <path class="air" d="M190 ${y(0)} V${y(n - 1) - 34}"/><g style="color:var(--ink-3)">${ar(190, y(n - 1) - 34, 'u')}</g>${T(186, y(n - 1) - 30, 'air', 'lbl2', 'end')}`;
+    cap = `${n}-pressure condensation: compressor 1 feeds condenser 1, which heats the air first; at each pressure part of the flow goes on to the next compressor and condenser, and each condenser's liquid is throttled into the one below.${n === 2 ? ' This is the dual-pressure cycle of Dai et al. (2020).' : ''}`;
   } else if (v === 'R') {
     const n = (cfg.par || LV.par).R.n, w = 300 / n;
     H = 170;
@@ -1631,12 +1642,12 @@ const FULL_NAME = {
   A: 'Recuperative heat pump A (RHX1 on the stage-1 suction)', B: 'Recuperative heat pump B (RHX2 on the interstage gas, with IHX)',
   C: 'Recuperative heat pump C (RHX1 and RHX2)', S: 'Split-stream heat pump (SLTHP: RHX1 parallel to the LT gas cooler)',
   K: 'Transcritical–transcritical cascade heat pump (Kong et al.)', N: 'cascade heat pump (Hoang et al.)', M: 'Heat pump with MVR steam', X: 'Supercritical CO₂ reverse Brayton heat pump (Dalal et al.)',
-  E: 'Two-stage heat pump', D: 'Dual-pressure condensation heat pump (Dai et al.)', R: 'Reverse-Stirling heat pump units (semi-empirical)', Y: 'Ammonia–water hybrid absorption–compression heat pump',
+  E: 'Two-stage heat pump', D: 'condensation heat pump', R: 'Reverse-Stirling heat pump units (semi-empirical)', Y: 'Ammonia–water hybrid absorption–compression heat pump',
 };
 const ECON_NAME = {flash: 'with a flash tank', economiser: 'with a closed economiser (vapour injection)', parallel: 'with parallel compression', single: 'single stage, for comparison'};
 function lvTitle() {
   const c = LIVE.cfg && LIVE.cfg.cyc === LV.cyc ? LIVE.cfg : LV, v = c.cyc;
-  const name = v === 'N' ? `${c.par.N.n}-level ${FULL_NAME.N}` : v === 'E' ? `${FULL_NAME.E} ${ECON_NAME[ECON_ARR[c.par.E.arr] || 'flash']}` : v === 'R' ? `Reverse-Stirling heat pump, ${c.par.R.n > 1 ? `${c.par.R.n} units in series` : 'one unit'} (semi-empirical)` : v === 'H' ? FULL_NAME['H' + (c.stagesH || 1)] + (c.ihxH ? ' with IHX' : '') : FULL_NAME[v];
+  const name = v === 'N' ? `${c.par.N.n}-level ${FULL_NAME.N}` : v === 'D' ? `${c.par.D.n}-pressure ${FULL_NAME.D}` : v === 'E' ? `${FULL_NAME.E} ${ECON_NAME[ECON_ARR[c.par.E.arr] || 'flash']}` : v === 'R' ? `Reverse-Stirling heat pump, ${c.par.R.n > 1 ? `${c.par.R.n} units in series` : 'one unit'} (semi-empirical)` : v === 'H' ? FULL_NAME['H' + (c.stagesH || 1)] + (c.ihxH ? ' with IHX' : '') : FULL_NAME[v];
   const nameOut = v === 'A' && stagesOf(c) === 1 ? name.replace('stage-1 suction', 'suction') + ', single stage' : name;
   const fl = MULTI(v) ? loopNames(v).map((n, i) => `${n.toLowerCase()} ${loopFluidText(c, v, i)}`).join(', ') + (v === 'M' ? ', steam (water)' : '')
     : fluidLabel({comps: c.mainComps || c.comps, basis: c.basis}) + ((c.mainComps || c.comps).filter(x => x[1] > 0).length > 1 && c.basis !== 'mole' ? ' (mass)' : '');

@@ -14,7 +14,7 @@ const PAGE_URL = typeof location !== "undefined" && /(\.github\.io|^localhost|^1
 const LOCAL_KEY = "dryer-cases-local";
 const CASE_KEYS = ["cyc", "mainComps", "basis", "multi", "par", "compModel", "etaC", "motor", "prMax", "T", "Tain", "RH", "Tmt", "phi",
   "a", "Ts", "Two", "lift", "lift2", "split", "liftS", "share", "alpha", "stagesH", "stagesA", "stagesS", "ihxH", "fanModel", "fanEta", "fanPR", "fanSh", "fanMotor", "src", "srcT", "srcM", "srcW", "srcHum", "srcRH", "srcDew", "airHum", "airWg", "airDew", "Patm", "dTs", "srcWm", "srcMw", "expn", "etaX", "pmax"];
-const CYC_SHORT = { H: "Conventional", A: "RHP-A", B: "RHP-B", C: "RHP-C", S: "SLTHP", K: "TT cascade", N: "n-cascade", M: "HP + MVR", X: "sCO2 Brayton", E: "Flash / economiser", D: "Dual-pressure", R: "Stirling", Y: "NH3-H2O hybrid" };
+const CYC_SHORT = { H: "Conventional", A: "RHP-A", B: "RHP-B", C: "RHP-C", S: "SLTHP", K: "TT cascade", N: "n-cascade", M: "HP + MVR", X: "sCO2 Brayton", E: "Flash / economiser", D: "n-pressure", R: "Stirling", Y: "NH3-H2O hybrid" };
 // numeric inputs: [key, lo, hi]
 const CASE_NUM = [["compModel", 1, 5], ["etaC", 0.5, 1], ["motor", 0.8, 1], ["prMax", 5, 50], ["T", 100, 220], ["Tain", 0, 40], ["RH", 0, 100],
   ["Tmt", 30, 200], ["phi", 0, 2], ["a", 0, 40], ["Ts", 0, 80], ["Two", 0, 80], ["lift", 0, 140], ["lift2", 0, 140], ["split", 0.3, 0.7],
@@ -111,7 +111,7 @@ function cleanInputs(raw) {           // anything from the store or a link is un
     }
   }
   o.par.N.n = Math.min(4, Math.max(2, Math.round(o.par.N.n))); o.par.M.n_mvr = Math.min(20, Math.max(1, Math.round(o.par.M.n_mvr))); o.par.M.split = o.par.M.split.map(v => Math.min(1, Math.max(0, v)));
-  o.par.E.arr = Math.min(3, Math.max(0, Math.round(o.par.E.arr))); o.par.R.n = Math.min(4, Math.max(1, Math.round(o.par.R.n)));
+  o.par.E.arr = Math.min(3, Math.max(0, Math.round(o.par.E.arr))); o.par.D.n = Math.min(5, Math.max(2, Math.round(o.par.D.n))); o.par.R.n = Math.min(4, Math.max(1, Math.round(o.par.R.n)));
   o.par.Y.w_rich = Math.min(0.95, Math.max(0.05, o.par.Y.w_rich)); o.par.Y.q_des = Math.min(0.95, Math.max(0.02, o.par.Y.q_des));
   const out = {}; for (const k of CASE_KEYS) out[k] = o[k];
   out.size = cleanSize(raw.size);
@@ -124,7 +124,7 @@ function applyInputs(inp) {
   openPicker = -1;
   renderLiveControls(); changed();
 }
-const cycleName = i => i.cyc === "A" && i.stagesA === 1 ? "RHP-A, single-stage" : i.cyc === "H" ? `Conventional, ${i.stagesH === 2 ? "two" : "single"}-stage${i.ihxH ? " + IHX" : ""}` : i.cyc === "N" ? `${i.par.N.n}-level cascade` : CYC_SHORT[i.cyc];
+const cycleName = i => i.cyc === "A" && i.stagesA === 1 ? "RHP-A, single-stage" : i.cyc === "H" ? `Conventional, ${i.stagesH === 2 ? "two" : "single"}-stage${i.ihxH ? " + IHX" : ""}` : i.cyc === "N" ? `${i.par.N.n}-level cascade` : i.cyc === "D" ? `${i.par.D.n}-pressure` : CYC_SHORT[i.cyc];
 function caseFluids(i) {
   const lab = cs => fluidLabel({ comps: cs, basis: i.basis });
   if (i.cyc === "K") return `${lab(i.multi.K[0])} / ${lab(i.multi.K[1])}`;
@@ -148,7 +148,7 @@ function designText0(i) {
     case "N": return `condensing ${p.N.T_cond.slice(0, p.N.n - 1).join("/")} °C`;
     case "X": return `arch ${p.X.arch} · ${p.X.P_L}/${p.X.P_H_min ? "lowest" : p.X.P_H} bar · split ${fixed(p.X.x, 2)}`;
     case "E": return `${["flash tank", "economiser", "parallel", "single stage"][p.E.arr] || "flash tank"}${p.E.arr === 3 ? "" : ` · intermediate ${p.E.T_int_auto ? "geometric mean" : `${p.E.T_int} °C`}`}`;
-    case "D": return `low condensing ${p.D.T_cond_low} °C`;
+    case "D": return `${p.D.n} pressures · condensing ${p.D.T_cond_auto ? "equal steps" : p.D.T_cond.slice(0, p.D.n - 1).join("/") + " °C"}`;
     case "R": return `${p.R.n} unit${p.R.n > 1 ? "s" : ""} · Carnot fraction ${fixed(p.R.eta_carnot, 2)}${p.R.n > 1 ? ` · air ${p.R.bounds_auto ? "equal steps" : p.R.bounds.slice(0, p.R.n - 1).join("/") + " °C"}` : ""}`;
     case "Y": return `w ${fixed(p.Y.w_rich, 3)} · degassing ${fixed(p.Y.q_des, 3)} · ${p.Y.wet ? "wet" : "dry"} compression`;
     case "M": return `bottom ${p.M.T_cond} °C · ${p.M.n_mvr} MVR stages · split ${p.M.split_fill ? "auto" : p.M.split.slice(0, Math.max(0, p.M.n_mvr - 1)).map(v => fixed(v, 2)).join("/") || "–"}`;

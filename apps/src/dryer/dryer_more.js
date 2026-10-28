@@ -6,9 +6,9 @@
                  pressure is the lowest that heats the air to the target with the approach; the intermediate pressure
                  is set by its saturation temperature T_int (null: the geometric mean of the evaporating and high
                  pressures).
-   dualPressure  dual-pressure condensation after Dai et al. (2020): a low-pressure condenser heats the air from the
-                 inlet to T_mid and a high-pressure one from T_mid to the target; the high-pressure liquid is
-                 throttled into the low-pressure condenser (DualPressureHeatPump).
+   multiPressure n condensing pressures in series on the air, generalising the dual-pressure condensation of Dai
+                 et al. (2020): each condenser's liquid is throttled into the one below (MultiPressureHeatPump; n = 2 is
+                 DualPressureHeatPump).
    stirling      reverse-Stirling units in series on the air, each a fraction of the Carnot COP between its hot side
                  (dT_hot above the air it delivers) and its cold side (dT_cold below the source outlet): a
                  semi-empirical block, not a physical Stirling model (StirlingHeatPump).
@@ -65,22 +65,23 @@
     return { S };
   }
   const noPressure = (c, last) => `no high pressure up to ${c.P_max_bar} bar heats the air to ${c.T_air_tar} C with a ${c.dT_GC_min} K approach${last instanceof Error ? ` (${last.message})` : ""}`;
-  // a one-variable optimiser: the start, a coarse grid and a compass search, rounded to 0.1 K
-  function* optimise1(f, x0, lo, hi, grid, maxEval, state) {
+  // an optimiser over condensing or saturation temperatures: the start, a coarse grid (grid(a) gives the point for
+  // each fraction a) and a compass search, rounded to 0.1 K
+  function* optimiseN(f, x0, lo, hi, grid, maxEval, state) {
     const b0 = x0 ? f(x0) : { y: -Infinity };
     yield { nEval: state.nEval, best: b0.y };
     let xg = null, bg = { y: -Infinity };
-    for (const a of grid) {
-      const z = [lo[0] + a * (hi[0] - lo[0])], o = f(z);
+    for (const a of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+      const z = grid(a), o = f(z);
       if (o.y > bg.y) { bg = o; xg = z; }
       yield { nEval: state.nEval, best: Math.max(b0.y, bg.y) };
     }
-    const g = compassSearch(f, [[x0, b0], [xg, bg]], lo, hi, [8], [0.05], [false], state, maxEval);
+    const dim = lo.length, g = compassSearch(f, [[x0, b0], [xg, bg]], lo, hi, Array(dim).fill(8), Array(dim).fill(0.05), Array(dim).fill(false), state, maxEval);
     let st, overall = Math.max(b0.y, bg.y);
     while (!(st = g.next()).done) { overall = Math.max(overall, st.value); yield { nEval: state.nEval, best: overall }; }
     let { x, best, converged } = st.value;
     if (!x) return { x: null, b0 };
-    const xr = [jsRound(x[0], 1)], o = f(xr);
+    const xr = x.map(v => jsRound(v, 1)), o = f(xr);
     if (isFinite(o.y)) { x = xr; best = o; }
     return { x, best, converged, b0 };
   }
@@ -236,111 +237,169 @@
     const f = memo1(state, T => economiser(fl, air, { ...c, T_int: T }));
     const base = economiser(fl, air, { ...c, T_int: null });
     const x0 = base.success ? [Math.min(Math.max(base.report.T_int, lo[0]), hi[0])] : null;
-    const o = yield* optimise1(f, x0, lo, hi, [0.2, 0.35, 0.5, 0.65, 0.8], maxEval, state);
+    const o = yield* optimiseN(f, x0, lo, hi, a => [lo[0] + a * (hi[0] - lo[0])], maxEval, state);
     if (!o.x) return fail("no intermediate pressure gives a feasible design", { nEval: state.nEval });
     const near = v => Math.abs(v - lo[0]) < 0.05 || Math.abs(v - hi[0]) < 0.05;
     return { success: true, COP: o.best.y, start: base.success ? base.COP : NaN, startOk: base.success, T_int: o.x[0], nEval: state.nEval, converged: o.converged, atBound: near(o.x[0]), lo, hi };
   }
 
-  // ================================================================== dual-pressure condensation (Dai et al.)
-  /* Per kg of evaporator flow: evaporator -> low-stage compressor (Pe -> P_L) -> split: 1 - a to the low-pressure
-     condenser, a through the high-stage compressor to the high-pressure condenser and a valve back to P_L, where it
-     joins the low-pressure condenser inlet; all the flow leaves that condenser for the evaporator valve. The air
-     passes the low-pressure condenser (inlet -> T_mid), then the high-pressure one (T_mid -> target). a follows
-     from the air balance, T_mid is the highest the low-pressure condenser allows and P_H the lowest that heats the
-     air to the target. */
-  const DUAL = { T_cond_low: 110, superheat: 5, P_max_bar: 60 };
-  function dualAt(fl, air, c, P_H, Pe, Te, P_L, low) {
-    const { sh, suc, lo } = low, h1 = lo.out.h, hi = stage(fl, P_L, lo.out, P_H), h2 = hi.out.h;
-    const Tain = c.T_air_inlet, Ttar = c.T_air_tar, haIn = air.h(Tain), haTar = air.h(Ttar), TdewL = fl.PQ(P_L, 1).T;
-    const sections = Tmid => {
-      const h3H = coolerOutlet(fl, air, P_H, h2, Tmid, Ttar, c.dT_GC_min), qH = h2 - h3H, hm = air.h(Tmid);
-      let a = 0.5;
-      for (let k = 0; k < 60; k++) {
-        const hInL = (1 - a) * h1 + a * h3H, h3L = coolerOutlet(fl, air, P_L, hInL, Tain, Tmid, c.dT_GC_min), qL = hInL - h3L;
-        const aNew = qL * (haTar - hm) / (qH * (hm - haIn));          // the same air flow through both condensers
-        if (!(aNew > 0 && aNew < 1)) throw new Error("no split of the flow balances the two condensers");
-        if (Math.abs(aNew - a) < 1e-9) { a = aNew; break; }
-        a = a + 0.8 * (aNew - a);
-      }
-      const hInL = (1 - a) * h1 + a * h3H, h3L = coolerOutlet(fl, air, P_L, hInL, Tain, Tmid, c.dT_GC_min);
-      return { a, h3H, qH, hInL, h3L, qL: hInL - h3L };
-    };
-    const top = TdewL - c.dT_GC_min;
-    if (top <= Tain + 1) throw new Error(`the low condensing temperature (${TdewL.toFixed(0)} C) is too close to the air inlet`);
-    let best = null, loT = Tain + 1, hiT = null;
-    for (let k = 0; k <= 20; k++) {
-      const T = top - (top - Tain - 1) * k / 20;
-      try { best = [T, sections(T)]; loT = T; break; } catch (e) { hiT = T; }
+  // ================================================================== multi-pressure condensation (Dai et al., n pressures)
+  /* Per kg of evaporator flow, pressures P_1 < ... < P_n: compressor 1 lifts the evaporator vapour to P_1; at each
+     P_k (k < n) the flow splits: m_k - m_(k+1) to condenser k, m_(k+1) on through compressor k+1 (m_1 = 1); compressor
+     n discharges into condenser n. The liquid of each condenser k > 1 is throttled into condenser k - 1, and condenser
+     1's outlet feeds the evaporator valve. The air passes condensers 1 to n in series, condenser k heating it from
+     T_(k-1) to T_k. The flows follow from the air balances, the air between condensers is the highest they allow
+     (all lowered together from their pinches, a fraction lam of the way to the air inlet, until every condenser is
+     feasible) and P_n is the lowest that heats the air to the target. T_cond: the lower n - 1 dew temperatures. With
+     n = 2 this is Dai et al.'s dual-pressure cycle. */
+  const MULTIP = { n_pressures: 3, T_cond: null, superheat: 5, P_max_bar: 60 };
+  const MAX_PRESSURES = 5;
+  const defaultTcond = (c, Tcrit) => {
+    const Te = evapT(c), n = c.n_pressures, top = Math.min(c.T_air_tar, Tcrit - 2);
+    return Array.from({ length: n - 1 }, (_, k) => Te + (top - Te) * (k + 1) / n);
+  };
+  /* the flow ratio a in (0, 1) where g(a) = 0 (g falls with a): a bracket and regula falsi (Illinois) */
+  function split(g) {
+    let lo = 1e-6, hi = 1 - 1e-6, gLo = g(lo), gHi = g(hi), side = 0, a = lo;
+    if (!(gLo > 0 && gHi < 0)) throw new Error("no split of the flow balances the condensers");
+    for (let k = 0; k < 80; k++) {
+      a = hi - gHi * (hi - lo) / (gHi - gLo);
+      const ga = g(a);
+      if (Math.abs(ga) < 1e-11 || hi - lo < 1e-13) break;
+      if (ga > 0) { lo = a; gLo = ga; if (side === 1) gHi /= 2; side = 1; }
+      else { hi = a; gHi = ga; if (side === -1) gLo /= 2; side = -1; }
     }
-    if (!best) throw new Error("the low-pressure condenser cannot take any of the air heating");
-    if (hiT != null) for (let k = 0; k < 25 && hiT - loT >= 0.02; k++) {
-      const m = (loT + hiT) / 2;
-      try { best = [m, sections(m)]; loT = m; } catch (e) { hiT = m; }
-    }
-    const [Tmid, S] = best, a = S.a, he = S.h3L;
-    const gapH = minGap(airProfile(fl, air, P_H, h2, S.h3H, Tmid, Ttar, 18)), gapL = minGap(airProfile(fl, air, P_L, S.hInL, S.h3L, Tain, Tmid, 18));
-    return { P_H, P_L, Pe, Te, sh, suc, lo, hi, Tmid, h1, h2, he, qAir: a * S.qH + S.qL, w: lo.w + a * hi.w, qSrc: suc.h - he,
-      gap: Math.min(gapH, gapL), gapH, gapL, ...S };
+    return a;
   }
-  function dualPressure(fl, air, cfg) {
-    const c = Object.assign({}, air0, DUAL, cfg), warnings = [];
+  function multiAt(fl, air, c, P_H, Pe, Te, Ps, low) {
+    const n = Ps.length + 1, P = [...Ps, P_H];
+    const comps = [...low.comps, stage(fl, Ps[n - 2], low.comps[n - 2].out, P_H)], hDis = comps.map(s => s.out.h);
+    const Tain = c.T_air_inlet, Ttar = c.T_air_tar, dT = c.dT_GC_min;
+    const sections = Ta => {
+      const T = [Tain, ...Ta, Ttar], hIn = Array(n).fill(0), hOut = Array(n).fill(0), m = Array(n).fill(0);
+      hIn[n - 1] = hDis[n - 1];
+      hOut[n - 1] = coolerOutlet(fl, air, P[n - 1], hIn[n - 1], T[n - 1], Ttar, dT);
+      m[n - 1] = 1;
+      const G = (hIn[n - 1] - hOut[n - 1]) / (air.h(Ttar) - air.h(T[n - 1]));     // air per kg through compressor n
+      for (let k = n - 2; k >= 0; k--) {
+        const dh = air.h(T[k + 1]) - air.h(T[k]);
+        const g = a => { const hi = (1 - a) * hDis[k] + a * hOut[k + 1]; return m[k + 1] * (hi - coolerOutlet(fl, air, P[k], hi, T[k], T[k + 1], dT)) / (G * dh) - a; };
+        const a = split(g);
+        hIn[k] = (1 - a) * hDis[k] + a * hOut[k + 1];
+        hOut[k] = coolerOutlet(fl, air, P[k], hIn[k], T[k], T[k + 1], dT);
+        m[k] = m[k + 1] / a;
+      }
+      const mm = m.map(v => v / m[0]);
+      return { T, m: mm, hIn, hOut, q: mm.map((v, k) => v * (hIn[k] - hOut[k])) };
+    };
+    const Tdew = Ps.map(Pk => fl.PQ(Pk, 1).T), top = Tdew.map(t => t - dT);
+    if (top[0] <= Tain + 1) throw new Error(`the lowest condensing temperature (${Tdew[0].toFixed(0)} C) is too close to the air inlet`);
+    if (top.some(t => t >= Ttar)) throw new Error("a lower condensing temperature is too close to the air target");
+    const floor = top.map((_, k) => Tain + 1 + k);
+    const trySections = lam => {
+      const Ta = top.map((t, k) => t - lam * (t - floor[k]));
+      if (Ta.some((v, k) => k > 0 && v <= Ta[k - 1])) throw new Error("the condensing temperatures must rise");
+      return sections(Ta);
+    };
+    let best = null, loL = 1, hiL = null;
+    for (let k = 0; k <= 20; k++) {
+      const lam = k / 20;
+      try { best = [lam, trySections(lam)]; loL = lam; break; } catch (e) { hiL = lam; }
+    }
+    if (!best) throw new Error("the lower condensers cannot take any of the air heating");
+    const span = Math.max(...top.map((t, k) => t - floor[k]));
+    if (hiL != null) for (let k = 0; k < 25 && (loL - hiL) * span >= 0.02; k++) {
+      const mid = (loL + hiL) / 2;
+      try { best = [mid, trySections(mid)]; loL = mid; } catch (e) { hiL = mid; }
+    }
+    const S = best[1];
+    const gaps = P.map((Pk, k) => minGap(airProfile(fl, air, Pk, S.hIn[k], S.hOut[k], S.T[k], S.T[k + 1], 18)));
+    return { P_H, P, Pe, Te, sh: low.sh, suc: low.suc, comps, hDis, he: S.hOut[0], qAir: S.q.reduce((x, y) => x + y, 0),
+      w: S.m.reduce((x, mk, k) => x + mk * comps[k].w, 0), qSrc: low.suc.h - S.hOut[0], gap: Math.min(...gaps), gaps, ...S };
+  }
+  function multiCheck(fl, c) {
+    const n = Math.round(c.n_pressures);
+    if (!(n >= 2 && n <= MAX_PRESSURES)) return `2 to ${MAX_PRESSURES} condensing pressures`;
+    const Tc = c.T_cond != null ? c.T_cond.map(Number) : defaultTcond({ ...c, n_pressures: n }, isFinite(fl.T_crit) ? fl.T_crit : Infinity);
+    if (Tc.length !== n - 1) return `${n} condensing pressures need ${n - 1} lower condensing temperatures`;
+    if (Tc.some((t, k) => k > 0 && t <= Tc[k - 1])) return "the lower condensing temperatures must rise";
+    if (isFinite(fl.T_crit) && Tc[Tc.length - 1] >= fl.T_crit - 1) return `the condensing temperatures must be below ${nameOf(fl)}'s critical temperature`;
+    if (Tc[0] <= evapT(c) + 5) return "the condensing temperatures must be above the evaporating temperature";
+    return Tc;
+  }
+  function multiPressure(fl, air, cfg) {
+    const c = Object.assign({}, air0, MULTIP, cfg), warnings = [];
     try {
-      const Te = evapT(c), Pe = fl.TQ(Te, 1).P;
-      if (isFinite(fl.T_crit) && c.T_cond_low >= fl.T_crit - 1) return fail(`the low condensing temperature must be below ${nameOf(fl)}'s critical temperature`);
-      if (c.T_cond_low <= Te + 5) return fail("the low condensing temperature must be above the evaporating temperature");
-      const P_L = fl.TQ(c.T_cond_low, 1).P;
-      const sh = drySuperheat(fl, Pe, Te, P_L, c.superheat), suc = fl.PT(Pe, Te + sh);
-      const low = { sh, suc, lo: stage(fl, Pe, suc, P_L) };
-      const Pmax = c.P_max_bar / 10, Plo = P_L * 1.05;
+      const Tc = multiCheck(fl, c);
+      if (typeof Tc === "string") return fail(Tc);
+      const Te = evapT(c), Pe = fl.TQ(Te, 1).P, Ps = Tc.map(t => fl.TQ(t, 1).P);
+      const sh = drySuperheat(fl, Pe, Te, Ps[0], c.superheat), suc = fl.PT(Pe, Te + sh);
+      const comps = [stage(fl, Pe, suc, Ps[0])];
+      for (let k = 1; k < Ps.length; k++) comps.push(stage(fl, Ps[k - 1], comps[k - 1].out, Ps[k]));
+      const low = { sh, suc, comps }, Pmax = c.P_max_bar / 10, Plo = Ps[Ps.length - 1] * 1.05;
       if (Plo >= Pmax) return fail(`${nameOf(fl)} needs more than ${c.P_max_bar} bar`);
-      const { S, last } = lowestPressure(P_H => dualAt(fl, air, c, P_H, Pe, Te, P_L, low), Plo, Pmax, c.dT_GC_min);
+      const { S, last } = lowestPressure(P_H => multiAt(fl, air, c, P_H, Pe, Te, Ps, low), Plo, Pmax, c.dT_GC_min);
       if (!S) return fail(noPressure(c, last));
-      return dualResult(fl, air, c, S, warnings);
+      return multiResult(fl, air, c, Tc, S, warnings);
     } catch (e) { return fail(errMsg(e), { warnings }); }
   }
-  function dualResult(fl, air, c, S, warnings) {
-    const wEl = S.w / (c.motor_eff ?? MOTOR), cop = S.qAir / wEl, { P_H, P_L, Pe, a } = S;
+  function multiResult(fl, air, c, Tc, S, warnings) {
+    const n = S.P.length, wEl = S.w / (c.motor_eff ?? MOTOR), cop = S.qAir / wEl, { P_H, Pe, P, m } = S;
     const supercritical = isFinite(fl.P_crit) && P_H >= fl.P_crit;
-    const prs = [S.lo.pr, S.hi.pr], dis = [S.lo.out.T, S.hi.out.T];
+    const prs = S.comps.map(s => s.pr), dis = S.comps.map(s => s.out.T);
     prWarn(prs, dis, warnings);
-    const vs = 1 / S.suc.D + a / S.lo.out.D, VHC = S.qAir / vs / 1000;
-    const hpName = "High-pressure condenser" + (supercritical ? " / gas cooler" : "");
+    let vs = 1 / S.suc.D; for (let k = 1; k < n; k++) vs += m[k] / S.comps[k - 1].out.D;
+    const VHC = S.qAir / vs / 1000;
+    const cname = P.map((_, k) => `Condenser ${k + 1}` + (k === n - 1 && supercritical ? " / gas cooler" : ""));
     const paths = [
-      { name: "Expansion valve", pts: compPath(fl, P_L, S.h3L, Pe, S.he) },
+      { name: "Expansion valve", pts: compPath(fl, P[0], S.hOut[0], Pe, S.he) },
       { name: "Evaporator", pts: iso(fl, Pe, S.he, S.suc.h) },
-      { name: "Low-stage compressor", pts: compPath(fl, Pe, S.suc.h, P_L, S.h1) },
-      { name: "High-stage compressor", pts: compPath(fl, P_L, S.h1, P_H, S.h2) },
-      { name: hpName, pts: iso(fl, P_H, S.h2, S.h3H) },
-      { name: "High-pressure valve", pts: compPath(fl, P_H, S.h3H, P_L, S.h3H) },
-      { name: "Low-pressure condenser", pts: iso(fl, P_L, S.hInL, S.h3L) },
+      { name: "Compressor 1", pts: compPath(fl, Pe, S.suc.h, P[0], S.hDis[0]) },
     ];
-    const pH = airProfile(fl, air, P_H, S.h2, S.h3H, S.Tmid, c.T_air_tar, 18), pL = airProfile(fl, air, P_L, S.hInL, S.h3L, c.T_air_inlet, S.Tmid, 18);
-    const hx = [
-      { name: "Low-pressure condenser to air", key: "gc2", hot: pL.map(p => [p[0], p[1]]), cold: pL.map(p => [p[0], p[2]]), otherName: "dryer air" },
-      { name: `${hpName} to air`, key: "gc", hot: pH.map(p => [a * p[0], p[1]]), cold: pH.map(p => [a * p[0], p[2]]), otherName: "dryer air" },
-      evapHx(fl, c, Pe, S.he, S.suc.h, 1, S.qSrc),
-    ];
-    const report = { COP: cop, VHC, fluid: nameOf(fl), P_high_bar: P_H * 10, P_low_cond_bar: P_L * 10, P_evap_bar: Pe * 10, T_cond_low: c.T_cond_low,
-      T_evap: S.Te, T_mid: S.Tmid, split_high: a, superheat: S.sh, supercritical, w_el_kJkg: wEl, q_air: S.qAir, q_air_low: S.qL, q_air_high: a * S.qH,
-      q_evap: S.qSrc, gap_air: S.gap, gap_low: S.gapL, gap_high: S.gapH, T_dis_low: dis[0], T_dis_high: dis[1], PR_low: prs[0], PR_high: prs[1],
+    for (let k = 1; k < n; k++) paths.push({ name: `Compressor ${k + 1}`, pts: compPath(fl, P[k - 1], S.hDis[k - 1], P[k], S.hDis[k]) });
+    for (let k = n - 1; k >= 0; k--) {
+      paths.push({ name: cname[k], pts: iso(fl, P[k], S.hIn[k], S.hOut[k]) });
+      if (k > 0) paths.push({ name: `Valve ${k + 1} to ${k}`, pts: compPath(fl, P[k], S.hOut[k], P[k - 1], S.hOut[k]) });
+    }
+    const keys = ["gc2", "gc3", "gc4", "gc5", "gc"];
+    const hx = P.map((Pk, k) => {
+      const pr = airProfile(fl, air, Pk, S.hIn[k], S.hOut[k], S.T[k], S.T[k + 1], 18);
+      return { name: `${cname[k]} to air`, key: k === n - 1 ? "gc" : keys[k], hot: pr.map(p => [m[k] * p[0], p[1]]), cold: pr.map(p => [m[k] * p[0], p[2]]), otherName: "dryer air" };
+    });
+    hx.push(evapHx(fl, c, Pe, S.he, S.suc.h, 1, S.qSrc));
+    const report = { COP: cop, VHC, fluid: nameOf(fl), n_pressures: n, T_cond: Tc.slice(), P_cond_bar: P.map(p => p * 10), P_high_bar: P_H * 10, P_evap_bar: Pe * 10,
+      T_evap: S.Te, T_air_between: S.T.slice(1, -1), flows: m.slice(), q_air_levels: S.q.slice(), gaps: S.gaps.slice(), T_dis: dis, PR: prs,
+      superheat: S.sh, supercritical, w_el_kJkg: wEl, q_air: S.qAir, q_evap: S.qSrc, gap_air: S.gap,
       air_per_ref: S.qAir / (air.h(c.T_air_tar) - air.h(c.T_air_inlet)), air_W: air.W, balance: S.qAir - S.w - S.qSrc };
     return { success: true, message: "success", cycle: "D", warnings, COP: cop, VHC, loops: [{ name: "Cycle", fluid: 0, flow: 1, paths }], hx,
       q_air: S.qAir, w_shaft: S.w, q_source: S.qSrc, ref: { rho: 1 / vs, flow: 1, PR: Math.max(...prs) }, Pmax_bar: P_H * 10, T_dis_max: Math.max(...dis),
-      air: [{ name: "low-pressure condenser", q: S.qL, to: S.Tmid }, { name: "high-pressure", q: a * S.qH }], report };
+      air: P.map((_, k) => ({ name: `condenser ${k + 1}`, q: S.q[k], ...(k < n - 1 ? { to: S.T[k + 1] } : {}) })), report };
   }
-  // best-COP low condensing temperature
-  function* dualPressureOptimiseSteps(fl, air, cfg, opt = {}) {
-    const c = Object.assign({}, air0, DUAL, cfg), maxEval = opt.maxEval ?? 120, state = { nEval: 0, memo: new Map() };
-    const Te = evapT(c), top = Math.min(c.T_air_tar, isFinite(fl.T_crit) ? fl.T_crit - 2 : c.T_air_tar);
-    const lo = [Math.max(Te + 10, c.T_air_inlet + c.dT_GC_min + 5)], hi = [top - 5];
-    if (lo[0] >= hi[0]) return fail("no room for a low condensing temperature between the source and the air target");
-    const f = memo1(state, T => dualPressure(fl, air, { ...c, T_cond_low: T }));
-    const x0 = [Math.min(Math.max(c.T_cond_low, lo[0]), hi[0])];
-    const o = yield* optimise1(f, x0, lo, hi, [0.2, 0.35, 0.5, 0.65, 0.8], maxEval, state);
-    if (!o.x) return fail("no low condensing temperature gives a feasible design", { nEval: state.nEval });
+  // best-COP lower condensing temperatures
+  function* multiPressureOptimiseSteps(fl, air, cfg, opt = {}) {
+    const c = Object.assign({}, air0, MULTIP, cfg), maxEval = opt.maxEval ?? 120, state = { nEval: 0 }, memo = new Map();
+    const n = Math.round(c.n_pressures);
+    if (!(n >= 2 && n <= MAX_PRESSURES)) return fail(`2 to ${MAX_PRESSURES} condensing pressures`);
+    const dim = n - 1, Te = evapT(c), top = Math.min(c.T_air_tar, isFinite(fl.T_crit) ? fl.T_crit - 2 : c.T_air_tar);
+    const lo = Array(dim).fill(Math.max(Te + 10, c.T_air_inlet + c.dT_GC_min + 5)), hi = Array(dim).fill(top - 5);
+    if (lo[0] >= hi[0]) return fail("no room for the lower condensing temperatures between the source and the air target");
+    const f = x => {
+      const k = x.map(v => (+v).toFixed(4)).join(",");
+      if (memo.has(k)) return memo.get(k);
+      state.nEval++;
+      let o;
+      if (x.some((v, i) => i > 0 && v <= x[i - 1])) o = { y: -Infinity, r: null };
+      else { const r = multiPressure(fl, air, { ...c, n_pressures: n, T_cond: x.map(Number) }); o = { y: r.success ? r.COP : -Infinity, r }; }
+      memo.set(k, o); return o;
+    };
+    const T0 = c.T_cond != null ? c.T_cond.map(Number) : defaultTcond({ ...c, n_pressures: n }, isFinite(fl.T_crit) ? fl.T_crit : Infinity);
+    const x0 = T0.length === dim ? T0.map(v => Math.min(Math.max(v, lo[0]), hi[0])) : null;
+    const grid = a => Array.from({ length: dim }, (_, k) => lo[0] + Math.pow(a, (dim - k) / dim) * (hi[0] - lo[0]));
+    const o = yield* optimiseN(f, x0, lo, hi, grid, maxEval, state);
+    if (!o.x) return fail("no set of lower condensing temperatures gives a feasible design", { nEval: state.nEval });
     const near = v => Math.abs(v - lo[0]) < 0.05 || Math.abs(v - hi[0]) < 0.05;
-    return { success: true, COP: o.best.y, start: o.b0.y, startOk: isFinite(o.b0.y), T_cond_low: o.x[0], nEval: state.nEval, converged: o.converged, atBound: near(o.x[0]), lo, hi };
+    return { success: true, COP: o.best.y, start: o.b0.y, startOk: isFinite(o.b0.y), T_cond: o.x.map(Number), nEval: state.nEval, converged: o.converged,
+      atBound: o.x.map(near), lo, hi };
   }
 
   // ================================================================== reverse-Stirling units
@@ -526,7 +585,7 @@
       atBound: { w_rich: near(x[0], 0), q_des: near(x[1], 1) } };
   }
 
-  const api = { ECON, DUAL, STIR, DEMONSTRATED_T_HOT, drySuperheat, economiser, economiserOptimiseSteps, dualPressure, dualPressureOptimiseSteps,
+  const api = { ECON, MULTIP, MAX_PRESSURES, STIR, DEMONSTRATED_T_HOT, drySuperheat, economiser, economiserOptimiseSteps, multiPressure, multiPressureOptimiseSteps,
     stirling, stirlingOptimiseSteps, HYB, hybrid, hybridOptimiseSteps };
   if (node) module.exports = api; else root.DRYMORE = api;
 })(typeof self !== "undefined" ? self : this);
