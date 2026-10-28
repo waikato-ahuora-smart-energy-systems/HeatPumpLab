@@ -1,4 +1,4 @@
-"""The dryer app's JavaScript ports of the economiser, dual-pressure, Stirling and ammonia-water hybrid cycles
+"""The dryer app's JavaScript ports of the economiser, multi-pressure, Stirling and ammonia-water hybrid cycles
 (apps/src/dryer/dryer_more.js) against the Python models, run in Node over CoolProp 8 (WebAssembly) and on the Python
 CoolProp backend: the same equations, property library and iterations, so they agree to round-off. The hybrid runs on
 the page's IAPWS G4-01 port (apps/src/dryer/ammonia_water.js) and the Python model on teqp. The air is the app's default humid air (the
@@ -14,8 +14,8 @@ from test_dryer_live import LIVE, _run_node
 
 pytest.importorskip("CoolProp")
 
-from HeatPumpLab.cycles.DualPressureHeatPump import DualPressureConfig, DualPressureHeatPump  # noqa: E402
 from HeatPumpLab.cycles.EconomiserHeatPump import EconomiserConfig, EconomiserHeatPump  # noqa: E402
+from HeatPumpLab.cycles.MultiPressureHeatPump import MultiPressureConfig, MultiPressureHeatPump  # noqa: E402
 from HeatPumpLab.cycles.StirlingHeatPump import StirlingConfig, StirlingHeatPump  # noqa: E402
 
 REL = 2e-6
@@ -31,10 +31,14 @@ CASES = [
     ("parallel hot inlet", "E", dict(arrangement="parallel", T_air_inlet=110.0)),
     ("flash butane", "E", dict(arrangement="flash", T_air_inlet=90.0, T_air_tar=140.0, fluid="n-Butane")),
     ("too hot", "E", dict(arrangement="flash", T_air_tar=230.0, P_max_bar=30.0)),
-    ("dual", "D", dict()),
-    ("dual 100", "D", dict(T_cond_low=100.0)),
-    ("dual butane", "D", dict(T_cond_low=95.0, T_air_tar=140.0, fluid="n-Butane")),
-    ("dual too low", "D", dict(T_cond_low=50.0)),
+    ("dual", "D", dict(n_pressures=2, T_cond=[110.0])),
+    ("dual 80", "D", dict(n_pressures=2, T_cond=[80.0])),
+    ("three", "D", dict()),
+    ("four", "D", dict(n_pressures=4)),
+    ("five", "D", dict(n_pressures=5)),
+    ("three butane", "D", dict(T_cond=[80.0, 110.0], T_air_tar=140.0, fluid="n-Butane")),
+    ("three falling", "D", dict(T_cond=[130.0, 110.0])),
+    ("three too low", "D", dict(T_cond=[48.0, 110.0])),
     ("stirling 1", "R", dict()),
     ("stirling 3", "R", dict(n_units=3)),
     ("stirling bounds", "R", dict(n_units=2, boundaries=[70.0], eta_carnot=0.4)),
@@ -45,7 +49,8 @@ CASES = [
     ("hybrid capped", "Y", dict(T_air_tar=150.0, P_max_bar=28.0)),
     ("hybrid lean", "Y", dict(w_rich=0.35, q_des=0.25)),
 ]
-OPT = [("flash", "E", dict(arrangement="flash", T_air_inlet=110.0)), ("dual", "D", dict()), ("stirling", "R", dict(n_units=3)),
+OPT = [("flash", "E", dict(arrangement="flash", T_air_inlet=110.0)), ("dual", "D", dict(n_pressures=2, T_cond=[110.0])),
+       ("three", "D", dict(max_eval=40)), ("stirling", "R", dict(n_units=3)),
        ("hybrid", "Y", dict(max_eval=12))]
 TEQP = importlib.util.find_spec("teqp") is not None
 
@@ -65,9 +70,11 @@ def _python(model: str, over: dict, optimise: bool = False):
     elif model == "E":
         hp = EconomiserHeatPump(EconomiserConfig(property_backend="coolprop", fluid=over.pop("fluid", "Cyclopentane")))
     else:
-        hp = DualPressureHeatPump(DualPressureConfig(property_backend="coolprop", fluid=over.pop("fluid", "Cyclopentane")))
+        hp = MultiPressureHeatPump(MultiPressureConfig(property_backend="coolprop", fluid=over.pop("fluid", "Cyclopentane")))
     if model == "R":
         return hp.optimise() if optimise else hp.solve()
+    if not optimise:
+        over.pop("max_eval", None)
     return hp.optimise(**over) if optimise else hp.solve(**over)
 
 
@@ -84,12 +91,12 @@ const fls = {{}}, fl = n => fls[n] || (fls[n] = new Fluid(CP, [[n, 100]], 'mass'
 DRY.setCompModel(5);
 const run = (m, o) => {{
   const {{ fluid = 'Cyclopentane', ...c }} = o, a = humid(W);
-  return m === 'E' ? M.economiser(fl(fluid), a, c) : m === 'D' ? M.dualPressure(fl(fluid), a, c) : m === 'Y' ? M.hybrid(a, c) : M.stirling(a, c);
+  return m === 'E' ? M.economiser(fl(fluid), a, c) : m === 'D' ? M.multiPressure(fl(fluid), a, c) : m === 'Y' ? M.hybrid(a, c) : M.stirling(a, c);
 }};
 const gen = (m, o) => {{
   const {{ fluid = 'Cyclopentane', ...c }} = o, a = humid(W);
   const {{ max_eval, ...cc }} = c, opt = max_eval ? {{ maxEval: max_eval }} : {{}};
-  const g = m === 'E' ? M.economiserOptimiseSteps(fl(fluid), a, cc, opt) : m === 'D' ? M.dualPressureOptimiseSteps(fl(fluid), a, cc, opt)
+  const g = m === 'E' ? M.economiserOptimiseSteps(fl(fluid), a, cc, opt) : m === 'D' ? M.multiPressureOptimiseSteps(fl(fluid), a, cc, opt)
     : m === 'Y' ? M.hybridOptimiseSteps(a, cc, opt) : M.stirlingOptimiseSteps(a, cc, opt);
   let s; do {{ s = g.next(); }} while (!s.done); return s.value;
 }};
@@ -121,8 +128,14 @@ def test_matches_python(js, name, model, over):
             _close(got[k], getattr(want, k), k)
     assert got["warnings"] == want.warnings
     for k, v in want.report.items():
-        if isinstance(v, (int, float)) and not isinstance(v, bool) and k in got["report"]:
+        if k not in got["report"]:
+            continue
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
             _close(got["report"][k], v, f"report.{k}")
+        elif isinstance(v, list) and v and all(isinstance(x, (int, float)) for x in v):
+            assert len(got["report"][k]) == len(v), k
+            for i, x in enumerate(v):
+                _close(got["report"][k][i], x, f"report.{k}[{i}]")
 
 
 @pytest.mark.parametrize("name,model,over", OPT, ids=[c[0] for c in OPT])
@@ -132,6 +145,6 @@ def test_optimisers_match_python(js, name, model, over):
     o = want.report["optimiser"]
     _close(got["COP"], want.COP, "COP")
     assert got["nEval"] == o["nEval"]
-    for key in {"E": ["T_int"], "D": ["T_cond_low"], "R": ["boundaries"], "Y": ["w_rich", "q_des"]}[model]:
+    for key in {"E": ["T_int"], "D": ["T_cond"], "R": ["boundaries"], "Y": ["w_rich", "q_des"]}[model]:
         assert got[key] == pytest.approx(o[key], abs=1e-9)
     assert got["COP"] >= got["start"] - 1e-12

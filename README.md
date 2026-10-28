@@ -27,7 +27,7 @@ The package contains eleven cycle models. Each is a module under `HeatPumpLab.cy
 | Heat pump with MVR steam | `MVRHeatPump` | A vapour-compression cycle heats the air and raises low-pressure steam, which a chain of mechanical vapour recompression fans, with water injection and splits to the process, lifts to heat the air to the target. | [2] |
 | sCO₂ reverse Brayton heat pump | `BraytonHeatPump` | Supercritical CO₂ cycle with split compression, a preheater, an IHX and a turbine expander, architectures 1 and 2. | [7] |
 | Two-stage economiser heat pump | `EconomiserHeatPump` | Two-stage cycle with a flash tank, a closed economiser (vapour injection) or parallel compression, or single-stage for comparison; optimises the intermediate pressure. | [8, 9] |
-| Dual-pressure condensation heat pump | `DualPressureHeatPump` | One evaporator and two condensing pressures in series on the air; the high-pressure liquid returns to the low-pressure condenser. Optimises the low condensing temperature. | [10] |
+| Multi-pressure condensation heat pump | `MultiPressureHeatPump` | One evaporator and n condensing pressures (2–5) in series on the air, each with its own compressor; each condenser's liquid is throttled into the one below. Optimises the lower condensing temperatures. `DualPressureHeatPump` is the two-pressure case. | [10] |
 | Reverse-Stirling heat pump | `StirlingHeatPump` | Semi-empirical block: a fraction of the Carnot COP per unit, one to four units in series on the air. Indicative only. | [11, 12] |
 | Ammonia–water hybrid heat pump | `HybridHeatPump` | Absorption–compression (Osenbrück) cycle: desorber, separator, compressor with optional wet compression, solution pump and absorber heating the air. Properties from the IAPWS 2001 ammonia–water formulation through teqp (`ammonia-water` extra). | [13, 14] |
 
@@ -37,7 +37,7 @@ Two of the models also run in the browser, with CoolProp compiled to WebAssembly
 installed and no inputs leave the browser:
 
 - **Advanced dryer heat pumps** ([`apps/dryer`](apps/dryer)): the RHP, SLTHP, cascade,
-  HP + MVR, sCO₂ Brayton, flash tank / economiser, dual-pressure, Stirling and ammonia–water
+  HP + MVR, sCO₂ Brayton, flash tank / economiser, multi-pressure, Stirling and ammonia–water
   hybrid cycles, solved live, plus the results of the REFPROP design study.
 - **Steam-generating heat pump** ([`apps/steam`](apps/steam)): the single-stage cycle raising
   steam, with compressor maps, saved cases, side-by-side comparison and sweeps.
