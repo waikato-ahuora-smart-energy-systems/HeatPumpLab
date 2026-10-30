@@ -18,9 +18,11 @@ BASE_VARIABLE_NAMES = (
     "comp2_power_frac",
 )
 
-# Compressor-2 share of total compressor power. A design constraint for every search
-# (optimisers, MOBO runners, ridge seeding via the objective's repair); the cycle model
-# itself solves 0.1-0.9.
+# Default search bounds on comp2_power_frac, the logarithmic pressure-ratio allocation
+# ln(P_int/P_L) = (1 - comp2_power_frac) ln(P_H/P_L) (CustomRelationship.Determine_Pint), not a
+# share of compressor power. A design constraint for every search (optimisers, MOBO runners, ridge
+# seeding via the objective's repair); production BO can widen it with
+# OuterDesignOptimisationConfig.comp2_power_frac_bounds. The cycle model itself solves 0.1-0.9.
 COMP2_POWER_FRAC_BOUNDS = (0.4, 0.6)
 
 DEFAULT_BOUNDS = np.asarray(
@@ -173,8 +175,21 @@ class OuterDesignOptimisationConfig:
     exact_evaluation_worker_max_tasks: int = 20
     max_stage_pressure_ratio: float = DEFAULT_MAX_STAGE_PRESSURE_RATIO
     min_discharge_superheat_K: float = 0.0
+    # Search bounds on comp2_power_frac (logarithmic pressure-ratio allocation).
+    comp2_power_frac_bounds: tuple[float, float] = COMP2_POWER_FRAC_BOUNDS
+
+    @property
+    def bounds(self) -> np.ndarray:
+        """Box bounds of [RHX1 lift, RHX2 lift, comp2_power_frac]."""
+        bounds = DEFAULT_BOUNDS.copy()
+        bounds[2] = self.comp2_power_frac_bounds
+        return bounds
 
     def __post_init__(self) -> None:
+        lower, upper = (float(v) for v in self.comp2_power_frac_bounds)
+        if not (np.isfinite(lower) and np.isfinite(upper) and 0.0 < lower < upper < 1.0):
+            raise ValueError("comp2_power_frac_bounds must satisfy 0 < lower < upper < 1.")
+        object.__setattr__(self, "comp2_power_frac_bounds", (lower, upper))
         if not np.isfinite(self.min_discharge_superheat_K) or self.min_discharge_superheat_K < 0:
             raise ValueError("min_discharge_superheat_K must be finite and nonnegative.")
         if not np.isfinite(self.max_stage_pressure_ratio) or self.max_stage_pressure_ratio <= 1:
@@ -210,7 +225,7 @@ class OuterDesignOptimisationConfig:
                 self.fixed_dT_rhx2_cold,
                 self.fixed_comp2_power_frac,
             ),
-            DEFAULT_BOUNDS,
+            self.bounds,
         ):
             if not np.isfinite(value) or not lower <= value <= upper:
                 raise ValueError(
