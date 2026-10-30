@@ -220,3 +220,48 @@ def test_historical_candidate_cannot_shift_fixed_composition_by_repair(monkeypat
     assert not result.incumbent_replays
     assert result.exact_evaluations == 2
     assert all(r.x[3:] == (0.5, 0.5) for r in result.evaluations)
+
+
+def test_comp2_power_frac_bounds_set_the_search_box(monkeypatch):
+    config = Config(comp2_power_frac_bounds=(0.3, 0.7), candidate_pool_size=64)
+    assert config.bounds[2].tolist() == [0.3, 0.7]
+    domain = DesignDomain([0.5, 0.5], 123.0, config)
+    for value in (0.3, 0.7):
+        x = domain.base.copy()
+        x[2] = value
+        u = domain.encode(x)
+        assert domain.contains(u)
+        assert domain.decode(u)[2] == pytest.approx(value)
+    search = BayesianDesignSearch(domain, config)
+    proposals = []
+    for _ in range(12):
+        proposals.append(search.ask())
+        search.tell(proposals[-1], 1e6, False)
+    assert all(0.3 - 1e-12 <= x[2] <= 0.7 + 1e-12 for x in proposals)
+    assert any(x[2] < 0.4 or x[2] > 0.6 for x in proposals)
+
+    analyser = SyntheticAnalyser()
+    instances = []
+
+    def factory(**kwargs):
+        objective = _OuterDesignObjective(**kwargs, analyser=analyser)
+        instances.append(objective)
+        return objective
+
+    monkeypatch.setattr(outer_design, "_OuterDesignObjective", factory)
+    outer_design.optimise_recuperative_heat_pump(
+        config=replace(config, max_exact_evaluations=1)
+    )
+    assert instances[0].bounds[2].tolist() == [0.3, 0.7]
+
+
+@pytest.mark.parametrize("bounds", [(0.6, 0.4), (0.0, 0.5), (0.5, 1.0), (0.4, float("nan"))])
+def test_comp2_power_frac_bounds_are_validated(bounds):
+    with pytest.raises(ValueError):
+        Config(comp2_power_frac_bounds=bounds)
+
+
+def test_fixed_comp2_power_frac_must_lie_inside_configured_bounds():
+    with pytest.raises(ValueError):
+        Config(comp2_power_frac_bounds=(0.3, 0.45), fixed_comp2_power_frac=0.5)
+    Config(comp2_power_frac_bounds=(0.3, 0.45), fixed_comp2_power_frac=0.35)
