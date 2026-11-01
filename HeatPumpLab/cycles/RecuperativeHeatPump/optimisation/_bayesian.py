@@ -15,6 +15,7 @@ from scipy.spatial.distance import cdist
 from scipy.stats import qmc
 
 from ._constraint_model import ConstraintModel, aggregate_margins
+from ._stable_solves import AddressIndependentSolves
 
 # GP fitting and acquisition failures that fall back to the space-filling pool. BotorchError covers
 # CandidateGenerationError (e.g. every acquisition restart ends infeasible) and UnsupportedError.
@@ -356,6 +357,7 @@ class BayesianDesignSearch:
         with (
             torch.random.fork_rng(devices=[]),
             warnings.catch_warnings(record=True) as caught,
+            AddressIndependentSolves(),
         ):
             torch.manual_seed(self.config.seed + 104729 * len(self.x))
             try:
