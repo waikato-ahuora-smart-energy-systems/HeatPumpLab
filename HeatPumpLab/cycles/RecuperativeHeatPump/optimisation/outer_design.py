@@ -49,6 +49,7 @@ def optimise_recuperative_heat_pump(
         exact_evaluation_worker_max_tasks=config.exact_evaluation_worker_max_tasks,
         max_stage_pressure_ratio=config.max_stage_pressure_ratio,
         min_discharge_superheat_K=config.min_discharge_superheat_K,
+        bounds=config.bounds,
     )
     evaluations, replays = [], []
     try:

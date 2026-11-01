@@ -15,7 +15,6 @@ from scipy.spatial.distance import cdist
 from scipy.stats import qmc
 
 from ._constraint_model import ConstraintModel, aggregate_margins
-from ._types import DEFAULT_BOUNDS
 
 # GP fitting and acquisition failures that fall back to the space-filling pool. BotorchError covers
 # CandidateGenerationError (e.g. every acquisition restart ends infeasible) and UnsupportedError.
@@ -29,6 +28,7 @@ class DesignDomain:
         self.config = config
         self.fractions = np.asarray(fractions, dtype=float)
         self.max_lift = float(max_lift)
+        self.bounds = config.bounds
         self.base = np.r_[
             config.fixed_dT_rhx1_cold,
             config.fixed_dT_rhx2_cold,
@@ -68,8 +68,8 @@ class DesignDomain:
     def encode(self, x):
         x = np.asarray(x, dtype=float)
         return np.r_[
-            (x[self.axes] - DEFAULT_BOUNDS[self.axes, 0])
-            / np.diff(DEFAULT_BOUNDS[self.axes], axis=1).ravel(),
+            (x[self.axes] - self.bounds[self.axes, 0])
+            / np.diff(self.bounds[self.axes], axis=1).ravel(),
             x[3 : 3 + self.nc],
         ]
 
@@ -78,8 +78,8 @@ class DesignDomain:
         x = self.base.copy()
         k = len(self.axes)
         x[self.axes] = (
-            DEFAULT_BOUNDS[self.axes, 0]
-            + u[:k] * np.diff(DEFAULT_BOUNDS[self.axes], axis=1).ravel()
+            self.bounds[self.axes, 0]
+            + u[:k] * np.diff(self.bounds[self.axes], axis=1).ravel()
         )
         if self.nc:
             x[3:-1] = u[k:]
@@ -103,8 +103,8 @@ class DesignDomain:
         fixed = sum(self.base[i] for i in (0, 1) if i not in self.axes)
         if indices:
             # sum(lower + u * span) <= max_lift - fixed, in normalised coordinates.
-            lower = DEFAULT_BOUNDS[[self.axes[j] for j in indices], 0]
-            span = np.diff(DEFAULT_BOUNDS[[self.axes[j] for j in indices]], axis=1).ravel()
+            lower = self.bounds[[self.axes[j] for j in indices], 0]
+            span = np.diff(self.bounds[[self.axes[j] for j in indices]], axis=1).ravel()
             constraints.append(
                 (
                     torch.tensor(indices),
