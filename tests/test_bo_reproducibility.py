@@ -67,7 +67,7 @@ def test_two_processes_propose_identical_designs_for_150_plus_steps():
     )
     runs = [
         subprocess.Popen(
-            [sys.executable, "-W", "ignore", "-c", SEARCH, str(heap_seed), str(PROPOSALS)],
+            [sys.executable, "-c", SEARCH, str(heap_seed), str(PROPOSALS)],
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
