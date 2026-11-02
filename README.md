@@ -124,6 +124,20 @@ print(hp.converged, hp.COP)              # True 2.59
 print(hp.get_report()["Pmax"])           # maximum pressure, kPa
 ```
 
+### Refrigerant charge
+
+`RecuperativeHP`, `MultiPressureHeatPump`, `DualPressureHeatPump` and `EconomiserHeatPump` give a screening range for the charge of a solved design, in g per kW of heating, without a heat exchanger design:
+
+```python
+charge = hp.estimate_charge()                      # recuperative
+charge = cycle.estimate_charge(cycle.solve())      # multi-pressure, dual-pressure, economiser
+
+print(charge.exchanger_low, charge.exchanger_central, charge.exchanger_high)
+print(charge.system_kg(1000.0))                    # (low, central, high) kg at 1 MW of heating
+```
+
+The cycle fixes the duty, driving force and refrigerant state along each exchanger. Assumed U and internal volume per unit area (`GEOMETRY` in `cycles/common/charge.py`; pass `geometry=` to replace them) then give the area and volume. The range runs from compact geometry with homogeneous density to bulky geometry with the Zivi void fraction. The system figures add an allowance for oil, piping and receivers based on small propane units. The result is for comparing designs under the same assumptions; it isn't a filling quantity. For zeotropes, the shift between charged and circulating composition isn't modelled.
+
 ### Design optimisation
 
 `optimise_recuperative_heat_pump` searches the RHX lifts, stage allocation and, optionally, the

@@ -890,6 +890,23 @@ function liveSrc() {
           variant: v, stages: stagesOf(c), title: k === 'A' ? `${nm} · ${v === 'H' ? `${(c.stagesH || 1) === 1 ? 'single-stage' : 'two-stage'}${c.ihxH ? ' with IHX' : ', no IHX'}` : v === 'A' ? (stagesOf(c) === 1 ? 'single stage, RHX1 on the suction' : 'RHX1 on the stage-1 suction') : v === 'B' ? 'RHX2 on the interstage gas' : 'RHX1 and RHX2'}` : 'SLTHP · RHX1 parallel to the LT gas cooler',
           info: `<div class="cyrow"><i class="sw" style="background:${col}"></i><b>${nm}</b><span class="f">${fluidLabel(c)} · ${c.T} °C air · ${c.a} K approach · ${desc}</span></div>`};
 }
+/* the refrigerant charge cards (dryer_charge.js), the same for every cycle; cached on the result */
+function chargeOf(r, c) {
+  if (!r || !r.success || !(RHP(c.cyc) || c.cyc === 'E' || c.cyc === 'D')) return null;
+  if (r._charge === undefined) {
+    try {
+      if (RHP(c.cyc)) r._charge = DRYCHARGE.rhpCharge(LIVE.fl, LIVE.air, r, baseOf(r.srcAir ? {...c, srcTo: r.srcAir.Tout} : c));
+      else r._charge = DRYCHARGE.loopCharge(r.fluids[0], r);
+    } catch (e) { r._charge = null; }
+  }
+  return r._charge;
+}
+function chargeFigs(r, c, kw, fig) {
+  const e = chargeOf(r, c), kg = g => g * kw / 1000, f = v => v < 10 ? v.toFixed(1) : v.toFixed(0);
+  if (!e) return [fig('Refrigerant charge', '–', '', RHP(c.cyc) || c.cyc === 'E' || c.cyc === 'D' ? 'could not be estimated for this design' : 'not estimated for this cycle')];
+  return [fig('Refrigerant charge', f(kg(e.system_central)), 'kg', `screening range ${f(kg(e.system_low))}–${f(kg(e.system_high))} kg · ${f(e.system_central)} g/kW${e.mixture ? ' · composition shift not modelled' : ''}`),
+    fig('Charge in the exchangers', f(kg(e.exchanger_central)), 'kg', `range ${f(kg(e.exchanger_low))}–${f(kg(e.exchanger_high))} kg · without oil and piping`)];
+}
 function renderLive() {
   lvTitle();
   if (LIVE.cfg && MULTI(LIVE.cfg.cyc)) return renderLiveMulti();
@@ -944,6 +961,8 @@ function renderLive() {
   if (p.evap_pinch_K != null) cells.push(fig(p.low_side_above_Pcrit ? 'Gas-heater pinch' : 'Evaporator pinch', p.evap_pinch_K.toFixed(2), 'K', `to the ${r.srcAir ? 'source air' : 'source water'} · ${p.low_side_above_Pcrit ? 'heater' : 'evaporator'} in ${p.T_evap_inlet.toFixed(1)} °C`));
   if (secOn(c)) cells.push(fig('Secondary air', (100 * secShare(c)).toFixed(1), '%', `of the heat · ${(+c.phi).toFixed(2)} kg per kg primary to ${c.Tmt} °C`));
   cells.push(fig('Air per refrigerant', p.air_per_ref_kgkg.toFixed(2), 'kg/kg', `${secOn(c) ? 'primary ' : ''}dry air${secOn(c) ? ` · total ${(p.air_per_ref_kgkg * (1 + +c.phi)).toFixed(2)}` : ''}${p.water_per_ref_kgkg != null ? ` · water ${p.water_per_ref_kgkg.toFixed(2)} kg/kg` : ''}`));
+  const uCh = energy(RHP(c.cyc) ? 'A' : 'S', liveD(), state.vsw, c.T, c.Tain);
+  if (uCh) cells.push(...chargeFigs(r, c, uCh.kw.air, fig));
   cells.push(fig('Solve time', (r.ms / 1000).toFixed(1), 's', `CoolProp ${CP_VERSION}`));
   figs.innerHTML = cells.join('');
 }
@@ -1421,6 +1440,7 @@ function renderLiveMulti() {
     fig('Process steam', p.stages.filter(s => s.to_process > 1e-9).length, `of ${p.stages.length} fans`, p.stages.filter(s => s.to_process > 1e-9).map((s, k) => `${s.T_sat.toFixed(0)} °C`).join(' · ')),
     fig('Air after the bottom cycle', p.T_air_mid.toFixed(1), '°C', `approach ${p.gap_bottom.toFixed(1)} K · steam ${p.gap_steam.toFixed(1)} K${p.sub_raise > 0.05 ? ` · subcooler outlet raised ${p.sub_raise.toFixed(1)} K` : ''}${p.t1_drop > 0.05 ? ` · ${p.t1_drop.toFixed(1)} K below condensing − approach, to keep the subcooler approach` : ''}`));
   if (c.cyc !== 'K' && secOn(c)) cells.push(fig('Secondary air', (100 * secShare(c)).toFixed(1), '%', `of the heat · ${(+c.phi).toFixed(2)} kg per kg primary to ${c.Tmt} °C`));
+  cells.push(...chargeFigs(r, c, energyG(r, c).kw.air, fig));
   cells.push(fig('Solve time', (r.ms / 1000).toFixed(1), 's', `CoolProp ${CP_VERSION}`));
   while (cells.length % 4) cells.push(`<div class="fig"></div>`);
   figs.innerHTML = cells.join('');
