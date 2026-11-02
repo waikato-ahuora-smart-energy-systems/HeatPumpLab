@@ -171,3 +171,63 @@ def test_unconverged_recuperative_is_rejected(monkeypatch):
     hp.converged = False
     with pytest.raises(ValueError, match="converged"):
         hp.estimate_charge()
+
+
+# ---- the dryer app's port (apps/src/dryer/dryer_charge.js), in Node over CoolProp ------------------------------------
+JS_CASES = [("flash", "E", {"arrangement": "flash"}), ("single", "E", {"arrangement": "single"}),
+            ("flash butane", "E", {"arrangement": "flash", "T_air_inlet": 90.0, "T_air_tar": 140.0, "fluid": "n-Butane"}),
+            ("dual", "D", {"n_pressures": 2, "T_cond": [110.0]}), ("three", "D", {})]
+KEYS = ("exchanger_low", "exchanger_central", "exchanger_high", "system_low", "system_central", "system_high")
+
+
+@pytest.fixture(scope="module")
+def js_charge(tmp_path_factory):
+    import json
+
+    from test_dryer_live import LIVE, _run_node
+
+    return _run_node(tmp_path_factory.mktemp("charge"), f"""
+const M = req({json.dumps(str(LIVE / "dryer_more.js"))}), C = req({json.dumps(str(LIVE / "dryer_charge.js"))});
+const W = CP.HAPropsSI('W', 'T', 288.15, 'P', 101325, 'R', 0.6);
+const humid = () => {{ const a = DRY.airModel(T => CP.HAPropsSI('H', 'T', T + 273.15, 'P', 101325, 'W', W) / 1000); a.W = W; return a; }};
+const fls = {{}}, fl = n => fls[n] || (fls[n] = new Fluid(CP, [[n, 100]], 'mass'));
+DRY.setCompModel(5);
+const out = {{ cases: {{}} }};
+for (const [name, m, o] of {json.dumps(JS_CASES)}) {{
+  const {{ fluid = 'Cyclopentane', ...c }} = o, a = humid(), f = fl(fluid);
+  const r = m === 'E' ? M.economiser(f, a, c) : M.multiPressure(f, a, c);
+  out.cases[name] = C.loopCharge(f, r);
+}}
+const f = new Fluid(CP, [['Propane', 20], ['Isopentane', 80]], 'mass');
+const rhp = (fl_, lift) => {{
+  const c = {{ T_air_tar: 170, dT_GC_min: 20, T_source_in: 60, T_source_out: 50, dT_src: 5, dT_ev: 5, T_air_inlet: 15, lift, lift2: 0, gc_out_offset: 5 }};
+  const r = DRY.rhpa(fl_, air, c);
+  if (!r.success) throw new Error(r.message);
+  return C.rhpCharge(fl_, air, r, c);
+}};
+out.rhp = rhp(fl('n-Butane'), 40);
+out.rhpMix = rhp(f, 40);
+console.log(JSON.stringify(out));
+""")
+
+
+@pytest.mark.parametrize("name,model,over", JS_CASES, ids=[c[0] for c in JS_CASES])
+def test_js_matches_python_for_loop_cycles(js_charge, name, model, over):
+    over = dict(over)
+    fluid = over.pop("fluid", "Cyclopentane")
+    if model == "E":
+        hp = EconomiserHeatPump(EconomiserConfig(property_backend="coolprop", fluid=fluid))
+    else:
+        hp = MultiPressureHeatPump(MultiPressureConfig(property_backend="coolprop", fluid=fluid))
+    want = hp.estimate_charge(hp.solve(**over))
+    got = js_charge["cases"][name]
+    for key in KEYS:
+        assert got[key] == pytest.approx(getattr(want, key), rel=2e-4), key
+
+
+def test_js_recuperative_counts_recuperator(js_charge):
+    for e in (js_charge["rhp"], js_charge["rhpMix"]):
+        assert 0.0 < e["exchanger_low"] < e["exchanger_central"] < e["exchanger_high"]
+        assert "RHX1" in e["by_exchanger"] and "Evaporator" in e["by_exchanger"]
+        assert e["exchanger_central"] == pytest.approx(sum(r["central"] for r in e["by_exchanger"].values()))
+    assert js_charge["rhpMix"]["mixture"] is True and js_charge["rhp"]["mixture"] is False
