@@ -10,7 +10,7 @@ import pytest
 from HeatPumpLab.cycles.ConventionalHeatPump import (
     DISPLACEMENT_50HZ_M3H, R600A_COEFFICIENTS, recip_models, recip_r600a,
 )
-from test_steam_hot_water import JS_TOY, WATER, steam_model
+from test_steam_hot_water import WATER, node_toy, steam_model
 
 ROOT = Path(__file__).resolve().parents[1]
 JS = ROOT / "apps" / "src" / "steam" / "sghp_model.js"
@@ -71,7 +71,7 @@ def check_cycle(model):
     # mass flow = swept volume x volumetric efficiency x suction density
     rho = py.states["suction"]["D"]
     assert r["m_dot_kgs"] == pytest.approx(comp.displacement_m3h / 3600 * r["eta_vol"] * rho, rel=1e-9)
-    js = node_json(JS_TOY + f"const base = {json.dumps(WATER | {'dT_superheat': 5.0})};"
+    js = node_toy(f"const base = {json.dumps(WATER | {'dT_superheat': 5.0})};"
                    f"const r = S.solve(toy, base, S.compressorMap({json.dumps(model)}, {{map_basis: 'temperature'}}), 0.0);"
                    "console.log(JSON.stringify(r.success ? r.report : {msg: r.message}));")
     for k in ("COP", "Q_heat_kW", "m_dot_kgs", "eta_is_overall", "eta_vol", "W_electric_kW"):

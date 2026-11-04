@@ -10,8 +10,10 @@ dT_subcool specification, and the browser model against Python.
 import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
+import CoolProp.CoolProp as CP
 import pytest
 
 from HeatPumpLab.cycles.ConventionalHeatPump import ConventionalHeatPump, ConventionalHPConfig, EfficiencyCurve
@@ -19,6 +21,17 @@ from test_conventional_heat_pump import ToyFluid
 
 ROOT = Path(__file__).resolve().parents[1]
 WATER = dict(T_source=15.0, T_steam=75.0, T_water_in=30.0, T_water_out=60.0)   # evap 10 C, bubble 80 C
+
+
+def water_P(T_out):
+    """Hot water pressure, Pa: 1 bar above saturation at the outlet temperature."""
+    return CP.PropsSI("P", "T", T_out + 273.15, "Q", 0, "Water") + 1e5
+
+
+def water_dh(T_in, T_out):
+    """Hot water enthalpy rise, kJ/kg, independent of the model."""
+    P = water_P(T_out)
+    return (CP.PropsSI("H", "T", T_out + 273.15, "P", P, "Water") - CP.PropsSI("H", "T", T_in + 273.15, "P", P, "Water")) / 1000
 
 
 def steam_model(props=None, **kw):
@@ -47,8 +60,24 @@ def test_hot_water_pinch_is_at_the_cold_end():
     assert r["dT_subcool"] == pytest.approx(45.0)
     assert r["subcooler_min_approach_K"] == pytest.approx(5.0)
     assert (r["T_water_in"], r["T_water_out"]) == (30.0, 60.0)
-    assert r["m_water_kgs"] == pytest.approx(r["Q_subcool_kW"] / (4.19 * 30.0))
+    assert r["m_water_kgs"] == pytest.approx(r["Q_subcool_kW"] / water_dh(30.0, 60.0))
     assert r["energy_balance_residual_kJkg"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_hot_water_properties_come_from_coolprop():
+    """The flow uses real enthalpies, at 1 bar above saturation at the outlet temperature, whatever the refrigerant."""
+    r = steam_model(T_steam=75.0, T_water_in=30.0, T_water_out=60.0).solve().report
+    assert r["P_water_bar"] == pytest.approx(water_P(60.0) / 1e5, rel=1e-6)
+    assert r["h_water_out_kJkg"] - r["h_water_in_kJkg"] == pytest.approx(water_dh(30.0, 60.0), rel=1e-6)
+    assert r["m_water_kgs"] == pytest.approx(r["Q_subcool_kW"] / water_dh(30.0, 60.0), rel=1e-6)
+    # hot water that a fixed cp of 4.19 kJ/kg K would get about 4 % wrong
+    hot = ConventionalHeatPump(ConventionalHPConfig(refrigerant="n-Pentane", property_backend="coolprop", T_source=150.0, T_steam=180.0,
+                                                    T_water_in=160.0, T_water_out=170.0)).solve()
+    assert hot.success, hot.message
+    assert hot.report["P_water_bar"] == pytest.approx(water_P(170.0) / 1e5, rel=1e-6)
+    cp_mean = water_dh(160.0, 170.0) / 10.0
+    assert 4.3 < cp_mean < 4.45 and hot.report["m_water_kgs"] == pytest.approx(hot.report["Q_subcool_kW"] / (cp_mean * 10.0), rel=1e-6)
+    assert steam_model(T_evap=10.0, T_cond=80.0, dT_subcool=45.0).solve().report["P_water_bar"] is None
 
 
 def test_same_cycle_as_the_direct_specification():
@@ -103,9 +132,12 @@ def test_interior_pinch_raises_the_subcooler_outlet():
     T_out = st["subcool_out"]["T"]
     assert T_out > 35.0 + 0.05                                             # not the cold-end value
     assert r["subcooler_min_approach_K"] == pytest.approx(5.0, abs=1e-4)
-    # independent dense check of the approach along the exchanger (water linear in duty)
+    # independent dense check of the approach along the exchanger (water enthalpy linear in duty)
     h_in, h_out, P = st["cond_out"]["h"], st["subcool_out"]["h"], res.P_H
-    worst = min(fluid.ref_PH(P, h_out + (h_in - h_out) * i / 400)["T"] - (30.0 + 40.0 * i / 400) for i in range(401))
+    Pw = water_P(70.0)
+    hw0, hw1 = (CP.PropsSI("H", "T", T + 273.15, "P", Pw, "Water") for T in (30.0, 70.0))
+    worst = min(fluid.ref_PH(P, h_out + (h_in - h_out) * i / 400)["T"]
+                - (CP.PropsSI("T", "H", hw0 + (hw1 - hw0) * i / 400, "P", Pw, "Water") - 273.15) for i in range(401))
     assert worst == pytest.approx(5.0, abs=2e-3) and worst > 5.0 - 2e-3
 
 
@@ -141,23 +173,46 @@ const toy = { P_crit: 3.796, T_crit: 151.98,
 """
 
 
+def node_toy(script):
+    """Run a script with S (the model) and toy (the toy fluid, with the page's CoolProp water as toy.water)."""
+    node, live, cp = shutil.which("node"), ROOT / "apps" / "src" / "steam", ROOT / "apps" / "src" / "coolprop"
+    if node is None or not (cp / "coolprop.js").exists():
+        pytest.skip("node or apps/src/coolprop/coolprop.js not available")
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        shutil.copy(cp / "coolprop.js", tmp / "coolprop.mjs")
+        shutil.copy(cp / "coolprop.wasm", tmp / "coolprop.wasm")
+        (tmp / "t.mjs").write_text(f"""
+import F from './coolprop.mjs'; import fs from 'fs'; import {{ createRequire }} from 'module';
+const S = createRequire(import.meta.url)({json.dumps(str(live / "sghp_model.js"))});
+const src = fs.readFileSync({json.dumps(str(live / "sghp_live.js"))}, 'utf8');
+const cut = (a, b) => src.slice(src.indexOf(a), src.indexOf(b));
+const code = cut('function cpCall', '/* ---------------------------------------------------------------- property adapter')
+  + cut('const LABEL', '/* ---------------------------------------------------------------- state */');
+const CP = await F({{ locateFile: p => new URL(p, import.meta.url).pathname }});
+const Fluid = new Function('CP', 'SGHP', code + '\\nreturn CoolPropFluid;')(CP, S);
+""" + JS_TOY + "toy.water = new Fluid(CP, [['Water', 100]]);\n" + script)
+        out = subprocess.run([node, str(tmp / "t.mjs")], capture_output=True, text=True, cwd=tmp)
+    assert out.returncode == 0, out.stderr[-800:]
+    return json.loads(out.stdout)
+
+
 def test_browser_model_matches_python():
-    node = shutil.which("node")
-    js = ROOT / "apps" / "src" / "steam" / "sghp_model.js"
-    if node is None or not js.exists():
-        pytest.skip("node or sghp_model.js not available")
     cases = [dict(),
              dict(dT_superheat=15.0, T_water_in=40.0, T_water_out=70.0), dict(T_water_out=78.0), dict(T_steam=150.0),
              dict(loss_UA_cond_kWK=0.02, loss_UA_subcool_kWK=0.01, loss_UA_evap_kWK=0.03), dict(preheat_subcool_share=0.5),
              dict(preheat_subcool_share=1.0), dict(preheat_subcool_share=1.0, loss_UA_cond_kWK=0.02),
-             dict(dP_K_cond=0.05, dP_K_subcool=0.5, dP_K_evap=0.02), dict(dP_K_cond=0.05, preheat_subcool_share=1.0)]
+             dict(dP_K_cond=0.05, dP_K_subcool=0.5, dP_K_evap=0.02), dict(dP_K_cond=0.05, preheat_subcool_share=1.0),
+             dict(second_steam=True, T_steam2=68.0), dict(second_steam=True, T_steam2=62.0, preheat_subcool_share=1.0),
+             dict(second_steam=True, T_steam2=68.0, loss_UA_cond_kWK=0.02, loss_UA_subcool_kWK=0.01, loss_UA_steam2_kWK=0.015),
+             dict(second_steam=True, T_steam2=68.0, dP_K_cond=0.05, dP_K_subcool=0.5, dP_K_evap=0.02),
+             dict(second_steam=True, T_steam2=58.0), dict(second_steam=True, T_steam2=78.0)]
     # the JS model always reads the R600a map; give Python the same map, size-less in neither
-    script = ("const S = require(%s);" % json.dumps(str(js)) + JS_TOY +
-              "const cases = %s; const base = %s;" % (json.dumps(cases), json.dumps(WATER | {"dT_superheat": 5.0})) +
+    script = ("const cases = %s; const base = %s;" % (json.dumps(cases), json.dumps(WATER | {"dT_superheat": 5.0})) +
               "const comp = S.compressorMap('Recip-M', {map_basis: 'temperature'});"
               "console.log(JSON.stringify(cases.map(c => { const r = S.solve(toy, Object.assign({}, base, c), comp, 0.0);"
               " return r.success ? {ok: true, r: r.report} : {ok: false, msg: r.message}; })));")
-    out = json.loads(subprocess.run([node, "-e", script], capture_output=True, text=True, check=True).stdout)
+    out = node_toy(script)
     from HeatPumpLab.cycles.ConventionalHeatPump import recip_r600a
     for c, js_res in zip(cases, out):
         py = steam_model(**c, Q_heat_kW=None, loss_UA_kWK=0.0,
@@ -172,8 +227,10 @@ def test_browser_model_matches_python():
                   "Q_loss_cond_kW", "Q_loss_subcool_kW", "Q_loss_evap_kW", "VHC", "T_cond_out", "dT_subcool_cond", "steam_preheat_fraction", "steam_gen_min_approach_K",
                   "preheat_subcool_share", "PR", "P_discharge_bar", "P_evap_in_bar", "dP_cond_kPa", "dP_subcool_kPa",
                   "dP_evap_kPa", "T_cond_dew", "W_electric_kW", "density_ratio", "density_ratio_beyond", "to_read",
-                  "tc_read", "w_swept_kJm3"):
-            assert js_res["r"][k] == pytest.approx(py.report[k], rel=1e-8, abs=1e-9), (c, k)
+                  "tc_read", "w_swept_kJm3", "second_steam", "T_steam2", "T_steam2_out", "Q_steam2_kW", "m_steam2_kgs",
+                  "steam2_min_approach_K", "q_steam2_kJkg", "m_hot_water_net_kgs", "energy_balance_residual_kJkg",
+                  "P_water_bar", "h_water_in_kJkg", "h_water_out_kJkg"):
+            assert js_res["r"][k] == pytest.approx(py.report[k], rel=1e-8, abs=1e-6 if k == "energy_balance_residual_kJkg" else 1e-9), (c, k)
         assert js_res["r"]["limit_flags"] == py.report["limit_flags"] and js_res["r"]["window_edge"] == py.report["window_edge"]
 
 
@@ -242,7 +299,7 @@ def test_exchanger_heat_losses():
     losses = r["Q_compressor_loss_kW"] + r["Q_loss_cond_kW"] + r["Q_loss_subcool_kW"] + r["Q_loss_evap_kW"]
     assert r["W_electric_kW"] + r["Q_source_kW"] == pytest.approx(r["Q_heat_kW"] + losses, rel=1e-9)
     # water and steam follow the delivered duties
-    assert r["m_water_kgs"] == pytest.approx(r["Q_subcool_kW"] / (4.19 * 30.0))
+    assert r["m_water_kgs"] == pytest.approx(r["Q_subcool_kW"] / water_dh(30.0, 60.0))
     assert r["m_steam_kgs"] < b["m_steam_kgs"]
     # sizing to a heat output covers the losses
     sized = steam_model(Q_heat_kW=50.0, loss_UA_kWK=None, **UA).solve()
@@ -278,6 +335,88 @@ def test_condenser_exit_subcooling_makes_more_steam():
     r = lossy.report
     Q_sub = r["Q_cond_refrigerant_kW"] - lb.report["Q_cond_refrigerant_kW"]
     assert Q_sub == pytest.approx(r["m_steam_kgs"] * r["steam_preheat_fraction"] * r["steam_dh_kJkg"], rel=1e-4)
+
+
+# ---------------------------------------------------------------- second steam level from the subcooling
+
+SIZED = dict(Q_heat_kW=None, loss_UA_kWK=0.0, compressor=EfficiencyCurve(eta_is=0.7, motor_eff=0.9, displacement_m3h=56.25))
+
+
+def test_second_steam_off_changes_nothing():
+    base = steam_model(**SIZED).solve()
+    off = steam_model(**SIZED, second_steam=False, T_steam2=68.0, loss_UA_steam2_kWK=0.5).solve()
+    assert base.report == off.report and base.states == off.states and "steam2_out" not in off.states
+    assert off.report["second_steam"] is False and off.report["m_steam2_kgs"] is None
+
+
+def test_second_steam_comes_out_of_the_hot_water():
+    """Same refrigerant cycle: the second steam takes all the subcooling its approach allows, the hot water the rest."""
+    from HeatPumpLab.cycles.ConventionalHeatPump import steam_from_feedwater
+    base = steam_model(**SIZED).solve()
+    res = steam_model(**SIZED, second_steam=True, T_steam2=68.0).solve()
+    assert res.success, res.message
+    b, r, st = base.report, res.report, res.states
+    for k in ("COP", "Q_heat_kW", "Q_cond_kW", "m_steam_kgs", "T_subcool_out", "dT_subcool", "m_dot_kgs"):
+        assert r[k] == pytest.approx(b[k], rel=1e-10), k
+    assert r["Q_steam2_kW"] + r["Q_subcool_kW"] == pytest.approx(b["Q_subcool_kW"]) and r["Q_steam2_kW"] > 0
+    assert r["Q_heat_kW"] == pytest.approx(r["Q_cond_kW"] + r["Q_steam2_kW"] + r["Q_subcool_kW"])
+    assert r["energy_balance_residual_kJkg"] == pytest.approx(0.0, abs=1e-9)
+    # the pinch is where boiling starts: the refrigerant there is dTmin_steam above the second steam
+    sf = steam_from_feedwater(r["Q_steam2_kW"], 68.0, 60.0)
+    fp, q = sf["preheat_kJkg"] / sf["dh_kJkg"], st["cond_out"]["h"] - st["steam2_out"]["h"]
+    assert ToyFluid().ref_PH(res.P_H, st["steam2_out"]["h"] + fp * q)["T"] == pytest.approx(73.0, abs=1e-6)
+    assert r["steam2_min_approach_K"] == pytest.approx(5.0, abs=1e-6) and r["T_steam2_out"] < 73.0
+    assert r["subcooler_min_approach_K"] == pytest.approx(5.0)
+    # water follows the smaller duty, and both steam levels bleed their feedwater from it
+    assert r["m_water_kgs"] == pytest.approx(r["Q_subcool_kW"] / water_dh(30.0, 60.0))
+    assert r["m_steam2_kgs"] == pytest.approx(sf["m_kgs"]) and r["P_steam2_bar"] == pytest.approx(sf["P_steam_MPa"] * 10)
+    assert r["m_hot_water_net_kgs"] == pytest.approx(r["m_water_kgs"] - r["m_steam_kgs"] - r["m_steam2_kgs"])
+    assert r["steam_bleed_fraction"] == pytest.approx((r["m_steam_kgs"] + r["m_steam2_kgs"]) / r["m_water_kgs"])
+
+
+def test_second_steam_after_preheat_share_and_with_losses():
+    # the condenser-exit subcooling comes first, so the second generator starts colder and raises less
+    plain = steam_model(**SIZED, second_steam=True, T_steam2=68.0).solve()
+    pre = steam_model(**SIZED, second_steam=True, T_steam2=68.0, preheat_subcool_share=1.0).solve()
+    assert pre.success, pre.message
+    assert pre.report["m_steam_kgs"] > plain.report["m_steam_kgs"] and pre.report["Q_steam2_kW"] < plain.report["Q_steam2_kW"]
+    assert pre.report["steam_gen_min_approach_K"] >= 5.0 - 1e-6
+    # the loss comes off the second steam duty, at the mean refrigerant temperature in that generator
+    UA = dict(loss_UA_steam2_kWK=0.002, loss_UA_subcool_kWK=0.01)
+    res = steam_model(**SIZED, second_steam=True, T_steam2=68.0, **UA).solve()
+    r, st = res.report, res.states
+    assert r["Q_loss_steam2_kW"] == pytest.approx(0.002 * ((st["cond_out"]["T"] + st["steam2_out"]["T"]) / 2 - 15.0))
+    assert r["Q_loss_subcool_kW"] == pytest.approx(0.01 * ((st["steam2_out"]["T"] + st["subcool_out"]["T"]) / 2 - 15.0))
+    assert r["Q_steam2_kW"] == pytest.approx(plain.report["Q_steam2_kW"] - r["Q_loss_steam2_kW"])
+    assert r["Q_heat_kW"] == pytest.approx(r["Q_cond_kW"] + r["Q_steam2_kW"] + r["Q_subcool_kW"])
+    # sizing to a heat output covers that loss too
+    sized = steam_model(second_steam=True, T_steam2=68.0, **UA).solve()
+    assert sized.success and sized.report["Q_heat_kW"] == pytest.approx(50.0)
+
+
+def test_second_steam_limits():
+    below = steam_model(second_steam=True, T_steam2=60.0).solve()              # not above its feedwater
+    assert not below.success and "not above the hot water outlet" in below.message
+    tight = steam_model(second_steam=True, T_steam2=75.0).solve()              # no room below the condenser exit
+    assert not tight.success and "below the refrigerant leaving the condenser" in tight.message
+    # needs the steam and hot-water specification: ignored, with a warning, on a direct specification
+    direct = steam_model(second_steam=True, T_steam2=68.0, T_evap=10.0, T_cond=80.0, dT_subcool=45.0).solve()
+    assert direct.success and direct.report["second_steam"] is False
+    assert any("second steam level" in w for w in direct.warnings)
+
+
+def test_subcooled_evaporator_inlet_is_flagged():
+    """A heat source hotter than the liquid: with no IHX to catch it the valve outlet stays liquid. It solves, but the
+    source then also heats the liquid and the COP is not a heat-pump COP, so it is flagged."""
+    res = steam_model(T_source=45.0, dT_superheat=0.0, compressor=EfficiencyCurve(eta_is=0.4, motor_eff=0.9)).solve()
+    assert res.success and res.report["evap_in_subcooled"] is True
+    assert any("subcooled" in w and "inflates the COP" in w for w in res.warnings)
+    assert steam_model().solve().report["evap_in_subcooled"] is False
+
+
+def test_evaporating_above_the_critical_temperature_says_so():
+    res = ConventionalHeatPump(ConventionalHPConfig(refrigerant="Propane", property_backend="coolprop", T_source=150.0, T_steam=180.0)).solve()
+    assert not res.success and "at or above the critical temperature" in res.message
 
 
 # ---------------------------------------------------------------- refrigerant pressure drops

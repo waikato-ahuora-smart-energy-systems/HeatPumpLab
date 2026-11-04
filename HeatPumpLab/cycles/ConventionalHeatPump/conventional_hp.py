@@ -10,6 +10,7 @@ Flow path (state numbers used in ``states``)::
     2 discharge    compressor outlet at P_H, after the compressor heat loss (see below)
     2d cond_dew    saturated vapour at P_H (end of desuperheating, inside the condenser)
     3 cond_out     condenser outlet at P_H: the bubble point, or subcooled (preheat_subcool_share)
+    3s steam2_out  second steam generator outlet (only with second_steam)
     4 subcool_out  subcooler outlet, dT_subcool below the bubble point at P_H
     4i ihx_out     IHX liquid outlet = valve inlet; the liquid gives the suction gas its superheat
     5 evap_in      expansion valve outlet (isenthalpic) at P_L
@@ -28,13 +29,24 @@ T_steam + dTmin_steam on the critical isochore (rho = rho_crit), which sets the 
 reads the critical-isochore state at the discharge pressure (``critical_isochore``). The subcooler heats water from ``T_water_in`` to ``T_water_out`` counter-
 currently: the refrigerant is subcooled as far as the minimum approach ``dTmin_water`` allows (for a
 liquid whose heat capacity rises with temperature the pinch is at the cold end, so the liquid leaves
-at T_water_in + dTmin_water), and the water flow follows from the duty (constant water heat
-capacity). ``T_evap`` / ``T_cond`` / ``dT_subcool`` set the evaporating or condensing temperature or
+at T_water_in + dTmin_water), and the water flow follows from the duty. Hot water properties always come from
+CoolProp, whatever the refrigerant backend, at a pressure ``HOT_WATER_MARGIN_MPa`` above the saturation pressure at
+T_water_out. ``T_evap`` / ``T_cond`` / ``dT_subcool`` set the evaporating or condensing temperature or
 the subcooling directly instead, bypassing the source / steam / hot-water specification. For a zeotropic
 mixture the saturation temperatures are taken at the dew point by default (the EN 12900
 convention of manufacturer data); ``evap_basis`` / ``cond_basis`` can be "bubble" or "mean".
 Compressor maps are always evaluated at the dew-point temperatures. Pressure drops are neglected:
 each side of the cycle is at one pressure.
+
+Second steam level (``second_steam``, off by default): a second steam generator between the condenser and the
+hot-water subcooler (3 -> 3s -> 4) raises saturated steam at ``T_steam2`` from the refrigerant's subcooling, with
+feedwater bled from the hot water at T_water_out, as for the main steam. Counter-current, the feedwater is heated to
+boiling over the first preheat fraction of the duty from the refrigerant's cold end, then boils at T_steam2. The
+second steam takes all the subcooling the approach allows: the refrigerant stays dTmin_steam above the water where
+boiling starts (the pinch; checked along the exchanger). The hot water takes the rest of the subcooling down to the same subcooler
+outlet, so the total heat is unchanged and the second steam comes out of the hot water. T_steam2 must lie above
+T_water_out and T_steam2 + dTmin_steam below the refrigerant leaving the condenser, and the hot water must supply the
+feedwater for both steam levels. The pressure-drop coefficient ``dP_K_subcool`` covers 3 -> 4.
 
 Compressor heat loss (``loss_mode``):
     "UA"                  Q_loss = UA (T_wall - T_ambient), with T_wall the mean of the suction and
@@ -78,6 +90,7 @@ from .water_steam import steam_from_feedwater
 GAS_PHASES = frozenset({"saturated_vapour", "superheated_vapour", "supercritical"})
 LIQUID_PHASES = frozenset({"liquid", "saturated_liquid"})
 DENSE_PHASES = LIQUID_PHASES | {"supercritical"}     # liquid-like states on a supercritical high side
+HOT_WATER_MARGIN_MPa = 0.1     # hot water pressure above the saturation pressure at its outlet temperature
 
 
 def critical_isochore(pr, P: float) -> dict:
@@ -123,6 +136,8 @@ class ConventionalHPConfig:
     # comes from subcooling the refrigerant liquid at the condenser exit; the rest is from condensing.
     # The subcooling heat goes to the steam instead of the hot water, so more steam.
     preheat_subcool_share: float = 0.0
+    second_steam: bool = False       # raise a second steam level from the subcooling; see the module docstring
+    T_steam2: float = 105.0          # second steam (saturated), used only with second_steam
     T_water_in: float = 80.0         # hot water into the subcooler
     T_water_out: float = 95.0        # hot water out of the subcooler
     dTmin_water: float = 5.0         # minimum subcooler approach to the water, K
@@ -140,6 +155,7 @@ class ConventionalHPConfig:
     loss_UA_cond_kWK: float = 0.0
     loss_UA_subcool_kWK: float = 0.0
     loss_UA_evap_kWK: float = 0.0
+    loss_UA_steam2_kWK: float = 0.0  # second steam generator, off its duty
     # Alternative: fix the discharge above the condensing dew point (takes precedence over UA).
     dT_discharge_superheat: float | None = None
     compressor: object = field(default_factory=lambda: recip_r600a("Recip-M"))
@@ -280,15 +296,25 @@ class ConventionalHeatPump:
             raise ValueError("no UA: set loss_UA_kWK")
         return self.c.loss_UA_kWK
 
-    WATER_CP = 4.19     # kJ/kg/K, liquid water at 60-110 C (within 1 %)
+    _water_props = None     # CoolProp water, shared: see _hot_water
+
+    def _hot_water(self) -> dict:
+        """Hot water stream: pressure (MPa), inlet and outlet enthalpies, and T(x) at duty fraction x from the cold end."""
+        c = self.c
+        if ConventionalHeatPump._water_props is None:
+            ConventionalHeatPump._water_props = FluidProperties("Water", backend="coolprop")
+        w = ConventionalHeatPump._water_props
+        P = w.ref_TQ(c.T_water_out, 0.0)["P"] + HOT_WATER_MARGIN_MPa
+        h_in, h_out = w.ref_PT(P, c.T_water_in)["h"], w.ref_PT(P, c.T_water_out)["h"]
+        return dict(P=P, h_in=h_in, h_out=h_out, T=lambda x: w.ref_PH(P, h_in + (h_out - h_in) * x)["T"])
 
     def _water_subcooler(self, P_H: float, sc_in: dict, n: int = 20):
         """Subcooler outlet for hot water heated from T_water_in to T_water_out counter-currently.
 
         The refrigerant is cooled as far as the minimum approach dTmin_water allows: the outlet goes
-        to T_water_in + dTmin_water unless the approach along the exchanger (water temperature linear
+        to T_water_in + dTmin_water unless the approach along the exchanger (water enthalpy linear
         in duty) is tighter somewhere else, in which case the outlet is raised until it is not.
-        Returns (outlet state, dict(min_approach=K)) or (None, failure message).
+        Returns (outlet state, dict(min_approach=K, stream=_hot_water())) or (None, failure message).
         """
         c, pr = self.c, self.props
         T_in, h_in = sc_in["T"], sc_in["h"]
@@ -296,6 +322,7 @@ class ConventionalHeatPump:
         if T_in - c.T_water_out < dT - 1e-9:
             return None, (f"hot water outlet {c.T_water_out:g} C is less than {dT:g} K below the refrigerant "
                           f"entering the subcooler ({T_in:.1f} C)")
+        stream = self._hot_water()
 
         def approach(T_out):
             """Smallest refrigerant-water temperature difference along the exchanger: n samples,
@@ -303,8 +330,7 @@ class ConventionalHeatPump:
             h_out = pr.ref_PT(P_H, T_out)["h"]
 
             def gap(x):                          # x: duty fraction from the cold end
-                return (pr.ref_PH(P_H, h_out + (h_in - h_out) * x)["T"]
-                        - (c.T_water_in + (c.T_water_out - c.T_water_in) * x))
+                return pr.ref_PH(P_H, h_out + (h_in - h_out) * x)["T"] - stream["T"](x)
             ends = min(T_out - c.T_water_in, T_in - c.T_water_out)
             vals = [(gap(i / n), i) for i in range(1, n)]
             g, i = min(vals)
@@ -321,14 +347,42 @@ class ConventionalHeatPump:
 
         T_out = c.T_water_in + dT
         if T_out >= T_in:                        # no room to subcool
-            return dict(sc_in), dict(min_approach=T_in - c.T_water_in)
+            return dict(sc_in), dict(min_approach=T_in - c.T_water_in, stream=stream)
         if approach(T_out) < dT - 1e-6:
             from scipy.optimize import brentq
             T_out = brentq(lambda T: approach(T) - dT, T_out, T_in - 1e-6, xtol=1e-6)
         out = pr.ref_PT(P_H, T_out)
         if out.get("phase") not in DENSE_PHASES:
             return None, f"subcooler outlet not liquid ({out.get('phase')})"
-        return out, dict(min_approach=approach(T_out))
+        return out, dict(min_approach=approach(T_out), stream=stream)
+
+    def _second_steam_generator(self, P_H: float, gen_in: dict, n: int = 40):
+        """Second steam generator outlet: all the subcooling the approach dTmin_steam allows, with the feedwater heated
+        from T_water_out to boiling over the preheat fraction fp of the duty from the cold end, then boiling at T_steam2.
+        Returns (outlet state, dict(min_approach=K)) or (None, failure message).
+        """
+        c, pr = self.c, self.props
+        T2, dT, feed = c.T_steam2, c.dTmin_steam, c.T_water_out
+        if not feed < T2:
+            return None, f"second steam {T2:g} C is not above the hot water outlet {feed:g} C (its feedwater)"
+        if gen_in["T"] - T2 <= dT + 1e-9:
+            return None, (f"second steam {T2:g} C is not {dT:g} K below the refrigerant leaving the condenser "
+                          f"({gen_in['T']:.1f} C)")
+        sf = steam_from_feedwater(1.0, T2, feed)
+        fp = sf["preheat_kJkg"] / sf["dh_kJkg"]
+        h_in = gen_in["h"]
+        # the pinch is where boiling starts: the refrigerant there, h_out + fp (h_in - h_out), sits at T2 + dT
+        h_out = (pr.ref_PT(P_H, T2 + dT)["h"] - fp * h_in) / (1 - fp)
+        out = pr.ref_PH(P_H, h_out)
+        if out.get("phase") not in DENSE_PHASES:
+            return None, f"second steam generator outlet not liquid ({out.get('phase')})"
+        mn = math.inf
+        for f in sorted([i / n for i in range(n + 1)] + [fp]):
+            Tw = feed + (T2 - feed) * f / fp if f < fp else T2
+            mn = min(mn, pr.ref_PH(P_H, h_out + (h_in - h_out) * f)["T"] - Tw)
+        if mn < dT - 1e-6:
+            return None, f"second steam generator approach {mn:.1f} K is below {dT:g} K"
+        return out, dict(min_approach=mn, fp=fp)
 
     def _ua_discharge(self, P_H: float, suction: dict, w_el: float, m_dot: float) -> dict:
         """Discharge state with Q_loss = UA (T_wall - T_ambient): h2 = h1 + w_el - Q_loss / m."""
@@ -453,10 +507,17 @@ class ConventionalHeatPump:
                                                    f"temperature of this refrigerant ({T_crit:.1f} C), and its "
                                                    f"critical density is not available")
             liquid_ok = DENSE_PHASES if sc else LIQUID_PHASES
-            if c.T_evap is not None:
-                P_L = self.saturation_pressure(c.T_evap, c.evap_basis)
-            else:                                   # evaporator outlet (dew) dTmin_source below the source
-                P_L = self.saturation_pressure(c.T_source - c.dTmin_source, "dew")
+            T_low_set = c.T_evap if c.T_evap is not None else c.T_source - c.dTmin_source
+            try:
+                if c.T_evap is not None:
+                    P_L = self.saturation_pressure(c.T_evap, c.evap_basis)
+                else:                               # evaporator outlet (dew) dTmin_source below the source
+                    P_L = self.saturation_pressure(T_low_set, "dew")
+            except ValueError:
+                if T_crit is not None and math.isfinite(T_crit) and T_low_set >= T_crit:
+                    return ConventionalHPResult(False, f"evaporating at {T_low_set:.1f} C is at or above the critical "
+                                                       f"temperature of this refrigerant ({T_crit:.1f} C)")
+                raise
             if sc:
                 gc_out = pr.ref_TD(T_hot_set, pr.rho_crit)
                 P_H = gc_out["P"]
@@ -568,8 +629,18 @@ class ConventionalHeatPump:
                                                 P_H=P_H, P_L=P_L, warnings=warnings)
             elif share > 0:
                 warnings.append("preheat from subcooling needs the steam and hot-water specification; ignored")
+            # 3s second steam generator: takes its share of the subcooling before the hot water
+            steam2_out, steam2 = None, None
+            if c.second_steam and steam_mode:
+                steam2_out, steam2 = self._second_steam_generator(P_H, cond_out)
+                if steam2_out is None:
+                    return ConventionalHPResult(False, steam2, P_H=P_H, P_L=P_L, warnings=warnings)
+            elif c.second_steam:
+                warnings.append("a second steam level needs the steam and hot-water specification; ignored")
+            sc_in = cond_out if steam2_out is None else steam2_out
             # 4 subcooler outlet
             h3 = cond_out["h"]
+            h3s = sc_in["h"]
             water = None
             if c.dT_subcool is not None:
                 sc_out = pr.ref_PT(P_H, cond_out["T"] - c.dT_subcool) if c.dT_subcool > 0 else cond_out
@@ -577,7 +648,7 @@ class ConventionalHeatPump:
                     return ConventionalHPResult(False, f"subcooler outlet not liquid ({sc_out.get('phase')})",
                                                 P_H=P_H, P_L=P_L, warnings=warnings)
             else:
-                sc_out, water = self._water_subcooler(P_H, cond_out)
+                sc_out, water = self._water_subcooler(P_H, sc_in)
                 if sc_out is None:
                     return ConventionalHPResult(False, water, P_H=P_H, P_L=P_L, warnings=warnings)
 
@@ -600,14 +671,19 @@ class ConventionalHeatPump:
 
             # 5 valve outlet
             evap_in = pr.ref_PH(P_evin, h_valve)
+            evap_in_subcooled = evap_in.get("phase") in LIQUID_PHASES
+            if evap_in_subcooled:
+                warnings.append(f"the liquid reaches the evaporator subcooled ({evap_in['T']:.1f} C, below evaporating "
+                                f"at {evap_dew['T']:.1f} C): the heat source also heats the liquid, which inflates the COP")
 
             q_desuperheat = h2 - cond_dew["h"]
             q_cond = h2 - h3
-            q_sc = h3 - h4
+            q_s2 = h3 - h3s
+            q_sc = h3s - h4
             q_evap = evap_out["h"] - h_valve
-            q_heat = q_cond + (q_sc if c.subcooler_heat_useful else 0.0)
+            q_heat = q_cond + q_s2 + (q_sc if c.subcooler_heat_useful else 0.0)
             w_el, w_sh = comp.w_electric, comp.w_shaft
-            balance = q_evap + (h2 - h1) - (q_cond + q_sc)
+            balance = q_evap + (h2 - h1) - (q_cond + q_s2 + q_sc)
 
             cop = q_heat / w_el
             cop_c = q_evap / w_el
@@ -616,13 +692,14 @@ class ConventionalHeatPump:
 
             # exchanger heat losses to ambient (kW), from the mean refrigerant temperature in each exchanger
             L_cond = c.loss_UA_cond_kWK * ((discharge["T"] + cond_out["T"]) / 2 - c.T_ambient)
-            L_sc = c.loss_UA_subcool_kWK * ((cond_out["T"] + sc_out["T"]) / 2 - c.T_ambient)
+            L_sc = c.loss_UA_subcool_kWK * ((sc_in["T"] + sc_out["T"]) / 2 - c.T_ambient)
+            L_s2 = 0.0 if steam2_out is None else c.loss_UA_steam2_kWK * ((cond_out["T"] + steam2_out["T"]) / 2 - c.T_ambient)
             L_evap = c.loss_UA_evap_kWK * ((evap_in["T"] + evap_out["T"]) / 2 - c.T_ambient)
-            L_heat = L_cond + (L_sc if c.subcooler_heat_useful else 0.0)
+            L_heat = L_cond + L_s2 + (L_sc if c.subcooler_heat_useful else 0.0)
             m_dot, scaled = comp.m_dot, False
             if m_dot is None and c.Q_heat_kW is not None:
                 m_dot, scaled = (c.Q_heat_kW + L_heat) / q_heat, True
-            if m_dot is None and (c.loss_UA_cond_kWK or c.loss_UA_subcool_kWK or c.loss_UA_evap_kWK):
+            if m_dot is None and (c.loss_UA_cond_kWK or c.loss_UA_subcool_kWK or c.loss_UA_evap_kWK or L_s2):
                 warnings.append("exchanger heat losses need a mass flow (a sized compressor or Q_heat_kW); ignored")
             if m_dot is not None:          # delivered heat, net of the exchanger losses
                 cop = (m_dot * q_heat - L_heat) / (m_dot * w_el)
@@ -634,6 +711,9 @@ class ConventionalHeatPump:
                 T_steam=None if c.T_cond is not None else c.T_steam,
                 T_water_in=None if water is None else c.T_water_in, T_water_out=None if water is None else c.T_water_out,
                 subcooler_min_approach_K=None if water is None else water["min_approach"],
+                P_water_bar=None if water is None else water["stream"]["P"] * 10,
+                h_water_in_kJkg=None if water is None else water["stream"]["h_in"],
+                h_water_out_kJkg=None if water is None else water["stream"]["h_out"],
                 COP=cop, COP_cooling=cop_c, SEC=1 / cop, VHC=vhc, rho_suction_kgm3=suction["D"],
                 COP_carnot=(T_hot + 273.15) / (T_hot - T_low) if T_hot > T_low else None,
                 P_evap_bar=P_L * 10, P_cond_bar=P_H * 10, PR=P_dis / P_L,
@@ -650,7 +730,7 @@ class ConventionalHeatPump:
                 T_cond_dew=cond_dew["T"], T_cond_bubble=cond_bub["T"], cond_glide_K=cond_dew["T"] - cond_bub["T"],
                 T_cond_out=cond_out["T"], dT_subcool_cond=cond_bub["T"] - cond_out["T"],
                 preheat_subcool_share=share if steam_mode else 0.0,
-                T_evap_in=evap_in["T"], x_evap_in=evap_in.get("q"), T_evap_out=evap_out["T"],
+                evap_in_subcooled=evap_in_subcooled, T_evap_in=evap_in["T"], x_evap_in=evap_in.get("q"), T_evap_out=evap_out["T"],
                 T_suction=suction["T"], T_discharge=discharge["T"], T_subcool_out=sc_out["T"],
                 T_valve_in=pr.ref_PH(P_H, h_valve)["T"] if h_valve != h4 else sc_out["T"],
                 dT_superheat=c.dT_superheat, dT_subcool=cond_out["T"] - sc_out["T"],
@@ -661,7 +741,7 @@ class ConventionalHeatPump:
                 compressor_Hz=getattr(compressor, "frequency_Hz", None), compressor_rpm=getattr(compressor, "rpm", None),
                 property_backend=getattr(pr, "backend", None),
                 q_heat_kJkg=q_heat, q_cond_kJkg=q_cond, q_desuperheat_kJkg=q_desuperheat,
-                q_subcool_kJkg=q_sc, q_evap_kJkg=q_evap, w_electric_kJkg=w_el, w_shaft_kJkg=w_sh,
+                q_subcool_kJkg=q_sc, q_steam2_kJkg=q_s2, q_evap_kJkg=q_evap, w_electric_kJkg=w_el, w_shaft_kJkg=w_sh,
                 w_to_gas_kJkg=h2 - h1, q_compressor_loss_kJkg=q_loss,
                 compressor_loss_fraction=q_loss / w_el, dT_discharge_superheat=discharge["T"] - cond_dew["T"],
                 loss_mode=mode, UA_loss_kWK=UA, T_ambient=c.T_ambient,
@@ -698,11 +778,13 @@ class ConventionalHeatPump:
                     W_electric_kW=m_dot * w_el, W_shaft_kW=m_dot * w_sh, Q_compressor_loss_kW=m_dot * q_loss,
                     V_suction_m3h=m_dot * v1 * 3600.0, V_discharge_m3h=m_dot / discharge["D"] * 3600.0,
                     m_water_kgs=(None if water is None else
-                                 (m_dot * q_sc - L_sc) / (self.WATER_CP * (c.T_water_out - c.T_water_in))),
+                                 (m_dot * q_sc - L_sc) / (water["stream"]["h_out"] - water["stream"]["h_in"])),
                 )
             # steam from hot water bled at the subcooler outlet: the steam generator (desuperheating and
             # condensing) heats it from T_water_out to saturated steam at T_steam (water_steam.py)
-            report.update(m_steam_kgs=None, steam_feed_T=None, steam_bleed_fraction=None, m_hot_water_net_kgs=None)
+            report.update(m_steam_kgs=None, steam_feed_T=None, steam_bleed_fraction=None, m_hot_water_net_kgs=None,
+                          second_steam=steam2_out is not None, T_steam2=None, T_steam2_out=None, m_steam2_kgs=None,
+                          Q_steam2_kW=None, steam2_min_approach_K=None)
             if m_dot is not None and water is not None and c.T_cond is None and c.T_water_out < c.T_steam:
                 sf = steam_from_feedwater(report["Q_cond_kW"], c.T_steam, c.T_water_out)
                 report.update(m_steam_kgs=sf["m_kgs"], steam_feed_T=c.T_water_out, steam_dh_kJkg=sf["dh_kJkg"],
@@ -725,19 +807,39 @@ class ConventionalHeatPump:
                         return ConventionalHPResult(
                             False, f"preheat from subcooling leaves the steam generator approach at {mn:.1f} K, below "
                                    f"{c.dTmin_steam:g} K", P_H=P_H, P_L=P_L, warnings=warnings)
+            # second steam, from its own share of the subcooling, with feedwater bled from the same hot water
+            if steam2_out is not None:
+                report.update(T_steam2=c.T_steam2, T_steam2_out=steam2_out["T"], steam2_min_approach_K=steam2["min_approach"],
+                              steam2_preheat_fraction=steam2["fp"])
+                if m_dot is not None:
+                    Q_s2 = m_dot * q_s2 - L_s2
+                    if Q_s2 <= 0.0:
+                        return ConventionalHPResult(
+                            False, f"the second steam generator delivers no steam ({Q_s2:.1f} kW net of its heat loss)",
+                            P_H=P_H, P_L=P_L, warnings=warnings)
+                    sf = steam_from_feedwater(Q_s2, c.T_steam2, c.T_water_out)
+                    report.update(Q_steam2_kW=Q_s2, Q_steam2_refrigerant_kW=m_dot * q_s2, Q_loss_steam2_kW=L_s2,
+                                  UA_loss_steam2_kWK=c.loss_UA_steam2_kWK, m_steam2_kgs=sf["m_kgs"],
+                                  steam2_dh_kJkg=sf["dh_kJkg"], P_steam2_bar=sf["P_steam_MPa"] * 10)
+                    feed = report["m_steam_kgs"] + sf["m_kgs"]
+                    report.update(steam_bleed_fraction=feed / report["m_water_kgs"],
+                                  m_hot_water_net_kgs=report["m_water_kgs"] - feed)
             if report.get("m_water_kgs") is not None and report["m_water_kgs"] <= 0.0:
                 return ConventionalHPResult(
                     False, f"the subcooler delivers no hot water ({report['Q_subcool_kW']:.1f} kW net of its heat loss)",
                     P_H=P_H, P_L=P_L, warnings=warnings)
-            if report["m_steam_kgs"] is not None and report["m_steam_kgs"] > report["m_water_kgs"]:
+            feed_total = (report["m_steam_kgs"] or 0.0) + (report["m_steam2_kgs"] or 0.0)
+            if report["m_steam_kgs"] is not None and feed_total > report["m_water_kgs"]:
                 return ConventionalHPResult(
-                    False, f"steam {report['m_steam_kgs']:.3f} kg/s needs more feedwater than the subcooler heats "
+                    False, f"steam {feed_total:.3f} kg/s needs more feedwater than the subcooler heats "
                            f"({report['m_water_kgs']:.3f} kg/s)", P_H=P_H, P_L=P_L, warnings=warnings)
             states = dict(suction=_state(suction), discharge=_state(discharge), cond_dew=_state(cond_dew),
                           cond_bub=_state(cond_bub),
                           cond_out=_state(cond_out), subcool_out=_state(sc_out), evap_in=_state(evap_in),
                           evap_dew=_state(evap_dew), evap_out=_state(evap_out), ihx_out=_state(ihx_out))
             states["isentropic_discharge"] = _state(isentropic)
+            if steam2_out is not None:
+                states["steam2_out"] = _state(steam2_out)
             return ConventionalHPResult(True, "success", cop, cop_c, vhc, P_H, P_L, report, states, warnings)
         except (ValueError, ZeroDivisionError) as exc:     # RefpropError subclasses ValueError
             return ConventionalHPResult(False, f"{type(exc).__name__}: {exc}", warnings=warnings)
