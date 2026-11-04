@@ -191,7 +191,8 @@ res = ConventionalHeatPump(ConventionalHPConfig(property_backend="refprop")).sol
 
 The defaults model n-butane on the Recip-M reciprocating compressor map, raising 120 °C steam from a 55 °C
 heat source, with hot water from the subcooler. Compressors can be described by efficiency maps,
-efficiency against pressure ratio, or EN 12900 polynomials (`compressor_curves.py`).
+efficiency against pressure ratio, or EN 12900 polynomials (`compressor_curves.py`). `second_steam=True` adds a
+second steam level at `T_steam2`, raised from the refrigerant's subcooling ahead of the hot water.
 
 ## Refrigerants
 

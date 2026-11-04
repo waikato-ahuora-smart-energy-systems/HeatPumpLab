@@ -452,7 +452,7 @@ def test_default_case(refprop):
     assert (r["T_source"], r["T_steam"], r["T_water_in"], r["T_water_out"]) == (55.0, 120.0, 80.0, 95.0)
     assert r["T_evap_dew"] == pytest.approx(50.0, abs=1e-6) and r["T_cond_bubble"] == pytest.approx(125.0, abs=1e-6)
     assert r["dT_subcool"] == pytest.approx(40.0, abs=1e-6) and r["subcooler_min_approach_K"] == pytest.approx(5.0, abs=1e-6)
-    assert r["m_water_kgs"] == pytest.approx(r["Q_subcool_kW"] / (4.19 * 15.0)) and r["m_water_kgs"] == pytest.approx(0.284, rel=0.02)
+    assert r["m_water_kgs"] == pytest.approx(r["Q_subcool_kW"] / (r["h_water_out_kJkg"] - r["h_water_in_kJkg"])) and r["m_water_kgs"] == pytest.approx(0.284, rel=0.02)
     assert st["suction"]["T"] == pytest.approx(65.0, abs=1e-6)
     assert st["discharge"]["T"] > 130.0
     assert st["subcool_out"]["T"] == pytest.approx(85.0, abs=1e-6)

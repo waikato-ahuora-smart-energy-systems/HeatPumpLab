@@ -83,8 +83,12 @@ def test_page_controls_and_headline(build_mod, tmp_path):
     assert ".hl-cop{padding-right:28px;border-right" not in html                # no vertical divider
     assert 'id="hz" min="30" max="70"' in html                                   # 30 Hz minimum speed
     # source, steam and hot-water temperatures on sliders; no condensing or subcooling inputs
-    for sid, lo, hi, val in (("T_source", 20, 80, 55), ("T_steam", 90, 140, 120), ("T_water_in", 20, 120, 80), ("T_water_out", 30, 135, 95)):
+    for sid, lo, hi, val in (("T_source", 20, 150, 55), ("T_steam", 90, 180, 120), ("T_water_in", 20, 170, 80), ("T_water_out", 30, 175, 95)):
         assert f'<input type="range" id="{sid}" min="{lo}" max="{hi}" step="1" value="{val}">' in html, sid
+    # second steam level: a toggle (off by default) and a temperature slider, off until the toggle is on
+    assert '<input type="checkbox" id="steam2_on">' in html and 'id="T_steam2" min="90" max="175" step="1" value="105" aria-label="Second steam temperature" disabled>' in html
+    assert html.count("if (!c.st[k]) continue;") == 2                    # the state only exists with the toggle on: diagram and table skip it
+    assert 'id="UA_steam2"' in html and '"Second steam":"--s7"' in html and ".headline.s2{" in html
     assert 'id="T_cond"' not in html and 'id="dT_subcool"' not in html and 'id="T_evap"' not in html
     assert 'id="dTmin_source"' in html and 'id="dTmin_steam"' in html and 'id="dTmin_water"' in html
     assert 'id="ihx"' not in html                          # IHX after the subcooler, on whenever superheat > 0

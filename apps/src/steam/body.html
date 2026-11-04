@@ -21,14 +21,17 @@
       <h2 id="h-point">Operating point</h2>
       <div class="temps">
         <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="T_source">Heat source</label><output id="T_source-out" for="T_source"></output></div>
-          <div class="speed"><div class="track"><input type="range" id="T_source" min="20" max="80" step="1" value="55"><div class="ticks" id="T_source-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="speed"><div class="track"><input type="range" id="T_source" min="20" max="150" step="1" value="55"><div class="ticks" id="T_source-ticks" aria-hidden="true"></div></div></div></div>
         <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="T_steam">Steam</label><output id="T_steam-out" for="T_steam"></output></div>
-          <div class="speed"><div class="track"><input type="range" id="T_steam" min="90" max="140" step="1" value="120"><div class="ticks" id="T_steam-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="speed"><div class="track"><input type="range" id="T_steam" min="90" max="180" step="1" value="120"><div class="ticks" id="T_steam-ticks" aria-hidden="true"></div></div></div></div>
         <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="T_water_in">Hot water in</label><output id="T_water_in-out" for="T_water_in"></output></div>
-          <div class="speed"><div class="track"><input type="range" id="T_water_in" min="20" max="120" step="1" value="80"><div class="ticks" id="T_water_in-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="speed"><div class="track"><input type="range" id="T_water_in" min="20" max="170" step="1" value="80"><div class="ticks" id="T_water_in-ticks" aria-hidden="true"></div></div></div></div>
         <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="T_water_out">Hot water out</label><output id="T_water_out-out" for="T_water_out"></output></div>
-          <div class="speed"><div class="track"><input type="range" id="T_water_out" min="30" max="135" step="1" value="95"><div class="ticks" id="T_water_out-ticks" aria-hidden="true"></div></div></div></div>
+          <div class="speed"><div class="track"><input type="range" id="T_water_out" min="30" max="175" step="1" value="95"><div class="ticks" id="T_water_out-ticks" aria-hidden="true"></div></div></div></div>
       </div>
+      <p class="hint">A heat source above about 75 °C needs hotter hot water as well: the liquid leaving the subcooler has to stay hotter than the suction gas it superheats.</p>
+      <div class="pickrow wide temp"><div class="slhead"><label class="inline" for="steam2_on" title="A second steam generator between the condenser and the subcooler, raising saturated steam from the refrigerant's subcooling, with feedwater bled from the hot water. It takes all the subcooling the steam approach allows; the hot water takes the rest."><input type="checkbox" id="steam2_on"> Second steam, from subcooling</label><output id="T_steam2-out" for="T_steam2"></output></div>
+        <div class="speed"><div class="track"><input type="range" id="T_steam2" min="90" max="175" step="1" value="105" aria-label="Second steam temperature" disabled><div class="ticks" id="T_steam2-ticks" aria-hidden="true"></div></div></div></div>
       <div class="temps pair">     <!-- side by side: preheat from subcooling and suction superheat -->
         <div class="pickrow wide temp"><div class="slhead"><label class="lab" for="preheat_sub" title="Share of the feedwater preheat (bled hot water heated to boiling in the steam generator) taken from subcooling the refrigerant liquid at the condenser exit; the rest is from condensing. More subcooling, more steam.">Preheat from subcooling</label><output id="preheat_sub-out" for="preheat_sub"></output></div>
           <div class="speed"><div class="track"><input type="range" id="preheat_sub" min="0" max="100" step="5" value="100"><div class="ticks" id="preheat_sub-ticks" aria-hidden="true"></div></div></div></div>
@@ -56,12 +59,13 @@
         <h2 id="h-set">Approaches and losses</h2>
         <div class="fields">
           <label for="dTmin_source" title="Evaporator outlet (dew point) below the heat source">ΔT source, K<input type="number" id="dTmin_source" value="5" step="0.5" min="0"></label>
-          <label for="dTmin_steam" title="Condenser outlet (bubble point) above the steam">ΔT steam, K<input type="number" id="dTmin_steam" value="5" step="0.5" min="0"></label>
+          <label for="dTmin_steam" title="Condenser outlet (bubble point) above the steam; also the second steam generator's minimum approach">ΔT steam, K<input type="number" id="dTmin_steam" value="5" step="0.5" min="0"></label>
           <label for="dTmin_water" title="Minimum subcooler approach to the hot water">ΔT hot water, K<input type="number" id="dTmin_water" value="5" step="0.5" min="0"></label>
           <label for="dTmin_ihx" title="Minimum approach in the internal heat exchanger">ΔT IHX, K<input type="number" id="dTmin_ihx" value="5" step="0.5" min="0"></label>
           <label for="UA_manual" title="Compressor shell heat loss to ambient: UA × (mean of suction and discharge − ambient)">Compressor heat loss UA, W/K<input type="number" id="UA_manual" value="15" step="1" min="0"></label>
           <label for="UA_cond" title="Condenser (steam generator) heat loss to ambient, from the mean refrigerant temperature; off the steam duty">Condenser heat loss UA, W/K<input type="number" id="UA_cond" value="0" step="1" min="0"></label>
           <label for="UA_subcool" title="Subcooler heat loss to ambient, from the mean refrigerant temperature; off the hot-water duty">Subcooler heat loss UA, W/K<input type="number" id="UA_subcool" value="0" step="1" min="0"></label>
+          <label for="UA_steam2" title="Second steam generator heat loss to ambient, from the mean refrigerant temperature; off the second steam duty">Second steam heat loss UA, W/K<input type="number" id="UA_steam2" value="0" step="1" min="0"></label>
           <label for="UA_evap" title="Evaporator heat loss to ambient, from the mean refrigerant temperature; the source supplies it">Evaporator heat loss UA, W/K<input type="number" id="UA_evap" value="0" step="1" min="0"></label>
           <label for="dPK_cond" title="Condenser refrigerant pressure drop, ΔP [kPa] = K × (V̇ [m³/h])^1.8, V̇ at the mean of the inlet and outlet specific volumes. The exit (bubble point) stays pinned, so the compressor discharges this much higher.">Condenser pressure-loss K, kPa/(m³/h)¹·⁸<input type="number" id="dPK_cond" value="0" step="0.01" min="0"></label>
           <label for="dPK_subcool" title="Subcooler refrigerant pressure drop, ΔP [kPa] = K × (V̇ [m³/h])^1.8, V̇ at the mean of the inlet and outlet specific volumes. Reported only: the liquid stays subcooled.">Subcooler pressure-loss K, kPa/(m³/h)¹·⁸<input type="number" id="dPK_subcool" value="0" step="0.01" min="0"></label>
@@ -121,7 +125,7 @@
   <div class="grid">
     <section class="panel"><h2>Temperature–entropy</h2><div class="legend" id="lg-ts"></div><div id="ts"></div></section>
     <section class="panel"><h2>Pressure–enthalpy</h2><div class="legend" id="lg-ph"></div><div id="ph"></div></section>
-    <section class="panel"><h2>Heat exchange profiles</h2><p class="note">Temperature against heat transferred, from each exchanger's cold end; the IHX follows the evaporator. Dashed grey: the other stream (feedwater heated to boiling and turned to steam, the hot water, the heat source); shaded: the heat transfer between the streams.</p><div class="legend" id="lg-pr"></div><div id="pr"></div></section>
+    <section class="panel"><h2>Heat exchange profiles</h2><p class="note">Temperature against heat transferred, from each exchanger's cold end; the IHX follows the evaporator. Dashed grey: the other stream (feedwater heated to boiling and turned to steam at each steam level, the hot water, the heat source); shaded: the heat transfer between the streams.</p><div class="legend" id="lg-pr"></div><div id="pr"></div></section>
     <section class="panel"><h2>Energy flows</h2><p class="note" id="ef-note"></p><div class="legend" id="lg-ef"></div><div id="ef"></div></section>
   </div>
 
@@ -131,7 +135,7 @@
 
   <div class="grid">
     <section class="panel"><h2>Heating COP across the rating grid</h2>
-      <p class="note">Same refrigerant and settings at every point. Click a cell to show it. "IHX": the liquid is too cold to give the suction superheat; "wet": compression ends two-phase; "HW": the hot water outlet is too close to the condensing temperature.</p>
+      <p class="note">Same refrigerant and settings at every point. Click a cell to show it. "IHX": the liquid is too cold to give the suction superheat; "wet": compression ends two-phase; "HW": the hot water outlet is too close to the condensing temperature; "S2": the second steam temperature does not fit between the hot water and the condenser exit. The grid moves to follow the point shown.</p>
       <div class="row"><button class="btn" id="btn-map" type="button">Compute COP map</button>
         <label class="inline" for="auto-map"><input type="checkbox" id="auto-map" checked> recompute when settings change</label>
         <span class="hint" id="map-status" role="status"></span></div>
