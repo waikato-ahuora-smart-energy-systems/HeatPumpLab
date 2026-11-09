@@ -230,6 +230,9 @@ def test_browser_model_matches_python():
                   "tc_read", "w_swept_kJm3", "second_steam", "T_steam2", "T_steam2_out", "Q_steam2_kW", "m_steam2_kgs",
                   "steam2_min_approach_K", "q_steam2_kJkg", "m_hot_water_net_kgs", "energy_balance_residual_kJkg",
                   "P_water_bar", "h_water_in_kJkg", "h_water_out_kJkg"):
+            if py.report[k] is None:                                  # second steam off: both models report None
+                assert js_res["r"][k] is None, (c, k)
+                continue
             assert js_res["r"][k] == pytest.approx(py.report[k], rel=1e-8, abs=1e-6 if k == "energy_balance_residual_kJkg" else 1e-9), (c, k)
         assert js_res["r"]["limit_flags"] == py.report["limit_flags"] and js_res["r"]["window_edge"] == py.report["window_edge"]
 
