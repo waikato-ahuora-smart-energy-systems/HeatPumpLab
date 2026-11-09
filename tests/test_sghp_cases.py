@@ -28,7 +28,7 @@ def run_cases_js(script):
 INPUTS = dict(comps=[["Propane", 20], ["Isopentane", 80]], basis="mass", compressor="Recip-L", T_source=50, T_steam=115,
               T_water_in=80, T_water_out=95, compressor_Hz=45, dTmin_source=5, dTmin_steam=5, dTmin_water=5,
               dT_superheat=15, dTmin_ihx=5, T_ambient=15, UA_W_K=15, UA_cond_W_K=20, UA_subcool_W_K=10, UA_evap_W_K=5, preheat_subcool_pct=50,
-              dPK_cond=0.05, dPK_subcool=0.5, dPK_evap=0.02)
+              dPK_cond=0.05, dPK_subcool=0.5, dPK_evap=0.02, steam2_on=True, T_steam2=102, UA_steam2_W_K=7)
 
 
 def test_link_round_trip():
@@ -41,7 +41,7 @@ def test_link_round_trip():
     assert o["back"]["n"] == "Propane/isopentane · 115 °C — test"            # non-ASCII names survive
     assert o["clean"] == INPUTS and o["back"]["v"] == 1
     assert o["label"] == "Propane/Isopentane 20/80 (mass)"
-    old = {k: v for k, v in INPUTS.items() if not k.startswith(("UA_cond", "UA_subcool", "UA_evap", "preheat_subcool_pct", "dPK_"))}   # saved before the exchanger losses
+    old = {k: v for k, v in INPUTS.items() if not k.startswith(("UA_cond", "UA_subcool", "UA_evap", "UA_steam2", "steam2_on", "T_steam2", "preheat_subcool_pct", "dPK_"))}   # saved before the exchanger losses and the second steam level
     o2 = run_cases_js(f"console.log(JSON.stringify(cleanInputs({json.dumps(old)})));")
     assert (o2["UA_cond_W_K"], o2["UA_subcool_W_K"], o2["UA_evap_W_K"], o2["preheat_subcool_pct"]) == (0, 0, 0, 0)
     assert (o2["dPK_cond"], o2["dPK_subcool"], o2["dPK_evap"]) == (0, 0, 0)
@@ -57,7 +57,7 @@ def test_untrusted_inputs_are_cleaned():
         "console.log(JSON.stringify({c, e1, e2}));" % json.dumps(INPUTS))
     c = o["c"]
     assert c["comps"] == [["Propane", 100], ["Isopentane", 0]] and c["basis"] == "mass" and c["compressor"] == "Recip-M"
-    assert c["T_steam"] == 140 and c["compressor_Hz"] == 30 and "extra" not in c
+    assert c["T_steam"] == 180 and c["compressor_Hz"] == 30 and "extra" not in c
     assert "no known refrigerant" in o["e1"] and "T_source is missing" in o["e2"]
 
 

@@ -31,6 +31,7 @@ import math
 from dataclasses import dataclass, replace
 
 from ...utils.property_cache import active_property_call_cache, property_call_cache
+from ..common.charge import ChargeEstimate, estimate_loop_charge
 from ..common.dryer import (
     DEFAULT_MOTOR_EFF,
     AirModel,
@@ -143,6 +144,10 @@ class MultiPressureHeatPump:
         """The design at the configuration (fields can be overridden by keyword, except the fluid and air)."""
         c = replace(self.c, **overrides) if overrides else self.c
         return self._cached(lambda: self._solve(c))
+
+    def estimate_charge(self, result: LoopResult, **kwargs) -> ChargeEstimate:
+        """Screening range for the refrigerant charge of a solved design; see ``cycles/common/charge.py``."""
+        return estimate_loop_charge(self.fluid, result, **kwargs)
 
     def optimise(self, max_eval: int = 120, **overrides) -> LoopResult:
         """Best-COP lower condensing temperatures (compass search from the configured values and a coarse grid),

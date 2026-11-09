@@ -138,6 +138,37 @@ def test_browser_model_matches_python_supercritical(propane):
         assert js["report"]["window_edge"] == py.report["window_edge"]
 
 
+@pytest.mark.parametrize("fluid, over", [
+    ("Propane", dict(second_steam=True, T_steam2=105.0)),                   # supercritical high side, normal source
+    ("n-Butane", dict(T_source=55.0, T_steam=120.0, second_steam=True, T_steam2=105.0)),
+    # the app's limits: a 150 C source and 180 C steam, with hot water hot enough for the IHX
+    ("n-Pentane", dict(T_source=150.0, T_steam=180.0, T_water_in=160.0, T_water_out=165.0, second_steam=True, T_steam2=172.0)),
+    ("R1233zd(E)", dict(T_source=150.0, T_steam=180.0, T_water_in=160.0, T_water_out=165.0, second_steam=True, T_steam2=172.0)),
+])
+def test_second_steam_browser_model_matches_python(tmp_path, fluid, over):
+    fl = NodeFluid(tmp_path, [[fluid, 100]])
+    try:
+        py = py_solve(fl, **over)
+        js = fl.call(dict(op="solve", cfg=BASE | over, UA=0.015))
+    finally:
+        fl.close()
+    assert py.success and js["ok"], (fluid, py.message, js.get("msg"))
+    for k in ("COP", "Q_heat_kW", "Q_cond_kW", "Q_subcool_kW", "Q_steam2_kW", "m_steam2_kgs", "m_steam_kgs", "T_steam2_out",
+              "steam2_min_approach_K", "m_hot_water_net_kgs", "T_discharge", "P_discharge_bar", "eta_is_overall", "eta_vol"):
+        assert js["report"][k] == pytest.approx(py.report[k], rel=1e-6, abs=1e-6), (fluid, k)
+    r = py.report
+    assert r["Q_steam2_kW"] > 0 and r["steam2_min_approach_K"] == pytest.approx(5.0, abs=1e-5)
+    assert r["energy_balance_residual_kJkg"] == pytest.approx(0.0, abs=1e-6)
+    assert [f["key"] for f in js["report"]["limit_flags"]] == [f["key"] for f in r["limit_flags"]]
+
+
+def test_source_above_the_critical_temperature_is_explained(propane):
+    over = dict(T_source=150.0, T_steam=180.0)
+    py, js = py_solve(propane, **over), propane.call(dict(op="solve", cfg=BASE | over, UA=0.015))
+    assert not py.success and not js["ok"]
+    assert "at or above the critical temperature" in py.message and "at or above the critical temperature" in js["msg"]
+
+
 def test_continuous_through_the_critical_point(propane):
     """Bubble-point rule below T_crit, critical-isochore rule above: the two meet at the critical point."""
     fl = propane

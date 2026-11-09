@@ -10,6 +10,7 @@ from ...components import (
     SetRelationship,
     Stream,
 )
+from ..common.charge import ChargeEstimate, estimate_rhp_charge
 from ..common.heatPump import BaseHeatPump
 
 from .rhp_helpers import set_rhp_model
@@ -99,6 +100,10 @@ class RecuperativeHP(BaseHeatPump):
         if self.feasible:
             solve_heat_pump_cycle(self)
         return self
+
+    def estimate_charge(self, **kwargs) -> ChargeEstimate:
+        """Screening range for the refrigerant charge; see ``cycles/common/charge.py``."""
+        return estimate_rhp_charge(self, **kwargs)
 
     def get_model_parameters(self) -> dict[str, float | bool]:
         """Return a snapshot of decision variables defining the configuration."""

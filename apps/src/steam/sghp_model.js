@@ -354,18 +354,27 @@
     compressor_Hz: 50, T_ambient: 15, loss_dT_basis: "mean", loss_UA_kWK: null,
     loss_UA_cond_kWK: 0, loss_UA_subcool_kWK: 0, loss_UA_evap_kWK: 0, preheat_subcool_share: 0, dP_K_cond: 0, dP_K_subcool: 0, dP_K_evap: 0,     // exchanger heat losses (as the Python model)
     dT_discharge_superheat: null, subcooler_heat_useful: true, dP_crit_min: 0,
+    second_steam: false, T_steam2: 105, loss_UA_steam2_kWK: 0,     // second steam level, from the subcooling
   };
 
   // ---------------------------------------------------------------- hot-water subcooler
-  // (ConventionalHeatPump._water_subcooler) outlet as cold as dTmin_water allows; water linear in duty
-  const WATER_CP = 4.19;
+  // (ConventionalHeatPump._water_subcooler) outlet as cold as dTmin_water allows; water enthalpy linear in duty.
+  // Hot water properties from CoolProp (pr.water), HOT_WATER_MARGIN_MPa above saturation at the outlet temperature.
+  const HOT_WATER_MARGIN_MPa = 0.1;
+  function hotWater(pr, c) {
+    const w = pr.water;
+    if (!w) throw new Error("hot water properties not available");
+    const P = w.TQ(c.T_water_out, 0).P + HOT_WATER_MARGIN_MPa, h_in = w.PT(P, c.T_water_in).h, h_out = w.PT(P, c.T_water_out).h;
+    return { P, h_in, h_out, T: x => w.PH(P, h_in + (h_out - h_in) * x).T };
+  }
   function waterSubcooler(pr, c, P_H, scIn, n = 20) {
     const T_in = scIn.T, h_in = scIn.h, dT = c.dTmin_water;
     if (T_in - c.T_water_out < dT - 1e-9)
       return { message: `hot water outlet ${c.T_water_out} C is less than ${dT} K below the refrigerant entering the subcooler (${T_in.toFixed(1)} C)` };
+    const stream = hotWater(pr, c);
     const approach = T_out => {          // n samples, then golden section around the smallest interior one
       const h_out = pr.PT(P_H, T_out).h;
-      const gap = x => pr.PH(P_H, h_out + (h_in - h_out) * x).T - (c.T_water_in + (c.T_water_out - c.T_water_in) * x);
+      const gap = x => pr.PH(P_H, h_out + (h_in - h_out) * x).T - stream.T(x);
       const ends = Math.min(T_out - c.T_water_in, T_in - c.T_water_out);
       let g = Infinity, i = 0;
       for (let k = 1; k < n; k++) { const v = gap(k / n); if (v < g) { g = v; i = k; } }
@@ -375,11 +384,30 @@
       return Math.min(g, gap(0.5 * (a + b)), ends);
     };
     let T_out = c.T_water_in + dT;
-    if (T_out >= T_in) return { out: scIn, min_approach: T_in - c.T_water_in };
+    if (T_out >= T_in) return { out: scIn, min_approach: T_in - c.T_water_in, stream };
     if (approach(T_out) < dT - 1e-6) T_out = brent(T => approach(T) - dT, T_out, T_in - 1e-6, 1e-6);
     const out = pr.PT(P_H, T_out);
     if (!liquidLike(out)) return { message: `subcooler outlet not liquid (${out.phase})` };
-    return { out, min_approach: approach(T_out) };
+    return { out, min_approach: approach(T_out), stream };
+  }
+
+  // ---------------------------------------------------------------- second steam generator
+  // (ConventionalHeatPump._second_steam_generator) all the subcooling dTmin_steam allows: feedwater from T_water_out to
+  // boiling over the preheat fraction fp of the duty from the cold end, then boiling at T_steam2
+  function secondSteamGenerator(pr, c, P_H, genIn, n = 40) {
+    const T2 = c.T_steam2, dT = c.dTmin_steam, feed = c.T_water_out;
+    if (!(feed < T2)) return { message: `second steam ${T2} C is not above the hot water outlet ${feed} C (its feedwater)` };
+    if (genIn.T - T2 <= dT + 1e-9) return { message: `second steam ${T2} C is not ${dT} K below the refrigerant leaving the condenser (${genIn.T.toFixed(1)} C)` };
+    const sf = steamFromFeedwater(1, T2, feed), fp = sf.preheat_kJkg / sf.dh_kJkg, h_in = genIn.h;
+    // the pinch is where boiling starts: the refrigerant there, h_out + fp (h_in - h_out), sits at T2 + dT
+    const h_out = (pr.PT(P_H, T2 + dT).h - fp * h_in) / (1 - fp);
+    const out = pr.PH(P_H, h_out);
+    if (!liquidLike(out)) return { message: `second steam generator outlet not liquid (${out.phase})` };
+    const fr = [fp]; for (let i = 0; i <= n; i++) fr.push(i / n);
+    let mn = Infinity;
+    for (const f of fr) mn = Math.min(mn, pr.PH(P_H, h_out + (h_in - h_out) * f).T - (f < fp ? feed + (T2 - feed) * f / fp : T2));
+    if (mn < dT - 1e-6) return { message: `second steam generator approach ${mn.toFixed(1)} K is below ${dT} K` };
+    return { out, min_approach: mn, fp };
   }
 
   // ---------------------------------------------------------------- saturation
@@ -449,7 +477,13 @@
       if (sc && !(pr.rho_crit > 0))
         return fail(`condensing at ${T_hot.toFixed(1)} C is at or above the critical temperature of this refrigerant (${pr.T_crit.toFixed(1)} C), and its critical density is not available`);
       const hiSat = (P, q) => (sc ? critIsochore(pr, P) : pr.PQ(P, q));
-      const P_L = c.T_evap != null ? saturationPressure(pr, c.T_evap, c.evap_basis) : saturationPressure(pr, c.T_source - c.dTmin_source, "dew");
+      const T_low0 = c.T_evap != null ? c.T_evap : c.T_source - c.dTmin_source;
+      let P_L;
+      try { P_L = c.T_evap != null ? saturationPressure(pr, c.T_evap, c.evap_basis) : saturationPressure(pr, T_low0, "dew"); }
+      catch (e) {
+        if (isFinite(pr.T_crit) && T_low0 >= pr.T_crit) return fail(`evaporating at ${T_low0.toFixed(1)} C is at or above the critical temperature of this refrigerant (${pr.T_crit.toFixed(1)} C)`);
+        throw e;
+      }
       // condenser outlet (bubble point) dTmin_steam above the steam, unless T_cond is given directly
       const gcOut = sc ? pr.TD(T_hot, pr.rho_crit) : null;
       const P_H = sc ? gcOut.P : c.T_cond != null ? saturationPressure(pr, c.T_cond, c.cond_basis) : saturationPressure(pr, c.T_steam + c.dTmin_steam, "bubble");
@@ -540,6 +574,14 @@
         }
         if (!liquidLike(condOut)) return fail(`condenser exit not liquid (${condOut.phase})`, { P_H, P_L });
       } else if (share > 0) warnings.push("preheat from subcooling needs the steam and hot-water specification; ignored");
+      // 3s second steam generator: takes its share of the subcooling before the hot water
+      let steam2Out = null, steam2 = null;
+      if (c.second_steam && steamMode) {
+        steam2 = secondSteamGenerator(pr, c, P_H, condOut);
+        if (steam2.message) return fail(steam2.message, { P_H, P_L });
+        steam2Out = steam2.out;
+      } else if (c.second_steam) warnings.push("a second steam level needs the steam and hot-water specification; ignored");
+      const scIn = steam2Out || condOut;
       let scOut = condOut, water = null;
       if (c.dT_subcool != null) {
         if (c.dT_subcool > 0) {
@@ -547,11 +589,11 @@
           if (!liquidLike(scOut)) return fail("subcooler outlet not liquid", { P_H, P_L });
         }
       } else {
-        const ws = waterSubcooler(pr, c, P_H, condOut);
+        const ws = waterSubcooler(pr, c, P_H, scIn);
         if (ws.message) return fail(ws.message, { P_H, P_L });
         scOut = ws.out; water = ws;
       }
-      const h1 = suction.h, h2 = discharge.h, h3 = condOut.h, h4 = scOut.h;
+      const h1 = suction.h, h2 = discharge.h, h3 = condOut.h, h3s = scIn.h, h4 = scOut.h;
       // IHX after the subcooler; its liquid outlet is the valve inlet
       const ihxIn = scOut, hIhxOut = h4 - q_ihx, hValve = hIhxOut;
       const ihxOut = q_ihx > 0 ? pr.PH(P_H, hIhxOut) : ihxIn;
@@ -566,17 +608,20 @@
           return fail(`IHX approach ${ihxApproach.toFixed(1)} K below ${c.dTmin_ihx} K: the liquid (${ihxIn.T.toFixed(1)} C) is too cold to superheat the suction gas to ${suction.T.toFixed(1)} C`, { P_H, P_L });
       }
       const evapIn = pr.PH(P_evin, hValve);
+      const evapInSubcooled = evapIn.phase === "liquid" || evapIn.phase === "saturated_liquid";
+      if (evapInSubcooled) warnings.push(`the liquid reaches the evaporator subcooled (${evapIn.T.toFixed(1)} C, below evaporating at ${evapDew.T.toFixed(1)} C): the heat source also heats the liquid, which inflates the COP`);
 
       const q_desup = h2 - condDew.h, q_cond = h2 - h3;
-      const q_sc = h3 - h4;
+      const q_s2 = h3 - h3s, q_sc = h3s - h4;
       const q_evap = evapOut.h - hValve;
-      const q_heat = q_cond + (c.subcooler_heat_useful ? q_sc : 0);
+      const q_heat = q_cond + q_s2 + (c.subcooler_heat_useful ? q_sc : 0);
       // exchanger heat losses to ambient (kW), from the mean refrigerant temperature in each exchanger:
       // off the heat delivered (condenser, subcooler); the source supplies the evaporator duty plus its loss
       const L_cond = (c.loss_UA_cond_kWK || 0) * ((discharge.T + condOut.T) / 2 - c.T_ambient);
-      const L_sc = (c.loss_UA_subcool_kWK || 0) * ((condOut.T + scOut.T) / 2 - c.T_ambient);
+      const L_sc = (c.loss_UA_subcool_kWK || 0) * ((scIn.T + scOut.T) / 2 - c.T_ambient);
+      const L_s2 = steam2Out ? (c.loss_UA_steam2_kWK || 0) * ((condOut.T + steam2Out.T) / 2 - c.T_ambient) : 0;
       const L_evap = (c.loss_UA_evap_kWK || 0) * ((evapIn.T + evapOut.T) / 2 - c.T_ambient);
-      const L_heat = L_cond + (c.subcooler_heat_useful ? L_sc : 0);
+      const L_heat = L_cond + L_s2 + (c.subcooler_heat_useful ? L_sc : 0);
       const cop = (m * q_heat - L_heat) / (m * w_el);
       const T_hot2 = c.T_cond != null ? c.T_cond : condBub.T;     // Carnot between the condensing ...
       const T_low = c.T_evap != null ? c.T_evap : evapDew.T;      // ... and evaporating temperatures
@@ -586,6 +631,7 @@
         T_steam: c.T_cond != null ? null : c.T_steam, T_cond: T_hot2, dT_subcool: condOut.T - scOut.T,
         T_water_in: water ? c.T_water_in : null, T_water_out: water ? c.T_water_out : null,
         subcooler_min_approach_K: water ? water.min_approach : null,
+        P_water_bar: water ? water.stream.P * 10 : null, h_water_in_kJkg: water ? water.stream.h_in : null, h_water_out_kJkg: water ? water.stream.h_out : null,
         VHC: (m * q_heat - L_heat) / m * suction.D / 1000, rho_suction_kgm3: suction.D, P_evap_bar: P_L * 10, P_cond_bar: P_H * 10, PR: P_dis / P_L,
         supercritical: sc, rho_crit_kgm3: sc ? pr.rho_crit : null,
         P_discharge_bar: P_dis * 10, P_evap_in_bar: P_evin * 10, P_valve_in_bar: P_valve * 10,
@@ -595,22 +641,22 @@
         T_evap_dew: evapDew.T, T_evap_bubble: evapBub.T, evap_glide_K: evapDew.T - evapBub.T,
         T_cond_dew: condDew.T, T_cond_bubble: condBub.T, cond_glide_K: condDew.T - condBub.T,
         T_cond_out: condOut.T, dT_subcool_cond: condBub.T - condOut.T, preheat_subcool_share: steamMode ? share : 0,
-        T_evap_in: evapIn.T, x_evap_in: evapIn.q, T_evap_out: evapOut.T, T_suction: suction.T,
+        evap_in_subcooled: evapInSubcooled, T_evap_in: evapIn.T, x_evap_in: evapIn.q, T_evap_out: evapOut.T, T_suction: suction.T,
         T_discharge: discharge.T, dT_discharge_superheat: discharge.T - condDew.T, T_subcool_out: scOut.T,
         T_valve_in: ihxOut.T, eta_is_overall: dh_is / w_el, eta_is_shaft: dh_is / w_sh, eta_vol,
         map_to: to, map_tc: tc,
         compressor_Hz: Hz, compressor_rpm: rpm, V_suction_m3h: m / suction.D * 3600, V_discharge_m3h: m / discharge.D * 3600,
-        q_heat_kJkg: q_heat, q_cond_kJkg: q_cond, q_desuperheat_kJkg: q_desup, q_subcool_kJkg: q_sc, q_evap_kJkg: q_evap,
+        q_heat_kJkg: q_heat, q_cond_kJkg: q_cond, q_desuperheat_kJkg: q_desup, q_subcool_kJkg: q_sc, q_steam2_kJkg: q_s2, q_evap_kJkg: q_evap,
         q_ihx_kJkg: q_ihx, w_electric_kJkg: w_el, w_to_gas_kJkg: h2 - h1, q_compressor_loss_kJkg: q_loss,
         compressor_loss_fraction: q_loss / w_el, loss_mode: mode, UA_loss_kWK: UA, loss_dT_K: wallT(c, suction.T, discharge.T) - c.T_ambient,
         ihx, ihx_min_approach_K: ihxApproach,
-        energy_balance_residual_kJkg: q_evap + (h2 - h1) - (q_cond + q_sc),
+        energy_balance_residual_kJkg: q_evap + (h2 - h1) - (q_cond + q_s2 + q_sc),
         m_dot_kgs: m, Q_heat_kW: m * q_heat - L_heat, Q_cond_kW: m * q_cond - L_cond, Q_subcool_kW: m * q_sc - L_sc, Q_evap_kW: m * q_evap,
         Q_cond_refrigerant_kW: m * q_cond, Q_subcool_refrigerant_kW: m * q_sc, Q_source_kW: m * q_evap + L_evap,
         Q_loss_cond_kW: L_cond, Q_loss_subcool_kW: L_sc, Q_loss_evap_kW: L_evap,
         UA_loss_cond_kWK: c.loss_UA_cond_kWK || 0, UA_loss_subcool_kWK: c.loss_UA_subcool_kWK || 0, UA_loss_evap_kWK: c.loss_UA_evap_kWK || 0,
         Q_ihx_kW: m * q_ihx, W_electric_kW: m * w_el, W_shaft_kW: m * w_sh, Q_compressor_loss_kW: m * q_loss,
-        m_water_kgs: water ? (m * q_sc - L_sc) / (WATER_CP * (c.T_water_out - c.T_water_in)) : null,
+        m_water_kgs: water ? (m * q_sc - L_sc) / (water.stream.h_out - water.stream.h_in) : null,
         in_envelope: inEnvelope(to, tc),
         // beyond the window: where the maps were read, the density ratio and how far past a ratio limit it is
         window_edge: ext.inside ? null : ext.edge_name, window_edge_kind: ext.inside ? null : ext.edge_kind,
@@ -623,6 +669,8 @@
       // steam from hot water bled at the subcooler outlet: the steam generator (desuperheating and condensing)
       // heats it from T_water_out to saturated steam at T_steam
       r.m_steam_kgs = r.steam_feed_T = r.steam_bleed_fraction = r.m_hot_water_net_kgs = null;
+      r.second_steam = !!steam2Out;
+      r.T_steam2 = r.T_steam2_out = r.m_steam2_kgs = r.Q_steam2_kW = r.steam2_min_approach_K = null;
       if (water && c.T_steam != null && c.T_water_out < c.T_steam) {
         const sf = steamFromFeedwater(r.Q_cond_kW, c.T_steam, c.T_water_out);
         Object.assign(r, { m_steam_kgs: sf.m_kgs, steam_feed_T: c.T_water_out, steam_dh_kJkg: sf.dh_kJkg, P_steam_bar: sf.P_steam_MPa * 10,
@@ -647,12 +695,23 @@
             return fail(`preheat from subcooling leaves the steam generator approach at ${mn.toFixed(1)} K, below ${c.dTmin_steam} K`, { P_H, P_L });
         }
       }
+      // second steam, from its own share of the subcooling, with feedwater bled from the same hot water
+      if (steam2Out) {
+        const Q_s2 = m * q_s2 - L_s2;
+        if (Q_s2 <= 0) return fail(`the second steam generator delivers no steam (${Q_s2.toFixed(1)} kW net of its heat loss)`, { P_H, P_L });
+        const sf = steamFromFeedwater(Q_s2, c.T_steam2, c.T_water_out), feed = r.m_steam_kgs + sf.m_kgs;
+        Object.assign(r, { T_steam2: c.T_steam2, T_steam2_out: steam2Out.T, steam2_min_approach_K: steam2.min_approach, steam2_preheat_fraction: steam2.fp,
+          Q_steam2_kW: Q_s2, Q_steam2_refrigerant_kW: m * q_s2, Q_loss_steam2_kW: L_s2, UA_loss_steam2_kWK: c.loss_UA_steam2_kWK || 0, m_steam2_kgs: sf.m_kgs,
+          steam2_dh_kJkg: sf.dh_kJkg, P_steam2_bar: sf.P_steam_MPa * 10, steam_bleed_fraction: feed / r.m_water_kgs, m_hot_water_net_kgs: r.m_water_kgs - feed });
+      }
       if (r.m_water_kgs != null && r.m_water_kgs <= 0)
         return fail(`the subcooler delivers no hot water (${r.Q_subcool_kW.toFixed(1)} kW net of its heat loss)`, { P_H, P_L });
-      if (r.m_steam_kgs != null && r.m_steam_kgs > r.m_water_kgs)
-        return fail(`steam ${r.m_steam_kgs.toFixed(3)} kg/s needs more feedwater than the subcooler heats (${r.m_water_kgs.toFixed(3)} kg/s)`, { P_H, P_L });
+      const feedTotal = (r.m_steam_kgs || 0) + (r.m_steam2_kgs || 0);
+      if (r.m_steam_kgs != null && feedTotal > r.m_water_kgs)
+        return fail(`steam ${feedTotal.toFixed(3)} kg/s needs more feedwater than the subcooler heats (${r.m_water_kgs.toFixed(3)} kg/s)`, { P_H, P_L });
       const states = { evap_out: evapOut, suction, discharge, cond_dew: condDew, cond_bub: condBub, cond_out: condOut, subcool_out: scOut,
         ihx_out: ihxOut, evap_in: evapIn, evap_dew: evapDew, isentropic: isen };
+      if (steam2Out) states.steam2_out = steam2Out;
       return { success: true, message: "success", COP: cop, P_H, P_L, P_dis, P_evin, report: r, states, warnings };
     } catch (e) {
       const raw = e && e.message ? e.message : String(e);
@@ -670,7 +729,8 @@
     const pt = s => [s.T, s.P * 10, s.h, s.s];
     const r = res.report, ihx = r.ihx && r.q_ihx_kJkg > 1e-9;
     const h1 = st.suction.h, h2 = st.discharge.h, h3 = st.cond_out.h, h4 = st.subcool_out.h, hi = st.ihx_out.h, heo = st.evap_out.h;
-    const scl = [h3, h4], ihxLiq = [h4, hi];
+    const h3s = st.steam2_out ? st.steam2_out.h : h3;      // second steam generator outlet, when there is one
+    const scl = [h3s, h4], ihxLiq = [h4, hi];
     const hv = ihx ? hi : h4;
     // pressure along the condenser and evaporator, linear in enthalpy between inlet and (pinned) exit
     const lin = (Pa, ha, Pb, hb) => h => Math.abs(hb - ha) < 1e-12 ? Pb : Pa + (Pb - Pa) * (h - ha) / (hb - ha);
@@ -687,7 +747,7 @@
     const comp = Array.from({ length: n + 1 }, (_, i) => { const f = i / n; const P = Math.exp(Math.log(P_L) + f * Math.log(P_dis / P_L)); return pt(pr.PH(P, h1 + f * (h2 - h1))); });
     const valve = Array.from({ length: n + 1 }, (_, i) => { const P = Math.exp(Math.log(P_H) + i / n * Math.log(P_evin / P_H)); return pt(pr.PH(P, hv)); });
     const out = [
-      { c: "Compressor", pts: comp }, { c: "Condenser", pts: isoParts(Pc, sc ? [[h2, h3, 3 * n]] : [[h2, hDew, n], [hDew, hBub, 2 * n], [hBub, h3, n]]) }, { c: "Subcooler", pts: iso(P_H, scl[0], scl[1]) },
+      { c: "Compressor", pts: comp }, { c: "Condenser", pts: isoParts(Pc, sc ? [[h2, h3, 3 * n]] : [[h2, hDew, n], [hDew, hBub, 2 * n], [hBub, h3, n]]) }, ...(st.steam2_out ? [{ c: "Second steam", pts: iso(P_H, h3, h3s) }] : []), { c: "Subcooler", pts: iso(P_H, scl[0], scl[1]) },
       { c: "Expansion valve", pts: valve }, { c: "Evaporator", pts: iso(Pe, hv, heo, 2 * n) },
     ];
     if (ihx) { out.push({ c: "Internal HX", pts: iso(P_H, ihxLiq[0], ihxLiq[1], n / 2) }); out.push({ c: "Internal HX", pts: iso(P_L, heo, h1, n / 2) }); }
@@ -695,14 +755,17 @@
     const m = r.m_dot_kgs, hot = [];
     // from the cold end: subcooler, liquid subcooled in the condenser, condensing (bubble to dew), desuperheating;
     // each segment ends exactly at the bubble and dew points
-    const segsHot = sc ? [["Subcooling", scl[1], scl[0], n], ["Gas cooling", h3, h2, 3 * n]]
-      : [["Subcooling", scl[1], scl[0], n], ["Subcooled liquid", h3, hBub, n], ["Condensing", hBub, hDew, 2 * n], ["Desuperheating", hDew, h2, n]];
+    const segsLiq = [["Subcooling", scl[1], scl[0], n], ["Second steam", h3s, h3, n]];
+    const segsHot = sc ? [...segsLiq, ["Gas cooling", h3, h2, 3 * n]]
+      : [...segsLiq, ["Subcooled liquid", h3, hBub, n], ["Condensing", hBub, hDew, 2 * n], ["Desuperheating", hDew, h2, n]];
     for (const [sec, a, b, k] of segsHot) {
       if (Math.abs(b - a) < 1e-9) continue;
-      for (let i = 0; i <= k; i++) { const h = a + (b - a) * i / k; const q = sec === "Subcooling" ? m * (h - scl[1]) : m * ((scl[0] - scl[1]) + (h - h3)); hot.push([q, pr.PH(sec === "Subcooling" ? P_H : Pc(h), h).T, sec]); }
+      for (let i = 0; i <= k; i++) { const h = a + (b - a) * i / k; const liq = sec === "Subcooling" || sec === "Second steam"; const q = liq ? m * (h - scl[1]) : m * ((h3 - scl[1]) + (h - h3)); hot.push([q, pr.PH(liq ? P_H : Pc(h), h).T, sec]); }
     }
     const evap = Array.from({ length: 2 * n + 1 }, (_, i) => { const h = hv + (heo - hv) * i / (2 * n); return [m * (h - hv), pr.PH(Pe(h), h).T]; });
     const prof = { hot, evap };
+    // hot water temperature against its share of the subcooler duty
+    if (r.P_water_bar != null) prof.hw = Array.from({ length: n + 1 }, (_, i) => [i / n, pr.water.PH(r.P_water_bar / 10, r.h_water_in_kJkg + (r.h_water_out_kJkg - r.h_water_in_kJkg) * i / n).T]);
     if (ihx) {
       const k = n / 2, [li, lo] = ihxLiq;
       prof.ihx_liq = Array.from({ length: k + 1 }, (_, i) => [m * (li - lo) * i / k, pr.PH(P_H, lo + (li - lo) * i / k).T]);

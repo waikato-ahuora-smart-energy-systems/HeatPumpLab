@@ -9,7 +9,7 @@
 :root{
   --bg:#f6f7f8; --surface:#ffffff; --ink:#14181c; --ink-2:#4c545c; --ink-3:#7d868f;
   --rule:#dde1e5; --grid:#eceff2; --dome:#9aa3ab; --accent:#1f5f8b;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#7a5bd6;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#7a5bd6; --s7:#0e8fa3;
   --seq-lo:#e3eef8; --seq-hi:#1d4f7a; --on-seq:#ffffff;
   --warn:#9a6200; --warn-bg:#fdf3e1; --info-bg:#e8f1f8; --bad:#b42318; --bad-bg:#fde8e6;
   --f-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
@@ -19,14 +19,14 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#121417; --surface:#1a1d21; --ink:#f2f4f6; --ink-2:#b9c0c7; --ink-3:#88919a;
   --rule:#2e3339; --grid:#252a2f; --dome:#6f7880; --accent:#7fb6e0;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9; --s7:#2aa5b8;
   --seq-lo:#1f2a35; --seq-hi:#7fb6e0; --on-seq:#0f1215;
   --warn:#f0b54d; --warn-bg:#2d2414; --info-bg:#1b2833; --bad:#ff8a7a; --bad-bg:#3a1a17;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#121417; --surface:#1a1d21; --ink:#f2f4f6; --ink-2:#b9c0c7; --ink-3:#88919a;
   --rule:#2e3339; --grid:#252a2f; --dome:#6f7880; --accent:#7fb6e0;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9; --s7:#2aa5b8;
   --seq-lo:#1f2a35; --seq-hi:#7fb6e0; --on-seq:#0f1215;
   --warn:#f0b54d; --warn-bg:#2d2414; --info-bg:#1b2833; --bad:#ff8a7a; --bad-bg:#3a1a17;
   color-scheme:dark}
@@ -114,9 +114,10 @@ td .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:
 .foot p{margin:0}
 /* headline: four evenly spaced results (COP + stars, three dials); steam : hot water ratio as subtext */
 .headline{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px 24px;align-items:center;justify-items:center;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:16px}
+.headline.s2{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px 16px}
 .headline > .dial{width:100%;max-width:188px}
 .headline > .hl-s{grid-column:1/-1;justify-self:center;text-align:center;max-width:none}
-@media (max-width:640px){.headline{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}.headline > .hl-cop{grid-column:1/-1}}
+@media (max-width:640px){.headline,.headline.s2{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}.headline > .hl-cop{grid-column:1/-1}}
 .hl-txt{display:grid;gap:3px;min-width:0}
 .hl-cop{justify-items:center}
 .hl-k{font-size:12px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase;font-family:var(--f-data)}
@@ -186,8 +187,8 @@ figure.pfdfig figcaption{color:var(--ink-3);font-size:13px;margin-top:4px}
 <script>
 const DATA = /*__DATA__*/null;
 
-const COMP = {"Evaporator":"--s1","Compressor":"--s2","Condenser":"--s3","Subcooler":"--s4","Expansion valve":"--s5","Internal HX":"--s6"};
-const COMP_ORDER = ["Evaporator","Internal HX","Compressor","Condenser","Subcooler","Expansion valve"];
+const COMP = {"Evaporator":"--s1","Compressor":"--s2","Condenser":"--s3","Second steam":"--s7","Subcooler":"--s4","Expansion valve":"--s5","Internal HX":"--s6"};
+const COMP_ORDER = ["Evaporator","Internal HX","Compressor","Condenser","Second steam","Subcooler","Expansion valve"];
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const NS = "http://www.w3.org/2000/svg";
 const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
@@ -279,6 +280,7 @@ function cycleDiagram(id, c, mode) {
     }
   }
   for (const [k, n] of DATA.states) {
+    if (!c.st[k]) continue;
     if (k === "cond_dew" || k === "evap_dew") continue;
     if (k === "evap_out" && !c.r.ihx) continue;
     const s = c.st[k]; const x = f.fx(s[X]), y = f.fy(s[Y]);
@@ -310,7 +312,7 @@ function profiles(c) {
   const water = (pts, name) => {
     el("path", { d: poly(pts, f.fx, f.fy), fill: "none", stroke: css("--ink-2"), "stroke-width": 1.6, "stroke-dasharray": "5 3" }, f.svg);
   };
-  const sub = hot.filter(p => p[2] === "Subcooling"), con = hot.filter(p => p[2] !== "Subcooling");
+  const sub = hot.filter(p => p[2] === "Subcooling"), s2 = hot.filter(p => p[2] === "Second steam"), con = hot.filter(p => p[2] !== "Subcooling" && p[2] !== "Second steam");
   // water side of the steam generator: the bled hot water heated from the feed temperature to boiling at the
   // refrigerant's cold end (counter-current), then boiling at T_steam
   let steamLine = null, hwLine = null;
@@ -325,9 +327,17 @@ function profiles(c) {
     } else steamLine = [[xs[0], c.r.T_steam], [xs[1], c.r.T_steam]];
     hov.push({ x: f.fx(xs[1]), y: f.fy(c.r.T_steam), html: `<b>Steam</b><br>${fmt(c.r.T_steam, 1)} °C` });
   }
+  // the same for the second steam generator, on the part of the subcooling it takes
+  let steam2Line = null;
+  if (c.r.second_steam && s2.length > 1) {
+    const xs = [Math.min(...s2.map(p => p[0])), Math.max(...s2.map(p => p[0]))], fp = c.r.steam2_preheat_fraction, xb = xs[0] + fp * (xs[1] - xs[0]);
+    steam2Line = [[xs[0], c.r.steam_feed_T], [xb, c.r.T_steam2], [xs[1], c.r.T_steam2]];
+    hov.push({ x: f.fx(xs[0]), y: f.fy(c.r.steam_feed_T), html: `<b>Second feedwater in</b> (bled hot water)<br>${fmt(c.r.steam_feed_T, 1)} °C · ${fmt(c.r.m_steam2_kgs * 3600, 1)} kg/h` });
+    hov.push({ x: f.fx(xs[1]), y: f.fy(c.r.T_steam2), html: `<b>Second steam</b><br>${fmt(c.r.T_steam2, 1)} °C` });
+  }
   if (c.r.T_water_in != null && sub.length > 1) {
     const xs = [Math.min(...sub.map(p => p[0])), Math.max(...sub.map(p => p[0]))];
-    hwLine = [[xs[0], c.r.T_water_in], [xs[1], c.r.T_water_out]];
+    hwLine = c.prof.hw ? c.prof.hw.map(([x, T]) => [xs[0] + x * (xs[1] - xs[0]), T]) : [[xs[0], c.r.T_water_in], [xs[1], c.r.T_water_out]];
     hov.push({ x: f.fx(xs[0]), y: f.fy(c.r.T_water_in), html: `<b>Hot water in</b><br>${fmt(c.r.T_water_in, 1)} °C` });
     hov.push({ x: f.fx(xs[1]), y: f.fy(c.r.T_water_out), html: `<b>Hot water out</b><br>${fmt(c.r.T_water_out, 1)} °C` });
   }
@@ -336,16 +346,18 @@ function profiles(c) {
   if (srcLine) hov.push({ x: f.fx(xE), y: f.fy(c.r.T_source), html: `<b>Heat source</b><br>${fmt(c.r.T_source, 1)} °C` });
   // shading first, lines over it
   if (steamLine) area(con.map(p => [p[0], p[1]]), steamLine, "--s3");
+  if (steam2Line) area(s2.map(p => [p[0], p[1]]), steam2Line, "--s7");
   if (hwLine) area(sub.map(p => [p[0], p[1]]), hwLine, "--s4");
   if (srcLine) area(srcLine, ev.map(p => [p[0], p[1]]), "--s1");
   if (il) area(il, iv, "--s6");
-  const segs = { "Subcooling": "--s4", "Subcooled liquid": "--s3", "Condensing": "--s3", "Desuperheating": "--s3", "Gas cooling": "--s3" };
-  for (const sec of ["Subcooling", "Subcooled liquid", "Condensing", "Desuperheating", "Gas cooling"]) {
+  const segs = { "Subcooling": "--s4", "Second steam": "--s7", "Subcooled liquid": "--s3", "Condensing": "--s3", "Desuperheating": "--s3", "Gas cooling": "--s3" };
+  for (const sec of ["Subcooling", "Second steam", "Subcooled liquid", "Condensing", "Desuperheating", "Gas cooling"]) {
     const pts = hot.filter(p => p[2] === sec);
     el("path", { d: poly(pts, f.fx, f.fy), fill: "none", stroke: css(segs[sec]), "stroke-width": 2.4, "stroke-linecap": "round", "stroke-dasharray": sec === "Desuperheating" ? "2 4" : "none" }, f.svg);
     for (const p of pts) hov.push({ x: f.fx(p[0]), y: f.fy(p[1]), html: `<b>${sec}</b><br>${fmt(p[0], 2)} kW · ${fmt(p[1], 1)} °C` });
   }
   if (steamLine) water(steamLine);
+  if (steam2Line) water(steam2Line);
   if (hwLine) water(hwLine);
   if (srcLine) water(srcLine);
   el("path", { d: poly(ev, f.fx, f.fy), fill: "none", stroke: css("--s1"), "stroke-width": 2.4, "stroke-linecap": "round" }, f.svg);
@@ -361,7 +373,7 @@ function profiles(c) {
   const t2 = el("text", { x: f.fx(xE) - 4, y: f.fy(ev[0][1]) + 18, "text-anchor": "end", class: "lbl" }, f.svg); t2.textContent = `Evaporator ${fmt(xE, 1)} kW`;
   if (il) { const t3 = el("text", { x: f.fx(xE) + 4, y: f.fy(Math.max(...il.map(p => p[1]))) - 8, class: "lbl" }, f.svg); t3.textContent = `IHX ${fmt(il[il.length - 1][0] - xE, 1)} kW`; }
   hoverLayer(host, f, hov);
-  legend("lg-pr", [{ color: "--s3", label: c.r.supercritical ? "Gas cooler (supercritical)" : "Condenser (dotted: desuperheating)" }, { color: "--s4", label: "Subcooler" }, { color: "--s1", label: "Evaporator" }]
+  legend("lg-pr", [{ color: "--s3", label: c.r.supercritical ? "Gas cooler (supercritical)" : "Condenser (dotted: desuperheating)" }, ...(steam2Line ? [{ color: "--s7", label: `Second steam (approach ${fmt(c.r.steam2_min_approach_K, 1)} K)` }] : []), { color: "--s4", label: "Subcooler" }, { color: "--s1", label: "Evaporator" }]
     .concat(c.r.T_steam != null ? [{ dash: 1, label: `Feedwater → steam, hot water and heat source (approach ${fmt(c.r.T_cond_bubble - c.r.T_steam, 1)} / ${fmt(c.r.subcooler_min_approach_K, 1)} K)` }] : [])
     .concat(il ? [{ color: "--s6", label: `IHX liquid / vapour (dashed), after the evaporator, approach ${fmt(c.r.ihx_min_approach_K, 1)} K` }] : [])
     .concat([{ box: 1, color: "--s3", op: 0.25, label: "Shaded: heat transfer between the streams" }]));
@@ -369,9 +381,9 @@ function profiles(c) {
 
 /* ---------- energy flows ---------- */
 /* heat lost to ambient: compressor, condenser, subcooler, evaporator (kW; a negative exchanger loss is a gain) */
-const totalLoss = r => (r.Q_compressor_loss_kW || 0) + (r.Q_loss_cond_kW || 0) + (r.Q_loss_subcool_kW || 0) + (r.Q_loss_evap_kW || 0);
+const totalLoss = r => (r.Q_compressor_loss_kW || 0) + (r.Q_loss_cond_kW || 0) + (r.Q_loss_steam2_kW || 0) + (r.Q_loss_subcool_kW || 0) + (r.Q_loss_evap_kW || 0);
 const dPon = r => (r.dP_cond_kPa || 0) + (r.dP_subcool_kPa || 0) + (r.dP_evap_kPa || 0) > 0.05;   // any refrigerant pressure drop
-const lossParts = r => [["condenser", r.Q_loss_cond_kW], ["subcooler", r.Q_loss_subcool_kW], ["evaporator", r.Q_loss_evap_kW]]
+const lossParts = r => [["condenser", r.Q_loss_cond_kW], ["second steam", r.Q_loss_steam2_kW], ["subcooler", r.Q_loss_subcool_kW], ["evaporator", r.Q_loss_evap_kW]]
   .filter(([, v]) => v).map(([k, v]) => ` · ${k} ${fmt(v, 2)}`).join("");
 function energy(c) {
   const host = document.getElementById("ef"); host.innerHTML = "";
@@ -380,11 +392,11 @@ function energy(c) {
   // delivered: the condenser loss is shared between desuperheating and condensing by refrigerant duty
   const fCond = r.Q_cond_refrigerant_kW ? r.Q_cond_kW / r.Q_cond_refrigerant_kW : 1;
   const desup = m * r.q_desuperheat_kJkg * fCond, cond = r.Q_cond_kW - desup;
-  const exLoss = [["Condenser", r.Q_loss_cond_kW || 0, "--s3"], ["Subcooler", r.Q_loss_subcool_kW || 0, "--s4"], ["Evaporator", r.Q_loss_evap_kW || 0, "--s1"]];
+  const exLoss = [["Condenser", r.Q_loss_cond_kW || 0, "--s3"], ["Second steam", r.Q_loss_steam2_kW || 0, "--s7"], ["Subcooler", r.Q_loss_subcool_kW || 0, "--s4"], ["Evaporator", r.Q_loss_evap_kW || 0, "--s1"]];
   const rows = [
     { name: "Electrical input", parts: [["Into the gas", gas, "--s2", 1, "To gas"], ["Lost from the shell", loss, "--ink-3", 0.55, "Loss"]] },
     { name: "Heat into the refrigerant", parts: [["Evaporator", r.Q_evap_kW, "--s1", 1], ["Compressor", gas, "--s2", 1]] },
-    { name: "Heat delivered", parts: (r.supercritical ? [["Gas cooling", r.Q_cond_kW, "--s3", 1]] : [["Desuperheating", desup, "--s3", 0.55], ["Condensing", cond, "--s3", 1]]).concat([["Subcooling", r.Q_subcool_kW, "--s4", 1]]) },
+    { name: "Heat delivered", parts: (r.supercritical ? [["Gas cooling", r.Q_cond_kW, "--s3", 1]] : [["Desuperheating", desup, "--s3", 0.55], ["Condensing", cond, "--s3", 1]]).concat(r.Q_steam2_kW ? [["Second steam", r.Q_steam2_kW, "--s7", 1]] : [], [["Subcooling", r.Q_subcool_kW, "--s4", 1]]) },
   ];
   if (exLoss.some(([, v]) => v > 1e-6)) rows.push({ name: "Heat lost to ambient", parts: [["Compressor", loss, "--s2", 0.4], ...exLoss.filter(([, v]) => v > 0).map(([n, v, col]) => [n, v, col, 0.4])] });
   if (r.ihx && r.Q_ihx_kW > 0) rows.push({ name: "Internal heat exchanger (liquid → suction gas, internal)", parts: [["IHX", r.Q_ihx_kW, "--s6", 1]] });
@@ -410,7 +422,7 @@ function energy(c) {
   });
   const ticks = niceTicks(0, xmax, 6);
   for (const v of ticks) { const t = el("text", { x: fx(v), y: H - 6, "text-anchor": "middle" }, svg); t.textContent = v; el("line", { x1: fx(v), x2: fx(v), y1: H - 22, y2: H - 18, stroke: css("--rule") }, svg); }
-  legend("lg-ef", [{ box: 1, color: "--s1", label: "Evaporator" }, { box: 1, color: "--s6", label: "IHX" }, { box: 1, color: "--s2", label: "Compressor" }, { box: 1, color: "--ink-3", op: .55, label: "Compressor heat loss" }, ...(r.supercritical ? [{ box: 1, color: "--s3", label: "Gas cooling" }] : [{ box: 1, color: "--s3", op: .55, label: "Desuperheating" }, { box: 1, color: "--s3", label: "Condensing" }]), { box: 1, color: "--s4", label: "Subcooling" }]);
+  legend("lg-ef", [{ box: 1, color: "--s1", label: "Evaporator" }, { box: 1, color: "--s6", label: "IHX" }, { box: 1, color: "--s2", label: "Compressor" }, { box: 1, color: "--ink-3", op: .55, label: "Compressor heat loss" }, ...(r.supercritical ? [{ box: 1, color: "--s3", label: "Gas cooling" }] : [{ box: 1, color: "--s3", op: .55, label: "Desuperheating" }, { box: 1, color: "--s3", label: "Condensing" }]), ...(r.Q_steam2_kW ? [{ box: 1, color: "--s7", label: "Second steam" }] : []), { box: 1, color: "--s4", label: "Subcooling" }]);
   document.getElementById("ef-note").textContent = loss > 0
     ? `kW at this point. Compressor heat loss = UA × (wall − ambient) = ${fmt(F().UA_kWK * 1000, 1)} W/K × ${fmt(r.loss_dT_K, 1)} K, with the wall taken as the ${M.loss_dT_basis === "mean" ? "mean of suction and discharge" : "discharge"} temperature.${lossParts(r) ? " Condenser, subcooler and evaporator losses use the mean refrigerant temperature in each exchanger; they come off the heat delivered (the source also covers the evaporator loss)." : ""}`
     : "kW at this point. No compressor heat loss at this point.";
@@ -469,20 +481,22 @@ function headline(c) {
   if (!host) return;
   if (!c || !c.ok) { host.hidden = true; return; }
   host.hidden = false;
-  const r = c.r, steam = r.Q_cond_kW, hw = r.Q_subcool_kW, tot = steam + hw, el = r.W_electric_kW;
+  const r = c.r, s2 = r.Q_steam2_kW || 0, steam = r.Q_cond_kW + s2, hw = r.Q_subcool_kW, tot = steam + hw, el = r.W_electric_kW;
+  host.classList.toggle("s2", !!s2);
   const ps = 100 * steam / tot, pw = 100 - ps;
   const n = copStars(r.COP);
   const m = maxHzCase(), rm = m && m.ok ? m.r : r;
-  const top = dialTop(steam, hw, el, rm.Q_cond_kW, rm.Q_subcool_kW, rm.W_electric_kW), mx = { steam: top, hw: top, el: top };
+  const top = dialTop(r.Q_cond_kW, s2, hw, el, rm.Q_cond_kW, rm.Q_steam2_kW || 0, rm.Q_subcool_kW, rm.W_electric_kW), mx = { steam: top, hw: top, el: top };
   const pmax = r.P_discharge_bar ?? r.P_cond_bar;   // compressor discharge (condenser inlet): its own scale, rounded up to the next 10 bar
   host.innerHTML = `<div class="hl-txt hl-cop"><span class="hl-k">Heating COP</span>
       <span class="hl-v">${fmt(r.COP, 2)}</span>
       <span class="stars" role="img" aria-label="${n.toFixed(2)} of 5 stars, one star per unit of COP">${starRow(n, "st")}</span></div>
-    <div class="dial">${dialSVG(steam, mx.steam, "--s3", "kW steam")}<span class="dk">Steam, kW</span></div>
+    <div class="dial">${dialSVG(r.Q_cond_kW, mx.steam, "--s3", "kW steam")}<span class="dk">Steam, kW</span></div>
+    ${s2 ? `<div class="dial">${dialSVG(s2, mx.steam, "--s7", "kW second steam")}<span class="dk">Second steam, kW</span></div>` : ""}
     <div class="dial">${dialSVG(hw, mx.hw, "--s4", "kW hot water")}<span class="dk">Hot water, kW</span></div>
     <div class="dial">${dialSVG(el, mx.el, "--s2", "kW electrical")}<span class="dk">Electrical, kW</span></div>
     <div class="dial">${dialSVG(pmax, dialTop(pmax, rm.P_discharge_bar ?? rm.P_cond_bar), "--s6", "bar maximum pressure")}<span class="dk">Max pressure, bar</span></div>
-    <span class="hl-s">Steam : hot water ${ps.toFixed(0)} : ${pw.toFixed(0)} by duty (${fmt(steam / hw, 2)} : 1) · ${fmt(tot, 1)} kW heat in total${r.m_steam_kgs != null ? `<br>Steam ${fmt(r.m_steam_kgs * 3600, 1)} kg/h at ${fmt(r.P_steam_bar, 2)} bar, raised from ${fmt(r.steam_feed_T, 0)} °C hot water bled at the subcooler outlet (${fmt(100 * r.steam_bleed_fraction, 1)} % of the hot water; ${fmt(r.m_hot_water_net_kgs * 3600, 0)} kg/h left)` : ""}</span>`;
+    <span class="hl-s">Steam : hot water ${ps.toFixed(0)} : ${pw.toFixed(0)} by duty (${fmt(steam / hw, 2)} : 1) · ${fmt(tot, 1)} kW heat in total${r.m_steam_kgs != null ? `<br>Steam ${fmt(r.m_steam_kgs * 3600, 1)} kg/h at ${fmt(r.P_steam_bar, 2)} bar, raised from ${fmt(r.steam_feed_T, 0)} °C hot water bled at the subcooler outlet (${fmt(100 * r.steam_bleed_fraction, 1)} % of the hot water; ${fmt(r.m_hot_water_net_kgs * 3600, 0)} kg/h left)` : ""}${s2 ? `<br>Second steam ${fmt(r.m_steam2_kgs * 3600, 1)} kg/h at ${fmt(r.T_steam2, 0)} °C and ${fmt(r.P_steam2_bar, 2)} bar, from the subcooling; the bleed above includes its feedwater` : ""}</span>`;
   fitCop();
 }
 
@@ -506,11 +520,11 @@ function pfd(c) {
   const r = c.r, st = c.st;
   const W = 960, H = 430;
   const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
-    "aria-label": `Refrigerant circuit: compressor ${fmt(r.W_electric_kW, 1)} kW, steam generator ${fmt(r.Q_cond_kW, 1)} kW, subcooler ${fmt(r.Q_subcool_kW, 1)} kW, evaporator ${fmt(r.Q_evap_kW, 1)} kW` }, host);
+    "aria-label": `Refrigerant circuit: compressor ${fmt(r.W_electric_kW, 1)} kW, steam generator ${fmt(r.Q_cond_kW, 1)} kW,${r.second_steam ? ` second steam generator ${fmt(r.Q_steam2_kW, 1)} kW,` : ""} subcooler ${fmt(r.Q_subcool_kW, 1)} kW, evaporator ${fmt(r.Q_evap_kW, 1)} kW` }, host);
   const ink = css("--ink"), ink2 = css("--ink-2"), ink3 = css("--ink-3"), surf = css("--surface");
   const defs = el("defs", {}, svg);
   const mk = (id, color) => { const m = el("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs); el("path", { d: "M0 0 L10 5 L0 10 z", fill: color }, m); };
-  mk("pfd-a", ink2); for (const v of ["--s1", "--s2", "--s3", "--s4", "--ink-3"]) mk("pfd" + v, css(v));
+  mk("pfd-a", ink2); for (const v of ["--s1", "--s2", "--s3", "--s4", "--s7", "--ink-3"]) mk("pfd" + v, css(v));
   const g = el("g", { transform: "translate(0,28)" }, svg);
   const pipe = (pts, o = {}) => el("polyline", { points: pts.map(p => p.join(",")).join(" "), fill: "none", stroke: o.color || ink2,
     "stroke-width": o.w || 2, "stroke-dasharray": o.dash || "none", "stroke-linejoin": "round", "marker-end": o.arrow === false ? "none" : `url(#${o.marker || "pfd-a"})` }, g);
@@ -525,15 +539,18 @@ function pfd(c) {
   // refrigerant pipework (clockwise: compressor -> steam generator -> subcooler -> IHX -> valve -> evaporator -> IHX -> compressor)
   // top row: subcooler and steam generator stretch from the valve line to the compressor riser
   pipe([[850, 181], [850, 60], [832, 60]]);
-  pipe([[470, 60], [402, 60]]);
+  // with a second steam generator the top row narrows to fit it: subcooler, second generator, steam generator
+  const s2On = r.second_steam, gx = s2On ? 540 : 470, sw = s2On ? 130 : 260;
+  if (s2On) { pipe([[540, 60], [492, 60]]); pipe([[300, 60], [272, 60]]); } else pipe([[470, 60], [402, 60]]);
   pipe([[140, 60], [110, 60], [110, 150], [680, 150], [680, 283]]);   // in line with the valve's inlet riser (x 110)
   pipe([[580, 285], [580, 255], [110, 255], [110, 281]]);
   pipe([[110, 309], [110, 338], [198, 338]]);
   pipe([[480, 338], [558, 338]]);
   pipe([[720, 338], [850, 338], [850, 251]]);
   // units
-  unit(470, 35, 360, 50, "--s3", "Steam generator", r.supercritical ? `gas cooling ${fmt(r.Q_cond_kW, 1)} kW (supercritical)` : `desup ${fmt(r.m_dot_kgs * r.q_desuperheat_kJkg, 1)} + cond ${fmt(r.Q_cond_kW - r.m_dot_kgs * r.q_desuperheat_kJkg, 1)} kW`);
-  unit(140, 35, 260, 50, "--s4", "Subcooler", `${fmt(r.Q_subcool_kW, 1)} kW`);
+  unit(gx, 35, 830 - gx, 50, "--s3", "Steam generator", r.supercritical ? `gas cooling ${fmt(r.Q_cond_kW, 1)} kW (supercritical)` : `desup ${fmt(r.m_dot_kgs * r.q_desuperheat_kJkg, 1)} + cond ${fmt(r.Q_cond_kW - r.m_dot_kgs * r.q_desuperheat_kJkg, 1)} kW`);
+  unit(140, 35, sw, 50, "--s4", "Subcooler", `${fmt(r.Q_subcool_kW, 1)} kW`);
+  if (s2On) unit(300, 35, 190, 50, "--s7", "Second steam", `${fmt(r.Q_steam2_kW, 1)} kW`);
   unit(200, 313, 280, 50, "--s1", "Evaporator", `${fmt(r.Q_evap_kW, 1)} kW from the source`);
   // IHX: two channels, counterflow
   const ihxOn = r.ihx && r.Q_ihx_kW > 1e-6;
@@ -555,8 +572,13 @@ function pfd(c) {
   // external streams
   pipe([[650, 35], [650, 2]], { color: css("--s3"), w: 3, marker: "pfd--s3" });
   text(660, 12, `Steam ${fmt(r.Q_cond_kW, 1)} kW${r.m_steam_kgs != null ? ` · ${fmt(r.m_steam_kgs * 3600, 1)} kg/h` : ""}`, "xs", "start", { fill: ink });
-  pipe([[270, 35], [270, 2]], { color: css("--s4"), w: 3, marker: "pfd--s4" });
-  text(280, 12, `Hot water ${fmt(r.Q_subcool_kW, 1)} kW`, "xs", "start", { fill: ink });
+  const hwX = s2On ? 205 : 270;
+  pipe([[hwX, 35], [hwX, 2]], { color: css("--s4"), w: 3, marker: "pfd--s4" });
+  text(hwX + 10, 12, `Hot water ${fmt(r.Q_subcool_kW, 1)} kW`, "xs", "start", { fill: ink });
+  if (s2On) {
+    pipe([[395, 35], [395, 2]], { color: css("--s7"), w: 3, marker: "pfd--s7" });
+    text(405, 12, `${fmt(r.T_steam2, 0)} °C steam · ${fmt(r.m_steam2_kgs * 3600, 1)} kg/h`, "xs", "start", { fill: ink });
+  }
   pipe([[340, 398], [340, 365]], { color: css("--s1"), w: 3, marker: "pfd--s1" });
   text(350, 394, "Heat source", "xs", "start", { fill: ink });
   pipe([[945, 215], [888, 215]], { color: css("--s2"), w: 3, marker: "pfd--s2" });
@@ -578,7 +600,8 @@ function pfd(c) {
     p.textContent = `${fmt(st[k][1], 2)} bar`;
   };
   sp(850, 120, "2", "discharge", 840, 124, "end");
-  sp(436, 60, "3", "cond_out", 436, 103, "middle");
+  sp(s2On ? 515 : 436, 60, "3", "cond_out", s2On ? 515 : 436, 103, "middle");
+  if (s2On) sp(286, 60, "3s", "steam2_out", 286, 103, "middle");
   sp(110, 105, "4", "subcool_out", 120, 109, "start");
   sp(440, 255, "4i", "ihx_out", 440, 245, "middle");
   sp(150, 338, "5", "evap_in", 140, 380, "middle", st.evap_in[6] >= 0 ? ` · x ${fmt(st.evap_in[6], 2)}` : "");
@@ -627,7 +650,7 @@ function copMap() {
     const g = el("g", { class: "cell", tabindex: rec.ok ? 0 : -1, role: "button", "aria-label": `Heat source ${e} °C, steam ${c} °C` }, svg);
     if (!rec.ok) {
       el("rect", { x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, rx: 2, fill: css("--grid") }, g);
-      const t = el("text", { x: x + cw / 2, y: y + ch / 2 + 4, "text-anchor": "middle", class: "val" }, g); t.textContent = /IHX/.test(rec.msg) ? "IHX" : /wet/.test(rec.msg) ? "wet" : /hot water/.test(rec.msg) ? "HW" : "–";
+      const t = el("text", { x: x + cw / 2, y: y + ch / 2 + 4, "text-anchor": "middle", class: "val" }, g); t.textContent = /second steam/.test(rec.msg) ? "S2" : /IHX/.test(rec.msg) ? "IHX" : /wet/.test(rec.msg) ? "wet" : /hot water/.test(rec.msg) ? "HW" : "–";
     } else {
       const tt = (rec.r.COP - lo) / (hi - lo || 1);
       const r = el("rect", { x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, rx: 2 }, g); r.style.fill = seqFill(0.08 + 0.92 * tt);
@@ -652,8 +675,8 @@ function copMap() {
   const eg = el("g", { "clip-path": "url(#mapclip)", "pointer-events": "none" }, svg);
   envelopeOn(eg, gx, gy, F().envelope || DATA.envelope, { w: 1.2, op: 0.7 });
   const [de, dc] = M.design.split("|").map(Number);
-  el("circle", { cx: cx(de) + cw / 2, cy: cy(dc) + ch / 2, r: Math.min(cw, ch) / 2 - 1, fill: "none", stroke: css("--s2"), "stroke-width": 2, "pointer-events": "none" }, svg);
-  el("rect", { x: cx(selE) + 0.5, y: cy(selC) + 0.5, width: cw - 1, height: ch - 1, rx: 3, fill: "none", stroke: css("--ink"), "stroke-width": 2.2, "pointer-events": "none" }, svg);
+  if (E.includes(de) && C.includes(dc)) el("circle", { cx: cx(de) + cw / 2, cy: cy(dc) + ch / 2, r: Math.min(cw, ch) / 2 - 1, fill: "none", stroke: css("--s2"), "stroke-width": 2, "pointer-events": "none" }, svg);
+  if (E.includes(selE) && C.includes(selC)) el("rect", { x: cx(selE) + 0.5, y: cy(selC) + 0.5, width: cw - 1, height: ch - 1, rx: 3, fill: "none", stroke: css("--ink"), "stroke-width": 2.2, "pointer-events": "none" }, svg);
 }
 
 function effMap() {
@@ -700,7 +723,7 @@ function figs(c) {
   const box = document.getElementById("figs"); box.innerHTML = "";
   const r = c.r;
   const items = [
-    ["Heat delivered", fmt(r.Q_heat_kW, 1), "kW", `evaporator ${fmt(r.Q_evap_kW, 1)} kW${r.m_steam_kgs != null ? ` · steam ${fmt(r.m_steam_kgs * 3600, 1)} kg/h` : ""}${r.m_water_kgs != null ? ` · hot water ${fmt(r.m_water_kgs * 3600, 0)} kg/h` : ""}`],
+    ["Heat delivered", fmt(r.Q_heat_kW, 1), "kW", `evaporator ${fmt(r.Q_evap_kW, 1)} kW${r.m_steam_kgs != null ? ` · steam ${fmt(r.m_steam_kgs * 3600, 1)} kg/h` : ""}${r.m_steam2_kgs != null ? ` · second steam ${fmt(r.m_steam2_kgs * 3600, 1)} kg/h` : ""}${r.m_water_kgs != null ? ` · hot water ${fmt(r.m_water_kgs * 3600, 0)} kg/h` : ""}`],
     ["Mass flow", fmt(r.m_dot_kgs * 3600, 1), "kg/h", `${fmt(r.V_suction_m3h, 1)} m³/h at ${fmt(r.compressor_rpm, 0)} rpm`],
     ["Pressures", `${fmt(r.P_evap_bar, 2)} → ${fmt(r.P_discharge_bar ?? r.P_cond_bar, 1)}`, "bar", `PR ${fmt(r.PR, 2)}` + (r.supercritical ? " · supercritical" : "") + ((r.evap_glide_K > 0.05 || r.cond_glide_K > 0.05) ? ` · glide ${fmt(r.evap_glide_K, 1)}/${fmt(r.cond_glide_K, 1)} K` : "")
       + (dPon(r) ? ` · ΔP ${fmt(r.dP_cond_kPa, 0)}/${fmt(r.dP_subcool_kPa, 0)}/${fmt(r.dP_evap_kPa, 0)} kPa cond/sub/evap` : "")],
@@ -720,9 +743,10 @@ function figs(c) {
 function table(c) {
   const t = document.getElementById("tbl");
   // colour = the component each state leaves
-  const col = { evap_out: "--s1", suction: "--s6", discharge: "--s2", cond_dew: "--s3", cond_out: "--s3", subcool_out: "--s4", ihx_out: "--s6", evap_in: "--s5", evap_dew: "--s1" };
+  const col = { evap_out: "--s1", suction: "--s6", discharge: "--s2", cond_dew: "--s3", cond_out: "--s3", steam2_out: "--s7", subcool_out: "--s4", ihx_out: "--s6", evap_in: "--s5", evap_dew: "--s1" };
   let h = "<thead><tr><th>State</th><th>Point</th><th>T, °C</th><th>P, bar</th><th>h, kJ/kg</th><th>s, kJ/(kg·K)</th><th>ρ, kg/m³</th><th>Phase</th></tr></thead><tbody>";
   for (const [k, n, label] of DATA.states) {
+    if (!c.st[k]) continue;
     const s = c.st[k], q = s[6];
     const phase = (s[5] || "").replace(/_/g, " ") + (s[5] === "two_phase" && q != null && q >= 0 ? ` (x ${fmt(q, 3)})` : "");
     h += `<tr><td>${n}</td><td><span class="sw" style="background:var(${col[k]})"></span>${label}</td><td>${fmt(s[0], 2)}</td><td>${fmt(s[1], 3)}</td><td>${fmt(s[2], 2)}</td><td>${fmt(s[3], 4)}</td><td>${fmt(s[4], 2)}</td><td>${phase}</td></tr>`;

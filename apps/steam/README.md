@@ -2,7 +2,7 @@
 
 An interactive rating model for a single-stage heat pump that raises steam from low-grade waste
 heat. The cycle has an internal heat exchanger and a hot-water subcooler, and the condenser
-raises steam. Set the source, steam and hot-water temperatures, the refrigerant (pure or up to
+raises steam; a toggle adds a second steam level raised from the refrigerant's subcooling. Set the source, steam and hot-water temperatures, the refrigerant (pure or up to
 three-component mixtures), the compressor (three reciprocating R600a efficiency maps, Recip-S,
 Recip-M and Recip-L) and its speed, and the cycle re-solves in the browser. Cases can be saved,
 compared side by side and swept.

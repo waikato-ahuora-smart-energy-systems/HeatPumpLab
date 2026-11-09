@@ -13,8 +13,8 @@ const PAGE_URL = typeof location !== "undefined" && /(\.github\.io|^localhost|^1
   ? location.origin + location.pathname : "https://waikato-ahuora-smart-energy-systems.github.io/HeatPumpLab/steam/";   // where case links point: this page on GitHub Pages or localhost, else the public GitHub Pages app
 const LOCAL_KEY = "sghp-cases-local";
 const SWEEPS = {
-  T_steam: { label: "Steam temperature, °C", lo: 90, hi: 140, step: 5 },
-  T_source: { label: "Heat-source temperature, °C", lo: 20, hi: 80, step: 5 },
+  T_steam: { label: "Steam temperature, °C", lo: 90, hi: 180, step: 5 },
+  T_source: { label: "Heat-source temperature, °C", lo: 20, hi: 150, step: 5 },
   compressor_Hz: { label: "Compressor speed, Hz", lo: 30, hi: 70, step: 5 },
 };
 const SWEEP_Y = {
@@ -22,24 +22,24 @@ const SWEEP_Y = {
   Q_heat_kW: { label: "Heat delivered, kW", d: 1, f: r => r.Q_heat_kW },
   W_electric_kW: { label: "Electrical power, kW", d: 1, f: r => r.W_electric_kW },
   P_cond_bar: { label: "Max pressure, bar", d: 1, f: r => r.P_discharge_bar ?? r.P_cond_bar },
-  steam_share: { label: "Steam share of heat, %", d: 0, f: r => 100 * r.Q_cond_kW / r.Q_heat_kW },
+  steam_share: { label: "Steam share of heat, %", d: 0, f: r => 100 * (r.Q_cond_kW + (r.Q_steam2_kW || 0)) / r.Q_heat_kW },
 };
 // results table rows: [key, label, decimals, better: 1 higher, -1 lower, 0 neither]
 const RESULT_ROWS = [
-  ["COP", "Heating COP", 3, 1], ["Q_heat_kW", "Heat delivered, kW", 1, 1], ["Q_cond_kW", "Steam, kW", 1, 1],
+  ["COP", "Heating COP", 3, 1], ["Q_heat_kW", "Heat delivered, kW", 1, 1], ["Q_cond_kW", "Steam, kW", 1, 1], ["Q_steam2_kW", "Second steam, kW", 1, 1],
   ["Q_subcool_kW", "Hot water, kW", 1, 1], ["W_electric_kW", "Electrical, kW", 1, -1], ["P_discharge_bar", "Max pressure, bar", 2, -1],
   ["P_evap_bar", "Low pressure, bar", 2, 0], ["PR", "Pressure ratio", 2, -1], ["T_discharge", "Discharge, °C", 1, -1],
   ["eta_is_overall", "Isentropic efficiency", 3, 1], ["eta_vol", "Volumetric efficiency", 3, 1],
-  ["m_steam_kgh", "Steam, kg/h", 1, 1], ["m_dot_kgh", "Mass flow, kg/h", 0, 0], ["m_water_kgh", "Hot-water flow, kg/h", 0, 0], ["rho_suction_kgm3", "Suction gas density, kg/m³", 2, 0],
+  ["m_steam_kgh", "Steam, kg/h", 1, 1], ["m_steam2_kgh", "Second steam, kg/h", 1, 1], ["m_dot_kgh", "Mass flow, kg/h", 0, 0], ["m_water_kgh", "Hot-water flow, kg/h", 0, 0], ["rho_suction_kgm3", "Suction gas density, kg/m³", 2, 0],
   ["V_suction_m3h", "Suction flow, m³/h", 1, -1], ["V_discharge_m3h", "Discharge flow, m³/h", 1, -1],
   ["VHC", "VHC, MJ/m³", 2, 1],
 ];
 const INPUT_ROWS = [
-  ["fluid", "Refrigerant"], ["compressor", "Compressor"], ["T_source", "Heat source, °C"], ["T_steam", "Steam, °C"],
+  ["fluid", "Refrigerant"], ["compressor", "Compressor"], ["T_source", "Heat source, °C"], ["T_steam", "Steam, °C"], ["steam2_on", "Second steam"], ["T_steam2", "Second steam, °C"],
   ["T_water_in", "Hot water in, °C"], ["T_water_out", "Hot water out, °C"], ["compressor_Hz", "Speed, Hz"],
   ["dTmin_source", "ΔT source, K"], ["dTmin_steam", "ΔT steam, K"], ["dTmin_water", "ΔT hot water, K"],
   ["dT_superheat", "Suction superheat, K"], ["preheat_subcool_pct", "Feedwater preheat from subcooling, %"], ["dTmin_ihx", "ΔT IHX, K"], ["T_ambient", "Ambient, °C"], ["UA_W_K", "Compressor heat loss UA, W/K"],
-  ["UA_cond_W_K", "Condenser heat loss UA, W/K"], ["UA_subcool_W_K", "Subcooler heat loss UA, W/K"], ["UA_evap_W_K", "Evaporator heat loss UA, W/K"],
+  ["UA_cond_W_K", "Condenser heat loss UA, W/K"], ["UA_subcool_W_K", "Subcooler heat loss UA, W/K"], ["UA_steam2_W_K", "Second steam heat loss UA, W/K"], ["UA_evap_W_K", "Evaporator heat loss UA, W/K"],
   ["dPK_cond", "Condenser pressure-loss K, kPa/(m³/h)¹·⁸"], ["dPK_subcool", "Subcooler pressure-loss K, kPa/(m³/h)¹·⁸"], ["dPK_evap", "Evaporator pressure-loss K, kPa/(m³/h)¹·⁸"],
 ];
 
@@ -70,6 +70,7 @@ function caseInputs() {
     dT_superheat: v("dT_superheat"), dTmin_ihx: v("dTmin_ihx"), T_ambient: v("T_ambient"), UA_W_K: v("UA_manual"),
     UA_cond_W_K: v("UA_cond"), UA_subcool_W_K: v("UA_subcool"), UA_evap_W_K: v("UA_evap"), preheat_subcool_pct: v("preheat_sub"),
     dPK_cond: v("dPK_cond"), dPK_subcool: v("dPK_subcool"), dPK_evap: v("dPK_evap"),
+    steam2_on: $("steam2_on").checked, T_steam2: v("T_steam2"), UA_steam2_W_K: v("UA_steam2"),
   };
 }
 const inputsJSON = inp => JSON.stringify(inp);
@@ -82,8 +83,8 @@ function cleanInputs(raw) {           // anything from the store or a link is un
   return {
     comps: cs.map(c => [c[0], Math.min(100, Math.max(0, +c[1] || 0))]), basis: raw.basis === "mole" ? "mole" : "mass",
     compressor: SGHP.COEFFS[raw.compressor] ? raw.compressor : "Recip-M",
-    T_source: num("T_source", 20, 80), T_steam: num("T_steam", 90, 140), T_water_in: num("T_water_in", 20, 120),
-    T_water_out: num("T_water_out", 30, 135), compressor_Hz: num("compressor_Hz", 30, 70),
+    T_source: num("T_source", 20, 150), T_steam: num("T_steam", 90, 180), T_water_in: num("T_water_in", 20, 170),
+    T_water_out: num("T_water_out", 30, 175), compressor_Hz: num("compressor_Hz", 30, 70),
     dTmin_source: num("dTmin_source", 0, 50), dTmin_steam: num("dTmin_steam", 0, 50), dTmin_water: num("dTmin_water", 0, 50),
     dT_superheat: num("dT_superheat", 0, 80), dTmin_ihx: num("dTmin_ihx", 0, 50), T_ambient: num("T_ambient", -40, 60),
     UA_W_K: num("UA_W_K", 0, 1000),
@@ -91,6 +92,9 @@ function cleanInputs(raw) {           // anything from the store or a link is un
     UA_cond_W_K: opt("UA_cond_W_K", 0, 1000), UA_subcool_W_K: opt("UA_subcool_W_K", 0, 1000), UA_evap_W_K: opt("UA_evap_W_K", 0, 1000),
     preheat_subcool_pct: opt("preheat_subcool_pct", 0, 100),
     dPK_cond: opt("dPK_cond", 0, 1e4), dPK_subcool: opt("dPK_subcool", 0, 1e4), dPK_evap: opt("dPK_evap", 0, 1e4),
+    // cases saved before the second steam level have it off
+    steam2_on: raw.steam2_on === true, T_steam2: isFinite(+raw.T_steam2) && raw.T_steam2 != null ? Math.min(175, Math.max(90, +raw.T_steam2)) : 105,
+    UA_steam2_W_K: opt("UA_steam2_W_K", 0, 1000),
   };
 }
 function applyInputs(inp) {
@@ -106,18 +110,21 @@ function applyInputs(inp) {
   set("T_ambient", inp.T_ambient); set("UA_manual", inp.UA_W_K);
   set("UA_cond", inp.UA_cond_W_K); set("UA_subcool", inp.UA_subcool_W_K); set("UA_evap", inp.UA_evap_W_K); set("preheat_sub", inp.preheat_subcool_pct);
   set("dPK_cond", inp.dPK_cond); set("dPK_subcool", inp.dPK_subcool); set("dPK_evap", inp.dPK_evap);
+  $("steam2_on").checked = !!inp.steam2_on; set("T_steam2", inp.T_steam2); set("UA_steam2", inp.UA_steam2_W_K);
   compRows(); tempTicks(); hzTicks(); preheatTicks(); superheatTicks(); changed("fluid");
 }
 const fluidLabel = inp => inp.comps.length === 1 ? LABEL(inp.comps[0][0])
   : `${inp.comps.map(c => LABEL(c[0])).join("/")} ${inp.comps.map(c => +(+c[1]).toFixed(1)).join("/")} (${inp.basis})`;
 const fluidKey = inp => inp.comps.map(c => c[0]).join("&") + "|" + inp.comps.map(c => c[1] / 100).join(";") + "|" + inp.basis;
-const caseSummary = inp => `${fluidLabel(inp)} · ${inp.T_source} → ${inp.T_steam} °C · ${inp.compressor} · ${inp.compressor_Hz} Hz`;
-function suggestName(inp) { return `${fluidLabel(inp)} · ${inp.T_source}/${inp.T_steam} °C · ${inp.compressor} · ${inp.compressor_Hz} Hz`; }
+const caseSummary = inp => `${fluidLabel(inp)} · ${inp.T_source} → ${inp.T_steam}${inp.steam2_on ? ` + ${inp.T_steam2}` : ""} °C · ${inp.compressor} · ${inp.compressor_Hz} Hz`;
+function suggestName(inp) { return `${fluidLabel(inp)} · ${inp.T_source}/${inp.T_steam}${inp.steam2_on ? `+${inp.T_steam2}` : ""} °C · ${inp.compressor} · ${inp.compressor_Hz} Hz`; }
 function summarize(r) {
   if (!r) return { ok: false };
   const o = { ok: true };
   for (const [k] of RESULT_ROWS) o[k] = k === "m_dot_kgh" ? r.m_dot_kgs * 3600 : k === "m_water_kgh" ? (r.m_water_kgs == null ? null : r.m_water_kgs * 3600)
     : k === "m_steam_kgh" ? (r.m_steam_kgs == null ? null : r.m_steam_kgs * 3600)
+    : k === "m_steam2_kgh" ? (r.m_steam2_kgs == null ? null : r.m_steam2_kgs * 3600)
+    : k === "Q_steam2_kW" ? (r.Q_steam2_kW ?? null)
     : k === "P_discharge_bar" ? (r.P_discharge_bar ?? r.P_cond_bar) : r[k];   // max pressure: the compressor discharge
   o.in_envelope = !!r.in_envelope;
   for (const k in o) if (typeof o[k] === "number" && !isFinite(o[k])) o[k] = null;
@@ -139,6 +146,7 @@ const caseCfg = inp => ({
   T_ambient: inp.T_ambient, dTmin_ihx: inp.dTmin_ihx, compressor_Hz: inp.compressor_Hz, loss_dT_basis: "mean",
   loss_UA_cond_kWK: inp.UA_cond_W_K / 1000, loss_UA_subcool_kWK: inp.UA_subcool_W_K / 1000, loss_UA_evap_kWK: inp.UA_evap_W_K / 1000,
   preheat_subcool_share: inp.preheat_subcool_pct / 100,
+  second_steam: !!inp.steam2_on, T_steam2: inp.T_steam2, loss_UA_steam2_kWK: (inp.UA_steam2_W_K || 0) / 1000,
   dP_K_cond: inp.dPK_cond || 0, dP_K_subcool: inp.dPK_subcool || 0, dP_K_evap: inp.dPK_evap || 0,
 });
 function solveInputs(inp, over = {}) {
@@ -511,6 +519,8 @@ const compareCases = () => CS.compare.map(id => CS.list.find(c => c.id === id)).
 function solvedResults(c) { const s = CS.solved.get(c.id); return s && s.json === inputsJSON(c.inputs) ? summarize(s.case.ok ? s.case.r : null) : null; }
 function inputValue(inp, k) {
   if (k === "fluid") return fluidLabel(inp);
+  if (k === "steam2_on") return inp.steam2_on ? "on" : "off";
+  if (k === "T_steam2" && !inp.steam2_on) return "–";
   return inp[k];
 }
 let compareJob = 0;
@@ -576,7 +586,7 @@ function sideBySide(cs) {
   const host = $("cmp-side"); host.innerHTML = "";
   const rs = cs.map(c => { const s = CS.solved.get(c.id); return s && s.json === inputsJSON(c.inputs) ? s.case : null; });
   const ok = rs.filter(r => r && r.ok).map(r => r.r);
-  const kwTop = ok.length ? dialTop(...ok.flatMap(r => [r.Q_cond_kW, r.Q_subcool_kW, r.W_electric_kW])) : 10;
+  const kwTop = ok.length ? dialTop(...ok.flatMap(r => [r.Q_cond_kW, r.Q_steam2_kW || 0, r.Q_subcool_kW, r.W_electric_kW])) : 10;
   const pTop = ok.length ? dialTop(...ok.map(r => r.P_discharge_bar ?? r.P_cond_bar)) : 10;
   const powTop = ok.length ? Math.max(...ok.map(r => r.Q_heat_kW + r.W_electric_kW)) : 1;
   // one T-s frame for every column, so the cycles line up
@@ -598,8 +608,10 @@ function sideBySide(cs) {
     COP: mark(r => r.COP, 1), steam: mark(r => r.Q_cond_kW, 1), hw: mark(r => r.Q_subcool_kW, 1), el: mark(r => r.W_electric_kW, -1),
     pmax: mark(r => r.P_discharge_bar ?? r.P_cond_bar, -1), heat: mark(r => r.Q_heat_kW, 1),
   };
+  const anyS2 = ok.some(r => r.second_steam);       // the second-steam rows only when a case has it
   const KV = [
     ["Heat delivered, kW", r => r.Q_heat_kW, 1, 1], ["Steam, kg/h", r => (r.m_steam_kgs == null ? NaN : r.m_steam_kgs * 3600), 1, 1],
+    ...(anyS2 ? [["Second steam, °C", r => r.T_steam2 ?? NaN, 0, 0], ["Second steam, kW", r => r.Q_steam2_kW ?? NaN, 1, 1], ["Second steam, kg/h", r => (r.m_steam2_kgs == null ? NaN : r.m_steam2_kgs * 3600), 1, 1]] : []),
     ["Hot water, kg/h", r => (r.m_water_kgs == null ? NaN : r.m_water_kgs * 3600), 0, 0],
     ["Low pressure, bar", r => r.P_evap_bar, 2, 0], ["Max pressure, bar", r => r.P_discharge_bar ?? r.P_cond_bar, 1, -1],
     ["Pressure ratio", r => r.PR, 2, -1], ["Discharge, °C", r => r.T_discharge, 1, -1], ["Isentropic efficiency", r => r.eta_is_overall, 3, 1],
@@ -642,9 +654,9 @@ function sideBySide(cs) {
       <div class="dial ${M_.pmax(i)}">${dialSVG(r.P_discharge_bar ?? r.P_cond_bar, pTop, "--s6", "bar maximum pressure")}<span class="dk">Max pressure, bar</span></div>`;
     // heat delivered and electrical input as one bar on a common length, so sizes compare across columns
     const bar = document.createElement("div"); bar.className = "side-bar"; bar.setAttribute("role", "img");
-    bar.setAttribute("aria-label", `steam ${fmt(r.Q_cond_kW, 1)} kW, hot water ${fmt(r.Q_subcool_kW, 1)} kW, electrical ${fmt(r.W_electric_kW, 1)} kW`);
-    for (const [v, cv] of [[r.Q_cond_kW, "--s3"], [r.Q_subcool_kW, "--s4"], [r.W_electric_kW, "--s2"]]) { const s = document.createElement("i"); s.style.width = `${(100 * v / powTop).toFixed(2)}%`; s.style.background = `var(${cv})`; bar.append(s); }
-    const bl = document.createElement("div"); bl.className = "side-barlab"; bl.textContent = `Steam : hot water ${(100 * r.Q_cond_kW / r.Q_heat_kW).toFixed(0)} : ${(100 * r.Q_subcool_kW / r.Q_heat_kW).toFixed(0)} · ${fmt(r.Q_heat_kW, 1)} kW heat`;
+    bar.setAttribute("aria-label", `steam ${fmt(r.Q_cond_kW, 1)} kW,${r.Q_steam2_kW ? ` second steam ${fmt(r.Q_steam2_kW, 1)} kW,` : ""} hot water ${fmt(r.Q_subcool_kW, 1)} kW, electrical ${fmt(r.W_electric_kW, 1)} kW`);
+    for (const [v, cv] of [[r.Q_cond_kW, "--s3"], [r.Q_steam2_kW || 0, "--s7"], [r.Q_subcool_kW, "--s4"], [r.W_electric_kW, "--s2"]]) { const s = document.createElement("i"); s.style.width = `${(100 * v / powTop).toFixed(2)}%`; s.style.background = `var(${cv})`; bar.append(s); }
+    const bl = document.createElement("div"); bl.className = "side-barlab"; bl.textContent = `Steam : hot water ${(100 * (r.Q_cond_kW + (r.Q_steam2_kW || 0)) / r.Q_heat_kW).toFixed(0)} : ${(100 * r.Q_subcool_kW / r.Q_heat_kW).toFixed(0)} · ${fmt(r.Q_heat_kW, 1)} kW heat`;
     const kv = document.createElement("dl"); kv.className = "side-kv";
     for (const m of KV) {
       const dt = document.createElement("dt"), dd = document.createElement("dd"), cl = m.cls(i);

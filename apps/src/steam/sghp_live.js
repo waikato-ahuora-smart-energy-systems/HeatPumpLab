@@ -217,6 +217,8 @@ class CoolPropFluid {
     }
     return AS;
   }
+  // hot water for the subcooler: one pure-water fluid per CoolProp module, kept when refrigerants change
+  get water() { if (!this.M.sghpWater) this.M.sghpWater = new CoolPropFluid(this.M, [["Water", 100]]); return this.M.sghpWater; }
   destroy() { for (const a of [this.AS, this.SAT]) try { a.delete(); } catch (_) {} }
   _dewT(P) {
     const k = P.toPrecision(10);
@@ -372,9 +374,22 @@ class CoolPropFluid {
 const COMPRESSORS = Object.keys(SGHP.COEFFS);          // R600a maps, smallest first
 let COMPRESSOR = SGHP.compressorMap("Recip-M");
 const STATES = [["evap_out", "1e", "Evaporator outlet"], ["suction", "1", "Compressor suction (IHX out)"], ["discharge", "2", "Compressor discharge"],
-  ["cond_dew", "2d", "Condenser dew point"], ["cond_out", "3", "Condenser outlet"], ["subcool_out", "4", "Subcooler outlet"],
+  ["cond_dew", "2d", "Condenser dew point"], ["cond_out", "3", "Condenser outlet"], ["steam2_out", "3s", "Second steam generator outlet"], ["subcool_out", "4", "Subcooler outlet"],
   ["ihx_out", "4i", "IHX liquid outlet"], ["evap_in", "5", "Evaporator inlet"], ["evap_dew", "5d", "Evaporator dew point"]];
 const GRID = { T_sources: [25, 30, 35, 40, 45, 50, 55, 60], T_steams: [85, 90, 95, 100, 105, 110, 115, 120, 125] };
+// the rating grid keeps its size and moves, in 5 K steps, just far enough to hold the point shown
+function slideGrid(vals, x, floor) {
+  const hi = vals[vals.length - 1];
+  let d = x > hi ? 5 * Math.ceil((x - hi) / 5) : x < vals[0] ? -5 * Math.ceil((vals[0] - x) / 5) : 0;
+  d = Math.max(d, floor - vals[0]);
+  return d ? vals.map(v => v + d) : vals;
+}
+function followPoint(src, steam) {
+  const a = slideGrid(GRID.T_sources, src, 25), b = slideGrid(GRID.T_steams, steam, 85);
+  if (a === GRID.T_sources && b === GRID.T_steams) return;
+  GRID.T_sources = a; GRID.T_steams = b;
+  LIVE.map = {}; LIVE.mapKey = ""; LIVE.fluidMeta.mapSH = undefined;     // new cells, and the efficiency map's axes follow
+}
 // shims for the shared dashboard renderers (the efficiency map and envelope are per fluid: F().eff, F().envelope)
 const DATA = { states: STATES, envelope: SGHP.ENVELOPE, eff: null, grid: GRID };
 
@@ -453,20 +468,20 @@ function balance() {
   comps[comps.length - 1][1] = 100 - others;
 }
 
-const NUM = ["dTmin_source", "dTmin_steam", "dTmin_water", "T_ambient", "dTmin_ihx", "UA_manual", "UA_cond", "UA_subcool", "UA_evap", "dPK_cond", "dPK_subcool", "dPK_evap"];
+const NUM = ["dTmin_source", "dTmin_steam", "dTmin_water", "T_ambient", "dTmin_ihx", "UA_manual", "UA_cond", "UA_subcool", "UA_steam2", "UA_evap", "dPK_cond", "dPK_subcool", "dPK_evap"];
 // temperature sliders: [id, minor tick, labelled tick]; source and steam pick the point, the water temperatures are settings
-const TEMPS = [["T_source", 5, 10], ["T_steam", 5, 10], ["T_water_in", 5, 20], ["T_water_out", 5, 20]];
+const TEMPS = [["T_source", 10, 20], ["T_steam", 5, 10], ["T_water_in", 10, 20], ["T_water_out", 10, 20], ["T_steam2", 5, 10]];
 function cfg() {
   const v = id => +$(id).value;
   return {
     T_source: v("T_source"), dTmin_source: v("dTmin_source"), T_steam: v("T_steam"),
     T_water_in: v("T_water_in"), T_water_out: v("T_water_out"), dTmin_steam: v("dTmin_steam"), dTmin_water: v("dTmin_water"),
     dT_superheat: v("dT_superheat"), T_ambient: v("T_ambient"),
-    dTmin_ihx: v("dTmin_ihx"),
+    dTmin_ihx: v("dTmin_ihx"), second_steam: $("steam2_on").checked, T_steam2: v("T_steam2"),
     compressor_Hz: v("hz"), loss_dT_basis: "mean",
     // exchanger heat losses, W/K on the page, kW/K in the model
     loss_UA_cond_kWK: Math.max(0, v("UA_cond") || 0) / 1000, loss_UA_subcool_kWK: Math.max(0, v("UA_subcool") || 0) / 1000,
-    loss_UA_evap_kWK: Math.max(0, v("UA_evap") || 0) / 1000,
+    loss_UA_evap_kWK: Math.max(0, v("UA_evap") || 0) / 1000, loss_UA_steam2_kWK: Math.max(0, v("UA_steam2") || 0) / 1000,
     preheat_subcool_share: Math.max(0, Math.min(100, v("preheat_sub") || 0)) / 100,
     // refrigerant pressure-loss coefficients, dP [kPa] = K (V [m3/h])^1.8
     dP_K_cond: Math.max(0, v("dPK_cond") || 0), dP_K_subcool: Math.max(0, v("dPK_subcool") || 0), dP_K_evap: Math.max(0, v("dPK_evap") || 0),
@@ -485,6 +500,8 @@ function rangeTicks(id, minor, major) {
 }
 function tempTicks() {
   for (const [id, minor, major] of TEMPS) { rangeTicks(id, minor, major); $(`${id}-out`).textContent = `${$(id).value} °C`; }
+  $("T_steam2").disabled = !$("steam2_on").checked;
+  if ($("T_steam2").disabled) $("T_steam2-out").textContent = "off";
 }
 // feedwater preheat from subcooling: share of the preheat, with the condenser-exit subcooling it gives
 function preheatTicks() {
@@ -535,7 +552,7 @@ function currentUA() { return { UA: Math.max(0, +$("UA_manual").value || 0) / 10
 function toCase(res, fl) {
   if (!res.success) return { ok: false, msg: res.message, warnings: res.warnings };
   const st = {};
-  for (const [k] of STATES) { const s = res.states[k]; st[k] = [s.T, s.P * 10, s.h, s.s, s.D, s.phase, s.q]; }
+  for (const [k] of STATES) { const s = res.states[k]; if (s) st[k] = [s.T, s.P * 10, s.h, s.s, s.D, s.phase, s.q]; }
   const pp = SGHP.paths(fl, res, 10);
   return { ok: true, msg: "success", warnings: res.warnings, r: res.report, st, paths: pp.paths, prof: pp.prof };
 }
@@ -544,6 +561,7 @@ function solveNow() {
   if (!CP) return;
   const c = cfg();
   selE = c.T_source; selC = c.T_steam;
+  followPoint(selE, selC);
   let fl;
   try { fl = currentFluid(); }
   catch (e) { LIVE.result = { ok: false, msg: `CoolProp could not set up this fluid: ${cpError(e)}`, warnings: [] }; render(); return; }
@@ -571,7 +589,7 @@ function runMap() {
   for (const e of GRID.T_sources) for (const k of GRID.T_steams) if (k - e >= 25) cells.push([e, k]);
   let i = 0;
   const step = () => {
-    if (LIVE.mapKey !== key) { LIVE.mapRunning = false; return; }
+    if (LIVE.mapKey !== key) { LIVE.mapRunning = false; if (!LIVE.mapKey && $("auto-map").checked) runMap(); return; }
     const t0 = performance.now();
     while (i < cells.length && performance.now() - t0 < 30) {
       const [e, k] = cells[i++];
@@ -598,6 +616,7 @@ function chips(c) {
   if (LIVE.fluid) for (const n of LIVE.fluid.notes) add("warn", `${LIVE.fluid.label}: ${n}`);
   if (LIVE.fluid && LIVE.fluid.fallbacks) add("info", `${LIVE.fluid.label}: some states near the critical point are approximate, from the phase envelope and density-temperature evaluations (CoolProp's flash did not converge there)`);
   if (c && !c.ok && c.msg) add("warn", `No cycle at this point: ${c.msg}`);
+  if (c && c.ok && c.r.evap_in_subcooled) add("warn", `The liquid reaches the evaporator subcooled (${fmt(c.r.T_evap_in, 1)} °C, below evaporating at ${fmt(c.r.T_evap_dew, 1)} °C): the heat source also heats the liquid, which inflates the COP. Raise the hot water temperatures.`);
   if (c && c.ok && !c.r.in_envelope) {
     const b = c.r.density_ratio_beyond || 0;
     add("warn", `Outside the compressor window, beyond the ${c.r.window_edge} edge: efficiencies read at the nearest window point`
@@ -625,7 +644,7 @@ function render() {
     return;
   }
   figs(c);
-  const lg = COMP_ORDER.map(n => ({ color: COMP[n], label: n })).concat([{ dash: 1, label: "Bubble and dew lines" }]);
+  const lg = COMP_ORDER.filter(n => n !== "Second steam" || c.r.second_steam).map(n => ({ color: COMP[n], label: n })).concat([{ dash: 1, label: "Bubble and dew lines" }]);
   legend("lg-ts", lg); legend("lg-ph", lg);
   cycleDiagram("ts", c, "ts"); cycleDiagram("ph", c, "ph");
   profiles(c); energy(c); table(c);
@@ -633,14 +652,14 @@ function render() {
 
 function copMapLive() {
   if (!Object.keys(LIVE.map).length) {
-    $("map").innerHTML = `<div class="empty">${LIVE.mapRunning ? "Solving…" : "Press “Compute COP map” to rate this refrigerant across 25–60 °C source and 85–125 °C steam."}</div>`;
+    $("map").innerHTML = `<div class="empty">${LIVE.mapRunning ? "Solving…" : `Press “Compute COP map” to rate this refrigerant across ${GRID.T_sources[0]}–${GRID.T_sources[GRID.T_sources.length - 1]} °C source and ${GRID.T_steams[0]}–${GRID.T_steams[GRID.T_steams.length - 1]} °C steam.`}</div>`;
     return false;
   }
   return true;
 }
 
 function foot() {
-  $("foot").innerHTML = `<p>Model: HeatPumpLab ConventionalHeatPump (SGHP), ported to JavaScript and checked against the Python model. Properties: CoolProp (HEOS) in the browser; mixtures use CoolProp's interaction parameters, or a linear mixing rule where none are fitted. Compressor: ${M.compressor} R600a efficiency fits (taken as rated at 15 K suction superheat), read for every refrigerant (n-butane included) at the R600a evaporating temperature with the same suction density and the R600a condensing temperature with the same saturated-vapour density, ${M.displacement_m3h} m³/h at 50 Hz (1450 rpm), electrical-input basis; swept volume scales with frequency. Steam is raised by the desuperheater and condenser: the condenser outlet (bubble point) sits the steam approach above the steam temperature, which sets the condensing pressure. At or above the critical temperature the high side is supercritical: the gas-cooler exit sits at that temperature on the critical isochore (critical density), which sets the gas-cooling pressure, and the compressor map reads the critical-isochore state at the discharge pressure. The subcooler heats water from its inlet to its outlet temperature, cooling the liquid as far as the hot-water approach allows; the water flow follows from the duty (c<sub>p</sub> 4.19 kJ/kg K). Shell heat loss = UA × (mean of suction and discharge temperature − ambient). The internal heat exchanger raises the saturated evaporator outlet to the suction superheat. The compressor path on the diagrams is indicative (end states are exact). Pressure drops ΔP = K V̇^1.8 in the condenser, subcooler and evaporator, with the exits pinned.</p>`;
+  $("foot").innerHTML = `<p>Model: HeatPumpLab ConventionalHeatPump (SGHP), ported to JavaScript and checked against the Python model. Properties: CoolProp (HEOS) in the browser; mixtures use CoolProp's interaction parameters, or a linear mixing rule where none are fitted. Compressor: ${M.compressor} R600a efficiency fits (taken as rated at 15 K suction superheat), read for every refrigerant (n-butane included) at the R600a evaporating temperature with the same suction density and the R600a condensing temperature with the same saturated-vapour density, ${M.displacement_m3h} m³/h at 50 Hz (1450 rpm), electrical-input basis; swept volume scales with frequency. Steam is raised by the desuperheater and condenser: the condenser outlet (bubble point) sits the steam approach above the steam temperature, which sets the condensing pressure. At or above the critical temperature the high side is supercritical: the gas-cooler exit sits at that temperature on the critical isochore (critical density), which sets the gas-cooling pressure, and the compressor map reads the critical-isochore state at the discharge pressure. The subcooler heats water from its inlet to its outlet temperature, cooling the liquid as far as the hot-water approach allows; the water flow follows from the duty, with CoolProp water properties at 1 bar above the saturation pressure at the hot water outlet temperature. The optional second steam generator sits between the condenser and the subcooler: it raises steam from bled hot water, takes all the subcooling the steam approach allows, and the hot water takes the rest. Shell heat loss = UA × (mean of suction and discharge temperature − ambient). The internal heat exchanger raises the saturated evaporator outlet to the suction superheat. The compressor path on the diagrams is indicative (end states are exact). Pressure drops ΔP = K V̇^1.8 in the condenser, subcooler and evaporator, with the exits pinned.</p>`;
 }
 
 // compressor choice: same R600a envelope and density basis, each model's own efficiency fits and swept volume
@@ -676,6 +695,7 @@ async function boot() {
   document.addEventListener("keydown", e => { if (e.key === "Escape" && openPicker >= 0) { openPicker = -1; compRows(); } });
   $("hz").addEventListener("input", () => hzTicks());
   $("preheat_sub").addEventListener("input", () => preheatTicks());
+  $("steam2_on").addEventListener("change", () => { tempTicks(); changed("settings"); });
   $("dT_superheat").addEventListener("input", () => superheatTicks());
   $("dT_superheat").addEventListener("change", () => changed("settings"));
   $("preheat_sub").addEventListener("change", () => changed("settings"));
